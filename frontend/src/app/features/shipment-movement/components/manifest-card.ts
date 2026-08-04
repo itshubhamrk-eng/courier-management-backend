@@ -1,0 +1,119 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { UiCard } from '@shared/components/ui-card/ui-card';
+import { UiLoader } from '@shared/components/ui-loader/ui-loader';
+import { UiButton } from '@shared/components/ui-button/ui-button';
+import { ShipmentStatusBadge } from '@features/shipment/components/shipment-status-badge';
+import { Manifest, Shipment } from '@core/models/shipment.model';
+import { ManifestService } from '@features/manifest/manifest.service';
+
+/**
+ * One open manifest's own card: heading (manifest number, lane, total weight, total
+ * parcels) and its LR table underneath. Adding a shipment to a manifest already is the
+ * "out scan created" milestone (V20, on direct request — there is no separate scan
+ * action any more; see ManifestService.create and ShipmentStatus's own class doc), so
+ * this card stays a read-only worklist by default — the next action for any of these
+ * shipments is Dispatch. `showDispatchAction` opts a card into surfacing that action
+ * itself (Dispatch's own worklist), instead of every consumer building its own trigger.
+ * `showInScanAction` does the same for In Scan's pending-manifest worklist — receives
+ * every shipment on the manifest that isn't `IN_SCAN` yet.
+ */
+@Component({
+  selector: 'app-manifest-card',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink, UiCard, UiLoader, UiButton, ShipmentStatusBadge],
+  template: `
+    <app-card>
+      <div class="mh">
+        <div>
+          <strong>{{ manifest().manifestNumber }}</strong>
+          <span class="text-caption">{{ fromLabel() }} → {{ toLabel() }}</span>
+        </div>
+        <div class="mh__stats">
+          <div class="stat"><span class="stat__value">{{ totalWeight() }} kg</span><span class="stat__label">Total Weight</span></div>
+          <div class="stat"><span class="stat__value">{{ totalParcels() }}</span><span class="stat__label">Total Parcels</span></div>
+          @if (showDispatchAction()) {
+            <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">Dispatch</app-button>
+          }
+          @if (showInScanAction()) {
+            <app-button icon="qr_code_scanner" [loading]="inScanLoading()"
+              [disabled]="!pendingCount()" (pressed)="inScan.emit(manifest())">
+              In Scan{{ pendingCount() ? ' (' + pendingCount() + ')' : '' }}
+            </app-button>
+          }
+        </div>
+      </div>
+
+      @if (loading()) {
+        <app-loader [minHeight]="100" caption="Loading…" />
+      } @else if (!shipments().length) {
+        <p class="empty">No shipments on this manifest.</p>
+      } @else {
+        <div class="tbl__wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>LR / Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              @for (s of shipments(); track s.id) {
+                <tr>
+                  <td><a [routerLink]="['/shipments', s.id]">{{ s.trackingNumber }}</a></td>
+                  <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                  <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
+                  <td><app-shipment-status-badge [status]="s.status" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </app-card>
+  `,
+  styles: [`
+    .mh { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .mh strong { display:block; font:600 16px var(--font-sans); }
+    .mh__stats { display:flex; gap:20px; }
+    .stat { display:flex; flex-direction:column; align-items:flex-end; }
+    .stat__value { font:600 15px var(--font-sans); color:var(--content-fg); }
+    .stat__label { font:400 11px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.03em; }
+    .tbl__wrap { overflow-x:auto; border:1px solid var(--surface-border); border-radius:var(--r-field); }
+    .tbl { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
+    .tbl th { text-align:left; padding:10px 14px; background:var(--surface-muted); color:var(--content-muted); font:600 11px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+    .tbl td { padding:10px 14px; border-top:1px solid var(--surface-border); white-space:nowrap; }
+    .tbl--right { text-align:right; }
+    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:16px; }
+    @media (max-width:760px){ .mh { flex-direction:column; } .mh__stats { gap:14px; } }
+  `]
+})
+export class ManifestCard implements OnInit {
+  private readonly manifestService = inject(ManifestService);
+
+  readonly manifest = input.required<Manifest>();
+  readonly branchNames = input<Map<string, string>>(new Map());
+  readonly showDispatchAction = input(false);
+  readonly showInScanAction = input(false);
+  readonly inScanLoading = input(false);
+  readonly dispatch = output<Manifest>();
+  readonly inScan = output<Manifest>();
+
+  readonly shipments = signal<Shipment[]>([]);
+  readonly loading = signal(true);
+
+  protected readonly fromLabel = computed(() =>
+    this.branchNames().get(this.manifest().bookingBranchId) ?? 'Booking branch');
+  protected readonly toLabel = computed(() =>
+    this.branchNames().get(this.manifest().deliveryBranchId) ?? 'Delivery branch');
+  protected readonly totalWeight = computed(() =>
+    this.shipments().reduce((sum, s) => sum + (s.chargeableWeight ?? 0), 0));
+  protected readonly totalParcels = computed(() => this.shipments().length);
+  protected readonly pendingCount = computed(() =>
+    this.shipments().filter((s) => s.status !== 'IN_SCAN').length);
+
+  ngOnInit(): void {
+    this.manifestService.shipments(this.manifest().id).subscribe({
+      next: (s) => { this.shipments.set(s); this.loading.set(false); },
+      error: () => { this.shipments.set([]); this.loading.set(false); }
+    });
+  }
+}

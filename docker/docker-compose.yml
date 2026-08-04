@@ -1,0 +1,108 @@
+# =============================================================================
+# Local stack: MySQL 8.4, Redis 7, and the API.
+#
+#   docker compose -f docker/docker-compose.yml up -d mysql redis   # deps only
+#   docker compose -f docker/docker-compose.yml --profile app up -d # everything
+#
+# The API is behind a profile so the common case — running the app from the IDE
+# against containerised dependencies — does not also build an image.
+# =============================================================================
+
+name: courier
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: courier-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-courier_db}
+      MYSQL_USER: ${DB_USERNAME:-courier}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-courier}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # UTC everywhere. Instants are stored as UTC and the JDBC connection is
+      # configured to match; a server on local time silently shifts every timestamp.
+      - --default-time-zone=+00:00
+      - --max-connections=200
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # Gates the app's startup: Flyway against a not-yet-ready MySQL just crashes.
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - courier-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: courier-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      # Cache entries are all expendable and all have a TTL, so evicting the
+      # least-recently-used one under pressure is correct.
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - courier-net
+
+  api:
+    profiles: ["app"]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: courier-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-courier_db}
+      DB_USERNAME: ${DB_USERNAME:-courier}
+      DB_PASSWORD: ${DB_PASSWORD:-courier}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # No default: compose fails loudly if JWT_SECRET is unset rather than
+      # starting the API with a guessable signing key.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    networks:
+      - courier-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  courier-net:
+    driver: bridge

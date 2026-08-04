@@ -1,0 +1,88 @@
+package com.courier.modules.finance.application.payment;
+
+import java.math.BigDecimal;
+import java.util.Map;
+
+/**
+ * The seam between wallet recharge and whichever payment gateway a deployment uses.
+ *
+ * <p>Two operations, and the split matters. {@link #createOrder} is what makes the flow
+ * securable at all: the amount is fixed <em>server side</em> before the browser ever sees
+ * it, so a client cannot open checkout for ₹1 and claim a ₹10,000 recharge.
+ * {@link #verifyPayment} then proves the confirmation the browser hands back really came
+ * from the gateway, by re-deriving its signature from the shared secret.
+ *
+ * <p>Nothing in the wallet module knows the gateway's name, wire format or SDK. Swapping
+ * Razorpay for another provider is a new implementation of this interface and a config
+ * change.
+ */
+public interface PaymentGatewayPort {
+
+    /** Gateway identifier stored on the ledger entry, e.g. {@code RAZORPAY}. */
+    String name();
+
+    /**
+     * Opens an order at the gateway for a fixed amount.
+     *
+     * @param amount   in major units (rupees), as the wallet holds it
+     * @param currency ISO-4217, e.g. {@code INR}
+     * @param receipt  our own reference — the pending transaction number
+     * @param notes    free-form metadata echoed back by the gateway; never secrets
+     */
+    GatewayOrder createOrder(BigDecimal amount, String currency, String receipt,
+                             Map<String, String> notes);
+
+    /**
+     * Proves a payment confirmation is genuine.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException if the signature does not
+     *         match — the caller must treat that as "no money arrived" and credit nothing
+     */
+    void verifyPayment(PaymentConfirmation confirmation);
+
+    /**
+     * Asks the gateway what actually happened, by payment id.
+     *
+     * <p>This is the second half of making recharge safe, and it is not optional. A valid
+     * signature proves the confirmation came from the gateway; it does not prove the amount
+     * the <em>client</em> claims alongside it. The wallet is credited with the figure the
+     * gateway reports here, so a browser cannot pay ₹1 and be credited ₹10,000.
+     */
+    GatewayPayment fetchPayment(String paymentId);
+
+    /**
+     * An order opened at the gateway.
+     *
+     * @param gateway    which gateway produced it
+     * @param orderId    the gateway's order id, handed to the browser checkout
+     * @param amountMinor amount in the smallest currency unit (paise) — the gateway's contract
+     * @param currency   ISO-4217
+     * @param publicKey  the publishable key the browser needs; never the secret
+     * @param receipt    our reference, echoed back
+     */
+    record GatewayOrder(String gateway, String orderId, long amountMinor, String currency,
+                        String publicKey, String receipt) {
+    }
+
+    /**
+     * What the browser hands back after a successful checkout.
+     *
+     * @param orderId   the gateway order the payment settled
+     * @param paymentId the gateway's payment id — also our idempotency key
+     * @param signature the gateway's HMAC over the pair
+     */
+    record PaymentConfirmation(String orderId, String paymentId, String signature) {
+    }
+
+    /**
+     * The gateway's own account of a payment — the authoritative figures.
+     *
+     * @param amount   in major units (rupees), converted by the adapter so no caller has to
+     *                 remember which side of the boundary speaks paise
+     * @param captured true once the money is actually with the merchant; an authorised but
+     *                 uncaptured payment must not credit a wallet
+     */
+    record GatewayPayment(String gateway, String paymentId, String orderId, BigDecimal amount,
+                          String currency, boolean captured) {
+    }
+}

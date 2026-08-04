@@ -1,0 +1,22 @@
+# Local development. Backed by docker/docker-compose.yml.
+spring:
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    # Local-only placeholder so `mvn spring-boot:run` works out of the box.
+    # It is >= 32 bytes and is NOT used anywhere else: dev and prod must set
+    # JWT_SECRET explicitly, and prod refuses to start without it.
+    secret: ${JWT_SECRET:local-development-only-secret-key-change-me-32b}
+
+logging:
+  level:
+    com.courier: DEBUG
+    org.hibernate.SQL: DEBUG
+    # Uncomment to see bound parameters. Never enable outside local: it prints
+    # passwords and personal data in clear text.
+    # org.hibernate.orm.jdbc.bind: TRACE

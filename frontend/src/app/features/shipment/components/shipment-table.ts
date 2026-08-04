@@ -1,0 +1,94 @@
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatIconModule } from '@angular/material/icon';
+import { UiTable, TableColumn, SortState } from '@shared/components/ui-table/ui-table';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { ShipmentStatusBadge } from './shipment-status-badge';
+import { Shipment, CANCELLABLE_STATUSES } from '@core/models/shipment.model';
+
+export interface ShipmentPerms { update: boolean; cancel: boolean; }
+export type ShipmentAction = 'view' | 'edit' | 'cancel';
+
+/** Shipment list table. Columns follow the backend list projection (ShipmentSummaryResponse). */
+@Component({
+  selector: 'app-shipment-table',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [DecimalPipe, UiTable, ShipmentStatusBadge, MatMenuModule, MatIconModule],
+  template: `
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+               emptyTitle="No shipments" emptyHint="Book your first shipment to get started."
+               (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
+      <ng-template #row let-s>
+        <td><span class="mono">{{ s.shipmentNumber }}</span></td>
+        <td><span class="mono awb">{{ s.trackingNumber }}</span></td>
+        <td>{{ s.bookingDate }}</td>
+        <td>{{ branchLabel(s.bookingBranchId) }}</td>
+        <td>{{ branchLabel(s.deliveryBranchId) }}</td>
+        <td>{{ s.senderName }}</td>
+        <td class="mono">{{ s.senderContact }}</td>
+        <td>{{ s.receiverName }}</td>
+        <td class="mono">{{ s.receiverContact }}</td>
+        <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
+        <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
+        <td><app-shipment-status-badge [status]="s.status" /></td>
+        <td class="col-actions" (click)="$event.stopPropagation()">
+          <button class="kebab" [matMenuTriggerFor]="menu" aria-label="Actions"><mat-icon>more_vert</mat-icon></button>
+          <mat-menu #menu="matMenu">
+            <button mat-menu-item (click)="act('view', s)"><mat-icon>visibility</mat-icon><span>View</span></button>
+            @if (perms().update && isEditable(s)) {
+              <button mat-menu-item (click)="act('edit', s)"><mat-icon>edit</mat-icon><span>Edit</span></button>
+            }
+            @if (perms().cancel && isCancellable(s)) {
+              <button mat-menu-item class="danger" (click)="act('cancel', s)"><mat-icon>cancel</mat-icon><span>Cancel</span></button>
+            }
+          </mat-menu>
+        </td>
+      </ng-template>
+    </app-table>
+  `,
+  styles: [`
+    .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
+    .awb { color:var(--brand-600); }
+    .num { text-align:right; }
+    .col-actions { text-align:right; width:56px; }
+    .kebab { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:inline-flex; padding:4px; border-radius:8px; }
+    .kebab:hover { background:var(--surface-muted); }
+    .danger { color:var(--danger); }
+  `]
+})
+export class ShipmentTable {
+  readonly rows = input<Shipment[]>([]);
+  readonly loading = input(false);
+  readonly sort = input<SortState | null>(null);
+  readonly perms = input.required<ShipmentPerms>();
+  /** Resolves `bookingBranchId`/`deliveryBranchId` to a name — every field the list
+   *  projection (`ShipmentSummaryResponse`) carries is shown; branch is the one that's an
+   *  id rather than a plain string. */
+  readonly branchOptions = input<SelectOption[]>([]);
+
+  readonly sortChange = output<SortState>();
+  readonly action = output<{ type: ShipmentAction; shipment: Shipment }>();
+
+  readonly columns: TableColumn<Shipment>[] = [
+    { key: 'shipmentNumber', header: 'Shipment No.', sortable: true },
+    { key: 'trackingNumber', header: 'AWB', sortable: true },
+    { key: 'bookingDate', header: 'Booking Date', sortable: true },
+    { key: 'bookingBranchId', header: 'Booking Branch' },
+    { key: 'deliveryBranchId', header: 'Delivery Branch' },
+    { key: 'senderName', header: 'Sender' },
+    { key: 'senderContact', header: 'Sender Contact' },
+    { key: 'receiverName', header: 'Receiver' },
+    { key: 'receiverContact', header: 'Receiver Contact' },
+    { key: 'chargeableWeight', header: 'Chargeable Wt.', sortable: true, align: 'right' },
+    { key: 'netAmount', header: 'Total Amount', align: 'right' },
+    { key: 'status', header: 'Status', sortable: true, width: '160px' },
+    { key: 'actions', header: '', width: '56px', align: 'right' }
+  ];
+
+  act(type: ShipmentAction, shipment: Shipment): void { this.action.emit({ type, shipment }); }
+  isEditable(s: Shipment): boolean { return s.status === 'BOOKED'; }
+  isCancellable(s: Shipment): boolean { return CANCELLABLE_STATUSES.includes(s.status); }
+  branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+}

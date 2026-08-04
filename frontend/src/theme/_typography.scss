@@ -1,0 +1,11 @@
+// Typography scale. Inter for UI, tabular numerals for tables/stats.
+:root { --font-sans:'Inter','Roboto',system-ui,-apple-system,sans-serif; }
+
+.text-display { font-size:28px; line-height:36px; font-weight:700; letter-spacing:-.02em; }
+.text-h1 { font-size:22px; line-height:30px; font-weight:700; letter-spacing:-.01em; }
+.text-h2 { font-size:18px; line-height:26px; font-weight:600; }
+.text-h3 { font-size:15px; line-height:22px; font-weight:600; }
+.text-body { font-size:14px; line-height:21px; font-weight:400; }
+.text-small { font-size:13px; line-height:18px; }
+.text-caption { font-size:12px; line-height:16px; color:var(--content-muted); }
+.num-tabular { font-variant-numeric:tabular-nums; }

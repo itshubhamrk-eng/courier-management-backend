@@ -1,0 +1,74 @@
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+
+/** Labelled text/password/email field bound to a reactive FormControl, with error text
+ *  and an optional show/hide toggle for passwords. */
+@Component({
+  selector: 'app-input',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule, MatIconModule],
+  template: `
+    <label class="field">
+      @if (label()) { <span class="field__label">{{ label() }}@if (required()) {<i>*</i>}</span> }
+      <span class="field__wrap" [class.field__wrap--err]="invalid">
+        @if (icon()) { <mat-icon class="field__icon">{{ icon() }}</mat-icon> }
+        <input class="field__input" [type]="effectiveType()" [placeholder]="placeholder()"
+               [formControl]="control()" [attr.autocomplete]="autocomplete()" />
+        @if (canToggle()) {
+          <button type="button" class="field__eye" (click)="reveal.set(!reveal())"
+                  [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'" tabindex="-1">
+            <mat-icon>{{ reveal() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+        }
+      </span>
+      @if (invalid) { <span class="field__err">{{ errorText }}</span> }
+    </label>
+  `,
+  styles: [`
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field__label { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .field__label i { color:var(--danger); margin-left:2px; font-style:normal; }
+    .field__wrap { display:flex; align-items:center; gap:8px; height:42px; padding:0 12px;
+      background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); transition:.15s; }
+    .field__wrap:focus-within { border-color:var(--brand-500); box-shadow:0 0 0 3px var(--brand-100); }
+    .field__wrap--err { border-color:var(--danger); }
+    .field__icon { color:var(--content-muted); font-size:20px; }
+    .field__input { border:0; outline:0; background:transparent; flex:1; font:400 14px var(--font-sans); color:var(--content-fg); }
+    .field__eye { display:grid; place-items:center; border:0; background:transparent; cursor:pointer; color:var(--content-muted); padding:0; }
+    .field__eye mat-icon { font-size:20px; width:20px; height:20px; }
+    .field__err { font:500 12px var(--font-sans); color:var(--danger); }
+  `]
+})
+export class UiInput {
+  readonly control = input.required<FormControl>();
+  readonly label = input('');
+  readonly type = input<'text' | 'password' | 'email' | 'tel'>('text');
+  readonly placeholder = input('');
+  readonly icon = input<string | null>(null);
+  readonly required = input(false);
+  readonly autocomplete = input('off');
+  readonly togglePassword = input(false);
+  /**
+   * Overrides the generic message when the caller knows a better one — a pattern the
+   * caller declared, for instance, where "Invalid value." says nothing useful. Empty
+   * falls back to the built-in mapping below.
+   */
+  readonly errorMessage = input('');
+
+  protected readonly reveal = signal(false);
+  protected readonly canToggle = computed(() => this.togglePassword() && this.type() === 'password');
+  protected readonly effectiveType = computed(() => (this.canToggle() && this.reveal() ? 'text' : this.type()));
+
+  get invalid(): boolean { const c = this.control(); return c.invalid && (c.touched || c.dirty); }
+  get errorText(): string {
+    const e = this.control().errors;
+    if (!e) return '';
+    if (this.errorMessage()) return this.errorMessage();
+    if (e['required']) return 'This field is required.';
+    if (e['email']) return 'Enter a valid email address.';
+    if (e['minlength']) return `At least ${e['minlength'].requiredLength} characters.`;
+    return 'Invalid value.';
+  }
+}

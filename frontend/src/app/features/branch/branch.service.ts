@@ -1,0 +1,50 @@
+import { Injectable, inject } from '@angular/core';
+import { map } from 'rxjs/operators';
+import { ApiService } from '@core/services/api.service';
+import { API } from '@core/config/api-endpoints';
+import {
+  Branch, BranchResponse, CreateBranchRequest, UpdateBranchRequest
+} from '@core/models/branch.model';
+import { AppUser } from '@core/models/user.model';
+import { PageQuery } from '@core/models/page.model';
+
+/** A resolved id → label pair, for the manager dropdown and the id→name map. */
+export interface Lookup { id: string; label: string; hint?: string; }
+
+/**
+ * Branch administration — talks to /api/v1/branches via ApiService, mirroring the backend
+ * endpoints one-to-one; no mock data. The optimistic-lock `version` travels in the PUT
+ * body. Status (activate/deactivate) and the manager (assign-manager) each have their own
+ * endpoint, matching BranchController; they are not part of the update body.
+ */
+@Injectable({ providedIn: 'root' })
+export class BranchService {
+  private readonly api = inject(ApiService);
+
+  // ---- reads ----------------------------------------------------------------
+  list(query: PageQuery) { return this.api.page<Branch>(API.branches, query); }
+  get(id: string) { return this.api.get<BranchResponse>(`${API.branches}/${id}`); }
+
+  // ---- writes ---------------------------------------------------------------
+  create(body: CreateBranchRequest) { return this.api.post<BranchResponse>(API.branches, body); }
+  update(id: string, body: UpdateBranchRequest) { return this.api.put<BranchResponse>(`${API.branches}/${id}`, body); }
+  remove(id: string) { return this.api.delete<void>(`${API.branches}/${id}`); }
+
+  // ---- lifecycle + assignment (idempotent / own endpoints) -----------------
+  activate(id: string) { return this.api.patch<BranchResponse>(`${API.branches}/${id}/activate`, {}); }
+  deactivate(id: string) { return this.api.patch<BranchResponse>(`${API.branches}/${id}/deactivate`, {}); }
+  /** Set (or clear, with null) the branch manager — a company user. */
+  assignManager(id: string, managerId: string | null) {
+    return this.api.patch<BranchResponse>(`${API.branches}/${id}/assign-manager`, { managerId });
+  }
+
+  // ---- lookups (for dropdowns / id→name resolution) -------------------------
+  /** Active company users, as options for the manager picker and the table's name map. */
+  managers() {
+    return this.api
+      .page<AppUser>(API.users, { page: 0, size: 100, sort: 'firstName,asc', status: 'ACTIVE' })
+      .pipe(map((p): Lookup[] => p.content.map((u) => ({
+        id: u.id, label: u.displayName, hint: u.designation || u.email
+      }))));
+  }
+}

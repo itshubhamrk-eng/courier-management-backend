@@ -1,0 +1,112 @@
+@use 'tokens';
+@use 'typography';
+// Angular Material 3 — must be a @use, so it sits with the others before any rules.
+@use '@angular/material' as mat;
+
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: light dark;
+  @include mat.theme((
+    color: (primary: mat.$violet-palette, tertiary: mat.$blue-palette),
+    typography: Inter,
+    density: -1
+  ));
+}
+// Material's M3 tokens resolve via CSS light-dark(), which follows this
+// property. Pin it to our own [data-theme] toggle (set by ThemeService) so
+// unstyled Material surfaces — e.g. the mat-menu panel — match the app's
+// theme instead of the OS's prefers-color-scheme.
+html[data-theme='light'] { color-scheme: light; }
+html[data-theme='dark'] { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--surface-muted);
+  color: var(--content-fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+}
+
+// Canonical page layout — one source of truth so every feature has identical
+// gutters and rhythm. Features must NOT redefine .page/.page__head/.page__actions.
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+.page__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.page__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+// Table cells declared via the `#row` template are content-projected, so app-table's
+// own (encapsulated) td styles don't reach them. This global rule keeps projected cells
+// aligned with the header — same padding/border/colour regardless of who renders the td.
+.tbl tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--content-fg);
+}
+.app-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.app-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,.5); border-radius: 999px; }
+
+// Toast tones for the notification service.
+.toast-success { --mdc-snackbar-container-color: var(--success); }
+.toast-info { --mdc-snackbar-container-color: var(--info); }
+.toast-error { --mdc-snackbar-container-color: var(--danger); }
+
+// driver.js popover, restyled to match the app instead of its own default look — scoped to
+// .cs-tour (TourService's popoverClass) so it never bleeds into any other future use of the
+// library. Overlay itself is untouched; `all:unset` on the library's base classes means every
+// property has to be restated, not just the color.
+.cs-tour {
+  background: var(--surface);
+  color: var(--content-fg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--r-card-lg);
+  box-shadow: var(--shadow-card-hover);
+  padding: 18px 20px;
+  max-width: 320px;
+  font-family: var(--font-sans);
+}
+.cs-tour .driver-popover-title { font: 700 16px var(--font-sans); color: var(--content-fg); }
+.cs-tour .driver-popover-description { margin-top: 6px; font: 400 13px/1.5 var(--font-sans); color: var(--content-muted); }
+.cs-tour .driver-popover-close-btn { color: var(--content-muted); font-size: 16px; }
+.cs-tour .driver-popover-close-btn:hover { color: var(--content-fg); }
+.cs-tour .driver-popover-footer { margin-top: 16px; }
+.cs-tour .driver-popover-progress-text { font: 500 12px var(--font-sans); color: var(--content-muted); }
+.cs-tour .driver-popover-footer-btn {
+  border-radius: var(--r-field);
+  padding: 6px 14px;
+  font: 600 12px var(--font-sans);
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  color: var(--content-fg);
+}
+.cs-tour .driver-popover-footer-btn:hover { background: var(--surface-muted); }
+.cs-tour .driver-popover-next-btn, .cs-tour .driver-popover-done-btn {
+  background: var(--brand-600); color: #fff; border-color: var(--brand-600);
+}
+.cs-tour .driver-popover-next-btn:hover, .cs-tour .driver-popover-done-btn:hover { background: var(--brand-700); border-color: var(--brand-700); }
+// Base .driver-popover-arrow sets all 4 border colors to #fff; driver.css's own
+// per-side rules then transparent 3 of them, leaving the visible one at #fff — only that
+// one needs restating here (touching the base rule would un-transparent the other 3).
+.cs-tour .driver-popover-arrow-side-left { border-left-color: var(--surface) !important; }
+.cs-tour .driver-popover-arrow-side-right { border-right-color: var(--surface) !important; }
+.cs-tour .driver-popover-arrow-side-top { border-top-color: var(--surface) !important; }
+.cs-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--surface) !important; }

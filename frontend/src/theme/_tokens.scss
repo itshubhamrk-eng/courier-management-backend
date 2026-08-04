@@ -1,0 +1,47 @@
+// =============================================================================
+// Design tokens — the single source for palette, spacing, radius, shadows, type.
+// Exposed as CSS custom properties so Tailwind utilities, Material 3 and component
+// SCSS all read the same values. Light is the default; [data-theme="dark"] overrides.
+// =============================================================================
+
+:root {
+  // Brand (indigo/blue enterprise) — the primary accent.
+  --brand-50:#eef2ff; --brand-100:#e0e7ff; --brand-200:#c7d2fe; --brand-300:#a5b4fc;
+  --brand-400:#818cf8; --brand-500:#6366f1; --brand-600:#4f46e5; --brand-700:#4338ca;
+  --brand-800:#3730a3; --brand-900:#312e81;
+
+  // Dark sidebar (the signature nav rail).
+  --sidebar-bg:#0f172a; --sidebar-hover:#1e293b; --sidebar-active:#4f46e5;
+  --sidebar-fg:#cbd5e1; --sidebar-fg-strong:#f8fafc; --sidebar-section:#64748b;
+
+  // Light content area.
+  --surface:#ffffff; --surface-muted:#f8fafc; --surface-border:#e5e7eb;
+  --content-fg:#111827; --content-muted:#6b7280;
+
+  // Semantic status.
+  --success:#16a34a; --success-bg:#dcfce7; --warning:#d97706; --warning-bg:#fef3c7;
+  --danger:#dc2626; --danger-bg:#fee2e2; --info:#2563eb; --info-bg:#dbeafe;
+  --neutral:#6b7280; --neutral-bg:#f3f4f6;
+
+  // Spacing scale (4px base).
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px;
+  --sp-8:32px; --sp-10:40px; --sp-12:48px;
+
+  // Radius.
+  --r-field:10px; --r-card:14px; --r-card-lg:16px; --r-pill:999px;
+
+  // Shadows.
+  --shadow-card:0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
+  --shadow-card-hover:0 8px 24px rgba(16,24,40,.10);
+  --shadow-pop:0 12px 32px rgba(16,24,40,.14);
+
+  // Layout metrics.
+  --sidebar-w:264px; --sidebar-w-collapsed:76px; --header-h:64px;
+}
+
+:root[data-theme="dark"] {
+  --surface:#111827; --surface-muted:#0b1220; --surface-border:#1f2937;
+  --content-fg:#e5e7eb; --content-muted:#9ca3af;
+  --sidebar-bg:#0b1220; --sidebar-hover:#111a2e;
+  --success-bg:#052e16; --warning-bg:#3b2f0a; --danger-bg:#3b0d0d; --info-bg:#0b2447; --neutral-bg:#1f2937;
+}

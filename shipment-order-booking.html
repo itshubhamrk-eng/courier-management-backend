@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>New consignment booking</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<style>
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --surface-0:#f7f6f2;--surface-1:#f1efe8;--surface-2:#ffffff;
+  --text-primary:#1f1f1d;--text-secondary:#5f5e5a;--text-muted:#888780;
+  --border:#e2e0d8;--border-accent:#378add;--purple:#7f77dd;--purple-t:#534ab7;
+  --bg-accent:#e6f1fb;--text-accent:#185fa5;--radius:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);font-family:var(--font-sans);color:var(--text-primary);padding:28px}
+.lr{max-width:960px;margin:0 auto}
+.lr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.lr-grid{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:16px}
+.lr-card{background:var(--surface-2);border:.5px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:14px}
+.lr-sec{font-size:13px;font-weight:500;color:var(--text-secondary);letter-spacing:.04em;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.lr-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:12px}
+.lr-row:last-child{margin-bottom:0}
+.lr-f{display:flex;flex-direction:column;gap:5px}
+.lr-f label{font-size:12px;color:var(--text-secondary)}
+.lr-hint{font-size:11px;color:var(--text-muted);margin-top:4px}
+input,select{height:36px;border:.5px solid var(--border);border-radius:var(--radius);padding:0 10px;font-size:14px;font-family:inherit;background:var(--surface-2);color:var(--text-primary);width:100%}
+input:focus,select:focus{outline:none;box-shadow:0 0 0 2px var(--bg-accent);border-color:var(--border-accent)}
+.lr-parties{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lr-party{border:.5px solid var(--border);border-radius:12px;padding:14px}
+.lr-party.sender{border-color:var(--border-accent)}
+.lr-party.recv{border-color:var(--purple)}
+.lr-ptitle{font-size:11px;font-weight:500;letter-spacing:.06em;margin-bottom:12px}
+.lr-party.sender .lr-ptitle{color:var(--text-accent)}
+.lr-party.recv .lr-ptitle{color:var(--purple-t)}
+.lr-party .lr-f{margin-bottom:10px}
+.lr-party .lr-f:last-child{margin-bottom:0}
+.lr-sum{background:var(--surface-1);border-radius:12px;padding:1rem;position:sticky;top:8px}
+.lr-sum .lbl{font-size:12px;color:var(--text-secondary);margin-top:12px}
+.lr-sum .val{font-size:14px;font-weight:500;margin-top:2px}
+.lr-line{display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);padding:5px 0}
+.lr-line span:last-child{color:var(--text-primary)}
+.lr-total{display:flex;justify-content:space-between;align-items:baseline;border-top:.5px solid var(--border);margin-top:8px;padding-top:10px}
+.lr-total .t{font-size:24px;font-weight:500}
+.lr-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:var(--radius);background:var(--bg-accent);color:var(--text-accent)}
+.lr-cta{margin-top:14px}
+.lr-cta button{width:100%;height:38px;border:.5px solid var(--border-accent);border-radius:var(--radius);background:var(--text-accent);color:#fff;font-size:14px;font-family:inherit;cursor:pointer}
+.lr-cta button:active{transform:scale(.98)}
+@media(max-width:760px){.lr-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.lr-parties{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="lr">
+  <div class="lr-head">
+    <div style="font-size:18px;font-weight:500"><i class="ti ti-truck-delivery"></i> New consignment booking</div>
+    <span class="lr-badge">Lorry receipt</span>
+  </div>
+  <div class="lr-grid">
+    <div>
+      <div class="lr-card">
+        <div class="lr-sec"><i class="ti ti-file-text"></i> Booking details</div>
+        <div class="lr-row">
+          <div class="lr-f"><label>LR number</label><input placeholder="LR number" /><span class="lr-hint">Optional &mdash; leave blank to auto-generate</span></div>
+          <div class="lr-f"><label>Booking date</label><input type="date" value="2026-07-30" /></div>
+          <div class="lr-f"><label>Payment mode</label><select id="lrPay"><option value="topay">To pay</option><option value="paid">Paid</option><option value="cash" selected>Cash</option><option value="tbb">TBB (to be billed)</option></select></div>
+        </div>
+      </div>
+
+      <div class="lr-card">
+        <div class="lr-sec"><i class="ti ti-map-pin"></i> Route</div>
+        <div class="lr-row">
+          <div class="lr-f"><label>From city *</label><input id="lrFrom" value="Mumbai" /></div>
+          <div class="lr-f"><label>From pincode</label><input value="400001" inputmode="numeric" /></div>
+          <div class="lr-f"><label>To city *</label><input id="lrTo" value="Nagpur" /></div>
+          <div class="lr-f"><label>To pincode</label><input value="440001" inputmode="numeric" /></div>
+        </div>
+      </div>
+
+      <div class="lr-card">
+        <div class="lr-sec"><i class="ti ti-users"></i> Parties</div>
+        <div class="lr-parties">
+          <div class="lr-party sender">
+            <div class="lr-ptitle">CONSIGNOR (SENDER)</div>
+            <div class="lr-f"><label>Name *</label><input placeholder="Name" /></div>
+            <div class="lr-f"><label>Address</label><input placeholder="Address" /></div>
+            <div class="lr-f"><label>Contact number</label><input placeholder="Contact number" inputmode="tel" /></div>
+          </div>
+          <div class="lr-party recv">
+            <div class="lr-ptitle">CONSIGNEE (RECEIVER)</div>
+            <div class="lr-f"><label>Name *</label><input placeholder="Name" /></div>
+            <div class="lr-f"><label>Address</label><input placeholder="Address" /></div>
+            <div class="lr-f"><label>Contact number</label><input placeholder="Contact number" inputmode="tel" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="lr-card">
+        <div class="lr-sec"><i class="ti ti-box"></i> Shipment details</div>
+        <div class="lr-row">
+          <div class="lr-f"><label>No. of packages *</label><input id="lrPkg" type="number" value="12" /></div>
+          <div class="lr-f"><label>Weight (kg)</label><input id="lrWt" type="number" value="850" /></div>
+          <div class="lr-f"><label>Description of goods</label><input value="Auto spare parts" /></div>
+          <div class="lr-f"><label>Amount (&#8377;) *</label><input id="lrAmt" type="number" value="4200" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="lr-sum">
+        <div style="font-size:14px;font-weight:500;margin-bottom:2px">Freight summary</div>
+        <div class="lbl">Route</div><div class="val" id="lrRoute">Mumbai &rarr; Nagpur</div>
+        <div class="lbl">Payment mode</div><div class="val" id="lrPayVal">Cash</div>
+        <div class="lbl">Load</div><div class="val" id="lrLoad">12 pkg &middot; 850 kg</div>
+        <div style="margin-top:14px">
+          <div class="lr-line"><span>Freight</span><span id="lrFreight">&#8377;4,200</span></div>
+          <div class="lr-line"><span>GST (5%)</span><span id="lrGst">&#8377;210</span></div>
+          <div class="lr-line"><span>Hamali / loading</span><span>&#8377;150</span></div>
+        </div>
+        <div class="lr-total"><span style="font-size:13px;color:var(--text-secondary)">Total</span><span class="t" id="lrTotal">&#8377;4,560</span></div>
+        <div class="lr-cta"><button>Generate LR</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  function inr(n){return '₹'+Math.round(n).toLocaleString('en-IN');}
+  var payLabels={topay:'To pay',paid:'Paid',cash:'Cash',tbb:'TBB'};
+  function render(){
+    document.getElementById('lrRoute').textContent=(document.getElementById('lrFrom').value||'From')+' → '+(document.getElementById('lrTo').value||'To');
+    document.getElementById('lrPayVal').textContent=payLabels[document.getElementById('lrPay').value];
+    var pkg=parseInt(document.getElementById('lrPkg').value||0,10);
+    var wt=parseInt(document.getElementById('lrWt').value||0,10);
+    document.getElementById('lrLoad').textContent=pkg+' pkg · '+wt+' kg';
+    var amt=parseFloat(document.getElementById('lrAmt').value||0);
+    var gst=amt*0.05;
+    document.getElementById('lrFreight').textContent=inr(amt);
+    document.getElementById('lrGst').textContent=inr(gst);
+    document.getElementById('lrTotal').textContent=inr(amt+gst+150);
+  }
+  ['lrFrom','lrTo','lrPay','lrPkg','lrWt','lrAmt'].forEach(function(id){
+    document.getElementById(id).addEventListener('input',render);
+    document.getElementById(id).addEventListener('change',render);
+  });
+  render();
+})();
+</script>
+</body>
+</html>

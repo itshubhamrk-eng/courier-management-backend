@@ -1,0 +1,172 @@
+package com.courier.shared.audit.domain;
+
+/**
+ * Catalogue of auditable events.
+ *
+ * <p>An enum rather than a free-text string so that the set is greppable, typo-proof
+ * and reportable. Modules add their own constants here as they land; the groupings
+ * below mirror {@code MEMORY/modules/*.md}.
+ */
+public enum AuditAction {
+
+    // --- authentication (Phase 2)
+    LOGIN_SUCCESS,
+    LOGIN_FAILURE,
+    LOGOUT,
+    LOGOUT_ALL_DEVICES,
+    TOKEN_REFRESHED,
+    REFRESH_TOKEN_REUSE_DETECTED,
+    TOKEN_REVOKED,
+    PASSWORD_CHANGED,
+    PASSWORD_RESET_REQUESTED,
+    PASSWORD_RESET_COMPLETED,
+    ACCOUNT_LOCKED,
+    ACCOUNT_UNLOCKED,
+    EMAIL_VERIFICATION_SENT,
+    EMAIL_VERIFIED,
+    SESSION_REVOKED,
+    USER_CREATED,
+    ROLE_GRANTED,
+    ROLE_REVOKED,
+
+    // --- company, the ownership root (Phase 2). A company is the tenant, so there is
+    // one set of constants for it and no TENANT_* parallel.
+    COMPANY_CREATED,
+    COMPANY_UPDATED,
+    COMPANY_ACTIVATED,
+    COMPANY_DEACTIVATED,
+    COMPANY_SUSPENDED,
+    COMPANY_EXPIRED,
+    COMPANY_DELETED,
+    COMPANY_ROLES_SEEDED,
+    COMPANY_SETTINGS_SEEDED,
+    COMPANY_SETTINGS_INITIALIZED,
+    COMPANY_SETTINGS_UPDATED,
+
+    // --- a company's subscription (Phase 2, SUPER_ADMIN). Distinct from the
+    // SUBSCRIPTION_PLAN_* constants further down, which are about the plan catalogue
+    // itself rather than one company's place in it.
+    COMPANY_SUBSCRIPTION_ASSIGNED,
+    COMPANY_SUBSCRIPTION_RENEWED,
+    COMPANY_SUBSCRIPTION_SUSPENDED,
+
+    // --- platform administration (SUPER_ADMIN)
+    SUPER_ADMIN_USER_CREATED,
+
+    // --- role management (Phase 3, COMPANY_ADMIN). Distinct from ROLE_GRANTED /
+    // ROLE_REVOKED below, which are about giving a role to a *user*.
+    ROLE_CREATED,
+    ROLE_UPDATED,
+    ROLE_DELETED,
+    ROLE_ACTIVATED,
+    ROLE_DEACTIVATED,
+
+    // --- permission management (Phase 3). Catalogue writes are SUPER_ADMIN; grants are
+    // the company's own decision and are recorded against the role.
+    PERMISSION_CREATED,
+    PERMISSION_UPDATED,
+    PERMISSION_DELETED,
+    ROLE_PERMISSIONS_ASSIGNED,
+    ROLE_PERMISSION_REVOKED,
+
+    // --- user management (Phase 3, COMPANY_ADMIN). USER_CREATED / ROLE_GRANTED /
+    // ROLE_REVOKED above predate this and are auth's; these are the company-admin actions.
+    USER_UPDATED,
+    USER_ACTIVATED,
+    USER_DEACTIVATED,
+    USER_LOCKED,
+    USER_UNLOCKED,
+    USER_PASSWORD_RESET,
+    USER_ROLE_ASSIGNED,
+    USER_ROLE_REMOVED,
+    USER_BRANCH_ASSIGNED,
+    USER_HUB_ASSIGNED,
+
+    // --- branch management (Phase 4, COMPANY_ADMIN / BRANCH_MANAGER)
+    BRANCH_CREATED,
+    BRANCH_UPDATED,
+    BRANCH_ACTIVATED,
+    BRANCH_DEACTIVATED,
+    BRANCH_MANAGER_ASSIGNED,
+    BRANCH_USERS_ASSIGNED,
+
+    // --- customer management (Phase 7, COMPANY_ADMIN / BRANCH_MANAGER / OPERATOR).
+    // Reusable master data, independent of Shipment Order.
+    CUSTOMER_CREATED,
+    CUSTOMER_UPDATED,
+    CUSTOMER_ACTIVATED,
+    CUSTOMER_DEACTIVATED,
+    CUSTOMER_ADDRESS_CREATED,
+    CUSTOMER_ADDRESS_UPDATED,
+    CUSTOMER_ADDRESS_DELETED,
+
+    // --- rate master (Phase 4 remainder, COMPANY_ADMIN). RATE_CALCULATED is deliberately
+    // absent: a quote reads the rate card and moves nothing, and every other CALCULATE
+    // right in the catalogue (see PermissionAction) is unaudited for the same reason.
+    RATE_CREATED,
+    RATE_UPDATED,
+    RATE_ACTIVATED,
+    RATE_DEACTIVATED,
+
+    // --- branch wallet (Phase 5, Finance). Every one of these is money moving, or an
+    // attempt to move it, so the trail is the record of record: WALLET_RECHARGE_INITIATED
+    // is written when a gateway order is opened, which is intent rather than money — it has
+    // no ledger entry by design, and this is where "who tried what" lives.
+    WALLET_CREATED,
+    WALLET_CREDITED,
+    WALLET_DEBITED,
+    WALLET_RECHARGE_INITIATED,
+    WALLET_RECHARGED,
+    // A top-up request moves nothing by itself (WALLET_TOPUP_REQUESTED is intent, same
+    // reasoning as WALLET_RECHARGE_INITIATED above); WALLET_TOPUP_APPROVED's own money
+    // movement is the WALLET_CREDITED entry approval writes via WalletService.credit.
+    WALLET_TOPUP_REQUESTED,
+    WALLET_TOPUP_APPROVED,
+    WALLET_TOPUP_REJECTED,
+
+    // --- master data (Phase 6, COMPANY_ADMIN). One set for all twelve lists: the entity
+    // name is already carried on every audit row, so a MASTER_COUNTRY_CREATED /
+    // MASTER_CITY_CREATED / ... explosion would put twelve times the constants in front of
+    // a reviewer to say what "entityType" already says.
+    MASTER_DATA_CREATED,
+    MASTER_DATA_UPDATED,
+    MASTER_DATA_ACTIVATED,
+    MASTER_DATA_DEACTIVATED,
+    MASTER_DATA_DELETED,
+    MASTER_DATA_SEEDED,
+
+    // --- shipment booking (Phase 4 remainder, COMPANY_ADMIN / BRANCH_MANAGER / OPERATOR).
+    // The wallet debit for a PREPAID booking is its own WALLET_DEBITED entry, written by
+    // Finance — see the branch wallet section above — not duplicated here.
+    SHIPMENT_BOOKED,
+    SHIPMENT_UPDATED,
+    SHIPMENT_CANCELLED,
+    SHIPMENT_DOCUMENT_UPLOADED,
+
+    // --- shipment movement (V19: minimal Manifest + the movement pipeline on top of it)
+    VEHICLE_CREATED,
+    VEHICLE_ACTIVATED,
+    VEHICLE_DEACTIVATED,
+    MANIFEST_CREATED,
+    SHIPMENT_OUT_SCANNED,
+    MANIFEST_DISPATCHED,
+    SHIPMENT_IN_SCANNED,
+    SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED,
+    SHIPMENT_DELIVERED,
+
+    // --- subscription plans (Phase 2, SUPER_ADMIN only)
+    SUBSCRIPTION_PLAN_CREATED,
+    SUBSCRIPTION_PLAN_UPDATED,
+    SUBSCRIPTION_PLAN_ACTIVATED,
+    SUBSCRIPTION_PLAN_DEACTIVATED,
+    SUBSCRIPTION_PLAN_DELETED,
+
+    // --- generic CRUD, for modules that need nothing more specific
+    CREATED,
+    UPDATED,
+    DELETED,
+
+    // --- security
+    ACCESS_DENIED,
+    COMPANY_ISOLATION_VIOLATION_BLOCKED
+}

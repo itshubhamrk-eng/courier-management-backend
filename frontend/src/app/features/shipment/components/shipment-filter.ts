@@ -1,0 +1,87 @@
+import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiButton } from '@shared/components/ui-button/ui-button';
+import { MasterDataService } from '@features/masters/master-data.service';
+import { ShipmentSearchRequest, ShipmentStatus } from '@core/models/shipment.model';
+
+const STATUSES: SelectOption[] = ([
+  'BOOKED', 'READY_FOR_MANIFEST', 'MANIFEST_CREATED', 'DISPATCHED', 'IN_SCAN',
+  'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'CANCELLED'
+] as ShipmentStatus[]).map((s) => ({ value: s, label: s.split('_').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ') }));
+
+/** Advanced filter for the shipment list. Emits a ShipmentSearchRequest; parent merges it in. */
+@Component({
+  selector: 'app-shipment-filter',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule, UiSelect, UiButton],
+  template: `
+    <form [formGroup]="form" (ngSubmit)="apply()" class="cf">
+      <app-select [control]="c('status')" label="Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
+      @if (!lockBookingBranch()) {
+        <app-select [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+      }
+      <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+
+      <label class="fld"><span class="fld__l">Booked From</span>
+        <input class="fld__i" type="date" [formControl]="c('bookingDateFrom')" /></label>
+      <label class="fld"><span class="fld__l">Booked To</span>
+        <input class="fld__i" type="date" [formControl]="c('bookingDateTo')" /></label>
+
+      <div class="cf__bar">
+        <app-button variant="text" (pressed)="clear()">Clear all</app-button>
+        <app-button type="submit" icon="filter_list">Apply filters</app-button>
+      </div>
+    </form>
+  `,
+  styles: [`
+    .cf { display:flex; flex-direction:column; gap:16px; }
+    .fld { display:flex; flex-direction:column; gap:6px; }
+    .fld__l { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .fld__i { height:42px; padding:0 12px; background:var(--surface); border:1px solid var(--surface-border);
+      border-radius:var(--r-field); font:400 14px var(--font-sans); color:var(--content-fg); }
+    .cf__bar { display:flex; justify-content:space-between; gap:10px; margin-top:8px; }
+  `]
+})
+export class ShipmentFilter {
+  private readonly fb = inject(FormBuilder);
+  private readonly masters = inject(MasterDataService);
+  readonly changed = output<ShipmentSearchRequest>();
+  /** Set by ShipmentList for a branch-scoped viewer — the list already fixes
+   *  bookingBranchId to their own branch, so the picker would just be misleading. */
+  readonly lockBookingBranch = input(false);
+
+  protected readonly statuses = STATUSES;
+  protected readonly branchOptions = signal<SelectOption[]>([]);
+
+  protected readonly form: FormGroup = this.fb.group({
+    status: [[] as string[]],
+    bookingBranchId: [null as string | null],
+    deliveryBranchId: [null as string | null],
+    bookingDateFrom: [''],
+    bookingDateTo: ['']
+  });
+
+  constructor() {
+    this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+  }
+
+  protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
+
+  protected apply(): void {
+    const v = this.form.getRawValue();
+    this.changed.emit({
+      status: v.status?.length ? (v.status as ShipmentStatus[]) : undefined,
+      bookingBranchId: v.bookingBranchId || undefined,
+      deliveryBranchId: v.deliveryBranchId || undefined,
+      bookingDateFrom: v.bookingDateFrom || undefined,
+      bookingDateTo: v.bookingDateTo || undefined
+    });
+  }
+
+  protected clear(): void {
+    this.form.reset({ status: [], bookingBranchId: null, deliveryBranchId: null, bookingDateFrom: '', bookingDateTo: '' });
+    this.changed.emit({});
+  }
+}

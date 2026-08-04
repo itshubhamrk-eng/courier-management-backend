@@ -1,0 +1,15 @@
+// Barrel for the shared component library.
+export * from './ui-button/ui-button';
+export * from './ui-input/ui-input';
+export * from './ui-select/ui-select';
+export * from './ui-table/ui-table';
+export * from './ui-drawer/ui-drawer';
+export * from './ui-search/ui-search';
+export * from './ui-pagination/ui-pagination';
+export * from './ui-loader/ui-loader';
+export * from './ui-card/ui-card';
+export * from './status-badge/status-badge';
+export * from './statistic-card/statistic-card';
+export * from './ui-dialog/dialog.service';
+export * from './ui-dialog/confirm-dialog';
+export * from './ui-dialog/reason-dialog';

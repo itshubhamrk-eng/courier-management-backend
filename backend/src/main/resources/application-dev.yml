@@ -1,0 +1,15 @@
+# Shared development environment.
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    enabled: true
+
+app:
+  cors:
+    allowed-origins:
+      - https://app-dev.courier.example
+
+logging:
+  level:
+    com.courier: DEBUG

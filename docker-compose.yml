@@ -1,0 +1,92 @@
+# =============================================================================
+# Dev stack: MySQL 8, Spring Boot backend, Angular served by Nginx.
+#
+#   cp .env.example .env   # fill in passwords/JWT_SECRET first
+#   docker compose up --build
+#
+# No Redis here on purpose: RedisTokenRevocationChecker fails open (see its
+# javadoc) and Lettuce connects lazily, so the app runs without it — degraded
+# (access-token revocation not enforced), not down. Add a redis service the
+# same shape as docker/docker-compose.yml's if that trade stops being fine.
+# =============================================================================
+
+name: courier-dev
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: courier-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set - see .env.example}
+      MYSQL_DATABASE: ${DB_NAME:-courier_db}
+      MYSQL_USER: ${DB_USERNAME:-courier}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set - see .env.example}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # UTC everywhere, matching the backend's own JDBC/Hibernate timezone config.
+      - --default-time-zone=+00:00
+    ports:
+      - "${DB_PORT:-3307}:3306"
+      # MySQL reports its own internal port as 3306 via @@port regardless of this
+      # remap; MySQL Workbench's Test Connection does a secondary probe against
+      # that reported value, so 3306 has to be reachable too or Workbench fails
+      # even though the actual 3307 connection works fine.
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - courier-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courier-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-courier_db}
+      DB_USERNAME: ${DB_USERNAME:-courier}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set - see .env.example}
+      # No default: the app must not start with a guessable signing key.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${BACKEND_PORT:-8091}:8080"
+    networks:
+      - courier-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: courier-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8090}:80"
+    networks:
+      - courier-net
+
+volumes:
+  mysql-data:
+
+networks:
+  courier-net:
+    driver: bridge

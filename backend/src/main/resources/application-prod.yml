@@ -1,0 +1,40 @@
+# Production. Everything sensitive comes from the environment; there are no
+# defaults here on purpose — a missing variable must stop the deploy, not fall
+# back to something weak.
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    # Migrations run as a separate job before the new version starts, so a failed
+    # migration cannot leave a half-started application serving traffic.
+    enabled: false
+    baseline-on-migrate: false
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+# The API contract is published from CI artifacts, not from a live production
+# endpoint that also enumerates every route to an attacker.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: WARN
+    com.courier: INFO

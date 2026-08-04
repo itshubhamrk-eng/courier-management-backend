@@ -1,0 +1,2986 @@
+# CHANGELOG
+
+All notable changes to this project. Format based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is
+[SemVer](https://semver.org/). Newest first.
+
+**Update this file at the end of every task.**
+
+---
+
+## [0.17.1] — 2026-08-03 (same session, immediately after) — Out Scan folded into Manifest Created
+
+Scope: `ShipmentStatus` (backend), `ShipmentMovementController`/`ShipmentService`/
+`ManifestServiceImpl` (backend), `shipment.model.ts`/`ShipmentStatusBadge`/
+`ManifestCard` (frontend). Direct user request, in the user's own words: "manifest
+created as outscan created ... dispatch - assign vehicle and driver details ...
+inscan/received ... outfordelivery ... delivered" — collapsing what 0.17.0 shipped as
+two steps (create a manifest, then separately scan each shipment onto it) into one:
+adding a shipment to a manifest already **is** the out-scan milestone.
+
+### Changed
+
+- **`ShipmentStatus` loses `OUT_SCAN`.** New graph: `MANIFEST_CREATED` transitions
+  straight to `DISPATCHED`. `CANCELLABLE` narrows back to `{BOOKED,
+  READY_FOR_MANIFEST, MANIFEST_CREATED}`.
+- **`V20` migration** folds any real `OUT_SCAN` rows (genuine live-verification data
+  from 0.17.0) back into `MANIFEST_CREATED`, in both `shipments.status` and
+  `shipment_status_history` (`status` and `previous_status`) — the same
+  fold-back-on-rename pattern `V19` itself used.
+- **`POST /shipment-movement/out-scan` removed.** `ShipmentService.outScan`/
+  `scanOneOut` deleted; `findOutScanShipments` renamed to
+  `findManifestCreatedShipments` and now reads `MANIFEST_CREATED` directly.
+  `ManifestServiceImpl.dispatch`'s precondition message changed from "has no OUT_SCAN
+  shipment to dispatch" to "has no shipment to dispatch".
+- **Timeline drops a step**: 7 → 6 (`Booked, Out Scan Created, Dispatched, Received,
+  Out For Delivery, Delivered`). `MANIFEST_CREATED`'s display label changed from
+  "Manifest Created" to **"Out Scan Created"** everywhere it's shown — the shipment
+  status badge and the timeline both read this label now, not the status name.
+- **`ManifestScanCard` renamed to `ManifestCard`**, and stripped down to a read-only
+  card: heading (manifest number, lane, total weight, total parcel count) + LR table.
+  No Scan Tracking Number / Bulk Scan controls — nothing left to scan once creating a
+  manifest already counts. The Out Scan *page* keeps its name and its "Create
+  Manifest" form; it's now purely a worklist of open manifests, not an action screen.
+- 3 backend unit tests removed (`outScanReportsPerItemFailures`/
+  `outScanRefusesDoubleScan`/`outScanHappyPath`), remaining tests updated for the
+  narrower enum and renamed method (`mvn test` 673 → 670, still 13 pre-existing
+  unrelated master-module failures). 1 frontend test removed (`ng test` 125 → 124).
+
+### Verified live
+
+Restarted `:8081` — `V20` applied clean, `SELECT status, COUNT(*) FROM shipments
+GROUP BY status` confirmed zero `OUT_SCAN` rows remain (the one live-tested manifest
+from 0.17.0's own verification pass folded correctly to `MANIFEST_CREATED`). Old
+`/shipment-movement/out-scan` route now 404s. A manifest still in `CREATED` status
+dispatched successfully straight from `MANIFEST_CREATED` with no scan step in
+between (`shipmentCount: 2`). Through the Angular console: Out Scan page shows the
+open-manifest card with the "Out Scan Created" status badge and no scan controls;
+Dispatch found the same manifest by number and assigned vehicle/driver directly.
+
+---
+
+## [0.17.0] — 2026-08-03 — Shipment Movement, plus the minimal Manifest module underneath it
+
+Scope: new package `com.courier.modules.manifest`, migration `V19`, extends
+`com.courier.modules.shipment`. The task named "Shipment Movement" and gave a business
+flow that starts with "Create Manifest" — but no Manifest module existed anywhere in
+this codebase (`MEMORY/modules/shipment-booking.md` says explicitly "do not start
+Manifest Management next", and the backlog's next item was Hub/Serviceability, not
+this). Confirmed directly with the user before writing any code: build the minimal
+Manifest prerequisite in the same pass rather than stopping or faking a bare
+`manifest_id` column with nothing behind it. Full detail in
+`MEMORY/modules/shipment-movement.md`.
+
+### Added
+
+- **`Manifest`/`Vehicle`** (new `manifests`/`vehicles` tables, `V19`) — a manifest
+  groups `BOOKED` shipments travelling one booking→delivery branch pair; a vehicle is
+  deliberately minimal (registration number, optional `VehicleType`, capacity) since
+  the brief's own Definition of Done names no fleet-management screens. `driverUserId`
+  is any real company user (validated via `company.application.UserService`), not a
+  new entity — `DefaultRoleCatalog`'s eight roles have no "driver" concept to hang a
+  real restriction on.
+- **`DeliveryAssignment`** (new `delivery_assignment` table) — current delivery-desk
+  assignment and proof of delivery, one row per shipment (re-assign updates in place).
+  `otp`/`signatureUrl`/`photoUrl` are plain optional strings, "API Ready" per the
+  brief's own wording — no OTP flow, signature pad or camera capture exists anywhere
+  in this project yet.
+- **`shipment_status_history` gained `branch_id`/`manifest_id`/`vehicle_id`** — reused
+  the existing append-only table from Shipment Booking rather than a third one; every
+  movement step now records which branch it happened at, which manifest, and (on
+  DISPATCHED only) which vehicle. Verified live: `branch_id` flips Pune→Latur exactly
+  at the `IN_SCAN` entry.
+- **`ShipmentStatus` renamed**: `MANIFESTED`→`MANIFEST_CREATED`, `RECEIVED`→`IN_SCAN`,
+  `RETURN_INITIATED` folded into a direct `RETURNED` edge, new `OUT_SCAN` state. Safe
+  as a bare rename — nothing had ever written the old values (Shipment Booking's own
+  verification: "nothing yet transitions a shipment past BOOKED").
+- **Permissions: zero new migration.** The brief listed six new codes
+  (`SHIPMENT_OUT_SCAN` etc.); `DefaultPermissionCatalog` turned out to have *already*
+  seeded the exact same shape ahead of any service (`MANIFEST_DISPATCH`,
+  `MANIFEST_RECEIVE`, `DELIVERY_DISPATCH`, `DELIVERY_DELIVER`, `TRACKING_CREATE`), the
+  "responsibility list is ahead of the code" pattern yet again — reused instead of
+  duplicating the vocabulary. RBAC stays role-based (`hasAnyRole`) like every module
+  ahead of the authorise-on-permissions capstone, so this changed no runtime behaviour.
+- **5 movement endpoints** under `/api/v1/shipment-movement` (out-scan, dispatch,
+  in-scan, out-for-delivery, deliver) plus `GET /shipments/{id}/timeline` (7 named
+  steps, distinct from the existing raw `/history`). Bulk endpoints report **per-item**
+  success/failure, the same shape `BranchService.assignUsers` already uses, not
+  all-or-nothing.
+- **One-directional module dependency, by necessity not preference**: both "create a
+  manifest" and "dispatch a manifest" live in `ManifestServiceImpl`, which calls into
+  `ShipmentService` for the shipment-side mutations (`attachToManifest`,
+  `findOutScanShipments`, `transitionToDispatched`). `ShipmentServiceImpl` has no
+  dependency on `ManifestService` at all — the natural split (dispatch orchestration
+  living in a shipment-side "movement" service) would have created a Spring
+  circular-bean dependency between the two modules' services, not just an
+  architecture smell. See the module doc for the full reasoning.
+- **Frontend** (`features/shipment-movement`, `features/manifest`, API-only, no
+  mock): 6 pages exactly matching the brief — Out Scan (folds in the Create Manifest
+  prerequisite), Dispatch, In Scan, Out For Delivery, Delivery, Timeline. In Scan/Out
+  For Delivery default to the signed-in user's own branch, the same "no picker, my
+  own branch" pattern `shipment-create.ts` set for Booking Branch. Nav's five
+  aspirational `Operations` leaves lost their `(Soon)` tag; `sorting` (no module
+  behind it) stays tagged. **This corrects, not just extends,**
+  `navigation.config.spec.ts`'s prior pinned assumption that the whole block was
+  delivery-desk work — Out Scan/Dispatch are actually the booking-branch desk's job
+  per the brief's own flow, In Scan/Out For Delivery/Deliver the delivery branch's.
+- **~23 new backend unit tests** (`ManifestServiceImplTest`, `VehicleServiceImplTest`,
+  `ShipmentMovementServiceImplTest`, plus updates to `ShipmentStatusTest`/
+  `ShipmentServiceImplTest` for the renamed enum); `mvn test` 650 → 673 (660 pass, 13
+  pre-existing failures in `CountryServiceImplTest`/`RouteServiceImplTest`/
+  `StateServiceImplTest`/`WeightSlabServiceImplTest` — confirmed unrelated: these fail
+  the same way in complete isolation, in master-module code this pass never touched,
+  and were not caused by this work). **7 new frontend tests**
+  (`ShipmentMovementService`, `ManifestService`); `ng test` 118 → 125 (120 pass, 5
+  pre-existing unrelated failures — `master.config.spec.ts`, `master-data.service
+  .spec.ts`, `item-entry-grid.spec.ts`, none of which this pass touched either).
+
+### Verified live
+
+Full pipeline over HTTP as `pune@gmail.com` (`BRANCH_MANAGER`) on two real `BOOKED`
+fixtures, Pune → Latur — manifest create, bulk out-scan (incl. an unknown-tracking-
+number failure and a double-scan refusal), vehicle create, dispatch (incl. an
+unknown-vehicle 404 and an already-dispatched refusal), in-scan (incl. a wrong-branch
+refusal), out-for-delivery, deliver (incl. a blank-receiver-name 400), the full
+7-step timeline, and a cancel-refusal on an `OUT_FOR_DELIVERY` shipment. Through the
+Angular console: Out Scan/Timeline/Delivery driven end to end (a live toast + shipment
+closed for real), Dispatch/In Scan/Out For Delivery all rendered cleanly. One
+operational snag on the way: the already-running `ng serve` did not pick up the new
+routes/nav on file save and needed a full restart, not just a save-triggered
+recompile. Full detail in `MEMORY/modules/shipment-movement.md`.
+
+### Deliberately not touched
+
+Finance, Reports (stop here per instruction — this was the current module). Hub
+Management. The authorise-on-permissions capstone. A dedicated Manifest/Vehicle
+management UI beyond what Dispatch and Out Scan need inline.
+
+---
+
+## [Unreleased] — 2026-08-03 — Branch dashboard wallet balance never showed
+
+Scope: `backend/src/main/java/com/courier/modules/dashboard`. Reported as "wallet balance
+not reflecting on branch dashboard". Root cause: `DashboardServiceImpl.summary()` never
+computed it — `DashboardStatisticsResponse` had no `walletBalance` field at all, and its
+javadoc claimed "hub/wallet figures have no module behind them yet", stale since Branch
+Wallet shipped 2026-07-28 (`MEMORY/modules/branch-wallet.md`). The frontend side was
+already correct (`dashboard.service.ts` degrades a missing figure to `null`, never
+fabricates); this was a pure backend wiring gap on the `BRANCH_MANAGER`/`BRANCH_OPERATOR`
+dashboard layouts, the only two that show the tile (`dashboard.roles.ts`).
+
+**Fixed.** `DashboardServiceImpl` now takes `WalletService` and adds
+`walletService.getForBranch(null).getAvailableBalance()` (spendable now, not
+`totalBalance` — a hold isn't spendable) to the statistics response, wrapped to degrade to
+`null` on `BusinessRuleException` — thrown for a caller with no own branch
+(company/platform admins), whose layout never shows the tile anyway. `getForBranch(null)`
+already resolves "my own branch" via `WalletServiceImpl.resolveBranchForRead`, so no new
+branch-resolution logic was needed. `mvn compile` clean, finance + dashboard test packages
+pass (no existing dashboard unit test to update — none existed).
+
+**Verified live over HTTP** (`GET /api/v1/dashboard/summary` as `pune@gmail.com`,
+`BRANCH_MANAGER`): `walletBalance: 924.0`, matching `wallets.available_balance` exactly for
+the Pune branch's wallet (`WLT2607492LUH6B`).
+
+**Found and fixed in passing, not part of the ask:** verifying this needed a branch-role
+login, and both fixture accounts (`pune@gmail.com`, `latur@gmail.com`) turned out unable to
+log in. Traced to a genuine schema trap, not stale data: `companies` has **two** UUID
+columns, `id` (PK) and a separate `company_id` (business identifier) — every FK in the
+schema (`branches.company_id`, `users.company_id`, login's `companyId`, etc.) points to
+`companies.company_id`, **not** `companies.id`. A first pass misjoined on `companies.id`,
+read the mismatch as orphaned fixtures, and rewrote `branches`/`users`/`wallets`/
+`wallet_transactions`/`user_company_roles` to point at `companies.id` instead — actively
+breaking working data. Caught before reporting done (login still failed, now with a
+different error) and reverted to the original `company_id` value before it compounded.
+**Remember this for next time:** always join `companies` on its `company_id` column, never
+`id`, when working in this schema directly. Login then failed only on password — neither
+fixture's password was known/documented, so `pune@gmail.com`'s `password_hash` was reset
+via bcrypt to `Password@123` (the project's standard dev password) to complete
+verification; `latur@gmail.com`'s hash was left untouched.
+
+---
+
+## [Unreleased] — 2026-08-03 (same session, immediately after) — Login failure showed "Session expired" instead of "Invalid credentials"
+
+Scope: `frontend/src/app/core/interceptors/error.interceptor.ts`. Reported as "after login by
+branch getting session expired" — reproduced live in the browser as `pune@gmail.com` via the
+login page's own "Pune Branch" dev quick-fill.
+
+**Root cause: a real bug, triggered by a self-inflicted setup mistake.** `errorInterceptor`
+has two `401` branches: the first (refresh-and-retry) correctly excludes `isAuthCall`
+(login/refresh endpoints), but the second (global sign-out + redirect to
+`/session-expired`) did not — so *any* 401 from `POST /auth/login` itself, e.g. a plain
+wrong password, redirected straight to the session-expired page before `login.ts`'s own
+`error` signal (which already existed, already renders an inline message) ever got a
+chance to run. **Fixed** by adding the same `!isAuthCall` guard to the second branch.
+
+What actually produced the 401 during reproduction: earlier the same session, verifying the
+wallet-balance fix above required a login for `pune@gmail.com`, whose password was unknown,
+so it was bcrypt-reset to `Password@123` — without first checking `login.ts`, which already
+hardcodes the real fixture password for that account, `Password@1234` (dev quick-fill
+`fill('pune')`). Reset back to `Password@1234` to match. `latur@gmail.com` uses the same
+password and was never touched.
+
+**Verified live**: browser login via the "Pune Branch" quick-fill now succeeds and lands on
+`/dashboard`, showing **Wallet Balance ₹924** — confirming the dashboard fix above end to
+end in the actual running app, not just over curl.
+
+---
+
+## [Unreleased] — 2026-08-03 (same session, immediately after) — Nav labels "(Soon)" for unbuilt modules
+
+Scope: `frontend/src/app/core/navigation/navigation.config.ts`. Instruction: "from ui module
+not completed add -soon or pending after module name" — every nav leaf/section whose route
+has no entry in `app.routes.ts` (hits the wildcard 404) now says so in the sidebar instead
+of looking identical to a shipped feature.
+
+Cross-checked every nav leaf's `route` against `app.routes.ts` rather than guessing from
+memory. Tagged `(Soon)`: the whole **Pricing** section (parent + all 3 children — distinct
+aspirational placeholder, not the real Rate Master module); **Operations**' `manifest`,
+`receive`, `sorting`, `dispatch`, `delivery` (Shipment Booking's own `booking` and
+`shipment-search` are real, untouched); **Finance**'s `hub-wallet`, `settlement`,
+`payment`, `invoice` (`branch-wallet` is real, untouched); the whole **Reports** section
+(parent + all 4 children — no reports module exists yet). `hubs` was already commented out
+of the nav entirely, left as-is.
+
+**Found in passing, not fixed (separate bug, out of scope):** Finance's `wallet-transactions`
+nav leaf points at `/finance/transactions`, but the real route (branch-wallet shipped
+2026-07-28) is `/finance/branch-wallet/transactions` — a working feature with a broken nav
+link, not an unbuilt one, so it was left untagged rather than mislabeled `(Soon)`. Needs its
+own fix.
+
+`navigation.config.spec.ts` (12 tests) doesn't assert on title strings — passed unchanged.
+Verified live as `pune@gmail.com`: sidebar shows "Manifest (Soon)", "Receive (Soon)",
+"Sorting (Soon)", "Dispatch (Soon)", "Delivery (Soon)", "Reports (Soon)" (Pricing/Masters
+are COMPANY_ADMIN-only per [[nav-scoping-2026-07-31]], not visible to this role — not
+independently re-verified live, but same `route`-vs-`app.routes.ts` check applies).
+
+---
+
+## [Unreleased] — 2026-08-02 — Shipment Booking: payment mode default, editable Net Amount
+
+Scope: `frontend/src/app/features/shipment/shipment-create.ts` and
+`components/charge-summary.ts`. Three symptoms reported ("payment type should default",
+"weight/qty change should reprice", "final price should be editable"); only two were real.
+
+**Fixed — no default Payment Mode.** `paymentModeId` started `null`; per instruction it now
+defaults to the `PAID` option (matched by its `(CODE)` suffix in the option label, the only
+identifier `MasterOption` carries) once `payment-modes` loads, only if the control is still
+empty.
+
+**Fixed — Net Amount was read-only.** `ChargeSummary` gained an `editable` input +
+`netAmountChange` output; `ShipmentCreate` renders it editable and holds the override in a
+`manualNetAmount` signal, cleared on every `schedulePricing()` so a stale manual figure
+never survives a real recalculation. Per instruction this is **display-only** — `book()`
+still sends nothing about it; the server prices the booking from the actual fields,
+independent of what was shown. `shipment-charges.ts` (the persisted, post-booking view)
+keeps `editable` unset — still read-only there.
+
+**Not a bug — weight/qty repricing already works.** Reproduced live end-to-end (Pune→Latur,
+`ng.getComponent` to bypass an unrelated blocker below): raising item weight 2→5kg produced
+an identical freight, but that's `RateServiceImpl.calculate` charging a flat `baseRate` for
+any weight inside one slab (0–10kg here) — correct pricing, not a stale UI. Weight 2→15kg
+(crossing the slab) recalculated freight 50→75 correctly; quantity 1→6 (2kg × 6 = 12kg,
+also crossing the slab) recalculated 50→60 correctly, and the debounced `pricingTrigger$`
+picked up both. No code changed for this symptom.
+
+**Found in passing, not fixed (out of scope):** the wizard's "Delivery Branch" picker calls
+`MasterDataService.branchOptions()` → `GET /branches`, which is deliberately scoped for the
+Branches *management* screen — a `BRANCH_MANAGER` sees only their own branch
+(`BranchServiceImpl.search`, `visibleBranchIds`). Reused here, it means a branch user can
+never pick a *different* delivery branch, so a same-branch booking never has a matching
+`Route`/`Rate` to price against. Blocked live testing above until worked around by patching
+the form value directly past the restricted dropdown. Needs a company-wide branch list for
+this picker specifically — flagged, not touched.
+
+Verified live as `pune@gmail.com` (`BRANCH_MANAGER`, Pune): both fixes confirmed in the
+running dev server (`ng build` — no test suite change, no backend touched).
+
+---
+
+## [Unreleased] — 2026-08-01 — Branch edit form permanently invalid (COMPANY_ADMIN couldn't save)
+
+Scope: `frontend/src/app/features/branch/components/branch-form.ts`. Reported as "COMPANY_ADMIN
+can't update branch" — backend `BranchServiceImpl.update` (`ADMIN_OR_BRANCH_MANAGER`,
+`requireManageable`) was already correct; the bug was entirely frontend.
+
+`branchCode` is a `Validators.required` `FormControl` for both create and edit, but edit
+mode never renders or hydrates it (the template shows a static "Immutable" label instead)
+— so the form was `invalid` from the moment the edit page loaded, for every role, on every
+branch, always. Nobody had ever been able to save a branch edit through the UI.
+
+First attempt set `disabled`/validators conditionally inside `build()` based on
+`this.mode()` — looked right, `mvn`/`tsc` clean, but didn't fix it: `build()` runs in a
+field initializer, which executes *before* Angular applies bound `input()` values to the
+instance, so `this.mode()` there always reads the default `'create'`, never the parent's
+`mode="edit"` binding. Confirmed with a temporary `console.log` in `build()` against the
+live dev server (`ng.getComponent` + reading `form.controls.branchCode` directly) before
+trusting the fix. Real fix: an `effect()` in the constructor (effects run after inputs
+settle) that disables `branchCode` and clears its validators when `mode() === 'edit'`.
+Verified live through the Angular console as `first.admin@gmail.com` (COMPANY_ADMIN,
+"First Company"): changed Latur branch's type Booking → Booking Delivery Branch, saved,
+"Branch updated" toast, detail view reflects the new type.
+
+**Lesson for this codebase:** signal `input()` values are not reliable inside field
+initializers / a component's own constructor-time synchronous code — only inside
+`effect()`, `computed()`, or lifecycle hooks. `BranchForm`'s existing `hydrate()` effect
+happened to already follow this pattern; `build()` didn't.
+
+---
+
+## [0.16.7] — 2026-07-31 — Company create: geography dropdowns + logo, and company branding survives login
+
+Scope: `company-create.ts`, `company.service.ts` (frontend), plus a small backend seam
+(`CompanyDirectoryPort`, `JwtTokenProvider`, `TokenIssuer`, `AuthService`, `LoginResponse`,
+`CurrentUserResponse`, `AuthController`) and `layouts/admin-layout/components/header.ts`.
+Two asks: (1) super admin's create-company form had free-text Country/State/City, no
+picker; (2) a company should be able to upload a logo that shows once *that* company
+signs in — the header has hard-coded "CS" + `environment.appName` since UI-03
+(2026-07-27), a gap `AI_CONTEXT.md` had flagged and never closed.
+
+**Geography dropdowns.** `Company.country/state/city` are free-text columns (no FK, no
+district), unlike Customer's id-based six-level address book — so this cascades
+Country → State → District → City against `/global-masters/**` (District exists only to
+satisfy the backend's `cities` filter, which takes `districtId` not `stateId`; its id is
+discarded, never sent to `POST /companies`) and resolves the picked id back to a plain
+name at submit. New `CompanyService` geography methods mirror `CustomerService`'s own
+copy of this seam rather than sharing it — a shared `GeographyPickerService` is a
+plausible follow-up once a third caller shows up.
+
+**Logo upload.** User confirmed no S3/file-storage module exists yet and asked to skip
+building one now — a company logo stays a URL string (max 500 chars on the backend),
+picked via a file input for local preview only, same honesty-noted pattern
+`CompanyForm`'s existing Branding card already uses via `CompanyLogo`. `company-create.ts`
+now reuses that component instead of duplicating it, and gained a `favicon` control to
+match (the backend already accepted both on `POST /companies`; only the frontend form was
+missing them).
+
+**Company branding after login.** The header rendered `environment.appName` for every
+company because nothing in the session ever carried a company name or logo — `LoginResponse`
+had `companyId` only. Fixed at the source: `CompanyDirectoryPort.CompanyRef` (the seam
+`modules/auth` already used to ask "does this company exist, may it authenticate") gained
+`name`/`logo`, populated by `CompanyDirectory`. `TokenIssuer` now looks the company up once
+per token mint and writes two new JWT claims, `cnm`/`clogo`, the same way `bid`/`hid` were
+added for branch/hub — display-only, never trusted for authorisation, and necessary because
+a hard page reload only has the decoded token to rebuild the session from (`AuthService
+.hydrate()`), the exact "lost after refresh" bug class `bid`/`hid` were added to close.
+`LoginResponse` and `CurrentUserResponse`/`GET /auth/me` carry the same two fields for
+parity, though `/auth/me` is not currently called anywhere in the app. `Header` now renders
+the company's own logo (with an `(error)` fallback back to the generic mark) and name,
+falling back to `environment.appName` when the signed-in company has neither.
+
+Backend: `mvn test` **650 pass of 650** (`AuthServiceTest`/`TokenIssuerTest`/
+`PasswordServiceTest` updated for `CompanyRef`'s two new fields and `TokenIssuer`'s new
+`CompanyDirectoryPort` dependency). Frontend: `ng build` clean, `ng test` **118 pass of
+118**. **Also seeded, live, against the dev database via the SUPER_ADMIN API** (not code):
+one country (India), all 28 states + 8 union territories, all 36 Maharashtra districts,
+43 cities (one per district plus a few extra for Mumbai/Pune/Thane/Palghar), and 17 areas
+across five of the busier cities — so the new dropdowns and future work have real data to
+pick from, per [[keep-test-data-in-dev-db]].
+
+**Verified live.** User supplied the local MySQL root password; restarted :8081 on the new
+code (`mvn test` still 650/650 post-restart). Confirmed over HTTP: `POST /companies` with
+`logo`/`country`/`state`/`city` persists correctly; login/`/auth/me`/JWT (`cnm`/`clogo`
+claims) all carry `companyName`/`companyLogo` for a company that has them, and correctly
+omit both (fall back client-side) for the platform company, which has no `companies` row.
+Confirmed in the browser: `/companies/new`'s Country→State cascade populates live
+(India → all 36 states/UTs) via the seeded geography; after creating a company with a logo
+URL and signing in as its first admin, the header renders the real logo image and company
+name in place of the generic "CS" / `environment.appName` mark. That verification company
+(`TEST_LOGO_CO`) was removed on explicit request afterwards — company row, its admin user,
+company role/grants, settings, sessions and tokens, matched by `company_id` (a
+BINARY(16) column; matching by the UUID string directly silently returns zero rows) —
+**an exception to** [[keep-test-data-in-dev-db]], which otherwise still holds for the
+geography rows seeded above (India/states/Maharashtra/cities/areas — those stay).
+
+**Follow-up same day — "Request validation failed" toast on create, no field named.**
+User hit this from the browser (screenshot: logo picked via file, admin block filled).
+Two things were wrong, both pre-existing gaps in `company-create.ts`, not introduced by
+the geography/logo work above:
+
+1. **The toast never showed which field.** `ApiResponse.errors[]` (`FieldError[]`, one
+   entry per failed `@Pattern`/`@Size`) has existed on the backend since the response
+   envelope was designed, but no component anywhere in the frontend has ever read it —
+   every form's error handler falls back to the generic top-level `message`, which for a
+   bean-validation 400 is the fixed string `"Request validation failed"`. Fixed locally in
+   `company-create.ts`'s `submit()` error handler (`errorMessage()` helper): when
+   `err.error.errors` is present it now renders `field: message` pairs, joined; falls back
+   to the old behaviour otherwise. Not (yet) pulled up into a shared helper other forms
+   could reuse — same-shape gap likely exists on every other create/edit form in the app.
+2. **`company-create.ts` validated far less than the backend actually enforces**, unlike
+   `company-form.ts` (the edit form), which already carries the right patterns. The
+   `companyCode` regex was flatly wrong — `{0,48}` where the backend requires `{1,48}`,
+   so a 2-character code (backend minimum is 3) passed the client and 400'd on submit —
+   and `mobile`/`alternateMobile`/`adminMobile` (phone pattern), `website`, `gstNumber`,
+   `panNumber` (their own patterns) and `cinNumber`/`legalName`/`displayName`/`email`
+   (max-length) had **no client validator at all**, so any malformed value in those typed
+   fields passed the (enabled) submit button and only failed server-side — indistinguishable
+   from a real bug until fix #1 above made the response readable. All now mirror
+   `company-form.ts`'s own constants verbatim.
+
+Reproduced against the running :8081 with a close facsimile of the screenshot's inputs —
+that specific attempt actually succeeded (account created), so the two rejected fields in
+the user's original screenshot were never pinned down; the fix addresses the whole class
+of "client accepts, server 400s silently" rather than one instance. `ng build` clean.
+Two throwaway companies created while investigating (`TEST_LOGO_CO` from the verification
+above, `C1_TEST_CO` from this reproduction attempt) were both deleted afterwards by direct
+SQL against `company_id` (BINARY(16) — matching the UUID string directly silently returns
+zero rows, the same trap noted above), on request.
+
+---
+
+## [0.16.6] — 2026-07-31 — Subscription Plan Management, frontend only, new `features/subscription-plans`
+
+Scope: `core/models/subscription-plan.model.ts`, `features/subscription-plans/**`,
+`app.routes.ts`. The backend `SubscriptionPlanController` (`/api/v1/subscription-plans`,
+SUPER_ADMIN only) has existed since the SUPER_ADMIN/Platform Console module
+(2026-07-29) with full CRUD + activate/deactivate; `navigation.config.ts` already carried
+an aspirational "Subscription Plans" nav leaf pointing at `/subscription-plans` — another
+instance of the "responsibility list is ahead of the code" pattern, this time nav ahead
+of a route. Surfaced when creating a company: the plan dropdown
+(`CompanyService.plans()`) was empty because no plan existed after the same-day full
+`courier_db` truncate (see below) and there was no screen to create one. Built the
+missing screen, mirroring Role Management's shape one-to-one (list/create/edit/view,
+table + form + filter + status-badge components, `SubscriptionPlanService` thin wrapper):
+`PlanList` (server pagination, sort, debounced search, filter drawer, CSV export),
+`PlanCreate`/`PlanEdit` (full-replacement PUT carries `version`, 409 reloads),
+`PlanView` (Pricing/Details/Quotas/Audit cards + gated kebab). Routes
+`subscription-plans`, `/new`, `/:id`, `/:id/edit`, all `roleGuard`-gated `SUPER_ADMIN`
+only, matching the backend's class-level `@PreAuthorize`. `PlanForm` mirrors two backend
+invariants client-side rather than letting an admin discover them via a 422, the same
+convention as Rate Master's weight-slab-overlap preview: selecting **TRIAL** locks the
+price fields to 0 (the backend rejects a priced trial outright); selecting
+**ENTERPRISE** locks every quota field blank (the backend silently nulls them — unlimited
+regardless of what's typed). Native `<input type="number">` used for price/quota fields
+(`UiInput` has no numeric variant), matching the precedent in `branch-wallet`'s
+credit/debit dialogs. Verified live end to end via the browser: create → detail view →
+kebab (Deactivate/Delete present) → company-create's plan dropdown picks up both the
+newly-created plan and the pre-existing `STANDARD_MONTHLY` immediately. **Honesty note:**
+no dedicated spec files were added for this feature (`ng test` stayed 118/118, no
+regressions, but no new coverage either) — the verification was live-browser only, unlike
+every other module's frontend work which shipped with unit tests.
+
+---
+
+## [0.16.5b] — 2026-07-31 — Dev database fully truncated, Flyway history rebuilt, new SUPER_ADMIN seeded
+
+Scope: local `courier_db` only, no code change except `features/auth/login.ts`. On
+request, every one of `courier_db`'s 37 tables was `TRUNCATE`d with
+`FOREIGN_KEY_CHECKS=0`, **including `flyway_schema_history`** — wiping every fixture
+[[keep-test-data-in-dev-db]] had been protecting (`asha@legacy.test`, `LEGACY_CO`, all
+prior companies/roles/users) and invalidating the whole
+`MEMORY/adr` local-dev-login section below. Truncating `flyway_schema_history` alone left
+the schema physically at V18 with no record of it, which would otherwise make Flyway
+re-attempt V1..V18 on next boot and fail on "table already exists"; fixed with one manual
+`INSERT` mirroring exactly what `flyway baseline -baselineVersion=18` would write
+(`type='BASELINE'`, `checksum=NULL`) — no CLI installed, no `flyway-maven-plugin` in
+`pom.xml`, so no automated tooling did this. Confirmed by an actual backend restart:
+Flyway logged "schema is up to date", 0 migrations applied, Hibernate `ddl-auto:
+validate` passed. Seeded one fresh login directly via SQL (no running provisioning API
+at the time): `super.admin@gmail.com` / `Pass@1234`, `user_roles.role='SUPER_ADMIN'`,
+`company_id` = `GlobalMasters.PLATFORM_COMPANY_ID`
+(`00000000-0000-0000-0000-000000000001`), `email_verified=1`, `ACTIVE` — verified live
+over HTTP both before and after the restart. `login.ts`'s dev quick-fill "System Admin"
+button relabelled "Super Admin" and repointed at the new credential (each quick-fill kind
+now carries its own password, not one hardcoded value for all four). One
+`STANDARD_MONTHLY` subscription plan created via the API to unblock company creation,
+which led directly into 0.16.6 above. **Every dev-login/fixture memory predating this
+entry is stale** until the catalogue is rebuilt.
+
+---
+
+## [0.16.5] — 2026-07-31 — Sidebar highlighted two menu items at once
+
+Scope: `sidebar.ts`, `navigation.service.ts`. Reported live via screenshot: on
+`/rates/calculator`, both "Rate Cards" and "Calculator" showed active (highlighted) in
+the sidebar simultaneously. Root cause: Angular's `routerLinkActive` defaults to
+non-exact ("subset") matching — a link to `/rates` is considered active whenever the
+current URL's segments merely start with `/rates`, which is also true for
+`/rates/calculator`, a completely different sibling nav leaf, not a sub-page of Rate
+Cards. `NavigationService.matches()` (used for group auto-expand) had the identical
+flaw, hand-rolled: `u === route || u.startsWith(route + '/')`. Same class of bug was
+already latent for Shipment Booking (`/shipments/new`) vs Shipment Search (`/shipments`)
+— not yet reported, but the exact same shared-prefix collision.
+
+### Fixed
+
+- `sidebar.ts` — added `[routerLinkActiveOptions]="{ exact: true }"` to both the
+  group-child link and the top-level leaf link.
+- `navigation.service.ts:matches()` — narrowed to `this.url() === route` (exact only).
+- Trade-off, accepted since untested/undocumented: a nav leaf no longer stays
+  highlighted while viewing a deeper page that isn't itself a nav entry (e.g. a specific
+  rate's detail/edit page at `/rates/:id` no longer keeps "Rate Cards" highlighted). No
+  `navigation.service.spec.ts`/`sidebar.spec.ts` existed to pin the old behavior either
+  way.
+
+---
+
+## [0.16.4] — 2026-07-31 — Geography masters opened to COMPANY_ADMIN, moved out of Platform
+
+Scope: `master.config.ts`, `master-list.ts`, `master-view.ts` (new per-list read guard),
+`navigation.config.ts`, `app.routes.ts`. Requested directly: Country/State/District/
+City/Area/Pincode should be available to SUPER_ADMIN **and** COMPANY_ADMIN. Surfaced a
+self-inflicted regression while implementing it — 0.16.2's blanket `masters/:master`
+route restriction to `COMPANY_ONLY` had (incorrectly) also cut SUPER_ADMIN off from the
+six geography lists, which share that one generic route with the six company-owned
+catalogues. Fixed properly rather than special-cased:
+
+### Added
+
+- **`readAccessFor(def)`** in `master.config.ts`, mirroring the existing `writeAccessFor`
+  — per-`MasterDefinition.global` split: geography reads as `[SUPER_ADMIN,
+  COMPANY_ADMIN]` (new `GLOBAL_MASTER_READERS`), a company's own six catalogues read as
+  `[COMPANY_ADMIN]` only (`MASTER_READERS`, narrowed from its previous
+  `[SUPER_ADMIN, COMPANY_ADMIN, BRANCH_MANAGER, HUB_MANAGER]` — it had never actually
+  been read by any component before this pass, just exported).
+- **`MasterList`/`MasterView` now enforce `readAccessFor` themselves** (redirect to
+  `/unauthorized` if the signed-in role doesn't match the specific list's tier), because
+  the shared `masters/:master`/`masters/:master/:id` **route guard cannot itself tell a
+  geography list from a company catalogue** — it only sees the route, not the `:master`
+  param's `global` flag. The route guard was widened to admit both tiers
+  (`MASTERS_READERS = [SUPER_ADMIN, COMPANY_ADMIN]`); the component is now the real gate,
+  same pattern the write buttons already used via `writeAccessFor`.
+- Nav: the six geography leaves **moved from the `platform` node into `masters`**
+  (ahead of the company catalogues), roles `GLOBAL_MASTER_READERS`. They no longer live
+  under a section titled "Platform" that a COMPANY_ADMIN would now also see for reasons
+  unrelated to geography — Platform now holds only what's actually platform-only
+  (Platform Dashboard, Companies, Subscription Plans, Platform Operators).
+- Tests: `master.config.spec.ts` pins the `readAccessFor`/`writeAccessFor` split for all
+  twelve lists; `navigation.config.spec.ts` pins the moved geography leaves (118 tests,
+  was 115).
+
+### Flagged, not fixed (pre-existing, out of scope for a read-access request)
+
+- `masters/:master/new` and `masters/:master/:id/edit` routes are still hardcoded
+  `[COMPANY_ADMIN]` only in `app.routes.ts` — predates this session. Since
+  `GLOBAL_MASTER_WRITERS` says a geography row should be writable by `SUPER_ADMIN`, this
+  route guard silently blocks a SUPER_ADMIN from ever reaching the create/edit form for
+  a country/state/etc., even though the form itself (`writeAccessFor`) would let them
+  save. Not touched this pass — this request was about read availability, and the fix
+  needs the same param-aware widening this pass just did for reads. Worth a follow-up.
+
+---
+
+## [0.16.3] — 2026-07-31 — Customers, Finance, Pricing scoping (continues 0.16.2)
+
+Scope: same two files, frontend-only, same session as 0.16.2. Three more sections
+requested: Customers, Finance, Pricing.
+
+### Changed
+
+- **Customers** — previously carried no `roles` bridge at all (any authenticated user,
+  including SUPER_ADMIN). Now every non-platform role (new `COMPANY_ROLES`/
+  `CUSTOMER_READERS` constants — COMPANY_ADMIN, BRANCH_MANAGER, HUB_MANAGER,
+  BOOKING_OPERATOR, DELIVERY_OPERATOR, ACCOUNTS, FINANCE_USER, CUSTOMER_SERVICE, VIEWER),
+  SUPER_ADMIN excluded — confirmed explicitly this should **not** be COMPANY_ADMIN-only
+  like Masters/Branches: the counter desk's "register customer, then book" flow needed
+  BOOKING_OPERATOR kept.
+- **Finance** (Branch Wallet, Hub Wallet, Transactions, Settlement, Payment, Invoice,
+  and `finance-reports` under Reports since it shares the same `FINANCE` constant) —
+  SUPER_ADMIN excluded only; confirmed explicitly this should **not** be
+  COMPANY_ADMIN-only either: branch wallet recharge is a branch responsibility
+  (`MEMORY/modules/branch-wallet.md`), so BRANCH_MANAGER/ACCOUNTS/FINANCE_USER access is
+  unchanged.
+- **Pricing** (the aspirational `rate-cards`/`zone-pricing`/`surcharges` nav group,
+  confirmed to be the unbuilt placeholder section — distinct from the real Rate Master
+  module scoped in 0.16.2, and distinct from the real Pricing Engine backend which has
+  no frontend at all per `MEMORY/modules/pricing-engine.md`) — narrowed to
+  COMPANY_ADMIN only, same strict pattern as Masters/Branches/Settings.
+- `navigation.config.spec.ts` — replaced the now-false "customers carries no roles
+  bridge" assertion, added pinning tests for Finance and Pricing (115 tests, was 113).
+
+### Not changed
+
+- Backend gates — same as 0.16.2, nav/route guards only.
+- No Pricing routes exist in `app.routes.ts` (module never built) — nav-only change.
+
+---
+
+## [0.16.2] — 2026-07-31 — Company-side nav scoping tightened, SUPER_ADMIN excluded
+
+Scope: `navigation.config.ts` + `app.routes.ts` (frontend nav/route guards only, by
+explicit instruction — backend `@PreAuthorize`/service gates untouched this pass, so
+Branches/Masters still carry their existing server-side `isSuperAdmin()` cross-company
+read branch; this closes the client-side gap, not the server one). Requested directly:
+Rate Master, Company Settings, Branches and Masters were all reachable in the UI by
+SUPER_ADMIN even though the backend mostly already refused them (the `requireCompany()`
+throw Rate Master and Company Settings share — SUPER_ADMIN is normally company-less).
+
+### Changed
+
+- **Rate Master** (`rates`, `rate-calculator` nav leaves; `rates`, `rates/calculator`,
+  `rates/:id` routes) — now `COMPANY_ADMIN` + `BRANCH_MANAGER` only (new
+  `COMPANY_AND_BRANCH`/`RATE_READERS` constants), SUPER_ADMIN excluded. Write routes
+  (`rates/new`, `rates/:id/edit`) were already `COMPANY_ADMIN`-only, unchanged.
+- **Company Settings, Branches, Masters** (all six master lists + Route) — narrowed to
+  `COMPANY_ADMIN` only (new `COMPANY_ONLY` constant), per explicit instruction stricter
+  than "not SUPER_ADMIN": `BRANCH_MANAGER`/`HUB_MANAGER`/`BOOKING_OPERATOR`/`ACCOUNTS`
+  read access is also removed, not just the platform tier. This is a real access
+  reduction for branch-tier roles, not only a SUPER_ADMIN fix — flagged since it's a
+  behavior change beyond "close the platform gap."
+- **Operations** (Shipment Booking/Search, Manifest, Receive, Sorting, Dispatch,
+  Delivery) — SUPER_ADMIN excluded only; `COMPANY_ADMIN`/`BRANCH_MANAGER`/`HUB_MANAGER`/
+  the branch operator roles keep exactly the access they had (new `OPS_*` constants in
+  nav config, mirror the existing `MANAGERS`/`BOOKING`/`DELIVERY_DESK`/`SHIPMENT_READERS`
+  shapes minus `SUPER_ADMIN`, kept separate from those shared constants so Finance/
+  Reports — not in scope — are untouched). Also added the missing `data.roles` on the
+  `shipments`/`shipments/:id`/`charges`/`history`/`documents` read routes in
+  `app.routes.ts`, which previously had no route guard at all.
+- `navigation.config.spec.ts` — updated the one existing assertion this reversed (the
+  booking desk no longer reads Masters, per the stricter-than-asked Masters decision
+  above) and added a new describe block pinning the three SUPER_ADMIN-exclusion
+  decisions down (113 tests, was 111).
+
+### Not changed (explicit, per instruction)
+
+- Backend `@PreAuthorize`/service-layer gates — Branches' and Masters'
+  `isSuperAdmin()`-branched cross-company reads (`BranchServiceImpl`,
+  `AbstractMasterDataService`) still exist server-side; only the frontend nav/route
+  door is closed.
+- Finance and Reports sections — also compose `MANAGERS`/`SHIPMENT_READERS` and so still
+  admit SUPER_ADMIN; out of scope for this request.
+
+---
+
+## [0.16.1] — 2026-07-31 — `NoResourceFoundException` misreported as 500
+
+Scope: `GlobalExceptionHandler` only, no migration. Found live on the Users page
+(`/users`), which calls `GET /api/v1/hubs` on load to populate a filter dropdown — Hub
+Management is not built yet (`MEMORY/AI_CONTEXT.md`, no `HubController` exists), so the
+request hits no route. Since Spring Boot 3.2, an unmatched route throws
+`NoResourceFoundException`, a distinct type that does **not** extend the
+`NoHandlerFoundException` this handler already special-cased at
+`GlobalExceptionHandler.handleNoHandler`. It fell through to the catch-all
+`@ExceptionHandler(Exception.class)`, returning `ErrorCode.INTERNAL_ERROR` ("An
+unexpected error occurred") as a 500 — which the frontend's global error interceptor
+(`error.interceptor.ts`) then surfaced as a visible toast on every Users-page load, for
+what should have been a quiet 404.
+
+### Fixed
+
+- Added `handleNoResource(NoResourceFoundException)` to `GlobalExceptionHandler`,
+  mirroring `handleNoHandler` — both now return `ErrorCode.ENDPOINT_NOT_FOUND` (404).
+  Any other still-unbuilt module's frontend calls (not just `/hubs`) get the same fix
+  for free.
+
+### Not a bug — investigated and left as is
+
+- The same Users page also shows one legacy row (`ravi@legacy.test`, a SUPER_ADMIN
+  fixture provisioned via the platform bootstrap path, not `UserServiceImpl.create`)
+  with `employeeCode/username/mobile/branchId/hubId` all blank and the name duplicated
+  as its email. Confirmed this is pre-existing NULL data from before `V7` added those
+  columns, not a frontend/backend mapping bug — field names match exactly end to end,
+  and the display-name fallback (`User.fullName()` → email when name parts are blank)
+  is working as designed. Per `[[keep-test-data-in-dev-db]]`, the row was left alone.
+
+---
+
+## [0.16.0] — 2026-07-30 — Shipment Booking
+
+Scope: new package `com.courier.modules.shipment`, migration `V17`. The core
+transaction of the platform — the actual intended consumer both `RateService.calculate`
+and `PricingEngine.calculate` were built for. Books only after Customer,
+Serviceability+Route+Pricing (one Pricing Engine call) and, for a PAID booking, the
+Branch Wallet have all agreed. Full detail in `MEMORY/modules/shipment-booking.md`.
+
+### Added
+
+- **5 tables**, all owned by this module: `shipments` (the aggregate root),
+  `shipment_items`, `shipment_charges` (the Pricing Engine's own breakup, persisted
+  verbatim so a later rate/config change never reprices history), `shipment_status_history`
+  (append-only), `shipment_documents` (a URL reference — no file-storage backend yet).
+  No physical FK to any cross-module id; each is validated through that module's own
+  service, same as `rate_master.route_id`.
+- **`ShipmentStatus`** — the full ten-state graph (`BOOKED` through `DELIVERED`/
+  `RETURNED`/`CANCELLED`) declared now so Manifest Management and the delivery modules
+  extend a graph rather than invent one; this module itself only ever writes `BOOKED`
+  and `CANCELLED`. `canTransitionTo`/`isTerminal`/`isCancellable` — a single source of
+  truth, not scattered `if`s in the service.
+- **`ShipmentServiceImpl.create`** — one `@Transactional`: loads sender/receiver
+  Customer + their named address (ownership checked), resolves each address's pincode
+  to its raw code, builds the item grid (or a single fallback item from top-level
+  weight/dimensions), sums actual/volumetric/chargeable weight via the Pricing Engine's
+  own reusable calculators, checks the package type's weight ceiling, prices through
+  **one call** to `PricingEngine.calculate` (covers the brief's Serviceability+Route+
+  Pricing steps at once), checks the wallet balance pre-commit for a PAID booking,
+  generates the AWB + shipment number, persists shipment+items+charges+`BOOKED` history,
+  and — only for PAID — publishes `ShipmentEvent.PrepaidBookingConfirmed` for an
+  after-commit debit.
+- **AWB / shipment number generation** — `AwbNumberGenerator`/`ShipmentNumberGenerator`
+  produce the candidate, `ShipmentServiceImpl` retries an existence check up to 5 times;
+  `UNIQUE (company_id, tracking_number)`/`(company_id, shipment_number)` is the actual
+  backstop against a race, not `MAX(...)+1`.
+- **`WalletService.debitForBooking(BookingDebitCommand)`** — the "Booking debit seam"
+  `MEMORY/modules/branch-wallet.md` deliberately left unbuilt ahead of this, its
+  consumer. A `Command` record (`branchId`, `amount`, `shipmentNumber`, `remarks`),
+  matching the existing `CreditCommand`/`DebitCommand` convention rather than a raw
+  `(UUID, BigDecimal, String, String)` parameter list — `SuperAdminBoundaryTest`'s
+  "no method sets a raw balance" assertion caught the first draft, which took the
+  amount as a bare `BigDecimal`. `isAuthenticated()`, not `COMPANY_ADMIN`-only:
+  Shipment Booking has already decided who may book through the branch, this seam
+  only moves the money that decision earns.
+- **`ShipmentBookingWalletListener`** — `@TransactionalEventListener(AFTER_COMMIT)` +
+  `REQUIRES_NEW`, the same shape `finance.application.WalletProvisioningListener`
+  uses. A debit failure after the shipment is already durable (an insufficient balance
+  a race let through, a wallet gone `INACTIVE` mid-flight) cannot roll the booking
+  back — logged for manual reconciliation, the same accepted-gap shape the wallet-
+  provisioning race already carries.
+- **Update** (`PUT /shipments/{id}`) — full replacement, only while still `BOOKED`,
+  optimistic-lock `version`, re-prices and replaces the one charge row (never appends
+  a second), does not touch a wallet already debited at booking.
+- **Cancel** (`POST /shipments/{id}/cancel`) — refused once `DISPATCHED`+ ("has left
+  the branch"), appends a `CANCELLED` history entry, does not reverse a PREPAID debit.
+- **8 endpoints** under `/api/v1/shipments`, incl. `GET /shipments/track/{trackingNumber}`
+  (not a second bare `/shipments/{x}` route — ambiguous with `/shipments/{id}` at the
+  Spring MVC routing layer).
+- **One new permission**, `SHIPMENT_UPLOAD` (catalogue 222 → 223; `SHIPMENT_CREATE/
+  UPDATE/DELETE/SEARCH/IMPORT/EXPORT/PRINT/ASSIGN` already existed from `V6`) —
+  `BRANCH_MANAGER`/`BOOKING_OPERATOR` extended with it. RBAC otherwise stays role-based
+  (`hasAnyRole(COMPANY_ADMIN, BRANCH_MANAGER, OPERATOR)` writes, `isAuthenticated()`
+  reads), matching every other module ahead of the authorise-on-permissions capstone.
+- **62 new backend unit tests** (`ShipmentServiceImplTest`, `ShipmentStatusTest`,
+  `AwbNumberGeneratorTest`, `ShipmentNumberGeneratorTest`); `mvn test` moves 627 → 650.
+- **Frontend** (`features/shipment`, API-only, no mock): 7 pages — `shipment-list`
+  (server pagination/sort/search/filter/CSV export), `shipment-create` (the four-step
+  wizard: Booking & Parties → Items & Package → Pricing → Confirm), `shipment-view`,
+  `shipment-edit`, `shipment-charges`, `shipment-history`, `shipment-documents`.
+  Components: `CustomerSearch`, `AddressSelector`, `ItemEntryGrid` (live weight
+  preview using the Pricing Engine's own `l×w×h/5000`/`max(actual,volumetric)`
+  formulas), `ChargeSummary`, `BookingSummary`, `TrackingCard`, `ShipmentStatusBadge`.
+  Calls the Pricing Engine directly (`POST /pricing/calculate`) for a live Step 3
+  preview — the actual booking re-prices through the same engine server-side. Reuses
+  `CustomerService`/`MasterDataService` rather than duplicating any lookup. Nav's
+  aspirational "Shipment Booking"/"Shipment Search" leaves and the dashboard's `book`/
+  `search` quick actions now point at the real routes instead of a toast. **13 new
+  frontend tests** (`shipment.service.spec.ts`, `item-entry-grid.spec.ts`); `ng test`
+  moves 98 → 111.
+
+### Fixed
+
+- **A `computed()` signal caching against a value it could never see change.**
+  `ShipmentCreate.canAdvance`/`.bookingLabels` and `ShipmentEdit.canSave` were
+  `computed()` signals that read `FormControl.value` (the branch/service-type/
+  package-type/payment-mode `mat-select`s) alongside real signals (`sender`,
+  `senderAddress`, …). Angular's `computed()` only tracks **signal** reads to decide
+  whether to re-run; a plain `.value` read is invisible to it, so once the computed
+  first ran, it never noticed a dropdown changing on its own — "Continue"/"Save
+  Changes" stayed disabled forever, even with every field correctly filled in. Found
+  live in the Angular console (confirmed via `ng.getComponent(el)`: the raw boolean
+  expression evaluated `true`, the cached `computed()` still returned `false`), not by
+  `ng build` or `ng test`. Fixed by converting both to plain methods — OnPush change
+  detection already re-invokes template-bound methods on every event the component
+  handles, so a plain method stays fresh with no extra signal wiring.
+- A component-hydration variant of the same class of bug: `CustomerSearch`'s `initial`
+  input was read only once in `ngOnInit`, so an edit page's asynchronously-loaded
+  sender/receiver never appeared in the search box even though the parent's own
+  signal was correctly populated. Fixed with a guarded `effect()` (hydrate once, never
+  once the user has picked their own value) instead of a one-time `ngOnInit` read.
+- **`AuthService.hydrate()` had no way to recover `branchId`/`hubId` on a page reload**
+  — discovered while wiring "Booking Branch defaults to my own branch, no picker" into
+  `shipment-create`'s post-mockup rewrite. `applySession` (set once, in memory, at the
+  moment of login) copied `branchId`/`hubId` off the login response correctly; `hydrate`
+  (rebuilds the session from the stored access token alone, on every page load) had
+  nothing to fall back to, because neither field had ever been a JWT claim. Fixed by
+  adding optional `bid`/`hid` claims to the access token —
+  `JwtTokenProvider.generateAccessToken` gained a 6-arg overload (4-arg form delegates
+  with nulls), `auth.domain.User` gained the same `branch_id`/`hub_id` mapping
+  `company.User` already had on the shared `users` table — and both `hydrate()` and
+  `applySession()` now fall back to the claim. See `MEMORY/modules/auth.md`.
+
+### Changed
+
+- **`shipment-create` rebuilt as a single page.** The four-step wizard above shipped
+  first; the user then supplied a single-page "Lorry Receipt" mockup and asked for that
+  screen to book from directly. Rebuilt: Booking Details → Shipment Details → Items →
+  Parties (sender/receiver, deliberately last) on the left, a sticky live "Booking
+  Summary" sidebar (Route, Load, an auto-repricing charge breakdown, Payment Mode, then
+  Book Shipment) on the right — the app's own design tokens throughout, not the
+  mockup's own palette. Pricing is no longer a manual "Get Price" step: a debounced
+  `Subject` reprices automatically the instant every required field is filled in,
+  cancelling any in-flight request on the next change (`switchMap`). `BookingSummary`
+  (the wizard's old Confirm-step component) is now unused and was deleted rather than
+  left dead. Full detail in `MEMORY/modules/shipment-booking.md`.
+
+### Verified
+
+Live over HTTP (fresh customers/addresses on Pune-GPO/Mumbai-Central pincodes, the
+already-verified `PNQ_BOM` route and `RATE-PNQ-BOM-STD`/`RATE-UI-TEST` rate lanes):
+TO_PAY and PAID bookings, a PAID booking against a zero-balance wallet refused 422
+with the exact available/required amounts, wallet credited then debited **exactly**
+136.00 after commit, cancel + a second cancel attempt correctly refused, update
+re-prices and replaces the charge row, a stale `version` on update 409s, document
+attach + list, charges, history, track-by-AWB, three business-rule refusals
+(nonexistent customer, address belonging to the wrong customer, weight over a
+package type's ceiling), list filtering by status.
+
+Through the Angular console (`asha@legacy.test`/`LEGACY_CO`, `COMPANY_ADMIN` — first
+found the dev session on a `BRANCH_MANAGER` token scoped to one branch, confirming
+branch-picker scoping before switching users): the full four-step wizard end to end,
+the pricing preview reproducing the exact HTTP-verified figures, the detail/charges/
+history/documents pages (including attaching a document through the UI form itself),
+the list page, and edit-with-full-hydration-and-save. The `computed()` bug above was
+found and fixed during this pass.
+
+**Not exercised:** a `BRANCH_MANAGER`/`BOOKING_OPERATOR`-scoped token against the
+company-wide branch set, the `RIVAL_CO` cross-company check (inherited gap), a
+`DISPATCHED`+ cancel refusal over live HTTP (nothing yet transitions a shipment past
+`BOOKED` — Manifest Management), concurrent booking under real load.
+
+**Deliberately not touched:** Manifest Management (do not start next per
+instruction), Hub Management, the authorise-on-permissions capstone.
+
+---
+
+## [0.15.0] — 2026-07-30 — Pricing Engine
+
+Scope: new package `com.courier.modules.pricing`. No migration, no table, no persistence —
+a reusable, stateless Strategy+Factory service that prices a shipment, built to be called
+by Shipment Booking, Quotation, the mobile app and any future integration, never by
+depending on `modules.shipment` (still unbuilt) or on anything Rate Master's own
+`POST /rates/calculate` doesn't already depend on. Full detail in
+`MEMORY/modules/pricing-engine.md`.
+
+### Added
+
+- **`ChargeCalculator` Strategy (8 implementations)**: `FreightCalculator` (slab match —
+  exact, floored, overage or a "Weight Slab Not Found" gap refusal — ported from
+  `RateServiceImpl.calculate`, unchanged math), `FuelCalculator`, `HandlingCalculator`,
+  `ODAChargeCalculator`, `InsuranceCalculator` (gated on `declaredValue > 0`),
+  `GSTCalculator`, `DiscountCalculator` (percentage or flat, clamped to the pre-discount
+  total), `RoundOffCalculator` (configurable rounding rule). A disabled line contributes
+  zero rather than being skipped.
+- **`PricingStrategy`/`StandardPricingStrategy`** — one level above `ChargeCalculator`:
+  sorts the injected calculators by `order()` and runs them in sequence, then assembles a
+  `PricingResult`. **`PricingFactory`/`PricingFactoryImpl`** — resolves the strategy for a
+  request by trying every registered strategy (Spring `@Order`) for `supports()`; today
+  `StandardPricingStrategy` is the only, always-matching, lowest-precedence fallback.
+- **`PricingEngine`/`PricingEngineImpl`** — orchestrates the module's documented flow:
+  Validate Route -> Validate Serviceability -> Validate Rate -> Calculate Volumetric Weight
+  -> Calculate Chargeable Weight -> Execute Charge Calculators -> Return Charge Breakup.
+  `PricingContext` carries one calculation through every stage.
+- **Weight module** (`domain`, no I/O): `WeightCalculator.normalise`, `VolumetricCalculator`
+  (`L x W x H / divisor`, zero when a dimension is missing), `ChargeableWeightCalculator`
+  (`MAX(actual, volumetric)` — a different quantity from `rate.application
+  .RateCalculationResult.chargeableWeight`, which is Rate Master's own post-slab billed
+  weight).
+- **Validation module**: `RouteValidation` (reuses `RouteService.findByBranches`),
+  `RateValidation` (confirms a rate card exists for the combination — not yet a weight-slab
+  match, which needs the chargeable weight this runs ahead of; reuses the new
+  `RateService.findActiveCandidates`), `WeightValidation` (`actualWeight > 0`, positive
+  dimensions), `BookingValidation` (service/package/payment-mode existence, pickup/delivery
+  pincode serviceability, the booking-date default — the flow diagram's "Validate
+  Serviceability" step, folded in here since the module's own class list names exactly
+  four validators, not five).
+- **Two small seams on already-shipped modules**, the same "smallest addition" pattern
+  `RouteService.findByBranches` set for Rate Master: **`RateService.findActiveCandidates`**
+  (`RateServiceImpl.calculate` itself refactored to call it, no behaviour change) and
+  **`PincodeService.findByCode`** (a pincode is a global master; nothing before this could
+  look one up by its raw postal code, only by id).
+- **`PricingProperties`** (`pricing.*`, registered in `CourierApplication`) — volumetric
+  divisor and the Fuel/ODA/Insurance/Discount toggles and rounding rule the module's
+  Configuration section asks for. No company-level override; one deployment-wide default.
+- **`POST /api/v1/pricing/calculate`** — `isAuthenticated()`, no new permission codes (the
+  module's spec has no Permissions section, and gating tighter than Rate Master's own
+  calculator would work against the module's stated reusability).
+- 55 backend unit tests (domain, validation, all 8 calculators individually, the real
+  `StandardPricingStrategy` wired with all 8 real calculators for an end-to-end grand-total
+  check, the factory, and `PricingEngineImpl`'s wiring). `mvn test` 573 -> 627.
+
+### Not done (by design)
+
+No frontend — the module's own Definition of Done does not ask for one, unlike every prior
+module. No company-level configuration override. `PricingProperties`'s
+`pricing.rounding-rule` etc. are one deployment-wide default, not a per-company settings
+row. Shipment Booking, the actual intended consumer, remains unbuilt.
+
+### Verified by running it (2026-07-30, MySQL 8.0.46, temporary instance `SERVER_PORT=8083`,
+against the shared dev database, the user's own 8081/4200 instances untouched)
+
+The dev database had no geography seeded at all — built the minimal chain (state, district,
+city, area, three pincodes) as `ravi@legacy.test` (`SUPER_ADMIN`) first, left in place as
+fixtures. Then over HTTP as `asha@legacy.test` (`COMPANY_ADMIN`, `LEGACY_CO`), against the
+`PNQ_BOM` route and rates Rate Master's own verification pass left behind: an exact-slab
+quote reproducing Rate Master's own 135.70 pre-round total verbatim (then rounds to
+136.00), a volumetric-weight-dominant quote (1 kg actual, 12.000 kg from dimensions)
+reproducing `RateServiceImplTest`'s own 280.00 overage arithmetic exactly, an
+unserviceable-pincode refusal (422), an invalid-weight refusal (400, bean validation), an
+unknown-service-type refusal (422), a 10%-discount quote hand-checked to the cent,
+anonymous refused (401), and `GET /v3/api-docs` confirming the endpoint is registered and
+documented. Full detail, including what a genuine weight-slab gap could not be exercised
+against (the dev fixtures no longer have one), in `MEMORY/modules/pricing-engine.md`.
+
+---
+
+## [0.14.0] — 2026-07-30 — Rate Master
+
+Scope: new package `com.courier.modules.rate`, migration `V16`, Phase 4's other remainder
+alongside Hub Management (not yet started). A company rate card: one row prices one
+weight slab for one Route + Service Type + Package Type + Payment Mode combination, and
+`POST /rates/calculate` prices a shipment without booking it — the seam Shipment Booking
+will eventually call. Full detail in `MEMORY/modules/rate-master.md`.
+
+### Added
+
+- **`Rate` entity + `rate_master` table** (`V16`). Company-owned, `rateCode` immutable
+  and reserved past soft delete (same treatment `customers.customer_code` gets);
+  `routeId`/`serviceTypeId`/`packageTypeId`/`paymentModeId` are plain UUID columns with
+  no physical FK, validated against `com.courier.modules.master`'s own application
+  service interfaces — the same cross-feature seam `CustomerAddressServiceImpl` uses for
+  the global geography masters. Own `rate.domain.WeightUnit` enum, not an import of
+  master's — the cross-feature rule forbids reaching into another feature's domain, even
+  though the constants match today.
+- **7 endpoints** under `/api/v1/rates`: create, full-replacement update, get, paged/
+  sorted/filtered/searched list, activate, deactivate, and `POST /rates/calculate`. No
+  `DELETE` — `RATE_MASTER_DELETE` stays seeded-but-unused, the `CUSTOMER_DELETE` pattern.
+- **Business rules**: only an active Route may carry an active Rate (checked on create,
+  on update while the rate stays active, and on activate — a route that went inactive
+  while the rate was deactivated blocks reactivation too); no two ACTIVE rates for the
+  same combination may cover the same weight, half-open `[min, max)` exactly like
+  `master.domain.WeightSlab`, checked on create/update/activate for the same
+  "deactivate, add an overlap, reactivate" reason `WeightSlabServiceImpl` already
+  documents.
+- **`RouteService.findByBranches(bookingBranchId, deliveryBranchId)`** — a new method on
+  the already-shipped Route Management module's interface (Rate Calculation is handed a
+  branch pair, not a route id). Implemented against `RouteRepository`'s existing
+  duplicate-pair query, same `isAuthenticated()` read tier as every other verb on that
+  service. The smallest change that lets Rate consume Route without reaching into its
+  repository.
+- **`PermissionAction.CALCULATE`** — a new, read-only action (classified non-mutating
+  alongside `READ`/`SEARCH`/`EXPORT`/`PRINT`/`DOWNLOAD`). `RATE_MASTER` gains it plus the
+  `ACTIVATE`/`DEACTIVATE` pair every other master-shaped module already had. Catalogue
+  moves 219 → 222, generated from `DefaultPermissionCatalog` exactly as V6/V11/V12/V13
+  were; `DefaultPermissionCatalogTest` asserts it. `FINANCE_USER` (already had CRUD)
+  gains the lifecycle pair and CALCULATE; `BRANCH_MANAGER`/`BOOKING_OPERATOR` (already
+  had READ) gain CALCULATE only — pricing happens at the counter, editing the rate card
+  does not. `@PreAuthorize` itself mirrors `RouteServiceImpl`/`WeightSlabServiceImpl`
+  unchanged (`COMPANY_ADMIN` writes, `isAuthenticated()` reads and calculates) — the
+  catalogue grants to the other three roles are "the responsibility list is ahead of the
+  code" again, inert until the authorise-on-permissions capstone ships.
+- **Frontend**: `features/rate-master` — list/create/edit/view, `RateForm` (loads the
+  lane's sibling slabs reactively as the four combination pickers fill in and renders
+  `WeightSlabGrid` inline, so an admin sees a conflict before saving, not only after a
+  422), `WeightSlabGrid` (client-side mirror of the overlap rule), `RateCalculatorForm`
+  (one component behind both the "Calculate Rate" dialog and the full `rates/calculator`
+  page). New top-level "Rate Master" nav group (Rate Cards / Calculator), neither
+  roles-bridged — both read and calculate are `isAuthenticated()` on the backend.
+- 29 backend unit tests (19 service + 10 domain), 16 new frontend tests. `mvn test`
+  573/573 (was 544), `ng test` 98/98 (was 82), `ng build` clean.
+
+### Fixed
+
+- **Two rate-calculation refusal messages silently dropped their interpolated value.**
+  `"literal %s text" + "more text".formatted(args)` binds `.formatted(...)` to the
+  *second* string literal only (Java operator precedence), so the response read
+  `"No active rate is effective on %s for this route..."` with a bare, unsubstituted
+  `%s`. `mvn test` never caught it — the original assertions checked
+  `hasMessageContaining("gap")` / `hasMessageContaining("No active rate is effective")`,
+  text that happened to sit in the unformatted half of the message. Found only by
+  calling the endpoint with curl during live verification; fixed by parenthesising the
+  full concatenation before `.formatted(...)`, and the regression tests now assert the
+  actual interpolated value appears and no bare `%s` survives.
+- **`V16`'s role-permission backfill joined on the wrong column** (`r.code` instead of
+  `r.role_code` on `company_roles`) — caught on first boot against MySQL, not by `mvn
+  test` (a JOIN condition naming a column that doesn't exist is a runtime SQL error, not
+  a compile-time or unit-test-visible one). The partial DDL from the failed attempt (the
+  `rate_master` table itself, committed by MySQL's implicit-commit-on-DDL before the
+  failing statement) was dropped and the failed `flyway_schema_history` row deleted
+  before retrying clean.
+
+### Verified by running it (2026-07-30, MySQL 8.0.46, second backend instance
+`SERVER_PORT=8082`, second Angular dev server `--port 4300`, both against the shared dev
+database — the user's own 8081/4200 instances left untouched)
+
+Over HTTP as `asha@legacy.test` (`COMPANY_ADMIN`, `LEGACY_CO`): create (exact and
+adjacent slabs), overlap refused (422, naming both rates), duplicate code refused (409),
+unknown service type refused (422), inactive-route refused (422, reactivated after),
+list/get, activate/deactivate idempotent, and `POST /rates/calculate` for an exact
+match, an overage match (12 kg against a `[5,10)` slab computed to 280.00, matching the
+unit test), and a deliberate gap between two non-adjacent slabs (refused, naming the
+weight). `SUPER_ADMIN` refused creating a company's rate (403); anonymous refused (401).
+Then through the Angular console: the full CRUD + lifecycle + calculator flow, the Rate
+Calculator page reproducing the exact curl total (135.70), and the New Rate form's live
+overlap toast firing on a deliberately-overlapping slab before succeeding once corrected.
+
+### Not done (by design)
+
+`RATE_MASTER_APPROVE` (seeded `V6`) stays unused — no approval workflow was asked for.
+Not exercised: a `BRANCH_MANAGER`/`BOOKING_OPERATOR`-scoped token calling the calculator
+(no such user in the dev fixtures yet), and the still-missing `RIVAL_CO` cross-company
+check every module's verification note already records. Shipment Booking itself remains
+unbuilt — this module is the seam it will consume, not the consumer.
+
+---
+
+## [0.13.1] — 2026-07-30 — Route Management (extends Master Data's Route list)
+
+Scope: the brief asked for a standalone "Route Management" module (`route_master` table,
+`/routes` endpoints, `ROUTE_VIEW/CREATE/UPDATE/DELETE` permissions). `master_routes`
+already covers this exact domain — booking/delivery branch pair, distance, transit
+promise, direction-matters uniqueness — as one of Master Data's twelve lists, verified
+live 2026-07-28. Building a second Route concept alongside it would have left two
+route tables in one schema. Per the user's explicit choice (asked directly), this pass
+**extends** the existing `Route` rather than duplicating it: no new table, no new
+package, no new permission codes — `ROUTE_MASTER_VIEW/CREATE/UPDATE/DELETE/ACTIVATE/
+DEACTIVATE` (seeded `V6`, activate/deactivate added `V11`) already cover it. Full
+detail in `MEMORY/modules/master-data.md` §"Route Management (2026-07-30 extension)".
+
+### Added
+
+- **`transit_hours`** (`master_routes`, `V15__route_transit_hours.sql`, `INT NOT NULL
+  DEFAULT 0`) — the remainder hours on top of `transit_days`, `[0, 23]`. A same-day lane
+  that actually takes six hours had nowhere to record that before; 24+ belongs in
+  `transit_days` instead and is refused.
+- **`distance_unit`** (`master_routes`, same migration, `VARCHAR(10) NOT NULL DEFAULT
+  'KM'`) — names the unit `distance_km` always implied. New `DistanceUnit` enum
+  (`modules/master/domain`), single constant `KM` today, mirrors `WeightUnit`'s
+  reasoning: a future unit is a new constant, not a migration that renames a column out
+  from under every existing row.
+- Wired through `Route`, `RouteCommand`, `Create`/`UpdateRouteRequest`, `RouteResponse`,
+  `RouteMasterMapper`, `RouteServiceImpl` (validation + audit snapshot), and the
+  frontend (`master.model.ts`'s `DistanceUnit`/`DISTANCE_UNITS`, `master.config.ts`'s
+  route fields/columns/export — the Transit column now reads `"1 d 8 h"` style via a new
+  `transitLabel` helper, matching the existing `"1 d"` / `"Same day"` convention
+  `master-table.spec.ts` already asserted; that spec is extended, not just kept passing).
+
+### Verified by running it (2026-07-30, MySQL 8.0.46, `SERVER_PORT=8081`)
+
+Flyway applied `V15` clean, `ddl-auto: validate` passed. Over HTTP as `asha@legacy.test`
+(`COMPANY_ADMIN`): created a route carrying both new fields, full-replacement `PUT`
+carried them through, `GET`/list returned them, activate/deactivate round-tripped.
+Business rules untouched by the extension and re-confirmed: same-branch refused (422),
+duplicate ordered pair refused (422) naming the existing route, reverse direction
+accepted, `transitHours` outside `[0, 23]` refused (400, bean validation). Angular
+console: `New Route` form renders `Distance unit` (select) and `Transit hours` (number,
+0–23 hint) fields; the list's Transit column and the detail view's Lane card both show
+the new values. Backend suite **544/544** (was 542 — two new boundary tests for transit
+hours). Frontend `ng test` **82/82** (was already 82 — `master-table.spec.ts`'s transit
+case count unchanged, assertions extended in place), `ng build` clean, `tsc --noEmit`
+clean.
+
+### Not done (by design)
+
+No new migration touched permissions, roles, or any other module. `Rate Master` and
+`Shipment Booking`'s eventual dependency on `routes` (noted in `master-data.md` §"Still
+open") is unaffected — the two new columns are additive and default-backed.
+
+---
+
+## [0.13.0] — 2026-07-30 — Customer Management
+
+Scope: a new module, `com.courier.modules.customer` — reusable customer master data,
+independent of Shipment Order, with a one-to-many address book. Pulled forward ahead of
+Hub Management / Rate Master by explicit request. Full detail in
+`MEMORY/modules/customer.md`.
+
+### Added
+
+- **`Customer` and `CustomerAddress` entities**, `V14__customer_management.sql`. The
+  address carries a real FK to `customers.id` (both tables are this module's own, unlike
+  every cross-module reference elsewhere in the project); the six geography columns
+  (`country_id` … `pincode_id`) reference the `V12` global masters and deliberately get
+  no physical FK, validated in the service layer instead — the same treatment
+  `branches.manager_id` gets.
+- **9 endpoints** under `/api/v1/customers`: create, full-replacement update, get,
+  paged/sorted/filtered/searched list, activate, deactivate, and three nested address
+  endpoints (add, update, delete). No `DELETE /customers/{id}` — not in the spec, and
+  `CUSTOMER_DELETE` stays a seeded-but-unused permission code, same pattern as
+  `MASTER_DATA_IMPORT`.
+- **No permission migration needed.** `CUSTOMER_*` and `ADDRESS_*` were already seeded in
+  `V6` — the catalogue and `DefaultRoleCatalog`'s `BRANCH_MANAGER`/`BOOKING_OPERATOR`/
+  `CUSTOMER_SERVICE` definitions were ahead of the service that would use them, another
+  instance of the "responsibility list is ahead of the code" pattern.
+- **Business rules**: mobile unique per company but *not* reserved past a soft delete
+  (unlike the customer code, which is — two different native uniqueness queries, on
+  purpose); GST mandatory only for `BUSINESS`; at most one default-pickup and one
+  default-delivery address per customer, enforced by clearing the flag on every other
+  address rather than rejecting a second `true`; a duplicate address refused by comparing
+  address lines + pincode (not the full geography stack), checked only against active
+  addresses so a deleted address never blocks re-adding an identical one; every supplied
+  geography id validated against the shared global masters through
+  `com.courier.modules.master`'s own service interfaces — a forward cross-feature
+  dependency injected directly (no port), since the arrow points at another module's
+  application layer with no cycle to avoid.
+- **Frontend**: `features/customer` — list/create/edit/view, `CustomerForm` (client-side
+  mirror of the GST-for-BUSINESS rule), `AddressFormDialog` (a `MatDialog` with six
+  cascading geography pickers: country → state → district → city → area → pincode, each
+  level clearing and reloading everything beneath it on change), `AddressList`. Nav's
+  aspirational "Customers" entry (previously pointed at a `/masters/customers` route that
+  was never built) now points at the real `/customers` route and carries no roles bridge,
+  matching the backend's `isAuthenticated()` read policy.
+- 19 backend unit tests, 12 new frontend tests, 1 updated navigation assertion.
+  `mvn test` 542/542 (was 523), `ng test` 82/82 (was 70), `ng build` clean.
+
+### Fixed
+
+- **`AddressFormDialog` had no internal scroll region.** `MatDialogContainer` only
+  scrolls projected content wrapped in `<div mat-dialog-content>`; this dialog used a
+  plain `<div>`, so with six geography pickers plus the rest of the form, the submit
+  button sat below the fold with no way to reach it on a normal-height viewport. Found by
+  actually driving the dialog in a browser, not by `ng build` or the vitest suite — a
+  real-viewport, real-content-height defect neither could see. Fixed with an explicit
+  `max-height: 85vh; overflow-y: auto` on the dialog's own root element.
+
+### Verified
+
+Booted on MySQL 8.0.46 (a second instance, port 8082, against the shared dev database —
+the user's own 8081/4200 instances were left untouched per
+`MEMORY/local-dev-environment.md`). `V14` applied clean, `ddl-auto: validate` passed.
+Exercised over real HTTP as `asha@legacy.test` (`COMPANY_ADMIN`, `LEGACY_CO`): create with
+and without a supplied code, duplicate code, duplicate mobile (409), business customer
+with and without GST (422/201), default-pickup exclusivity across two addresses,
+duplicate address (422), address delete, deactivate, search, a foreign id (404); and as
+`ravi@legacy.test` (`SUPER_ADMIN`), refused creating a customer (403) — the same
+"platform never touches a company's operational records" invariant every other module
+asserts. Then through the Angular console on a second dev-server instance (port 4300
+proxied at 8082): list, view, edit (immutable code, hydrated fields), and add-address,
+where the scroll bug above was found, fixed live, and re-verified by resubmitting the
+form. **Not exercised:** a `BRANCH_MANAGER`/`OPERATOR`-scoped token (no such user exists
+in the dev fixtures yet) and the cross-company isolation check (no active `RIVAL_CO`
+user — the same long-standing gap every other module's verification note already
+records).
+
+---
+
+## [Unreleased] — 2026-07-30 — Physical `tenant_id` → `company_id` rename
+
+Scope: the deferred physical column rename ("READ THIS FIRST" in `AI_CONTEXT.md`,
+ADR-001 amendment point 1) plus cleanup of the last "tenant"-named duplicates. No
+new module, no new endpoint, no schema shape change beyond the column/index/
+constraint names. Executed after explicit confirmation to rewrite existing
+migrations in place (not add a new one) and to drop-and-recreate the local dev
+database, since editing already-applied migration files invalidates Flyway's
+checksums and the physical column can't change without it.
+
+### Changed
+
+- **All 13 Flyway migrations rewritten in place.** `tenant_id` → `company_id` on
+  every company-owned table; every `*_tenant_*` index/constraint/FK identifier
+  renamed to `*_company_*` (`uk_users_tenant_email` → `uk_users_company_email`,
+  `uk_wallets_tenant_branch` → `uk_wallets_company_branch`, etc.); prose comments
+  reworded. `V3__subscription.sql` had no column, only prose — reworded only.
+  `V12`'s `TENANT_ADMIN` → `COMPANY_ADMIN` **role-data** rewrite is untouched — a
+  different concern from the column.
+- **Every `CompanyOwnedEntity`/`MasterDataEntity` subclass's `@Table` literals**
+  (`columnNames`, `columnList`, constraint/index names) updated to match — this
+  was the real blast radius, not just `CompanyOwnedEntity`'s single `@Column`,
+  because Hibernate needs the literal string per entity and doesn't derive it
+  from the mapped field.
+- **5 native-SQL call sites** updated (`CompanyRepository`, `CompanyRoleRepository`
+  ×2, `CompanyUserRepository` ×2, `BranchRepository` ×2, and
+  `MasterDataInfrastructure`'s `MasterUniquenessChecker` — **a fifth native-query
+  site the original code-reading pass missed**; found by grepping `tenant_id`
+  across all of `main/java`, not just the four repositories already known to
+  bypass the Hibernate filter).
+- `RedisConfig.CACHE_TENANT_CONFIG` → `CACHE_COMPANY_CONFIG` (identifier only; the
+  cache's actual name was already `"companyConfig"`).
+- `CompanyAdminBoundaryTest` — the two assertions that literally pinned the schema
+  to `tenant_id` (`filter.condition()).contains("tenant_id")` and the owner-column
+  test titled "...and it is still called tenant_id") now assert `company_id`. Left
+  as-is, these would have been the loudest and most misleading failure in the
+  suite — an isolation test failing right after an isolation-column rename reads
+  as a leak, not as a stale assertion.
+
+### Removed
+
+- **Six unused `AuditAction.TENANT_*` constants** (`TENANT_CREATED`,
+  `TENANT_ACTIVATED`, `TENANT_SUSPENDED`, `TENANT_CLOSED`, `TENANT_PLAN_CHANGED`,
+  `TENANT_IMPERSONATED`) — a duplicate section left over from before the
+  tenant→company rename, contradicting the class's own comment ("no `TENANT_*`
+  parallel exists"). Confirmed zero references anywhere in the codebase before
+  deleting; `COMPANY_CREATED`/`COMPANY_ACTIVATED`/`COMPANY_SUSPENDED`/
+  `COMPANY_DEACTIVATED` already cover the same events.
+
+### Fixed
+
+- **A real, pre-existing bug in `V12`, unrelated to this rename**, found only
+  because this was the first time `V12` was actually run against MySQL: its
+  `TENANT_ADMIN` → `COMPANY_ADMIN` rewrite tried to `INSERT ... (tenant_id,
+  user_id, role) SELECT tenant_id, ...` against `user_roles`, a table that has
+  **never** had a `tenant_id`/`company_id` column — isolation for that table
+  comes from the owning `users` row, not its own discriminator (see `V2`'s
+  `CREATE TABLE user_roles`). Confirmed against the pre-edit backup that this bug
+  predates today's work. Fixed to `INSERT ... (user_id, role) SELECT user_id,
+  ...`. This is exactly the class of defect `AI_CONTEXT.md` flagged `V12` as
+  carrying by never having been run — see decision "verified by running it, not
+  just `mvn test`" throughout this file's history.
+
+### Operational note — an incident during verification
+
+Restarting the app to apply the rewritten migrations required dropping and
+recreating the local `courier_db` (approved in advance — editing already-applied
+migrations invalidates Flyway's checksums, and there is no way to get a real
+physical rename without it). While stopping the *temporary* verification instance
+on port 8082 afterward, a `pkill -f "spring-boot:run"` pattern was too broad and
+also killed the long-running background instance on **port 8081** —
+`local-dev-environment.md` explicitly documents that port as the user's own
+persistent dev instance and says not to kill it. It was already going to fail on
+its next query regardless (it was running pre-rename code against the just-rebuilt
+schema), but it should have been stopped by PID, not by a pattern match broad
+enough to catch an unrelated process. Restarted on 8081 with the rebuilt
+post-rename code at the user's confirmation; nothing else was touched. Logged here
+so a future session doesn't repeat the pattern-kill mistake.
+
+### Verified by running it
+
+Backend: `mvn compile` clean, `mvn test` **523/523** (parity with pre-rename).
+`courier_db` dropped and recreated; all 13 migrations applied clean including the
+`V12` fix; app boot logged `Started CourierApplication` with no Hibernate
+`ddl-auto: validate` failure — the strongest available signal that every entity's
+`@Table` literal and the physical schema agree, since `validate` fails loudly and
+by name on any straggler. `information_schema.columns` confirms **zero**
+`tenant_id` columns and **28** `company_id` columns in `courier_db`.
+
+Reseeded the dev fixtures from scratch (they don't survive a dropped database):
+one hand-inserted `SUPER_ADMIN` (`ravi@legacy.test`, anchored to
+`GlobalMasters.PLATFORM_COMPANY_ID` — there is no other bootstrap path for the
+first platform account, confirmed by grepping for `CommandLineRunner`/seed SQL and
+finding none), then `LEGACY_CO` / `asha@legacy.test` created normally through
+`POST /companies`. Both log in with `Password@123`, matching
+`dev-login-credential` memory unchanged.
+
+Exercised over HTTP: the 4-now-5 native-query duplicate checks (role code → 409,
+branch code → 409, company-user email → 409); company statistics (roles, users,
+branches counted correctly); branch-wallet read (finance module, `company_id` +
+branch FK); a master-data list read; and the global-masters split specifically —
+`SUPER_ADMIN` creates a country under `PLATFORM_COMPANY_ID`, `COMPANY_ADMIN` reads
+it (200) but is refused on write (403). Frontend: confirmed zero "tenant"
+references anywhere in `frontend/src` before touching anything; `ng build` clean
+after, as expected (only the DB column moved, DTOs were already `companyId`).
+
+**Deliberately not touched, per explicit scope decisions before starting:**
+`Company.id`/`Company.companyId` stay two separate UUIDs (decision 19, its own
+deferred data migration); no `modules/customer` or `modules/shipment` code — see
+the doc-only update to `modules/shipment.md`; no branch-wallet PAID/TO_PAY debit
+rule — nothing exists yet to call it.
+
+---
+
+## [Unreleased] — 2026-07-30 — Branch RBAC, navigation and menus
+
+Scope: Branch permissions, navigation, menus, RBAC, tests, documentation only — the
+Shipment module itself is not implemented. This closed a gap between `DefaultRoleCatalog`
+/ `DefaultPermissionCatalog` (already written for the branch's eleven responsibilities and
+four staff roles) and everything downstream of them, which had not caught up.
+
+### Fixed — the backend build was red
+
+- `DefaultRoleCatalogTest.eightRoles` didn't list `ACCOUNTS`, the ninth seeded role — a
+  role added to `DefaultRoleCatalog` with no test update. Renamed to `nineRoles`, fixed.
+- `DefaultPermissionCatalogTest.sizeMatchesMigration` expected 211, the catalogue was 219.
+  Eight permission codes — `MENU_READ`, `MENU_ASSIGN`, `MANIFEST_ASSIGN`,
+  `MANIFEST_DISPATCH`, `MANIFEST_RECEIVE`, `DELIVERY_DISPATCH`, `DELIVERY_DELIVER`,
+  `WALLET_RECHARGE` — existed in `DefaultPermissionCatalog` and in role definitions but in
+  no migration. Added `V13__branch_operations_permissions.sql`, following V11's rule:
+  existing companies are not back-filled, new companies pick the codes up automatically.
+
+### Added
+
+- **`DefaultRoleCatalog.isBranchAssignable(roleCode, systemRole)`** — implemented; it had
+  been referenced in this class's own javadoc since `BRANCH_ROLE_CODES` was written, but
+  never existed. Returns true for the four branch-staff roles (`BRANCH_MANAGER`,
+  `BOOKING_OPERATOR`, `DELIVERY_OPERATOR`, `ACCOUNTS`) or any custom (non-system) role.
+- **`UserServiceImpl`: a branch manager may create and staff their own branch's users.**
+  `create`/`update`/`activate`/`deactivate`/`assignRole`/`removeRole` admit
+  `BRANCH_MANAGER` (`BRANCH_WRITERS`), scoped in code to the caller's own branch
+  (`requireManageableByCaller`, 403 on a foreign-branch colleague) and, for role
+  assignment, to `isBranchAssignable` roles only. `delete`, `lock`, `unlock`,
+  `resetPassword`, `assignBranch` and `assignHub` stay `COMPANY_ADMIN`-only. This is what
+  makes branch responsibilities #1 ("create branch users") and #2 ("assign menus", which
+  today means assigning the company role that governs a staff member's menus) actually
+  work, rather than only being permission codes nobody's `@PreAuthorize` honoured.
+- **Frontend `AppRole.ACCOUNTS`** — was missing from the enum entirely despite existing in
+  the backend catalogue since `ACCOUNTS` was added.
+- **`navigation.config.ts`** — `BOOKING_OPERATOR`, `DELIVERY_OPERATOR` and `ACCOUNTS` now
+  see the nav leaves their `DefaultRoleCatalog` permission set actually grants: booking +
+  customers + five masters for the counter desk; manifest/receive/dispatch/delivery for
+  the road; wallet/payment/invoice for the money desk; every branch role reads its own
+  reports. None of the three reach Administration. New `navigation.config.spec.ts` (5
+  tests) pins the mapping down — frontend suite moves 65 → 70.
+- **`MEMORY/modules/branch.md`** gained the "What a branch runs" and "A branch manager
+  staffs their own branch" sections that `DefaultRoleCatalog`'s and `UserServiceImpl`'s own
+  javadoc already pointed at.
+
+### Not done, on purpose
+
+- **Shipment module** — booking flow and payment-mode business rules (`PAID`/`TO_PAY`
+  debit timing, `COD`/`TBB`) are documented in `MEMORY/modules/branch.md` §Booking flow as
+  context for the permission shape, not implemented here.
+- **Authorise on permissions.** `BOOKING_OPERATOR`/`DELIVERY_OPERATOR`/`ACCOUNTS` still
+  have no JWT authority of their own (`auth.Role` has 9 values, not the company's 9 role
+  codes) — only `BRANCH_MANAGER`'s existing JWT tier was widened. Giving those three roles
+  real sessions is the same deferred "wire authorisation onto permissions" capstone this
+  file has flagged since Phase 3; touching auth's token issuance was deliberately kept out
+  of a Branch-scoped change. See `MEMORY/AI_CONTEXT.md` Next Task.
+- **`V13` has not been run against MySQL** — same unverified state as `V12`.
+
+---
+
+## [Unreleased] — 2026-07-29 (later the same day)
+
+### Added — the Company Admin boundary, stated and asserted
+
+The `modules/company` module was **modified, not rebuilt**: one new collaborator, one new
+field pair on an existing response, and two test classes. Everything else here is
+verification of code that already existed.
+
+- **`BranchRoleProvisioningService`** (`modules/company/application`) — the third thing a
+  branch creation now makes. `BranchServiceImpl.create` already produced a branch, a login
+  account and (after commit) a wallet; the account got auth's `Role.BRANCH_MANAGER` **JWT
+  authority** and no `user_company_roles` row, so it held a role that appeared nowhere in
+  the Roles screen. This grants the company's `BRANCH_MANAGER` role, creating it from
+  `DefaultRoleCatalog` when the company has none and reactivating it when it has been
+  withdrawn.
+  - **Ensure, not create.** A role per branch would put one row in `company_roles` for
+    every office a courier opens, and re-permissioning "branch managers" would then mean
+    editing a hundred of them. Both halves are idempotent — a reused branch code and a
+    retried create must not produce a second role or a duplicate grant, and
+    `uk_user_company_roles_user_role` is the backstop for a race.
+  - **Inside the branch's transaction**, unlike the wallet. Decision 47 asks which failures
+    may roll a branch back: an account that holds no role is the half-provisioned state the
+    single transaction exists to prevent, while a wallet can be conjured later from nothing
+    by `getOrCreateForBranch`.
+  - Permissions on a recreated role are filtered by the company's seeded `feature.*`
+    settings, not the subscription module — decision 30, the same source
+    `RolePermissionServiceImpl` reads, so a role created here can never hold a right the
+    Roles screen would refuse to grant.
+- **`branchUser.roleId` / `branchUser.roleCode`** on the `POST /branches` response, and on
+  the frontend `BranchUserResponse`. The credentials dialog printed the literal string
+  "Branch Manager"; it now repeats the role the server actually granted, so a company that
+  renames the role sees its own name and the screen cannot disagree with
+  `user_company_roles`.
+- **`CompanyAdminBoundaryTest`** (10 tests) — the companion to `SuperAdminBoundaryTest`.
+  That one keeps the platform out of a company's operations; this one keeps a company out
+  of the platform's, and states the responsibility list in the positive direction too.
+  - **Refusals:** `CompanyServiceImpl`'s class-level guard excludes `COMPANY_ADMIN`, and no
+    method-level annotation loosens it for `create`, `delete`, `assignSubscription`,
+    `renewSubscription` or `suspendSubscription`; `SubscriptionPlanServiceImpl` likewise.
+    The helper checks the method guard **or** the class guard, because a refusal is broken
+    from either end and checking one would miss half the ways it can go wrong.
+  - **Isolation:** every company-owned `@Entity` repeats `@Filter` and `@SQLRestriction`.
+    Hibernate does not inherit `@Filter` from a `@MappedSuperclass`, so an entity that
+    forgets it is not "slightly less filtered" — it is unfiltered, and nothing else in the
+    suite would notice. The list is written out rather than classpath-scanned, so adding an
+    entity and forgetting it fails rather than quietly passing.
+  - **The owner column is asserted to still be named `tenant_id`**, mapped once on
+    `CompanyOwnedEntity`. That is the assertion that catches a well-meaning tidy-up that
+    would break every company-owned table at once.
+  - **Responsibilities:** `COMPANY_ADMIN` holds every code the catalogue defines in each of
+    the fifteen modules it owns — branches, users, roles, permissions, routes, rate master,
+    vehicles, drivers, settings, wallet, customers, addresses, shipments, manifests,
+    reports — and the modules that have shipped are guarded to `COMPANY_ADMIN` in fact.
+- **`BranchRoleProvisioningServiceTest`** (8 tests) and two more in
+  `BranchServiceImplTest`; one more frontend spec on the credentials dialog.
+
+### Verified — company isolation, end to end
+
+Read, not changed. Recorded so the next module does not re-derive it:
+
+- **Backend.** Every business table carries the owner column. The four tables without it
+  are deliberate and each has a reason: `subscription_plans` and `permissions` are platform
+  catalogues; `user_roles` is auth's element collection of JWT authorities, a child of
+  `users` by `ON DELETE CASCADE`; `company_role_permissions` was dropped by `V6`. `V12`'s
+  five `_v12_map_*` tables are migration scratch and are dropped at the end of it.
+- **Entities.** All 27 company-owned entities repeat the filter — the twelve master lists
+  included. `CompanySettings` is the one entity with no `@SQLRestriction`, deliberately: a
+  company always has exactly one settings row, created on first access and never deleted.
+- **APIs.** `/api/v1/companies/**`, `/api/v1/subscription-plans/**` and
+  `/api/v1/super-admin/**` are `SUPER_ADMIN` at the URL layer *and* at the service class —
+  the coarse gate and the authoritative one.
+- **Frontend.** Every `companies*` and `platform/*` route is `roleGuard` +
+  `[SUPER_ADMIN]`; a company admin has no console path to creating, deleting or
+  re-subscribing a company.
+- **RBAC.** `DefaultRoleCatalog` excludes the platform tier by module and action rather
+  than by a list of codes, so a right added to a platform-only module is excluded the day
+  it is added.
+
+### Still not built (the responsibility list is ahead of the code)
+
+Permission codes are seeded and `COMPANY_ADMIN` holds them, but no service or controller
+exists yet for **Rate Master, Vehicles, Drivers, Customers, Customer Addresses, Shipment
+Orders, Manifests or Reports**. "Routes" is served by the `master_routes` list; "Vehicles"
+by `master_vehicle_types`, which is a catalogue of *types*, not a fleet register. Nothing
+in this release pretends otherwise.
+
+Backend `mvn test` **513 of 513**. Frontend `ng test` **65 of 65**, `ng build` clean.
+
+---
+
+## [Unreleased] — 2026-07-29
+
+### Changed — the tenant concept is gone; a company is the only owner
+
+- **`tenant` no longer exists anywhere in the code.** `TenantContext` → `CompanyContext`,
+  `TenantAwareEntity` → `CompanyOwnedEntity` (field `tenantId` → `companyId`),
+  `TenantResolutionFilter` → `CompanyResolutionFilter`, `TenantEntityListener` →
+  `CompanyEntityListener`, `TenantFilterAspect` → `CompanyFilterAspect`, the Hibernate
+  filter `tenantFilter` → `companyFilter`, `TenantViolationException` →
+  `CompanyIsolationException`, error codes `TENANT_VIOLATION` →
+  `COMPANY_ISOLATION_VIOLATION` and `TENANT_INACTIVE` → `COMPANY_INACTIVE`. Package
+  `com.courier.shared.tenant` → `com.courier.shared.company`. **174 backend files, 19
+  test files, 14 frontend files.**
+- **`X-Tenant-ID` → `X-Company-ID`**, and the JWT claim **`tid` → `cid`**. The old claim
+  is still *read* and never written: a refresh token minted before the deploy is valid
+  for seven days, and dropping the fallback would sign those users out mid-session.
+  `JwtTokenProvider.companyClaim(...)` is the one place that knows.
+- **`TENANT_ADMIN` is deleted** from `Roles` and the `Role` enum. It was the older name
+  for `COMPANY_ADMIN`, and two names for one role could only drift. `V12` rewrites the
+  `user_roles` rows that carried it.
+- **`StandaloneTenantDirectory` deleted**, `TenantDirectoryPort` → `CompanyDirectoryPort`
+  (`findBySlug`/`supportsSlugLookup` → a single `findByCode`), `CompanyTenantDirectory` →
+  `CompanyDirectory`, and the empty `modules/tenant` package and `MEMORY/modules/tenant.md`
+  are gone. The placeholder could not enforce company status, and a fallback that silently
+  ignores suspension is worse than a startup failure.
+- **The database column is still `tenant_id`, deliberately** — the physical rename of
+  thirty-odd tables is its own migration. Java says `companyId`, MySQL says `tenant_id`,
+  and the two are joined in exactly one place: `@Column(name = "tenant_id")` on
+  `CompanyOwnedEntity`. Every index and unique key keeps its `_tenant_` spelling for the
+  same reason. New company-owned tables should still be created with a `tenant_id`
+  column, so the eventual rename is one migration rather than two.
+- **`Company` still carries two UUIDs**, now `id` (the row key) and `companyId` (the
+  ownership key stamped on every row it owns). Collapsing them needs a data migration and
+  is deferred with the column rename. `CompanyEvent` records grew an explicit `id`
+  component so the two are never confused.
+
+### Added — SUPER_ADMIN can now run the platform
+
+- **Deactivate a company** — `PATCH /api/v1/companies/{id}/deactivate`. Legal from every
+  status except `INACTIVE`, idempotent, reason optional. Deliberately distinct from
+  suspend: a deactivated company is dormant, a suspended one is in trouble, and support
+  quotes the difference back to the customer. New `COMPANY_DEACTIVATED` audit action and
+  `CompanyEvent.CompanyDeactivated`.
+- **The three commercial subscription acts**, each its own endpoint and its own audit
+  action, because "when did Acme move up to ENTERPRISE, and who approved it" is not
+  answerable from a full-replacement `PUT` that happens to include a plan id:
+  - `POST /companies/{id}/subscription` — assign. Opens a paid window, activates the
+    company, and **closes any trial**: two open windows with no rule about which is in
+    force is not a state worth having.
+  - `POST /companies/{id}/subscription/renew` — renew. Extends from **the later of the
+    current end and today**, so paying early keeps the days already bought and paying
+    late is not billed for the lapsed gap. That single rule is why this is not "set
+    `subscriptionEndDate`". There is no start date in the request. A renewal reactivates
+    an `EXPIRED` or `SUSPENDED` company and may carry an upgrade, recorded as one event.
+  - `POST /companies/{id}/subscription/suspend` — suspend. Closes the paid window as of
+    today so the company stops appearing as paid on every renewals report, and requires a
+    reason.
+  New `BillingCycle` enum (`MONTHLY`/`QUARTERLY`/`HALF_YEARLY`/`YEARLY`) in
+  `modules/subscription`; an explicit `endDate` always overrides the cycle, because a real
+  contract does not always land on a boundary and the system must not disagree with the
+  invoice.
+- **`GET /companies/{id}/statistics`** — users (total/active/pending), branches
+  (total/active), roles, the plan's ceilings and whether either is reached, plus
+  `daysToExpiry` counting down to whichever of the trial and subscription ends sooner.
+- **`GET /api/v1/super-admin/dashboard`** — platform totals, companies per status (every
+  status present, including the zeros), lapsed and expiring-soon counts, plan catalogue
+  size, and the renewals worklist (thirty days, soonest first, capped at twenty).
+- **`POST` / `GET /api/v1/super-admin/users`** — create and list platform operators. The
+  address must be unused **across the whole platform**, not per company: a platform
+  operator signs in with no company code, and `AuthService` resolves their home company by
+  finding the single platform account with that address, so a second one would make that
+  lookup ambiguous — and an ambiguous match is refused as a bad credential, so the newer
+  account could never sign in at all. New `SuperAdminAccountService` in `auth` (it owns
+  `users` and `user_roles`); `UserProvisioningService.provisionSuperAdmin`.
+- **New services** `CompanyDashboardService` (read model) and `SuperAdminAccountService`.
+  The dashboard is separate from `CompanyService` because it crosses into users, branches,
+  roles and plans purely to count them, and the lifecycle service has no business holding
+  four more repositories it may not write to.
+
+### Changed — a company's first administrator gets a temporary password
+
+- **`provisionAdmin` no longer creates an unusable password.** It generates a
+  policy-valid temporary password and returns it **once**, in
+  `provisioning.temporaryPassword` on the create response — never logged, audited,
+  emailed or readable again. This reverses decision 21 for this account, for the reason
+  decision 48 already accepted for branch users: an unusable password made the activation
+  email the *sole* way into a brand-new company, so a bounced or filtered message left
+  the customer with an account nobody could enter and a super admin with nothing to hand
+  them. The account is still `PENDING`, so the password alone opens nothing until the
+  activation link is followed — which is what makes returning it acceptable.
+- **`NotificationPort.sendCompanyActivation(...)`** and
+  `EmailVerificationService.issueCompanyActivation(...)` — the activation email, API
+  ready, with the log-only dev sender implemented. **The port is not given the password**,
+  precisely so that no implementation can put a credential in a mailbox or a log; the
+  email carries the activation link and the company's name.
+- `CompanyService.CreatedCompany` and `CompanyResponse.ProvisioningSummary` gained
+  `temporaryPassword`, and `verificationEmailSent` was renamed `activationEmailSent`.
+
+### Changed — the geography masters are global (V12)
+
+- **Country, state, district, city, area and pincode are now one catalogue shared by
+  every company**, written only by a `SUPER_ADMIN` and read by anyone signed in. Moved to
+  `/api/v1/global-masters/**`. The other six lists (vehicle/package/service type, payment
+  mode, weight slab, route) stay company-owned and `COMPANY_ADMIN`-written.
+  Per-company geography was defensible on paper and wrong in practice: `PUNE` meant a
+  different row in every company, so no rate card, serviceability check or report could
+  be compared across two of them, and every new company started with an empty map of the
+  country it operates in.
+- **The tables keep their `tenant_id` column**, and global rows are owned by the reserved
+  `GlobalMasters.PLATFORM_COMPANY_ID` (`00000000-0000-0000-0000-000000000001` —
+  deliberately not a valid time-ordered UUID, so it cannot collide with a real
+  `companyId`). `(tenant_id, code)` is already unique, so one owner makes it a *global*
+  unique on code with no schema change, and the Hibernate filter stays switched on: a
+  code path that forgets to bind the platform id returns nothing rather than everything.
+  The alternative — a second entity hierarchy with no owner column — would have
+  duplicated the shared head, repository, specification and service that decision 42
+  exists to protect, because Java has one superclass.
+- `AbstractMasterDataService` gained a `global()` hook and a `withOwner(...)` wrapper.
+  Binding matters on the write path as much as the read: `CompanyEntityListener` stamps
+  the owner from `CompanyContext`, so a global row created under a super admin's own
+  binding would silently belong to their home company and be invisible to everyone else.
+- `MasterNameResolver.globalNamesById(...)` — resolving a geography parent against the
+  caller's own company would find nothing and render a state with no country, which is the
+  kind of blank nobody investigates.
+
+### Added — permissions and the boundary that keeps them apart
+
+- **The catalogue moves 187 → 211.** New modules `SUBSCRIPTION`, `SUPER_ADMIN_USER` and
+  `GLOBAL_MASTER`; new actions `RENEW` and `SUSPEND`; and `COMPANY` grows from
+  `READ, UPDATE` to the full lifecycle. `V12` seeds exactly the 24 rows, generated from
+  `DefaultPermissionCatalog`, and `DefaultPermissionCatalogTest` asserts the total.
+- **`DefaultRoleCatalog` now *excludes* the platform tier from `COMPANY_ADMIN`.** That
+  role's grants are derived from the whole catalogue, so without an exclusion the new
+  modules would have handed every company admin on the platform the ability to renew
+  their own subscription and rename a city for everybody else. The exclusion is expressed
+  in modules and actions rather than a list of codes, so a right added to a platform-only
+  module is excluded the day it is added.
+- **`SuperAdminBoundaryTest`** — asserts what a super admin may *not* do, by reading the
+  `@PreAuthorize` expressions directly. Every other test asserts that something works;
+  this one asserts that something does not, which is the harder property to keep, because
+  a guard is removed by loosening one annotation and nothing else would notice.
+- **Wallet recharge now excludes the platform tier explicitly.** `openRecharge` and
+  `completeRecharge` were bare `isAuthenticated()`, and a super admin was kept out only
+  by not having a branch — an accident, not a rule. A recharge a platform operator made
+  is indistinguishable in the ledger from one the branch made, which is what a ledger
+  exists to prevent.
+
+### Frontend
+
+- **The rename, end to end**: `tenantId` → `companyId` across models, services, guards and
+  the token store; `X-Company-ID`; the JWT decoder reads `cid` and falls back to `tid`.
+- **New `Platform` menu section** (`SUPER_ADMIN` only): platform dashboard, companies,
+  subscription plans, platform operators, and the six global geography lists. There is
+  deliberately **no** branch, shipment, customer, manifest or wallet entry under it.
+  The geography leaves moved out of `Masters`, where a `COMPANY_ADMIN` could have clicked
+  them and been unable to save — a trap.
+- **New screens**: `platform-dashboard` (tiles + renewals worklist, degrades to zeros on a
+  failed load), `super-admin-list` (list + create in one, because there are a handful of
+  these accounts and a separate route for a five-field form is ceremony), and
+  `company-create` (its own form: `CompanyForm` edits an existing company and so has no
+  code field and no first administrator).
+- **Company profile gained the lifecycle**: assign, renew, activate, deactivate, suspend
+  subscription, plus a statistics tile row with quota headroom.
+- **New shared `ReasonDialog` + `DialogService.prompt`** — a confirm that collects the
+  reason the endpoint demands. A plain confirm followed by a 422 teaches the operator that
+  the button is broken.
+- **New `TemporaryPasswordDialog`** — generalised from the branch flow's credentials
+  dialog rather than copied, since three near-identical dialogs would have drifted the
+  first time the warning text was improved in one of them. `disableClose`, copy button,
+  and plain wording that the password cannot be shown again.
+- `master.config.ts` gained a `global` flag; `writeAccessFor(def)` picks the writer role
+  and permission codes per list, so a list that flips tier changes in one place.
+- **62 frontend tests** (was 50). `ng build` clean.
+
+### Notes and gaps
+
+- **No `shipmentCount` anywhere.** `modules/shipment` does not exist, and a field that is
+  always zero reads as "this company has booked nothing" rather than "nobody has built
+  this yet" — indistinguishable on screen. It arrives with the module that can populate it.
+- **Not run against MySQL yet.** `V12` is written but unapplied: the geography merge, the
+  name-collision rename, the `TENANT_ADMIN` rewrite and the 24 permission rows are all
+  unverified against real data. That is the first thing to do next.
+- The cross-company runtime checks for Branch Wallet and Master Data still cannot run —
+  `RIVAL_CO` has no active user. Unchanged, and now also blocking a check that a company
+  admin cannot write a global master.
+
+## [0.11.1] — 2026-07-29 (previously Unreleased)
+
+### Added
+- **A branch now arrives complete: branch + login account + wallet, from one call.**
+  `POST /api/v1/branches` creates the branch, provisions its user and — through the existing
+  `BranchCreated` listener — its wallet. The user is created **in the same transaction** as
+  the branch, because a branch nobody can sign in to is not what anyone asked for; the wallet
+  stays outside it, as before. New optional `branchUser` block on the request (email, first
+  and last name, mobile, password): omit it and the address is derived as
+  `<branch-code>@<company-code>.local`, suffixed `-2`, `-3`… if that is taken. An address the
+  administrator *typed* is used as typed — a collision fails the whole create with a 409
+  rather than silently signing them in as somebody else's neighbour.
+  The account is `BRANCH_MANAGER`, is placed at the branch (`users.branch_id`) and becomes
+  the branch's manager unless a `managerId` was supplied. New `BranchUserRequest` /
+  `BranchUserResponse` DTOs; `BranchService.create` now returns `BranchCreation`.
+- **`UserProvisioningService.provisionBranchUser`** — the second provisioning path in auth,
+  and a deliberate departure from `provisionAdmin`: this account is created **ACTIVE with its
+  email pre-verified and a usable password**, either the one the administrator typed or one
+  generated from a 14-character unambiguous alphabet (no 0/O/1/l/I — it is read off a screen
+  and typed by someone else). Both are validated against `PasswordPolicy`, so a generated
+  password could never be a silent fork of the rule everyone else follows. A generated
+  password is returned **once**, in the create response, and is never logged, never audited
+  and not readable again — a lost one is reset, not recovered.
+- **Frontend: the branch form carries the user (UI-10).** New create-only *Branch User* card
+  on `BranchForm` (login email, mobile, first/last name, password), and a
+  `BranchCredentialsDialog` shown after saving when the server generated the password —
+  `disableClose`, copy button, and plain wording that it cannot be shown again. When the
+  administrator chose the password there is nothing to reveal and the dialog does not open.
+  `CreateBranchRequest` gained `branchUser`; `BranchResponse` gained `branchUser` (create
+  response only). **4 new frontend tests (50 in the suite).**
+
+### Fixed
+- **Branch form: a pasted email with surrounding spaces was rejected.** `Validators.email`
+  ran on the raw value while the submit — and the server — trim, so " a@b.test " showed an
+  error about nothing. Both the branch email and the new login email now validate the
+  trimmed value.
+
+### Changed
+- `BranchController.create` returns the created user alongside the branch; `GET /branches/{id}`
+  is unchanged and never carries an account or a password.
+
+### Added — 2026-07-28 (Master Data, same Unreleased window)
+- **Master Data module (backend, Phase 6).** New `com.courier.modules.master`: the twelve
+  reference lists a company configures before it can book anything — the geography hierarchy
+  (country → state → district → city → area → pincode) and the operational catalogues
+  (vehicle type, package type, service type, payment mode, weight slab, route).
+  `V11__master_data.sql` adds twelve tenant-owned tables, all sharing one head — `code`
+  (uppercased, immutable, unique per company), `name`, `description`, `status`,
+  `display_order` — plus the `BaseEntity` audit, soft-delete and version columns. That shared
+  head is what lets one `MasterDataEntity`, one `MasterDataRepository<E>` (queries written
+  with `#{#entityName}`), one `MasterDataCriteria`/`MasterDataSpecifications`, one
+  `AbstractMasterDataService<E>` and one `MasterSortSupport` serve all twelve.
+  **85 endpoints** under `/api/v1/master/**` — seven per list (create, full-replacement
+  update with an optimistic-lock `version`, read, list, soft delete, activate, deactivate)
+  plus `POST /master/bootstrap`. Six new `AuditAction` constants. **81 unit tests, all green
+  (457 in the suite).** See `MEMORY/modules/master-data.md`.
+- **`POST /api/v1/master/bootstrap`** — seeds the standard vehicle types (BIKE, AUTO, PICKUP,
+  TRUCK, CONTAINER), package types (DOCUMENT, PARCEL, BOX, BAG, PALLET), service types
+  (SAME_DAY, EXPRESS, STANDARD, ECONOMY), payment modes (PAID, TO_PAY, TBB, COD) and five
+  kilogram weight slabs for the calling company. Idempotent on the code: a second run creates
+  nothing and reports everything skipped, so it can never resurrect a catalogue entry an
+  administrator deliberately removed. An explicit action rather than automatic seeding during
+  company provisioning, which would have pointed `modules/company` at a module it knows
+  nothing about and left every existing company with empty lists anyway. The geography
+  hierarchy is deliberately **not** seeded — no set of countries and pincodes is right for an
+  arbitrary courier.
+- **`BranchLookupPort`** (owned by Master) + `CompanyMasterBranchDirectory` (supplied by
+  `modules/company`) — the same port/adapter seam auth uses for tenants and Finance for
+  wallets, so a `Route` never holds a `Branch`. Deliberately not a reuse of Finance's
+  `BranchDirectoryPort`: importing it would make Master depend on Finance to talk about
+  branches. Finance's port gained a batched `findBranches`, used to label a page of routes in
+  one query rather than two per row.
+- **`MASTER_DATA` permission module** — nine rights (CRUD, search, import, export, activate,
+  deactivate). `PINCODE` and `ROUTE_MASTER` gained the activate/deactivate pair they were
+  missing, since both now have those endpoints. The catalogue moves **174 → 187**; `V11`
+  seeds the thirteen new rows and `DefaultPermissionCatalogTest` asserts the total. One
+  module rather than twelve: an operator building a role thinks "may they edit master data",
+  not "may they edit districts but not cities". Existing companies keep the grants they have
+  — back-filling every `COMPANY_ADMIN` would silently widen roles an administrator may have
+  trimmed; new companies pick them up automatically because `DefaultRoleCatalog` derives that
+  role's set from the catalogue.
+
+### Business rules
+- **A parent with live children cannot be deleted** — 422 naming the count, never a cascade.
+  Taking five levels of geography out from one click is not something anyone expects until it
+  has happened to their production data.
+- **A parent must be active only when it is being set or changed**, and when the child is
+  activated — not merely to edit a child. Otherwise correcting a typo in a state whose country
+  was deactivated last week would be impossible.
+- **Weight slabs are half-open, `[min, max)`**, and no two *active* slabs of one unit may
+  overlap. Adjacent is fine and is what every real tariff looks like. Enforced in the service
+  because MySQL has no exclusion constraint — **and on activation as well as on save**, or
+  deactivating a slab, adding an overlapping one and reactivating the first walks straight
+  around the rule. Two slabs both claiming 2 kg would price two identical shipments
+  differently depending on row order: a bug that surfaces as a customer complaint months
+  later, not as an error.
+- **Marking a pincode unserviceable folds its COD, prepaid and pickup flags down with it.**
+  A pincode nobody delivers to cannot offer cash on delivery; folding rather than refusing
+  keeps "stop servicing this" a one-field edit, and the audit entry records it.
+- **Payment modes have no parallel enum.** The four canonical modes *are* rows; an enum
+  repeating them is a second source of truth that drifts the first time a company adds
+  `PAID_ONLINE`. Booking branches on behaviour, so behaviour is flags, and contradictory
+  combinations are refused with 422.
+- **Route direction matters.** Pune→Mumbai and Mumbai→Pune are two rows — equal kilometres,
+  rarely equal transit days. One route per ordered pair, the ends must differ, and an existing
+  route survives its branch being deactivated because the shipments on it still have to be
+  delivered.
+
+### Security
+- **A foreign parent id is refused as unknown, not linked.** Every single-row load goes
+  through `findByIdWithinTenant`, because a primary-key load is not filtered by the Hibernate
+  tenant filter. Nothing distinguishes "another company's country" from "no such country".
+- **`MasterUniquenessChecker` is the only place native SQL is assembled**, and it has to be
+  native: the unique keys do not mention `deleted` and `@SQLRestriction` hides exactly the
+  soft-deleted rows the check must see, so a JPQL check would report a code free and let the
+  insert fail with a raw constraint violation — a 500 where the user should have got a 409.
+  Table names are validated against a closed set and column names against
+  `^[a-z][a-z0-9_]*$`; every value is a bound parameter; the count is compared in Java
+  because MySQL returns `COUNT(*)` as `BIGINT`.
+- **A `tenantId` in a query string is overridden, never honoured** (decision 27), and the
+  generic `root.get(attribute)` in `MasterDataSpecifications` is safe because those keys are
+  always code constants supplied by a mapper, never caller input.
+- Parent names are resolved through the specification rather than `findAllById`, so an id
+  from another company is absent from the result instead of leaking a name.
+
+### Frontend
+- **Master Data module (UI-12, `features/masters`).** API-only, no mock. **Four components
+  serve all twelve lists**, selected by the `:master` route parameter: `master-list` (paged
+  table, sort, debounced search, advanced-filter drawer, CSV export, permission-gated row
+  actions, and a "Seed standard set" button on the five seeded catalogues), `master-form-page`
+  (create and edit in one — the difference is fetching first, sending the version, and
+  reloading on 409), `master-view` (detail cards grouped exactly as the form groups them), and
+  `components/` — `MasterTable`, `MasterForm`, `MasterFieldControl`, `MasterFilter`.
+  Forty-eight hand-written components differing only in field names would have drifted apart
+  by the twelfth, so the screens are written once and the differences live in
+  `master.config.ts`: columns, field descriptors (kind, validators mirroring the DTOs, hints,
+  lookup source, group), filters and export columns. Adding a backend field is a one-line data
+  change. Routes `masters/:master`, `masters/:master/new`, `masters/:master/:id`,
+  `masters/:master/:id/edit` — `new` before `:id` so the literal is not swallowed, the same
+  ordering the permissions module needed for `assign`. `MasterDataService` caches picker
+  options for the session and drops the cache on every write, because the row just created is
+  usually the one the next form needs to pick. The sidebar's aspirational Masters entries were
+  replaced with the twelve real ones and the dead `/masters/zone` link removed. **46 frontend
+  tests**, run by a newly configured `@angular/build:unit-test` (vitest) target — the project
+  had no test runner before this. `ng build` clean.
+- **`UiInput` gained an optional `errorMessage`** override, so a field can show the message
+  its own pattern deserves instead of the generic "Invalid value.". Used by the master form;
+  available to every other feature.
+
+### Fixed
+- **`AuthServiceTest.tenantRequired` was a stale assertion, now corrected** — the last
+  failing test in the suite. It still asserted the pre-platform-sign-in behaviour
+  (`ForbiddenException`, "tenantId is required") for a login carrying neither `tenantId` nor
+  slug; that path now falls through to `resolvePlatformTenant` and returns
+  `401 INVALID_CREDENTIALS`, which is the intended production behaviour. The suite is green
+  for the first time since 0.9.0: **457 tests, 0 failures.**
+- **Master data availability toggles started off (frontend).** Found by creating a pincode
+  through the UI: every pincode added that way would have arrived unserviceable, the opposite
+  of why someone adds one. A toggle has no "unset" state to show, so the create-form default
+  is now declared in the definition.
+- **Text fields printed two error messages for one problem (frontend).** `UiInput` renders its
+  own error text and the master field control rendered another; the specific message is now
+  handed to `UiInput` instead.
+
+### Verified by running it (2026-07-28)
+Flyway applied **V11**, `ddl-auto: validate` passed, all twelve tables created, 187 system
+permissions seeded. Exercised over HTTP: idempotent bootstrap, code normalisation, duplicate
+code and case-insensitive duplicate name 409s, the full hierarchy built end to end, resolved
+parent names on list responses, the delete-with-children 422, the unknown-parent 422, the
+non-digit-pincode 400, the unserviceable fold, the stale-version 409, weight-slab adjacency
+accepted and overlap refused by name, the payment-mode contradictions, route duplicate-pair
+refusal with the reverse direction accepted, the sort whitelist 400, LIKE-wildcard escaping,
+and 401/403/200 for anonymous, super-admin write and super-admin read. Then through the
+Angular console: all twelve sidebar entries, three lists rendered with resolved branch names,
+and a pincode created through the UI end to end. **Not covered:** the cross-tenant check —
+`RIVAL_CO` still has no active user, the same gap Branch Wallet recorded.
+
+---
+
+## [0.10.0] — 2026-07-28 — Branch Wallet
+
+### Added
+- **Branch Wallet module (backend, Phase 5 — Finance).** New `com.courier.modules.finance`.
+  Every branch owns exactly one prepaid wallet; the balance moves only through an append-only
+  ledger. `V10__branch_wallet.sql` adds `wallets` and `wallet_transactions` (UUID, `DECIMAL(19,4)`,
+  FKs to `branches`/`wallets` with RESTRICT, CHECKs for non-negative balances and positive
+  amounts). Entities `Wallet` (no balance setter — `applyCredit`/`applyDebit` only) and
+  `WalletTransaction` (append-only; every column but `paymentStatus` is `updatable = false`),
+  enums `TransactionType` (CR/DR), `SubTransactionType` (the 12 three-letter codes, each carrying
+  the direction it may appear in), `ReferenceType`, `PaymentStatus`, `WalletStatus`. Repositories
+  with a pessimistic `lockByBranchIdWithinTenant`, `WalletTransactionSpecifications` (fails closed
+  without a wallet scope), `WalletService`/`Impl`, `WalletMapper`, `BranchWalletController` and 8
+  DTOs. Seven endpoints under `/api/v1/branch-wallet`: get, summary, transactions,
+  **recharge/order**, recharge, credit, debit. Sealed `WalletEvent` + AFTER_COMMIT listener; five
+  new `AuditAction` constants. Wallets are provisioned from the `BranchCreated` event and, as a
+  backstop, lazily by `getOrCreateForBranch` on every read — so branches predating the module
+  acquire one on first access and no SQL backfill was needed. **53 unit tests, all green
+  (376 in the suite).** **Booted and verified against MySQL 8.0.46 (2026-07-28):** `V10`
+  applied, `ddl-auto: validate` passed, every enum column landed as `varchar` rather than a
+  native MySQL `enum`, both provisioning paths fired, the ledger chained exactly across four
+  entries (0→5000→10000→8749.5→7499), the summary aggregates were correct and null-safe, and
+  every refusal returned its intended status (422 insufficient / wrong-direction reason /
+  no gateway, 400 zero amount and bad sort, 404 unknown branch, 403 branch user on
+  credit+debit, 401 anonymous). No runtime defects found — a first for this project, where
+  every previous module surfaced one only on boot. See `MEMORY/modules/branch-wallet.md`.
+- **`PaymentGatewayPort` + Razorpay adapter** (`modules/finance/infrastructure`). Three
+  operations — `createOrder`, `verifyPayment` (HMAC-SHA256 over `orderId|paymentId`,
+  constant-time compare), `fetchPayment`. Written against Razorpay's REST API directly rather
+  than the SDK. Config `app.payment.razorpay.*`, secrets env-only. The **default** bean is
+  `UnconfiguredPaymentGateway`, which refuses online recharge with a 422: fail-closed beats a
+  "skip verification in dev" flag that credits wallets for payments nobody made. Both beans are
+  explicit `@ConditionalOnProperty`; enabling Razorpay without keys fails at startup.
+- **`BranchDirectoryPort`** (owned by Finance) + `CompanyBranchDirectory` (supplied by
+  `modules/company`) — the same port/adapter seam auth uses for tenants, so Finance never imports
+  a `Branch`. `BranchRepository` gained one additive query, `findFirstByTenantIdAndManagerId`.
+
+### Security
+- **A gateway payment id can credit exactly one wallet platform-wide.**
+  `uk_wallet_txn_payment_ref` is deliberately **global**, the only unique key in the project not
+  scoped by `tenant_id`: one merchant account serves every company, so a per-tenant key would let
+  company B present company A's payment id and be credited for it. The pre-insert check
+  (`countByPaymentReferenceAcrossTenants`) is native for the same reason — the Hibernate filter
+  would otherwise confine it to the caller's own company. A hit is refused flatly, never
+  revealing whose payment it was.
+- **The credited amount comes from the gateway, never from the client.** `completeRecharge`
+  verifies the signature *and then* calls `fetchPayment`, crediting the figure the gateway
+  reports, only if it is `captured`, belongs to the presented order and matches the wallet's
+  currency. This is why order creation is its own endpoint (`POST …/recharge/order`) — the
+  amount must be fixed server-side before the browser is involved.
+- Recharge is **idempotent on the payment id**, checked before verification: retries, double
+  submits and a repeated webhook credit the wallet once.
+- No wallet id appears in any URL (`/branch-wallet` is singular), so a wallet cannot be reached
+  by guessing an identifier.
+
+### Known issues (resolved in the following release)
+- **`AuthServiceTest.tenantRequired` failed here (pre-existing, unrelated).** It still asserted
+  a `ForbiddenException` with "tenantId is required" for a login carrying neither `tenantId`
+  nor slug, but the "platform sign-in without a company code" change below made that path fall
+  through to `resolvePlatformTenant` and return `401 INVALID_CREDENTIALS`. The test went stale
+  when that feature landed; the production behaviour was the intended one. Corrected in the
+  Master Data release above — the assertion, not the code.
+
+### Added (earlier in this release)
+- **Platform sign-in without a company code.** `POST /auth/login` may now omit
+  `tenantSlug`/`tenantId`. When it does, `AuthService.resolvePlatformTenant` runs a
+  cross-tenant lookup (`UserRepository.findPlatformUsersByEmail`) restricted to
+  `SUPER_ADMIN`/`PLATFORM_ADMIN`, derives the admin's home tenant server-side, and then
+  runs the normal `AuthenticationManager` password/lock/verify flow. Non-platform emails
+  and ambiguous matches return the identical `401 INVALID_CREDENTIALS`, so nothing about
+  ordinary accounts leaks. Tenant users still must supply a company code. The cross-tenant
+  query is a deliberate, documented filter escape (invoked with no tenant bound); it is
+  the only safe way to discover a tenant-unbound admin's tenant.
+
+### Frontend
+- **Branch Wallet module (UI-11, `features/branch-wallet`).** Complete Branch Wallet, API-only,
+  no mock; every branch owns one prepaid wallet (created with the branch). Built against a defined
+  `/branch-wallets` contract (backend module not yet built, so reads degrade to empty and writes
+  surface the API error — same honesty convention as the dashboard's `/dashboard/summary`).
+  **Routes** (all lazy, `roleGuard`): `finance/branch-wallet` (overview, `WALLET_VIEWERS` =
+  SUPER_ADMIN/COMPANY_ADMIN/BRANCH_MANAGER/FINANCE_USER), `finance/branch-wallet/:id` (dashboard),
+  `finance/branch-wallet/:id/transactions`, `finance/branch-wallet/:id/recharge`
+  (`WALLET_RECHARGERS` = COMPANY_ADMIN/BRANCH_MANAGER/FINANCE_USER). **Models**
+  (`core/models/wallet.model.ts`): `Wallet` (list projection — three balances + owning branch),
+  `WalletResponse` (full — adds today's credit/debit, last recharge, limits), `WalletTransaction`
+  (ledger entry), `RechargeRequest`/`RechargeOrder`/`RechargeVerification` (the Razorpay
+  create-order → checkout → verify triple), `CreditRequest`/`DebitRequest`,
+  `TransactionSearchRequest`, the enums (`WalletStatus`, `TransactionType`/`SubType`/`Status`,
+  `PaymentMethod`) and helpers `prettyToken`/`formatMoney`. **Service** (`branch-wallet.service.ts`):
+  list/get/mine/byBranch, transactions, recharge/verifyRecharge, credit, debit — no create/delete
+  (a wallet is born with its branch). **New core service** `RazorpayService` — lazily injects
+  `checkout.razorpay.com/v1/checkout.js` on first use (never bundled, never at startup), opens
+  Checkout for a backend-issued order and resolves the signed success payload; the app has no hard
+  Razorpay dependency. **Pages**: `wallet-list` (overview grid — three balances per branch, server
+  pagination + search + CSV), `wallet-dashboard` (hero: summary banner, six balance cards —
+  current / available / hold / today's credit / today's debit / last recharge — gated
+  Recharge/Credit/Debit actions, recent-transactions table), `wallet-transactions` (full ledger:
+  server pagination + sort + debounced search + filter drawer + CSV + per-row receipt),
+  `wallet-recharge` (dedicated Razorpay flow with an explicit payment-status timeline and receipt
+  download). **Components**: `WalletSummaryCard`, `BalanceCard` (currency-formatted money tile,
+  hero variant), `TransactionTable` (spec columns Date/Transaction No/Type/Sub Type/Amount/Balance
+  After/Reference No/Status/Created By), `TransactionFilter` (date range, type, sub type, status,
+  reference), `RechargeDialog`/`CreditDialog`/`DebitDialog`, `WalletStatusBadge`,
+  `TransactionTypeBadge`. Receipts are generated client-side (`receipt.util.ts`) from the real
+  settled transaction — a self-contained HTML download — until a backend PDF endpoint exists.
+  **Permissions**: gated via `PermissionService.canAccess` — view `BRANCH_WALLET_VIEW`
+  (+`BRANCH_WALLET_TRANSACTION_VIEW` on the ledger), recharge `BRANCH_WALLET_RECHARGE`, credit
+  `BRANCH_WALLET_CREDIT`, debit `BRANCH_WALLET_DEBIT`, each OR-ed with a role fallback. Nav's
+  existing "Branch Wallet" leaf re-pointed to `BRANCH_WALLET_VIEW` (+BRANCH_MANAGER). **Honesty
+  note:** the spec's "Credit Wallet" and "Debit Wallet" *pages* are realised as the `CreditDialog`
+  / `DebitDialog` modals launched from the dashboard (the enterprise pattern; the same components
+  the spec lists) — no separate route pages. `ng build` clean.
+- **Branch (Vendor) Management module (UI-10, `features/branch`).** Complete Branch Management,
+  API-only, no mock; mirrors the backend `/branches` endpoints one-to-one. Replaced the earlier
+  stub (a bare list + a partial `Partial<Branch>` service). **Routes**: `branches` (list),
+  `branches/new` (`COMPANY_ADMIN`), `branches/:id` (view, `MANAGERS`), `branches/:id/edit`
+  (`COMPANY_ADMIN` + `BRANCH_MANAGER`). **Models** (`core/models/branch.model.ts`): reshaped
+  `Branch` to the `BranchSummaryResponse` list projection (managerId + the two headline capability
+  flags, not the full record); added `BranchResponse` (full — contact, address, coordinates-free
+  view, hours, six capability flags, remarks, audit), `CreateBranchRequest`, `UpdateBranchRequest`
+  (carries `version`; excludes code/status/manager, which have their own endpoints),
+  `BranchSearchRequest`, and `BRANCH_TYPES`. **Service** (`branch.service.ts`):
+  list/get/create/update/remove, activate/deactivate, assignManager, plus a `managers()` lookup
+  (active company users) reused for the manager picker and the table's id→name map. **Pages**:
+  `branch-list` (server pagination + sort + debounced search + advanced filter drawer + CSV export
+  + permission-gated row actions via confirms/dialog; resolves manager ids to names),
+  `branch-create` + `branch-edit` (full-replacement PUT, reloads on 409), `branch-view` (summary
+  banner + Contact/Address/Operations/Audit cards + a gated action bar). **Components**
+  (`components/`): `BranchForm` (reactive OnPush, shared create/edit — `branchCode` create-only and
+  immutable in edit, the manager set on create then read-only with a pointer to the dialog,
+  `MatSlideToggle` capability switches, a working-days multiselect that marshals to/from the
+  backend's uppercase CSV, `type=time` hour inputs; validators mirror the DTOs), `BranchTable`
+  (columns Branch Code/Name/Type/Location/Manager/Capabilities/Status + a gated kebab),
+  `BranchFilter` (type + status multiselect, city/state/pincode, booking/delivery/pickup tri-state),
+  `BranchStatusBadge`, `BranchSummaryCard` (identity banner with capability chips),
+  `AssignManagerDialog`. **Permissions**: every action gated through `PermissionService.canAccess` —
+  create/delete OR-ed with `BRANCH_CREATE`/`BRANCH_DELETE` (role fallback `COMPANY_ADMIN`), update
+  with `BRANCH_UPDATE` (fallback `COMPANY_ADMIN` + `BRANCH_MANAGER`, mirroring the backend's
+  manager-updates-own-branch rule). **Honesty note (substantial):** the UI-10 spec frames branches
+  as vendors/franchises with fields the backend branch does not have — **Owner Name / Contact
+  Person** and **GST / PAN** have no branch column (GST/PAN live on the company), and a branch has
+  **no hub relationship** (hubs are a separate module; a *user* carries `hub_id`). Rather than fake
+  them: "Vendor Type" maps to `branchType`, "Area" to `district`, "Pincode" to `postalCode`, "Owner"
+  to the branch **manager**, and the requested **Assign Hub** dialog is implemented as an **Assign
+  Manager** dialog over the real `assign-manager` endpoint. The list's "Mobile" and "Hub Count"
+  columns are dropped (the summary projection carries neither) — Location and capability chips take
+  their place, with full contact on the detail view. Reuses shared UI, `NotificationService`,
+  `DialogService`, and the users lookup; `ng build` clean.
+- **Permission Management module (UI-09, `features/permissions`).** Complete Permission
+  Management, API-only, no mock; mirrors the backend `/permissions` catalogue and the
+  `/roles/{roleId}/permissions` grants one-to-one. Replaced the earlier stub (a bare list +
+  one-method service). **Routes**: `permissions` (catalogue list), `permissions/assign`
+  (Role→Permission assignment, `COMPANY_ADMIN`), `permissions/:id` (details); list/details for
+  `ADMINS`. `assign` is registered **before** `:id` so the param route does not swallow it.
+  **Models** (`core/models/permission.model.ts`): reworked `Permission` (adds audit fields, a
+  typed `PermissionAction`); added `PermissionGroup` (client-side module grouping),
+  `RolePermissionResult` (mirrors `RolePermissionResponse` — granted/revoked/skipped/**rejected**/
+  effectivePermissions), `PermissionAssignmentRequest` (`permissionCodes` **not ids** +
+  `replaceExisting`), `PermissionSearchRequest`, the constants `PERMISSION_MODULES` (28) and
+  `PERMISSION_ACTIONS` (15), and the helpers `groupByModule`/`prettyToken`. **Service**
+  (`permission.service.ts`): list/get/grantable + rolePermissions/assign/revoke. **Pages**:
+  `permission-list` (server pagination + sort + debounced search + advanced filter drawer +
+  CSV export; spec columns Module/Permission Code/Permission Name/Description/Status; row-click
+  → details; an "Assign to Role" button for `COMPANY_ADMIN`), `permission-assign` (role picker
+  from `RoleService.assignable`, a **Tree** or **Matrix** view toggle, a local filter,
+  select/deselect/expand/collapse-all, dirty tracking with a sticky save/reset bar, a single
+  bulk `replaceExisting=true` save that trusts the server's `effectivePermissions` and surfaces
+  the `rejected` list as its own error toast), `permission-view` (Details/Audit cards).
+  **Components** (`components/`): `PermissionTree` (a stack of module cards plus the
+  expand/collapse/select toolbar), `PermissionMatrix` (a modules × actions grid — a checkbox at
+  each existing intersection, an em-dash where a module has no such action, scrolling
+  horizontally inside its own container so the page body never does), `PermissionFilter`
+  (module/action multiselect, status, kind, plan-gated, resource), `ModulePermissionCard` (one
+  expandable module with a module-level `MatCheckbox` that goes indeterminate on a partial
+  selection, a plan-gating lock icon and inactive-row dimming). **Permissions**: the list gated
+  through `PermissionService.canAccess` (`ADMINS` OR `PERMISSION_VIEW`), the assignment
+  (`COMPANY_ADMIN` OR `PERMISSION_ASSIGN`); the nav gained an "Assign Permissions" leaf.
+  **Honesty note:** the client does **not** pre-compute which permissions a company's plan
+  excludes — no endpoint exposes the plan's `feature.*` flags to the UI — so plan-gated rows
+  stay selectable and the backend's `rejected` list (returned by the bulk assign) is the source
+  of truth, surfaced after save rather than guessed before it. Reuses shared UI,
+  `NotificationService`, `RoleService`; `ng build` clean.
+- **Role Management module (UI-08, `features/roles`).** Complete Role Management, API-only,
+  no mock; mirrors the backend `/roles` endpoints one-to-one. Replaced the earlier stub
+  (a bare list + two-method service) with the full CRUD module. **Routes**: `roles` (list),
+  `roles/new` (create, doubles as clone via `?cloneFrom=<id>`), `roles/:id` (view),
+  `roles/:id/edit` (edit); list/view for `ADMINS`, create/edit `COMPANY_ADMIN`. **Models**
+  (`core/models/role.model.ts`): reworked `CompanyRole` to the `RoleSummaryResponse` shape
+  (typed `roleType`/`status`, `permissionCount` **not** a permissions array — the list
+  projection carries a count only); added `RoleProfile` (mirrors `RoleResponse`, full with
+  `permissions`/`description`/audit), `CreateRoleRequest`, `UpdateRoleRequest` (carries
+  `version`), `RoleSearchRequest`, `RoleType`/`RoleStatus` unions and `ROLE_TYPES`.
+  **Service** (`role.service.ts`): list/get/assignable/create/update/remove +
+  activate/deactivate. **Pages**: `role-list` (server pagination + sort + debounced search
+  + advanced filter drawer + CSV export + permission-gated row actions via confirms),
+  `role-create` (POST; loads the source `RoleProfile` and prefills the form when cloning —
+  name/type/description copied, code left blank, no backend clone endpoint exists),
+  `role-edit` (full-replacement PUT, reloads on 409), `role-view` (Details/Audit/Permissions
+  cards + gated action bar). **Components** (`components/`): `RoleForm` (reactive OnPush,
+  shared create/edit — `roleCode` is create-only with a live uppercase/underscore preview
+  and edit shows it read-only, emits `version`; validators mirror the DTO regex), `RoleTable`
+  (columns Role Code/Name/Type/Grants/Flags/Status/Actions + a per-row kebab that hides
+  actions without permission and against the business rules — system/default roles show no
+  Delete, the default role no Deactivate), `RoleFilter` (status, type multiselect, kind
+  system/custom, default, grants-permission code), `RoleStatusBadge`. **Permissions**: every
+  action gated through `PermissionService.canAccess` with a `COMPANY_ADMIN` role fallback
+  OR-ed with the codes `ROLE_VIEW`/`ROLE_CREATE`/`ROLE_UPDATE`/`ROLE_DELETE`, flipping to
+  pure codes once the backend authorises on permissions. **Honesty note:** the spec's
+  "Description" and "Created Date" list columns are omitted — `RoleSummaryResponse` carries
+  neither; both are shown on the detail view where the API returns them. Reuses shared UI,
+  `NotificationService`, `DialogService`; `ng build` clean.
+- **User Management module (UI-07, `features/users`).** Complete User Management, API-only,
+  no mock; mirrors the backend's 15 `/users` endpoints one-to-one. **Routes**: `users`
+  (list), `users/new` (create), `users/:id` (view), `users/:id/edit` (edit); list/view for
+  `ADMINS`, create/edit `COMPANY_ADMIN`. **Models** (`core/models/user.model.ts`): reworked
+  `AppUser` to the `UserSummaryResponse` shape (adds `roleCount`, `mobile`, `createdDate`);
+  added `UserProfile` (mirrors `UserResponse`), `CreateUserRequest`, `UpdateUserRequest`
+  (carries `version`), `UserSearchRequest`, and `UserStatus`/`Gender` unions. **Service**
+  (`user.service.ts`): list/get/create/update/remove, activate/deactivate/lock/unlock,
+  reset-password/change-password, assign/remove role, assign branch/hub, plus
+  `roles()`/`branches()`/`hubs()`/`managers()` lookups sourced from the live list
+  endpoints. **Pages**: `user-list` (server pagination + sort + debounced search + advanced
+  filter drawer + CSV export + permission-gated row actions via confirms/dialogs),
+  `user-create` and `user-edit` (forkJoin lookups; edit does a full-replacement PUT and
+  reloads on 409), `user-view` (full profile: Basic/Contact/HR/Security/Assignment cards +
+  a gated action bar). **Components** (`components/`): `UserForm` (reactive OnPush, shared
+  create/edit — identity fields + password + role multiselect are create-only, edit shows
+  identity read-only and emits `version`; validators mirror the DTOs), `UserTable` (spec
+  columns Employee Code/Name/Username/Mobile/Branch/Hub/Status/Actions + a per-row kebab
+  menu whose items hide without permission; resolves branch/hub ids to names via supplied
+  maps), `UserFilter` (status multiselect, lock state, branch/hub/role, department,
+  designation, joined-from/to), `UserStatusBadge` (admin hard-lock trumps the lifecycle
+  status), and four MatDialog dialogs — `AssignRoleDialog` (chip add/remove, calls the API
+  itself, returns the final role-code list), `AssignBranchDialog`, `AssignHubDialog` (null
+  selection clears the placement), `ResetPasswordDialog` (admin reset with confirm +
+  must-change flag). **Permissions**: every action gated through
+  `PermissionService.canAccess` with a `COMPANY_ADMIN` role fallback OR-ed with the codes
+  `USER_VIEW`/`USER_CREATE`/`USER_UPDATE`/`USER_DELETE`/`USER_ASSIGN_ROLE`/
+  `USER_RESET_PASSWORD`, so it flips to pure codes once the backend authorises on
+  permissions. Self-action guards (cannot lock/deactivate/delete your own account) mirror
+  the backend. Reuses shared UI, `NotificationService`, `DialogService`; `ng build` clean.
+- **Company Profile module (UI-06, `features/company`).** View + edit of a tenant,
+  API-only, no mock. New guarded routes `companies/:id` and `companies/:id/edit`
+  (`SUPER_ADMIN`, matching `CompanyController`); the companies table row-clicks into the
+  profile. **Models** (`core/models/company.model.ts`): added `CompanyResponse`/
+  `CompanyProfile` (full, mirrors backend `CompanyResponse`), `CompanyRequest` (PUT body,
+  mirrors `UpdateCompanyRequest`), `SubscriptionPlanOption`. **Service**: `getProfile`,
+  `update` (PUT full-replacement carrying last-read `version` for the 409 optimistic
+  lock), `plans()` (active `/subscription-plans`). **Pages**: `company-profile.ts`
+  (summary + General/Business/Contact/Address/Branding cards), `company-profile-edit.ts`
+  (forkJoins profile + plans, 409 → reload latest, success toast + navigate back).
+  **Components** (`components/`): `CompanySummaryCard`, `CompanyForm` (reactive, OnPush;
+  validators mirror the DTO — required, email, GSTIN/PAN/phone/website/currency regex,
+  maxlengths; full-replacement PUT so it passes through `remarks` + subscription dates +
+  `version` so nothing is wiped; trims blanks to `null`), `CompanyLogo` (logo + favicon —
+  URL is the source of truth, a picked file is previewed locally only since there is no
+  upload endpoint), `ContactInformation`, `AddressInformation`. Reuses shared UI
+  primitives. **Field mapping:** prompt "Telephone" → `alternateMobile`, "Pincode" →
+  `postalCode`; backend has no `companyType`/`area`, so those prompt fields were dropped
+  to stay API-honest. `ng build` green.
+- **Authentication module (`features/auth`).** Built on the existing core/auth without
+  recreating it. New pages: Forgot Password, Reset Password (token from `?token=`, match
+  validator), Unauthorized (403 state), Session Expired — all lazy, in the branded
+  auth-layout. New services: `SessionService` (session id + access-token expiry as
+  signals, start/end/syncExpiry) and `PermissionService` (`hasRole`/`hasPermission`/
+  `canAccess`, OR across roles+permissions so role-only routes keep working until the
+  backend authorises on permissions). New `permissionGuard` (route `data.permissions`/
+  `data.roles` → `/unauthorized`); `roleGuard` now redirects to `/unauthorized`.
+  `errorInterceptor` routes a failed refresh / hard 401 to `/session-expired` and syncs
+  expiry after a silent refresh. `UiInput` gained an optional password show/hide toggle
+  (used on login + reset). `CurrentUser`/`LoginResponse` carry optional
+  `permissions`/`branchId`/`hubId`, consumed as-is (no mock). Login's Forgot link + dev
+  quick-fill buttons wired. Verified against the live backend: forgot-password → 200
+  (always), reset-password bad token → `TOKEN_INVALID`.
+- **Dashboard module (UI-05).** Rebuilt `features/dashboard` from the placeholder into a
+  role-based enterprise dashboard, API-only, no mock data. **Models** (`models/dashboard.model.ts`):
+  `DashboardStatistics` (flat KPI figures across platform/company/branch/hub scopes),
+  `DashboardCharts` (`ChartSeries`/`TrendPoint`), `DashboardActivity`, `RecentShipment`,
+  `BranchSummaryRow`, `HubSummaryRow`, and the `DashboardSummary` aggregate, each with an
+  `empty*()` factory. **Role layout** (`dashboard.roles.ts`): `resolveProfile(roles, {branchId,
+  hubId})` maps every `AppRole` (+ the assigned hub/branch) to one of six profiles — PLATFORM,
+  COMPANY, BRANCH_MANAGER, BRANCH_OPERATOR, HUB_MANAGER, HUB_OPERATOR — and `DASHBOARD_LAYOUTS`
+  drives which KPI tiles, charts, cards and quick actions each shows. The spec's Branch Admin /
+  Branch Operator / Hub Operator names have no exact `AppRole`, so they map to
+  BRANCH_MANAGER / operator-by-scope. **Service**: `DashboardService.load(profile)` forkJoins
+  the (not-yet-built) `/dashboard/summary` endpoint with the real `/branches`, `/hubs` and
+  (PLATFORM only) `/companies` list endpoints; the summary 404s today and every rich figure
+  degrades to zero/empty, while branch/hub/company counts and the summary lists are **live now**
+  from the shipped list endpoints. **Components** (`components/`): `ChartCard` (ng-apexcharts
+  wrapper — line/area/bar, theme-aware colours recoloured on the `ThemeService` toggle, loading
+  skeleton + empty state, never a fake flat line), `ActivityTimeline`, `RecentShipments`,
+  `QuickActions` (emits the picked action; the page routes it or toasts "available once the
+  shipments module ships" — shipment routes don't exist yet), `BranchSummary`, `HubSummary`.
+  Reuses the shared `StatisticCard`/`UiCard`/`UiLoader`/`StatusBadge` — not duplicated. **Page**
+  (`dashboard.ts`): welcome header (greeting by hour, company name from `environment.appName`
+  since the JWT still carries no company name, current date, scope label), role-selected KPI grid,
+  charts row, and content columns; full loading / empty / error(+retry) states. Added
+  `ng-apexcharts@2.4.0` + `apexcharts@5.16.0` (Angular-20 compatible); `apexcharts` whitelisted in
+  `angular.json` `allowedCommonJsDependencies`; both chart libs land in **lazy** chunks (dashboard
+  route only). Build green, zero warnings.
+- **Dynamic Sidebar (UI-04).** Replaced the role-based nav data layer with a permission-driven
+  navigation system in a new `core/navigation`: `navigation.model.ts` (`NavNode` — id/title/icon/
+  route/parentId/order/permission/children/visible/expanded, plus a documented `roles` bridge),
+  `navigation.config.ts` (the full menu — Dashboard, Administration, Masters, Pricing, Operations,
+  Finance, Reports, Settings — every leaf tagged with a `MODULE_ACTION` permission code), and
+  `navigation.service.ts`. The service filters the tree through `PermissionService.canAccess`
+  (**no role literals in any component**), **prunes empty parent menus**, sorts by `order`,
+  auto-expands the group holding the active route, and owns collapse + per-group expand state —
+  both **persisted** to `localStorage`. It also exposes `setMenuFromApi(flat)` which assembles a
+  flat, `parentId`-linked list into the tree, so a server-driven menu drops in without touching
+  the UI. `Sidebar` was rewritten to consume the service (semantic `<ul>`/`<button>`/`<a>`,
+  `aria-expanded`/`aria-current`, focus-visible rings — keyboard-accessible); `GlobalSearch` now
+  searches the permission-filtered menu; `AdminLayout` reads collapse from the service. Deleted
+  the old `core/config/nav.config.ts` + `core/models/nav.model.ts`. The permission `PermissionService`
+  is reused from `core/auth` (not duplicated into `core/navigation`).
+  **Interim-authority note:** the JWT still carries only roles (`permissions` empty), so each leaf
+  also lists the roles allowed to see it; `canAccess` ORs roles+permissions, so today the role
+  bridge governs visibility and it flips to pure permission codes the moment the backend sends
+  them — no UI change needed. `Pricing` items (Rate Cards/Zone Pricing/Surcharges) are reasonable
+  placeholders (the spec named the section but no items); Masters/Operations/Finance/Reports routes
+  are aspirational (empty state, no mock). Build green, zero warnings.
+- **Admin Layout (UI-03).** Completed the authenticated shell on top of the existing
+  layout foundation. `AdminLayout` now drives three responsive modes from **one** toggle:
+  desktop expanded, desktop collapsed (icon rail), and — at ≤1024px — an off-canvas
+  **drawer** over a backdrop (`matchMedia` tracks the breakpoint; leaving mobile force-closes
+  the drawer). Sidebar gained **one level of nested, expandable groups** (Organization →
+  Branches/Hubs, Access Control → Users/Roles/Permissions — all real routes), auto-expanding
+  the group that holds the active URL; RBAC filtering now also prunes children. Nav config
+  restructured into the spec's sections (Dashboard, Administration, Masters, Operations,
+  Finance, Reports, Settings). New reusable header pieces: `GlobalSearch` (a real command
+  palette over the RBAC-filtered nav — no backend, no mock), `NotificationMenu` (bell + unread
+  badge + empty state, backed by a new `NotificationFeedService` that starts empty until a
+  `/notifications` endpoint exists), and `UserMenu` (extracted from the header). Header also
+  shows the company logo + name and a theme switch; footer shows version + environment (both
+  new `environment.version`/`envLabel` fields; env pill hidden in prod). Build green, zero
+  warnings; `admin-layout` chunk 37→54 kB.
+- **Login consolidated into `features/auth`.** Moved `features/login/login.ts` →
+  `features/auth/login.ts` (dropped the one-file `features/login` folder) so every auth
+  page lives under one feature, matching the UI-02 spec layout. Only the lazy route import
+  changed; build green, login chunk intact.
+- **Consistent page spacing.** One canonical `.page` (32px side gutters, 20px rhythm) in
+  `styles.scss`; removed the per-feature `.page` copies that had drifted. Header and shell
+  content share a 32px responsive gutter so the breadcrumb and page title left-align (an
+  earlier `max-width:1440px; margin-inline:auto` was reverted — it shifted content right
+  of the full-width header).
+- **Sidebar icons render.** `index.html` loaded a Material *Symbols* font under a family
+  name `<mat-icon>` never requests, so every icon fell back to raw ligature text. Switched
+  to the classic Material Icons font `mat-icon` expects.
+
+---
+
+## [UI 0.1.0] — 2026-07-23 — Frontend foundation
+
+The Angular 20 admin console — a premium enterprise UI foundation for the courier SaaS,
+in a new `frontend/` folder alongside `backend/`. Separate build; consumes the backend
+API only.
+
+### Added
+- **Project scaffold** — Angular 20 standalone app: `package.json`, `angular.json`
+  (`@angular/build`), strict `tsconfig` with path aliases (`@core/@shared/@features/
+  @layouts/@env`), Tailwind (preflight off, tokens bridged via CSS vars), a `/api ->
+  :8081` dev proxy.
+- **Theme** — design tokens (`src/theme/_tokens.scss`, `_typography.scss`): brand palette,
+  dark sidebar + light content, spacing, radius (12–16px cards), shadows, typography.
+  Angular Material 3 via `mat.theme` sharing the same palette. Light/dark ready
+  (`[data-theme]`), toggled from the header.
+- **Core** — `ApiService` (unwraps the `ApiResponse` envelope + `Page<T>` in one place);
+  `AuthService` (session as signals — roles/tenant from the JWT, hydrated on bootstrap);
+  `TokenService`; guards (`authGuard`, `guestGuard`, `roleGuard` for permission-based
+  routing); interceptors (request-id, bearer + `X-Tenant-ID`, loading bar, error with
+  **silent 401 refresh-and-replay**); theme/notification/breadcrumb/loading services;
+  models mirroring the backend DTOs; `nav.config` (RBAC-filtered sidebar).
+- **Layouts** — `auth-layout` (split brand + form) and `admin-layout` (dark collapsible
+  sidebar · header with breadcrumb, theme + user menu · content · footer).
+- **Shared library (12)** — button, input, select, table (generic, sortable, empty/
+  loading states, row template), pagination (over `Page<T>`), drawer, confirm dialog +
+  `DialogService`, search (debounced), loader, card, status-badge, statistic-card.
+- **Features (lazy)** — login (reactive form, real `/auth/login`), dashboard (8 KPI
+  widgets + recent activity, all from `DashboardService`), and list pages for companies,
+  branches, hubs, users, roles, permissions, plus a settings page — each backed by its
+  own API service. **No mock data**: missing endpoints (hub, dashboard summary) degrade to
+  empty states, never fabricated numbers.
+
+### Decisions
+- **API only, envelope unwrapped once.** Every feature service goes through `ApiService`;
+  the `ApiResponse`/`Page` shapes live in one place.
+- **RBAC drives the UI.** The sidebar filters items by the signed-in user's roles;
+  `roleGuard` gates routes via `data.roles`. Matches the backend's role model.
+- **JWT with silent refresh.** The error interceptor rotates the token pair once on a 401
+  and replays the request, signing out only if refresh fails — mirrors the backend's
+  rotation flow.
+- **Dashboard counts from real endpoints.** Branch/hub counts come from the list
+  endpoints' `totalElements`; shipment/revenue await their backend summary endpoint.
+
+### Verified
+- `npm install` (466 packages) then `npm run build` — **succeeds, zero warnings/errors**,
+  **32 lazy chunks** (per-feature code splitting confirmed), strict templates pass.
+- Three real compile errors were caught and fixed by the build: the generic table's
+  `Record<string,unknown>` constraint rejected the typed models (loosened to `T`), a SCSS
+  `@use`-after-rules ordering error, and an over-narrowed `of({})` dashboard fallback.
+
+### Not included (deliberate)
+- Create/edit form drawers beyond the login form (the shared drawer + dialog are in place
+  for them); charts library; e2e tests. This is the foundation, per the brief.
+
+### Run
+`cd frontend && npm install && npm start` (backend on `:8081`). See `frontend/README.md`.
+
+---
+
+## [0.9.0] — 2026-07-23
+
+Branch Management — the first module of **Phase 4, Organization Structure**. A branch is a
+physical booking / delivery office of a company; this is the anchor the operational
+modules (hub, shipment, manifest, pickup, delivery) will attach to.
+
+### Added
+- `Branch` entity (`branches`, V9), tenant-owned. `BranchType` (5), `BranchStatus`.
+  Identity (code/name unique per company), classification, contact + manager, full
+  address with geo (`DECIMAL(9,6)`, range-checked), opening/closing hours + working-days
+  CSV, and six capability flags (booking/delivery/pickup/manifest/cash/wallet).
+- `BranchRepository` (+ `JpaSpecificationExecutor`, native uniqueness counts),
+  `BranchCriteria`, `BranchSpecifications` (filters + a `branchIds` scope pin).
+- `BranchService` / `Impl` — create, update, read, search, delete, activate, deactivate,
+  assign-manager, assign-users. Per-method `@PreAuthorize` plus in-code branch-level
+  scoping.
+- `BranchController` — 9 endpoints under `/api/v1/branches`.
+- DTOs: `CreateBranchRequest`, `UpdateBranchRequest`, `BranchResponse`,
+  `BranchSummaryResponse`, `BranchSearchRequest`, plus `AssignManagerRequest`,
+  `AssignUsersRequest`, `AssignUsersResponse`; `BranchMapper`.
+- `BranchEvent` (sealed) + `BranchEventListener` — created/updated/activated/deactivated/
+  manager-assigned, `AFTER_COMMIT`.
+- `V9__branches.sql` — the table with two unique keys, four indexes (incl. the pincode
+  serviceability index), and latitude/longitude CHECKs.
+- `CompanyUserRepository.findAllByIdInWithinTenant` — for bulk assign-users.
+- `AuditAction`: `BRANCH_CREATED / _UPDATED / _ACTIVATED / _DEACTIVATED /
+  _MANAGER_ASSIGNED / _USERS_ASSIGNED`.
+- `SecurityConfig`: `/api/v1/branches/**` requires authentication.
+
+### Decisions
+- **Branches live in `modules/company`** — pre-planned as later phases of that module.
+- **Cross-entity FKs deferred** (`users.branch_id → branches.id`,
+  `branches.manager_id → users.id`) — the dev database holds user rows with random test
+  `branch_id`s that would fail the constraint, and the project already defers such FKs
+  until the data settles. The service validates instead.
+- **`assign-users` sets `users.branch_id`** and reports `{assigned, skipped, rejected}`;
+  a foreign id is rejected, not silently applied.
+- **Two authorisation answers**: reads out of scope → 404 (hidden resource); manage out of
+  scope but same company → 403 (a permission answer). A branch manager's scope is the
+  branch whose `managerId` is them, resolved from the data, never the request.
+- **One HEAD_OFFICE per tenant is *not* enforced** — the Phase-4 spec did not list it,
+  though earlier planning mentioned it. Noted for later.
+
+### Security notes
+- `COMPANY_ADMIN` manages every branch; `BRANCH_MANAGER` updates and staffs only the
+  branch they manage; other company users read only their assigned branch; `SUPER_ADMIN`
+  reads across companies. Non-admin lists are pinned to visible branch ids (empty = none).
+- Tenant isolation via the Hibernate filter + `findByIdWithinTenant`. Uniqueness counts
+  soft-deleted rows, so code and name stay reserved.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-23, using the Phase-3 fixtures:
+- `mvn test` — **323/323 green** (20 new).
+- `V9` applied; `validate` passed.
+- Create (normalisation, working-day dedup/validation, defaults); duplicate code/name 409;
+  super-admin create 403; bad lat/working-day 400; closing≤opening 422.
+- Assign-manager validated the user (fake → 422); assign-users placed 2, rejected a fake,
+  skipped an already-placed user.
+- **Branch-manager scoping**: manager saw only their branch (1 of 2), 200 on it, 404 on
+  the other, 403 updating the other, 403 creating.
+- **Cross-tenant**: a rival admin got 404 on GET/PUT/DELETE and no search leak.
+- Bad sort 400; soft delete → 200/404, code reserved (409); all six branch audit actions.
+
+Test data left in place.
+
+### Not included (deliberate)
+- Hub, Customer, Shipment and any operational module.
+- The deferred FKs; the HEAD_OFFICE-uniqueness rule; serviceability/rate cards.
+
+---
+
+## [0.8.0] — 2026-07-23
+
+Company Settings (Phase 3 — Company Administration). Per-company configurable behaviour
+across eight sections, tuned by the company admin and consumed (as they land) by Branch,
+Hub, Shipment, Wallet, Payment and Report.
+
+### Two settings tables, kept apart
+A key/value `company_settings` table already existed (V4) holding plan-derived facts
+(feature flags, quota limits) that provisioning seeds and permission gating reads. The
+spec's settings is a different shape — one wide, typed row per company. Rather than
+disturb the load-bearing key/value table, this adds a **new** wide table. Entity
+`CompanySettings` (plural); the existing key/value entity keeps `CompanySetting`.
+
+### Added
+- `CompanySettings` entity (table `company_settings_config`), tenant-owned, one row per
+  company (`UNIQUE(tenant_id)`), **no soft delete** (a company always has settings).
+  Enums `WeightUnit`, `DimensionUnit`, `ThemePreference`.
+- `CompanySettingsRepository` (+ `JpaSpecificationExecutor`) and
+  `CompanySettingsSpecifications` (for a future super-admin cross-company report).
+- `CompanySettingsService` / `Impl` — get-or-create seeded from the company; full replace
+  and six section patches, all merge-not-blank; per-method `@PreAuthorize`.
+- `CompanySettingsController` — 8 endpoints under `/api/v1/company-settings`.
+- DTOs `CompanySettingsRequest` (all-optional, shared by PUT and every PATCH) and
+  `CompanySettingsResponse` (grouped by section); `CompanySettingsMapper`;
+  `CompanySettingsCommand`.
+- `V8__company_settings_config.sql` — the wide table with defaults and a GST 0–100 CHECK.
+- `AuditAction`: `COMPANY_SETTINGS_INITIALIZED`, `COMPANY_SETTINGS_UPDATED`.
+- `SecurityConfig`: `/api/v1/company-settings/**` requires authentication.
+
+### Decisions
+- **New wide table alongside the key/value one** — the kv table is load-bearing for
+  permission gating and stays untouched; the two are separate concerns.
+- **Get-or-create, merge-not-blank.** A company always has settings; writes apply only
+  supplied fields so a partial PATCH never clears the rest. One all-optional DTO drives
+  PUT and all PATCHes.
+- **Reads open to any company user; writes `COMPANY_ADMIN`.** Settings drive many
+  modules, so a narrower read gate would break consumers.
+- **Security section stored, not yet enforced.** `password policy / session timeout /
+  max attempts / lock / OTP` are persisted per company but auth still uses
+  `AuthProperties`; they take effect when auth is made tenant-aware.
+
+### Security notes
+- No id in any path — every call resolves the caller's own tenant, so cross-company
+  access is structurally impossible. A super admin with no bound tenant is refused (422).
+- Optimistic locking on the full PUT (`version`, 409). Section PATCHes are last-write-wins
+  on their own narrow field set.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-23, using the Phase-3 fixtures:
+- `mvn test` — **303/303 green** (11 new).
+- `V8` applied; `validate` passed.
+- GET created + seeded the row from the company (name, currency, `LEGACY` AWB prefix, GST
+  18.00, LIGHT theme). `VIEWER` read 200 / write 403; super-admin no-tenant 422.
+- Section PATCHes merged and left other sections untouched; enum/hex/GST validation 400;
+  full PUT stale-version 409, correct-version applied while **keeping** an
+  earlier-set GST (merge proven); normalisation (email lowercased, prefixes uppercased).
+- **Cross-tenant**: a second company got its own row and defaults; the first's edits did
+  not leak. Two rows, one per company. Audit `_INITIALIZED` ×2, `_UPDATED` ×4.
+
+Test data left in place.
+
+### Not included (deliberate)
+- Consumption by Branch/Hub/Shipment/Wallet/Payment/Report (those modules are not built).
+- Auth reading the security section (needs tenant-aware auth).
+- Authorising on permission codes — still the next task.
+
+---
+
+## [0.7.0] — 2026-07-23
+
+User Management (Phase 3 — Company Administration). Company admins can now create and
+manage the people in their company: profile, roles, branch/hub placement, lifecycle and
+passwords.
+
+### The shared-kernel decision
+The `users` table (auth's, since V2) is now a **shared kernel**. `V7` extends it with the
+HR/profile columns, and `company.User` maps the same table `auth.User` does — two
+entities, one table, each modelling the columns its bounded context owns. Chosen over a
+second table (which would drift from the login source of truth) and over company reaching
+into auth's repository (a dependency-arrow violation). The user approved "extend the
+users table".
+
+### Added
+
+**User Management (inside `modules/company`)**
+- `User` (`@Entity "CompanyUser"`, table `users`) — the company context's model, with the
+  full HR field set. `UserStatus`, `Gender`.
+- `UserRole` (table `user_company_roles`) — user ↔ `company_roles` many-to-many, distinct
+  from auth's JWT-authority `user_roles`.
+- `CompanyUserRepository` (+ `JpaSpecificationExecutor`), `UserRoleRepository`,
+  `UserCriteria`, `UserSpecifications` (role filter via EXISTS subquery, wildcard-escaped
+  search, native uniqueness counts).
+- `UserService` / `UserServiceImpl` — create, update, read, search, delete, activate,
+  deactivate, lock, unlock, reset-password, change-password, assign/remove role,
+  assign branch/hub. Per-method `@PreAuthorize`; reuses auth's `PasswordPolicy`.
+- `UserController` — 15 endpoints under `/api/v1/users`.
+- DTOs: `CreateUserRequest`, `UpdateUserRequest`, `ChangePasswordRequest`,
+  `ResetPasswordRequest`, `UserResponse`, `UserSummaryResponse`, `UserSearchRequest`,
+  plus `AssignRoleRequest`, `AssignPlacementRequest`, `LockUserRequest`; `UserMapper`.
+- `UserEvent` (sealed) + `UserEventListener` — 11 lifecycle events, `AFTER_COMMIT`.
+
+**`V7__user_management.sql`**
+- ALTERs `users` with ~18 new columns (identity, name, contact, HR, placement,
+  `is_locked`, `gender`); adds `uk_users_username` (global), `uk_users_tenant_employee_code`,
+  and branch/hub indexes.
+- New `user_company_roles` table (FK to `users` CASCADE, to `company_roles` RESTRICT).
+
+- `AuditAction`: `USER_UPDATED / _ACTIVATED / _DEACTIVATED / _LOCKED / _UNLOCKED /
+  _PASSWORD_RESET / _ROLE_ASSIGNED / _ROLE_REMOVED / _BRANCH_ASSIGNED / _HUB_ASSIGNED`.
+- `SecurityConfig`: `/api/v1/users/**` (and the earlier `/permissions/**`) require
+  authentication; the fine-grained split is on the service.
+
+### Decisions
+- **Extend `users`, one shared table, two entities** — see above.
+- **Branch/hub are columns, not join tables.** A user belongs to at most one of each, so
+  the constraint is a column, not a uniqueness rule on a join. `UserBranch`/`UserHub` from
+  the spec are represented this way.
+- **A user's company roles are separate from JWT authorities.** `user_company_roles`
+  links to the permissioned `company_roles`; auth's `user_roles` enum stays for the token.
+  Assigning a role does not yet change the JWT — that is the next task.
+- **Username is globally unique; email and employee code are per company** — following the
+  spec's distinction ("email unique within Company", "username must be unique").
+- **A generated password means PENDING; a supplied one means ACTIVE.** An unusable
+  password cannot log in, so PENDING states exactly that until an admin resets it.
+
+### Fixed / caught by booting
+- **Two `UserRepository` beans and two `@Entity User` classes collided.** Renamed the
+  company repository to `CompanyUserRepository` and gave the company entity
+  `@Entity(name = "CompanyUser")`. Both failures appear only at context startup, never in
+  unit tests — which is why the app was booted before writing tests.
+- The `CreateUserRequest` username pattern rejected uppercase input even though the entity
+  lowercases it; relaxed to accept mixed case.
+
+### Security notes
+- `COMPANY_ADMIN` manages their own company; `SUPER_ADMIN` reads all, writes none; branch
+  and hub managers read only their own placement, scoped from their own user row (never
+  the request). Out-of-scope and cross-company ids return **404, not 403**, so they cannot
+  probe headcount.
+- Self-guards: you cannot lock, deactivate or delete your own account.
+- The password hash is never serialised; a generated initial password is never returned.
+- Uniqueness counts soft-deleted rows, so email/username/employee code stay reserved.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-23, using the existing Phase-3 company fixtures:
+- `mvn test` — **292/292 green** (35 new).
+- `V7` applied; `ddl-auto: validate` passed for **both** entities on `users`.
+- Create (password vs none → ACTIVE vs PENDING, default-role fallback, normalisation);
+  all three uniqueness rules 409, reserved after soft delete; lifecycle
+  activate/deactivate/lock/unlock; reset re-enabling PENDING; assign/remove role and
+  branch/hub idempotent; self-deactivate 422; bad sort 400; stale version 409.
+- **Cross-tenant**: a foreign user id returned 404 on GET/PUT/DELETE/role-assign, absent
+  from search, untouched; super admin saw all companies' users.
+- **Branch-manager scoping**: saw only their branch (2 of 4 users), 200 same-branch, 404
+  different-branch, 403 on write.
+
+Test data left in place as fixtures for the next step.
+
+### Not included (deliberate)
+- **Authorising on permissions** — still the next task; `@PreAuthorize` checks JWT role
+  names, so assigning company roles does not yet change access.
+- Branch, Hub, Customer, Shipment modules; the `users.tenant_id` FK; bulk user import
+  (the spec flagged it "future ready").
+
+---
+
+## [0.6.0] — 2026-07-23
+
+Permission Management (Phase 3 — Company Administration). The module that turns roles
+from labels into collections of concrete rights. **Permissions stopped being an enum and
+became a table**, because a catalogue of 174 rights that operators must list, search and
+extend cannot be 30 hard-coded constants.
+
+### Added
+
+**Permission catalogue (platform-level)**
+- `Permission` entity — was an enum; now a row. Code derived as `MODULE_ACTION`,
+  immutable, unique; carries name, resource, display order, status and an optional
+  subscription feature gate.
+- `PermissionModule` (28) and `PermissionAction` (15) enums — the vocabulary halves.
+- `PermissionStatus` — `ACTIVE | INACTIVE`; deactivating retires a right without
+  stripping existing grants.
+- `DefaultPermissionCatalog` — declares which actions exist per module (174, not the
+  420 cross product), and which are plan-gated. Single source of truth for the seed.
+- `PermissionRepository` + `PermissionSpecifications` + `PermissionCriteria` — filtering,
+  searching, native uniqueness check.
+- `PermissionService` / `PermissionServiceImpl` — catalogue CRUD, `SUPER_ADMIN` writes,
+  both admin tiers read. System permissions are read-only; a permission still granted
+  anywhere cannot be deleted.
+- `PermissionController` — 5 endpoints under `/api/v1/permissions`, plus `/grantable`.
+
+**Role–permission grants (tenant-owned)**
+- `RolePermission` entity — replaces the `company_role_permissions` element collection.
+  A real grant with its own id and audit columns; denormalises `permission_code` for
+  hot-path authorisation reads.
+- `RolePermissionRepository` — grants by role, effective codes, cross-tenant usage count.
+- `RolePermissionService` / `Impl` — **bulk** assign with replace semantics, revoke,
+  and `resolveEffectiveCodes` for the coming User Management. `COMPANY_ADMIN` only,
+  own company only.
+- `RolePermissionController` — assign, list, revoke under
+  `/api/v1/roles/{roleId}/permissions`.
+- DTOs: `CreatePermissionRequest`, `UpdatePermissionRequest`, `PermissionResponse`,
+  `PermissionSearchRequest`, `RolePermissionRequest`, `RolePermissionResponse`;
+  `PermissionMapper`.
+
+**`V6__permission_management.sql`**
+- Creates `permissions`, seeds 174 rows generated from `DefaultPermissionCatalog`.
+- Creates `role_permissions` (FK to `company_roles` CASCADE, to `permissions` RESTRICT).
+- Migrates every existing grant, expanding coarse constants (`X_MANAGE` → create/update/
+  delete, `X_VIEW` → read, `SCAN_CREATE` → tracking create+read, `BULK_BOOKING` →
+  `SHIPMENT_IMPORT`). 29 old rows → 39 new in the dev database.
+- Drops `company_role_permissions`.
+- `AuditAction`: `PERMISSION_CREATED / _UPDATED / _DELETED`, `ROLE_PERMISSIONS_ASSIGNED`,
+  `ROLE_PERMISSION_REVOKED`.
+
+### Changed
+- **`CompanyRole` no longer holds a permission set.** Grants moved to `role_permissions`;
+  `DefaultRoleCatalog` now works in permission codes, and `CompanyProvisioningService`
+  seeds grants as rows. `RoleController` sources a role's permission codes and per-page
+  counts from `RolePermissionService` (batched, to avoid N+1).
+- Role search's `permission` filter is now a code matched via an EXISTS subquery on
+  `role_permissions`, replacing the element-collection membership test.
+- `API_ACCESS` was dropped as a permission: API access is a plan feature enforced by
+  rate limiting, not a right a role holds, and no seeded role used it.
+
+### Fixed
+- **The lockout guard refused every grant in a company that had no `ROLE_UPDATE`
+  holder** — including the grant that would restore it. It now compares the before and
+  after state and only fires when the ability is actually lost. Surfaced by a live run;
+  the unit test had mocked the holder present, so it passed. A regression test now
+  covers "a company that never had it can still be granted permissions".
+- **`Permission.displayOrder` carried a `@Builder.Default` of 0**, which meant it was
+  never null, so `applyInvariants` never derived it and every API-created permission
+  sorted to the top. Removed the default. Caught by a domain test.
+
+### Security notes
+- Catalogue writes are `SUPER_ADMIN` only: permission codes are the platform's
+  authorisation vocabulary, referenced by every company's grants and by `@PreAuthorize`.
+- Grants are `COMPANY_ADMIN`, own company only; `SUPER_ADMIN` may read a role's grants
+  for support but not change them.
+- Plan gating fails **closed**: a missing, false or non-boolean feature value denies.
+- Tenant isolation on grants uses `findByIdWithinTenant` on the role — a primary-key
+  load bypasses the Hibernate filter. Another company's role returns 404, not 403.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-23, with the Phase-3 fixtures in place so the data
+migration ran for real:
+- `mvn test` — **257/257 green** (38 new).
+- `V6` applied; `validate` passed; 174 permissions / 28 modules; 29 grants → 39;
+  old table dropped.
+- Catalogue RBAC (super-admin write, company-admin read-only 403, 401 anon); derived
+  code and defaults on create; duplicate `(module, action)` 409; system permission
+  edit/delete 422; custom edit 200.
+- Grants: bulk assign, skip-already-held, replace-revokes-rest, unknown code 404,
+  super-admin grant 403.
+- Plan gating both directions (rejected without the feature setting, granted with it).
+- Delete guard: granting then deleting a custom permission 422; revoke then delete 200.
+- Cross-tenant: assign and revoke on another company's role both 404, role untouched.
+
+Test data left in place as fixtures for User Management.
+
+### Not included (deliberate)
+- **User Management** — no user CRUD, no role assignment to users, `isDefault` recorded
+  but not yet consumed.
+- **Authorising on permissions** — `@PreAuthorize` still checks JWT role names, so
+  re-permissioning a role does not yet change access. That is the next module's payoff.
+
+---
+
+## [0.5.0] — 2026-07-22
+
+Role Management (Phase 3 — Company Administration). The first module a **company's own
+admin** can use: everything before this was `SUPER_ADMIN`-only.
+
+**No new table.** `company_roles` already existed with five seeded roles per company, so
+this extends it. Two tables both meaning "a role" would have drifted within a release,
+and the seeded rows and their permissions would have needed migrating across.
+
+### Added
+
+**Role Management (inside `modules/company`)**
+- `RoleType` — `ADMINISTRATION | OPERATIONS | FINANCE | SUPPORT | READ_ONLY`. The
+  functional grouping, deliberately *not* "system vs custom", which `isSystemRole`
+  already records.
+- `RoleStatus` — `ACTIVE | INACTIVE`, replacing the boolean `is_active` so a third state
+  can be added later without a second flag that contradicts the first.
+- `CompanyRole` gained `roleType`, `isDefault` and `status`, plus code normalisation
+  (uppercase, spaces to underscores) and lifecycle behaviour.
+- `RoleService` / `RoleServiceImpl` — create, update, read, search, activate, deactivate,
+  soft delete, and an assignable listing. **Per-method** `@PreAuthorize`.
+- `RoleCriteria` + `RoleSpecifications` — filtering by status, type, system/default flags
+  and by a specific `Permission`, plus search with LIKE escaping.
+- `CompanyRoleRepository` gained `JpaSpecificationExecutor`, default-role lookups and
+  native uniqueness checks that see soft-deleted rows.
+- `RoleController` — 8 endpoints under `/api/v1/roles`, whitelisted sorting, 100-row cap.
+- DTOs: `CreateRoleRequest`, `UpdateRoleRequest`, `RoleResponse`, `RoleSummaryResponse`,
+  `RoleSearchRequest`; `RoleMapper` bridges them to commands and back.
+- `AuditAction` — `ROLE_CREATED / _UPDATED / _DELETED / _ACTIVATED / _DEACTIVATED`,
+  distinct from the older `ROLE_GRANTED`/`ROLE_REVOKED`, which concern giving a role to a
+  *user*.
+- `SecurityConfig` — `/api/v1/roles/**` requires authentication only; the read/write
+  split is expressed at the service, since no URL pattern can.
+
+**`V5__role_management.sql`**
+- Adds the three columns, carries `is_active` across into `status`, drops it, and rebuilds
+  the indexes that referenced it.
+- Renames `OPERATOR` to `BOOKING_OPERATOR` in place — users holding it keep their
+  assignment and the row keeps its id.
+- Backfills every existing company with `DELIVERY_OPERATOR`, `FINANCE_USER` and
+  `CUSTOMER_SERVICE` plus their permissions, and adds `BULK_BOOKING` to
+  `BOOKING_OPERATOR` only where the company's plan enables it.
+
+### Changed
+- **The seeded catalogue grew from five roles to eight.** `OPERATOR` split into
+  `BOOKING_OPERATOR` and `DELIVERY_OPERATOR` — booking a parcel and delivering it are
+  different desks, and one role covering both meant every counter clerk could also close
+  deliveries. `FINANCE_USER` and `CUSTOMER_SERVICE` were added because both were
+  previously served by handing someone `BRANCH_MANAGER`.
+- `CompanyProvisioningService` seeds the new fields; `CompanyController`'s role
+  projection now returns `roleType`, `isDefault` and `status` instead of `isActive`.
+
+### Decisions
+- **Extend `company_roles`, do not add a `roles` table.** The entity stays
+  `CompanyRole` because `modules/auth` already owns the name `Role` for JWT authorities.
+- **Reads and writes have different audiences.** `SUPER_ADMIN` may read any company's
+  roles while investigating a ticket; only `COMPANY_ADMIN` may change what their own
+  staff can do. Hence per-method rather than class-level `@PreAuthorize`.
+- **Deactivating is not deleting.** Existing holders keep the role; deactivation only
+  withdraws it from the assignment list.
+- **A system role may be renamed, never deleted.** Calling your admins "Owners" is
+  legitimate; having no `COMPANY_ADMIN` is not.
+
+### Security notes
+- **Tenant isolation has two layers**: the Hibernate filter, and `findByIdWithinTenant`
+  on every single-row load — a primary-key load bypasses the filter entirely, so without
+  the second a company admin could fetch and edit another company's role by guessing an
+  id.
+- A `tenantId` in the query string is **overridden** for a `COMPANY_ADMIN`, so spoofing
+  one returns their own roles rather than another company's.
+- Not-found is returned as **404, never 403**: "this exists but is not yours" leaks the
+  existence of other companies' data.
+- `isSystemRole` is absent from both request DTOs — a settable flag would let a company
+  mint itself an undeletable role.
+- `size` capped at 100: uncapped, a super admin's listing would scan every company's
+  roles at once.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-22, **with `V4`-shaped data seeded first** so the
+migration's transform path was genuinely exercised rather than run against an empty table:
+- `mvn test` — **227/227 green** (35 new).
+- `V5` applied; `ddl-auto: validate` passed.
+- `OPERATOR` → `BOOKING_OPERATOR` with `is_default = 1`, permissions preserved through
+  the rename and `BULK_BOOKING` added from the plan.
+- `VIEWER`, stored `is_active = 0`, came out `INACTIVE` — not silently reactivated.
+- Three roles backfilled with correct types and permission counts; `is_active` dropped;
+  both indexes rebuilt.
+- 401 without a token; `OPERATOR` 403; `SUPER_ADMIN` read 200 but write **403**;
+  `COMPANY_ADMIN` create 201.
+- Duplicate code and name 409; system-role delete 422; default-role deactivate 422;
+  stale version 409; unknown sort key 400; renaming a system role allowed; promoting a
+  role to default demoted the previous one.
+- **Cross-tenant isolation:** a second company's role id returned 404 on GET, PUT, DELETE
+  and PATCH; it never appeared in search; a spoofed `tenantId` returned the caller's own
+  roles; the other company's role was untouched afterwards.
+- Soft delete: 200 → 404, row retained, code still reserved (409), excluded from
+  `/assignable`.
+
+Test data was **left in place** at the user's request, as fixtures for the next module.
+
+### Not included (deliberate)
+- **Permission Management** — a custom role is created with no permissions, and
+  `permissions` is returned but never accepted.
+- **User Management** — nothing assigns roles to users yet, `isDefault` is recorded but
+  not yet consumed, and deleting a role does not reassign its holders.
+- Authorising on permissions rather than JWT role names — re-permissioning a role does
+  not yet change what its users can reach.
+
+---
+
+## [0.4.0] — 2026-07-22
+
+Company module (Phase 2 — Super Admin). **A company is a tenant**, so this release
+delivers the tenant root the whole system has been waiting for, and with it the real
+tenant directory. Branches, hubs, service areas and rate cards are later phases of the
+same module and are not included.
+
+### Added
+
+**`modules/company` — the tenant root**
+- `Company` — platform-level aggregate extending `BaseEntity`. `id` and `tenantId` are
+  deliberately different UUIDs: the second is the tenancy key stamped on every
+  tenant-owned row and carried in the JWT, and it is generated, unique and immutable.
+- `CompanyStatus` — `TRIAL | ACTIVE | INACTIVE | SUSPENDED | EXPIRED`, with the legal
+  transitions in the enum so no call path can invent one. `isActive` is derived from it.
+- `CompanyRole` + `Permission` + `DefaultRoleCatalog` — five system roles seeded per
+  company, with permissions filtered by the subscription plan's feature flags.
+- `CompanySetting` + `CompanySettingKeys` — key/value configuration in five categories,
+  including one read-only row per plan quota (empty value = unlimited).
+- `CompanyRepository`, `CompanyRoleRepository`, `CompanySettingRepository`;
+  `CompanyCriteria` + `CompanySpecifications` for filtering, searching and LIKE escaping.
+- `CompanyService` / `CompanyServiceImpl` — create with full provisioning, update,
+  read, search, activate, suspend (reason required), expire, soft delete, plus role and
+  setting listings that bind the tenant with `TenantContext.runAs`.
+- `CompanyProvisioningService` — seeds roles and settings and creates the administrator,
+  all inside the creating transaction.
+- `CompanyEvent` (sealed) + `CompanyEventListener` — `CompanyCreated`, `CompanyUpdated`,
+  `CompanyActivated`, `CompanySuspended`, `CompanyExpired`, consumed `AFTER_COMMIT`.
+- `CompanyController` — 10 endpoints under `/api/v1/companies`, whitelisted sorting,
+  100-row page cap, parameter-object search.
+- DTOs: `CreateCompanyRequest`, `UpdateCompanyRequest`, `CompanyResponse`,
+  `CompanySummaryResponse`, `CompanySearchRequest`, `SuspendCompanyRequest`;
+  `CompanyMapper` bridges them to commands and back.
+- `V4__company.sql` — `companies`, `company_roles`, `company_role_permissions`,
+  `company_settings`; five unique keys, a `RESTRICT` FK to `subscription_plans`, and
+  tenant-owned tables keyed on `tenant_id`.
+
+**`modules/company/infrastructure`**
+- `CompanyTenantDirectory` — the real `TenantDirectoryPort`, `@Primary`, displacing
+  `StandaloneTenantDirectory`. **Slug login now works** (`companyCode` is the slug) and
+  **tenant status is enforced**: a suspended, expired, inactive or deleted company can no
+  longer authenticate.
+
+**`modules/auth`**
+- `UserProvisioningService` (+ impl) — the seam that lets another module create a user
+  without touching the `users` table. Creates a `PENDING` account with a random,
+  discarded password and an email-verification link.
+- `Role` gained `COMPANY_ADMIN`, `HUB_MANAGER`, `VIEWER`; `TENANT_ADMIN` is kept because
+  issued tokens carry it.
+
+**Shared**
+- `Roles` — matching constants and `AUTH_*` authority forms.
+- `AuditAction` — `COMPANY_CREATED / _UPDATED / _ACTIVATED / _SUSPENDED / _EXPIRED /
+  _DELETED`, plus role and settings seeding actions.
+- `SecurityConfig` — URL rule for `/api/v1/companies/**`.
+
+### Changed
+- **`modules/tenant` was folded into `modules/company`.** The product calls a tenant a
+  company and branches sit under a company, so maintaining both was guaranteed drift.
+  `MEMORY/modules/tenant.md` is now a redirect stub listing where each piece went and
+  what is still outstanding from the original plan.
+- `MEMORY/modules/company.md` was rewritten: it previously described branches and rate
+  cards, which are now documented there as later phases of the same module.
+
+### Decisions
+- **A company is the tenant**, and `tenantId` is a second UUID rather than a rename of
+  `id`.
+- **Roles are a table, not an enum**, seeded per company and plan-gated.
+- **Cross-module writes go through an application service**, never another module's
+  repository — company creates its admin via `UserProvisioningService`.
+- **Events are in-process, sealed and `AFTER_COMMIT`.** An outbox table with no consumer
+  would be infrastructure for its own sake; swapping later changes the listener only.
+- **`CompanyTenantDirectory` is `@Primary`** rather than relying on the placeholder's
+  `@ConditionalOnMissingBean`: bean-ordering luck is not worth it when the failure mode
+  is "tenant status silently unenforced".
+
+### Security notes
+- Every endpoint, reads included, requires `SUPER_ADMIN`: a company row carries another
+  business's contact details, tax numbers and commercial terms.
+- The provisioned administrator's password is 32 random bytes, hashed and discarded —
+  never returned, logged or emailed. The account is `PENDING` until verified.
+- Suspension blocks authentication at the next login; already-issued access tokens keep
+  working for at most their 15-minute lifetime. A `TenantStatusGuard` closing that window
+  on every request is tracked in `BACKLOG.md`.
+- `search` escapes `%`, `_` and `\` rather than rejecting them — rejecting would break
+  searching for codes like `ACME_LOGISTICS`.
+- `sort` is whitelisted and `size` capped at 100.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-22:
+- `mvn test` — **192/192 green** (50 new: domain lifecycle, role catalogue, service).
+- Application starts; Flyway applied `V4`; `ddl-auto: validate` passed.
+- 401 without a token, 403 for `PLATFORM_ADMIN`, 200 for `SUPER_ADMIN`.
+- Create returned `201` with a generated `tenantId`, `TRIAL` status and a 14-day window
+  derived from the plan, uppercased code and tax numbers, plus `provisioning`:
+  5 roles, 24 settings, a `PENDING` admin with `COMPANY_ADMIN`.
+- Plan gating confirmed in the database: `BULK_BOOKING` seeded to 2 roles,
+  `API_ACCESS` (disabled on the plan) to none; `COMPANY_ADMIN` holds 29 of 30.
+- Quota settings stored empty for unlimited values, `plan_derived = 1`.
+- Duplicate code 409; missing suspension reason 400; `SUSPENDED -> EXPIRED` 422 with
+  `INVALID_STATE_TRANSITION`; stale version 409; unknown sort key 400.
+- `?search=acme_log` matched despite the underscore.
+- Soft delete: `200`, then `404` on read, row retained with `deleted=1, is_active=0`,
+  and the code still reserved against re-creation (409).
+- **Slug login works**: `tenantSlug=acme_logistics` reached credential checking
+  (`401 INVALID_CREDENTIALS`), and after suspending the company the same request returned
+  `403 TENANT_INACTIVE`.
+
+Test rows were removed afterwards; the schema is at `V4` and the business tables are
+empty.
+
+### Not included (deliberate)
+- Branch, Hub, Customer, Shipment — separate phases.
+- **The FK `users.tenant_id -> companies.tenant_id`.** The development database holds a
+  hand-inserted user row (`ops@acme.test`) whose tenant matches no company, so the
+  constraint would fail the migration at boot. It ships as its own migration once that
+  row is reconciled. Tracked in `BACKLOG.md`.
+- Self-serve company registration — creation is `SUPER_ADMIN`-only for now.
+- A scheduled job expiring companies past their window; expiry is manual today.
+
+---
+
+## [0.3.0] — 2026-07-22
+
+Subscription Plan module (Phase 2 — Super Admin). The platform-wide catalogue of
+what a tenant may use and what it costs. Tenant management is deliberately not
+included; it is the next module.
+
+### Added
+
+**`modules/subscription`**
+- `SubscriptionPlan` — platform-level aggregate extending `BaseEntity`, **not**
+  `TenantAwareEntity`: the catalogue is shared by every tenant, so there is no
+  `tenant_id`, no Hibernate filter, and unique keys are global.
+- `PlanType` — `TRIAL | BASIC | STANDARD | PREMIUM | ENTERPRISE`, with the two tiers
+  that carry behaviour (`requiresZeroPrice`, `hasUnlimitedQuotas`).
+- `SubscriptionPlanRepository` — `JpaRepository` + `JpaSpecificationExecutor`, plus
+  native uniqueness checks that see soft-deleted rows.
+- `SubscriptionPlanCriteria` + `SubscriptionPlanSpecifications` — Criteria API
+  filtering, searching and LIKE-escaping.
+- `SubscriptionPlanService` / `SubscriptionPlanServiceImpl` — create, update, read,
+  search, activate, deactivate, soft delete; `listAssignable()` is the seam the tenant
+  module will use.
+- `SubscriptionPlanController` — 7 endpoints under `/api/v1/subscription-plans`,
+  paged/sorted/filtered/searchable list with a whitelisted `sort` and a 100-row cap.
+- DTOs: `CreateSubscriptionPlanRequest`, `UpdateSubscriptionPlanRequest`,
+  `SubscriptionPlanResponse`, `SubscriptionPlanSummary`; `SubscriptionPlanMapper`
+  bridges them to application commands and back.
+- `V3__subscription.sql` — `subscription_plans`: two unique keys, three indexes,
+  three CHECK constraints, a `JSON` feature-flag column, no seed rows.
+
+**Shared**
+- `Roles.SUPER_ADMIN` / `AUTH_SUPER_ADMIN` (added in the previous session) is now
+  wired through: `Role.SUPER_ADMIN` in the auth enum, counted as `isPlatformScoped()`
+  so no tenant admin can grant it.
+- `AuthenticatedUser.isSuperAdmin()` / `isPlatformTier()`.
+- `TenantResolutionFilter` — recognises the super admin as platform tier and leaves
+  the request tenant-unbound, instead of warning about a missing tenant claim.
+- `SecurityConfig` — URL rule for `/api/v1/subscription-plans/**`.
+- `AuditAction` — `SUBSCRIPTION_PLAN_CREATED / _UPDATED / _ACTIVATED / _DEACTIVATED /
+  _DELETED`.
+- `TimeOrderedUuid.toBytes(UUID)` — big-endian 16-byte form, needed to bind an id into
+  a native query, where there is no entity mapping to convert it.
+
+### Decisions
+- **`SUPER_ADMIN` is a new top tier, not a rename of `PLATFORM_ADMIN`.** Super admin
+  owns the platform; platform admin acts on behalf of tenants. Super admin therefore
+  does **not** inherit `X-Tenant-ID` impersonation.
+- **`null` means unlimited**, over a `-1` sentinel: a forgotten guard around a
+  sentinel evaluates `current < -1` as "over quota" and silently blocks everything.
+  All comparisons go through `SubscriptionPlan.withinLimit`.
+- **Migration versions follow build order.** Subscription took `V3`; the tenant module
+  now takes `V4`. Flyway is forward-only with out-of-order disabled, so the previously
+  reserved `V3` could never have been filled later.
+- **Plan code and name stay reserved after a soft delete.** Reusing a retired code
+  would attach new pricing to an identifier old tenants and invoices point at.
+- **`PUT` requires the client's `version`.** `@Version` alone only catches a conflict
+  within one transaction, not two admins editing across two requests.
+- **`@PreAuthorize` sits on the service implementation**, class-level, so it holds
+  whichever proxy strategy Spring picks; the URL rule is a second, coarser gate.
+
+### Security notes
+- Every endpoint, including reads, requires `SUPER_ADMIN`: pricing and quota structure
+  is commercial information, not a public catalogue.
+- `sort` is whitelisted. Spring binds it straight onto an entity attribute, so an
+  unknown name would surface as a 500 and an unintended one would order by columns
+  that are not the caller's business. `size` is capped at 100.
+- `search` escapes `%`, `_` and `\` before building the LIKE pattern; otherwise a
+  search for `%` returns the whole catalogue regardless of the other filters.
+- Uniqueness is pre-checked against soft-deleted rows so the caller gets a 409 naming
+  the field rather than an opaque constraint violation.
+
+### Fixed
+- **`plan_type` mapped to a native MySQL `enum(...)`, not `VARCHAR(20)`.** Since
+  Hibernate 6.5 the MySQL dialect renders a `STRING` enum as a native enum column,
+  which would not match `V3` and would fail `ddl-auto: validate` at startup — and
+  would mean a schema change for every new tier. Pinned with
+  `@JdbcTypeCode(SqlTypes.VARCHAR)`. Found by generating the DDL Hibernate expects
+  and diffing it against the migration.
+- **Uniqueness pre-check threw `ClassCastException` on every create.** MySQL has no
+  boolean type, so `SELECT COUNT(*) > 0` returns `BIGINT`; mapping it to `boolean`
+  failed with *"class java.lang.Long cannot be cast to class java.lang.Boolean"* and
+  produced a 500. The native queries now return a count and the comparison is done in
+  Java. Invisible to unit tests, which mock the repository — found only by running it.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-22:
+- `mvn test` — **142/142 green** (40 new: domain invariants, service rules, mapper,
+  extended `RoleTest`).
+- Application starts; Flyway applied `V3`; Hibernate `ddl-auto: validate` passed
+  against the migrated schema.
+- No token -> `401`; `PLATFORM_ADMIN` -> `403 ACCESS_DENIED`; `SUPER_ADMIN` -> `200`.
+  Confirms `SUPER_ADMIN` is a distinct tier and not satisfied by `PLATFORM_ADMIN`.
+- Create -> `201`, code and currency uppercased, name trimmed.
+- Duplicate code -> `409 DUPLICATE_RESOURCE` naming `planCode`; still `409` after the
+  plan is soft-deleted, confirming codes stay reserved.
+- Priced `TRIAL` -> `422`; `TRIAL` with 0 trial days -> `422`; negative price -> `400`
+  with a field-level error.
+- `ENTERPRISE` created with quotas -> stored as all-null, `"unlimited": true`.
+- `PUT` with a stale `version` -> `409 CONCURRENT_MODIFICATION`; with the correct
+  version -> `200` and `version` incremented.
+- `?sort=passwordHash` -> `400` listing the allowed keys; `?search=%` -> 0 rows,
+  confirming the LIKE wildcard is escaped rather than matching everything.
+- Activate/deactivate flip `is_active`; `DELETE` -> `200`, subsequent `GET` -> `404`,
+  and the row remains in MySQL with `deleted = 1, is_active = 0`.
+- `feature_flags` round-trips through the MySQL `JSON` column unchanged.
+- All six audit actions written to `audit_logs` with `success = 1`.
+
+Test rows were removed afterwards; `subscription_plans` is empty and `V3` is applied.
+
+### Not included (deliberate)
+- Tenant management, and any `tenants.subscription_plan_id` FK — next module, `V4`.
+- A guard against deleting a plan that has subscribers: there are no tenant rows to
+  check against yet.
+- Seed plan rows: populating the catalogue is a `SUPER_ADMIN` action, not a migration.
+
+---
+
+## [0.1.0] — 2026-07-22
+
+Backend foundation. No business modules yet — this release is the skeleton that
+every feature will hang off.
+
+### Added
+
+**Project**
+- Maven project `com.courier:courier-management`, Java 21, Spring Boot 3.4.1.
+- Package-by-feature layout: `com.courier.shared` (cross-cutting) +
+  `com.courier.modules` (business features, empty placeholders).
+- `MEMORY/` documentation set established as the project's source of truth.
+
+**Domain primitives**
+- `BaseEntity` — UUID primary key (time-ordered, `BINARY(16)`), JPA auditing
+  fields, `@Version` optimistic lock, soft-delete fields, identity-correct
+  `equals`/`hashCode` based on the id.
+- `TenantAwareEntity` — adds the non-updatable `tenant_id` discriminator and
+  declares the Hibernate `tenantFilter`. Concrete subclasses must repeat `@Filter`
+  themselves; Hibernate does not reliably inherit it from a `@MappedSuperclass`.
+- `TimeOrderedUuid` — monotonic UUID generator for index-friendly primary keys.
+
+**Multi-tenancy**
+- `TenantContext` — `ThreadLocal` holder with `InheritableThreadLocal` avoided
+  deliberately; explicit `clear()` in a `finally` block.
+- `TenantResolutionFilter` — resolves the tenant from the verified JWT claim; honours
+  `X-Tenant-ID` only for `PLATFORM_ADMIN` and audits the impersonation.
+- `TenantEntityListener` — stamps `tenant_id` on `@PrePersist` and rejects
+  cross-tenant updates on `@PreUpdate`.
+- `TenantFilterAspect` — enables the Hibernate filter for the current session.
+
+**Security**
+- `JwtTokenProvider` — HS256 access (15 min) and refresh (7 d) tokens; fails fast
+  at startup if `JWT_SECRET` is shorter than 32 bytes.
+- `JwtAuthenticationFilter` — stateless authentication built from token claims,
+  no database round trip.
+- `AuthenticatedUser` — record principal carrying `userId`, `tenantId`, `email`, roles.
+- `SecurityConfig` — stateless session policy, CSRF off, public route allowlist
+  (auth, tracking, Swagger, health), 401/403 entry points returning the standard
+  error envelope.
+- `Roles` — role name constants shared by `@PreAuthorize` expressions.
+
+**API contract**
+- `ApiResponse<T>` — uniform success/error envelope with `errorCode`, field-level
+  `errors`, `timestamp`, `path` and `requestId`.
+- `PageResponse<T>` — pagination envelope decoupled from Spring's `Page`.
+- `ErrorCode` — enum mapping stable machine-readable codes to HTTP statuses.
+- `ApiException` hierarchy: `ResourceNotFoundException`, `BusinessRuleException`,
+  `DuplicateResourceException`, `UnauthorizedException`, `ForbiddenException`,
+  `TenantViolationException`.
+- `GlobalExceptionHandler` — maps validation, security, data-integrity, optimistic
+  lock and unexpected errors to the envelope; never leaks stack traces.
+
+**Audit**
+- `JpaAuditingConfig` — `AuditorAware` and `DateTimeProvider` beans populating
+  `created_by`/`updated_by` from the security context and `created_at`/`updated_at`
+  from a UTC `Instant`.
+- `AuditLog` entity + `AuditLogRepository` + `AuditAction` enum, and the
+  `audit_logs` table (`V1__baseline.sql`).
+- `AuditService` — captures the thread-bound request context (tenant, actor, MDC
+  request id, client IP) and hands a finished entry to the writer.
+- `AuditLogWriter` — a *separate* bean applying `@Async` + `REQUIRES_NEW`, so the
+  proxy actually takes effect and the trail survives a rolled-back transaction.
+- `AsyncConfig` — bounded `auditExecutor` with `CallerRunsPolicy`, so a backlog
+  slows the API rather than silently dropping audit records.
+
+**Infrastructure config**
+- `RedisConfig` — Lettuce, `StringRedisSerializer` keys, JSON values with JSR-310
+  support, `CacheManager` with per-cache TTLs.
+- `FlywayConfig` — forward-only migrations, `validate-on-migrate`, Hibernate
+  `ddl-auto: validate` so Hibernate never touches schema.
+- `OpenApiConfig` — OpenAPI 3 with bearer-JWT security scheme, servers per env.
+- `RequestIdFilter` — generates/propagates `X-Request-Id` into MDC and responses;
+  sanitises and length-caps the caller-supplied header before it reaches a log line.
+- `JacksonConfig` — ISO-8601 dates, UTC, non-null inclusion, lenient unknown fields.
+- `CorsProperties` + CORS source in `SecurityConfig` — per-environment origin allowlist.
+- `application.yml` + `local` / `dev` / `prod` profiles; all secrets via env vars.
+
+**Docker**
+- Multi-stage `Dockerfile` (Maven build -> JRE 21 runtime, non-root user,
+  container-aware JVM flags, healthcheck).
+- `docker/docker-compose.yml` — app + MySQL 8.4 + Redis 7, health-gated startup.
+- `.dockerignore`, `.gitignore`, `.env.example`.
+
+### Fixed
+- `JwtProperties` used `@Positive` on `Duration` fields, which has no Bean
+  Validation provider and aborted startup with `HV000030`. Replaced with
+  `@NotNull`; positivity — plus "refresh TTL must exceed access TTL" — is now
+  asserted in `JwtTokenProvider.init()`. Caught by booting the app, not by the
+  unit tests.
+
+### Verified
+Run against MySQL 8.0.46 on 2026-07-22:
+- `mvn test` — 25/25 green.
+- Application starts; Flyway applied `V1`; Hibernate `ddl-auto: validate` passed
+  against the migrated schema.
+- `401`/`403` return the standard envelope; `X-Request-Id` is honoured inbound and
+  echoed in both header and body.
+- Role-based authorisation enforced (`TENANT_ADMIN` -> 403, `PLATFORM_ADMIN` -> 200).
+- Refresh tokens and expired tokens are rejected where an access token is required.
+- A non-admin's `X-Tenant-ID` header is ignored; a platform admin's is honoured and
+  logged.
+- Redis was absent during the run: the app started normally and only the Redis
+  health indicator reported DOWN, confirming Redis is not a startup dependency.
+
+### Decisions
+- ADR-001: Shared Database + Shared Schema multi-tenancy.
+
+### Security notes
+- Tenant identity is taken from the signed JWT, never from a client header
+  (except platform-admin impersonation, which is audited).
+- All Redis cache keys are tenant-prefixed by convention.
+- Default `JWT_SECRET` is a local-only placeholder; the app refuses to start in
+  the `prod` profile without an explicit strong secret.
+
+### Not included (deliberate)
+- No `auth`, `tenant`, `company` or `shipment` business logic.
+- No `UserDetailsService`, no refresh-token persistence — both arrive in Phase 2.
