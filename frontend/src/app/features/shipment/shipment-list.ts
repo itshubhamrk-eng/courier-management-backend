@@ -161,11 +161,15 @@ export class ShipmentList implements OnInit {
   private download(rows: Shipment[]): void {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
-      'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount', 'status'];
+      'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount',
+      'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
+      'companyCommissionOnBasicFreight', 'status'];
     const line = (r: Shipment) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
-      r.chargeableWeight, r.netAmount ?? '', r.status].map(esc).join(',');
+      r.chargeableWeight, r.netAmount ?? '',
+      r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
+      r.companyCommissionOnBasicFreight ?? '', r.status].map(esc).join(',');
     const csv = [header.join(','), ...rows.map(line)].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');

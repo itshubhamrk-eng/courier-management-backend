@@ -29,6 +29,7 @@ public record ShipmentResponse(
         BigDecimal declaredValue, Integer numberOfPackages,
         ShipmentStatus status,
         String remarks,
+        Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
         List<ShipmentItemResponse> items
 ) {

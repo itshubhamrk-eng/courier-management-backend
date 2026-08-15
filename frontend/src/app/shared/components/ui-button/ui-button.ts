@@ -26,17 +26,19 @@ type Variant = 'primary' | 'stroked' | 'text' | 'danger';
     </button>
   `,
   styles: [`
-    .app-btn { display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 18px;
+    .app-btn { display:inline-flex; align-items:center; gap:8px; height:42px; padding:0 20px;
       border-radius:var(--r-field); font:600 14px/1 var(--font-sans); cursor:pointer;
-      border:1px solid transparent; transition:.15s ease; }
+      border:1px solid transparent; transition:background .15s ease, border-color .15s ease, box-shadow .15s ease; }
     .app-btn:disabled { opacity:.55; cursor:not-allowed; }
     .app-btn__icon { font-size:18px; width:18px; height:18px; }
     .app-btn--primary { background:var(--brand-600); color:#fff; }
     .app-btn--primary:hover:not(:disabled) { background:var(--brand-700); }
     .app-btn--stroked { background:var(--surface); color:var(--content-fg); border-color:var(--surface-border); }
-    .app-btn--stroked:hover:not(:disabled) { background:var(--surface-muted); }
-    .app-btn--text { background:transparent; color:var(--brand-600); padding:0 10px; }
+    .app-btn--stroked:hover:not(:disabled) { background:var(--surface-muted); border-color:var(--content-muted); }
+    .app-btn--text { background:transparent; color:var(--brand-600); padding:0 10px; box-shadow:none; }
+    .app-btn--text:hover:not(:disabled) { background:var(--brand-50); }
     .app-btn--danger { background:var(--danger); color:#fff; }
+    .app-btn--danger:hover:not(:disabled) { background:#b91c1c; }
   `]
 })
 export class UiButton {

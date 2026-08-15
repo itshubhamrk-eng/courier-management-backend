@@ -24,6 +24,11 @@ public record PricingResult(
         BigDecimal gstAmount,
         BigDecimal discountAmount,
         BigDecimal roundOff,
-        BigDecimal netAmount
+        BigDecimal netAmount,
+        /** The Freight Factor grid cell's own factor, or the caller's override of it if one
+         *  was supplied and accepted — null except on the Freight Factor fallback path (see
+         *  {@code PricingEngineImpl.priceByDistanceAndWeight}), since the normal Route/Rate
+         *  path never uses a freight factor at all. */
+        BigDecimal appliedFreightFactor
 ) {
 }

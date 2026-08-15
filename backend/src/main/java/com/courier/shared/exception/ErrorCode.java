@@ -40,10 +40,11 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, "Endpoint not found"),
 
-    // 405 / 409 / 415
+    // 405 / 409 / 413 / 415
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "HTTP method not supported"),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "Resource already exists"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "Resource was modified by another request"),
+    FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "Uploaded file exceeds the maximum allowed size"),
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported media type"),
 
     // 422 — syntactically valid, semantically rejected

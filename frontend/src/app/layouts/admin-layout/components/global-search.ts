@@ -43,9 +43,9 @@ interface SearchResult { label: string; route: string; icon: string; section: st
     </div>
   `,
   styles: [`
-    .gs { position:relative; display:flex; align-items:center; gap:8px; width:280px; height:40px; padding:0 10px;
-      border:1px solid var(--surface-border); border-radius:10px; background:var(--surface-muted); transition:.15s; }
-    .gs--open { border-color:var(--brand-400); background:var(--surface); box-shadow:0 0 0 3px var(--brand-50); }
+    .gs { position:relative; display:flex; align-items:center; gap:8px; width:280px; height:42px; padding:0 12px;
+      border:0; border-radius:var(--r-field); background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); transition:box-shadow .15s; }
+    .gs--open { box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
     .gs__icon { color:var(--content-muted); font-size:20px; width:20px; height:20px; }
     .gs__input { flex:1; border:0; outline:0; background:transparent; font:500 14px var(--font-sans); color:var(--content-fg); }
     .gs__clear { display:grid; place-items:center; border:0; background:transparent; color:var(--content-muted); cursor:pointer; }

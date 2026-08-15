@@ -23,7 +23,11 @@ public record UpdateBranchCommand(
         LocalTime openingTime, LocalTime closingTime, String workingDays,
         Boolean allowBooking, Boolean allowDelivery, Boolean allowPickup,
         Boolean allowManifest, Boolean allowCashCollection, Boolean allowWallet,
+        Boolean instantCommission,
         String remarks,
+        BigDecimal gstPercentage, BigDecimal commissionOnOtherCharges,
+        BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
+        BigDecimal drsChargePerQty,
         Long expectedVersion
 ) {
 }

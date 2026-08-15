@@ -77,6 +77,18 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
               <dt>State</dt><dd>{{ branch()!.state || '—' }}</dd>
               <dt>Country</dt><dd>{{ branch()!.country || '—' }}</dd>
               <dt>Pincode</dt><dd>{{ branch()!.postalCode || '—' }}</dd>
+              <dt>Latitude</dt><dd>{{ branch()!.latitude ?? '—' }}</dd>
+              <dt>Longitude</dt><dd>{{ branch()!.longitude ?? '—' }}</dd>
+            </dl>
+          </app-card>
+
+          <app-card title="Charges" subtitle="Percentages applied to shipment charges booked at this branch.">
+            <dl class="kv">
+              <dt>GST %</dt><dd>{{ branch()!.gstPercentage }}%</dd>
+              <dt>Company Commission on Other Charges %</dt><dd>{{ branch()!.commissionOnOtherCharges }}%</dd>
+              <dt>Commission on Basic Freight %</dt><dd>{{ branch()!.commissionOnBasicFreight }}%</dd>
+              <dt>Company Service Charge %</dt><dd>{{ branch()!.companyServiceChargePercentage }}%</dd>
+              <dt>DRS Charge per Qty</dt><dd>{{ branch()!.drsChargePerQty }}</dd>
             </dl>
           </app-card>
 
@@ -88,6 +100,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
               <span class="cap" [class.cap--on]="branch()!.allowManifest">Manifest</span>
               <span class="cap" [class.cap--on]="branch()!.allowCashCollection">Cash Collection</span>
               <span class="cap" [class.cap--on]="branch()!.allowWallet">Wallet</span>
+              <span class="cap" [class.cap--on]="branch()!.instantCommission">Instant Commission</span>
             </div>
             <dl class="kv kv--tight">
               <dt>Opening</dt><dd>{{ time(branch()!.openingTime) }}</dd>
@@ -100,7 +113,9 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
             <dl class="kv">
               <dt>Branch Code</dt><dd class="mono">{{ branch()!.branchCode }}</dd>
               <dt>Created</dt><dd>{{ branch()!.createdDate ? (branch()!.createdDate | date:'medium') : '—' }}</dd>
+              <dt>Created By</dt><dd class="mono">{{ branch()!.createdBy || '—' }}</dd>
               <dt>Last Updated</dt><dd>{{ branch()!.updatedDate ? (branch()!.updatedDate | date:'medium') : '—' }}</dd>
+              <dt>Updated By</dt><dd class="mono">{{ branch()!.updatedBy || '—' }}</dd>
               <dt>Version</dt><dd>{{ branch()!.version }}</dd>
               <dt>Remarks</dt><dd>{{ branch()!.remarks || '—' }}</dd>
             </dl>

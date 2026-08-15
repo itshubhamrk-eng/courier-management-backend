@@ -5,6 +5,17 @@ migration `V17`. Replaces the earlier, never-built design sketch in this file's
 predecessor — the old `modules/shipment.md` doc-only note (consignor/consignee,
 `deliveryType`, `V5__shipment.sql`) is gone; nothing in it was ever implemented.
 
+**Correction (0.18.1, 2026-08-12):** the *Shape* section below (`senderCustomerId`,
+`receiverCustomerId`, `senderAddressId`, `receiverAddressId`) and *Business rules* step 1-2
+(load the `Customer`/address by id) describe a design that was **never actually built** —
+what shipped, and is still true today, is plain-text `senderName`/`senderAddress`/
+`senderContact` (and the receiver equivalents) with no FK at all, exactly as
+`customer.md`'s independence rule says it must be. This doc was never corrected after the
+simpler shape shipped. As of 0.18.1, booking does call into the Customer module —
+`CustomerService.findOrCreateForBooking` — but only to write a reusable `Customer` row for
+future search suggestions, never to read/validate one at booking time and never producing
+an FK on `Shipment`. See `CHANGELOG.md` 0.18.1.
+
 ## Purpose
 
 The core transaction of the platform. A shipment is booked only after Customer,
@@ -35,7 +46,10 @@ ShipmentItem     — itemName, quantity, weight, lengthCm/widthCm/heightCm, decl
 ShipmentCharge   — the Pricing Engine's own charge breakup, persisted verbatim at
                    booking time (freight/fuelCharge/handlingCharge/odaCharge/
                    insuranceCharge/gstAmount/discountAmount/roundOff/netAmount), plus
-                   matchedRouteId/matchedRateId (no physical FK — cross-module, informational)
+                   matchedRouteId/matchedRateId (no physical FK — cross-module, informational),
+                   otherCharges (manual, booking-time — see 0.24.0 below for its own GST),
+                   appliedFreightFactor (0.24.0, `V35` — null outside the Freight Factor
+                   fallback)
 
 ShipmentStatusHistory  — append-only; previousStatus/status/remarks/changedBy/changedAt
 
@@ -44,12 +58,28 @@ ShipmentDocument — documentType (INVOICE|EWAY_BILL|PACKING_LIST|LR_COPY|POD),
                    the source of truth, same honesty note CompanyLogo carries), remarks
 ```
 
-Five tables total (`shipments`, `shipment_items`, `shipment_charges`,
-`shipment_status_history`, `shipment_documents`), all owned by this module from day
-one — no physical FK to any cross-module id (booking/delivery branch, sender/receiver
-customer/address, service/package/payment type); each is validated through that
-module's own application service, the same cross-feature treatment `rate_master
-.route_id` and `customer_addresses`' geography ids already get.
+Six tables total (`shipments`, `shipment_items`, `shipment_charges`,
+`shipment_status_history`, `shipment_documents`, `shipment_assets` — the last added
+0.23.0), all owned by this module from day one — no physical FK to any cross-module id
+(booking/delivery branch, sender/receiver customer/address, service/package/payment
+type); each is validated through that module's own application service, the same
+cross-feature treatment `rate_master.route_id` and `customer_addresses`' geography ids
+already get.
+
+### `shipment_assets` (V33, 0.23.0)
+
+One row per uploaded shipment image, immutable — a re-upload adds a new row rather than
+replacing one. `assetType` is `BOOKING` (a photo attached during booking, this
+feature) or `POD` (delivery photo/signature, moved here from two columns that used to
+live directly on `DeliveryAssignment` — see `shipment-movement.md`); `kind` is `PHOTO`
+or `SIGNATURE` (`BOOKING` is always `PHOTO`). A read (`ShipmentMapper`) takes the
+newest row per `(assetType, kind)` as current — the same "newest row wins" shape those
+two `DeliveryAssignment` columns used to embody directly, now generalised to one table
+instead of duplicated per capture point. `ShipmentServiceImpl.uploadShipmentImage`
+(booking side, `FileStoragePort` key prefix `shipment-photo`) writes a `BOOKING` row
+the instant the upload succeeds — deliberately not a two-step "upload then confirm"
+like POD's `uploadPodFile`/`deliver()` pair, because a booking photo isn't gated behind
+any state-machine transition the way POD is behind `deliver()`.
 
 ## State machine
 
@@ -90,6 +120,12 @@ At booking, in `ShipmentServiceImpl.create` (one `@Transactional`):
    steps all at once, since Pricing already runs route, serviceability, rate and
    weight-slab validation internally. Calling `RouteService`/`RateService` separately
    first would duplicate logic Pricing already owns.
+   **(0.20.6/0.20.7) If there's no route/rate for this lane at all**, the Pricing Engine
+   itself — not this module — falls back to the company's distance×weight Freight Factor
+   grid instead of raising a refusal; this module has no fallback logic of its own to
+   maintain. See `pricing-engine.md`'s "Freight Factor fallback" section and
+   `CHANGELOG.md` 0.20.7 for why it lives there (not here) and the two real bugs found
+   live along the way.
 7. For a payment mode with `collectAtBooking = true` (PAID): check the booking
    branch's wallet `availableBalance >= netAmount` *before* committing anything
    (422 `"Insufficient wallet balance: available X, required Y."` otherwise).
@@ -97,7 +133,10 @@ At booking, in `ShipmentServiceImpl.create` (one `@Transactional`):
    is the backstop), persist shipment + items + charges + `BOOKED` history entry,
    audit `SHIPMENT_BOOKED`.
 9. If PAID, publish `ShipmentEvent.PrepaidBookingConfirmed` — debited only
-   **after commit** (see Wallet debit seam below).
+   **after commit** (see Wallet debit seam below). Carries no commission any more
+   (0.24.3) — branch commission is credited later, when the shipment's Trip Challan
+   (manifest dispatch) is created, not at booking. See `shipment-movement.md`'s
+   "Dispatch" section and `branch-wallet.md`.
 
 Update (`PUT /shipments/{id}`): full replacement, only while still `BOOKED`
 (`isEditable()`), optimistic-lock via `version`, re-runs the same Customer/address/
@@ -157,6 +196,7 @@ undebited, logged for manual reconciliation. A real, accepted gap, not swept und
 | `GET` | `/api/v1/shipments/{id}/history` | Oldest first |
 | `GET` | `/api/v1/shipments/{id}/documents` | Newest first |
 | `GET` | `/api/v1/shipments/{id}/items` | The item grid alone |
+| `POST` | `/api/v1/shipments/{id}/image-upload` | multipart `file` (JPEG/PNG/WEBP/HEIC) → `{url}`, 0.23.0 — persists a `BOOKING` `ShipmentAsset` row immediately, no separate confirm step |
 
 RBAC is still role-based, matching every other module in the project ahead of the
 authorise-on-permissions capstone: `WRITERS = hasAnyRole(COMPANY_ADMIN,
@@ -177,11 +217,16 @@ server-side inside `POST /shipments`.
 
 **Pages**: `shipment-list` (server pagination/sort/search/filter/CSV export, gated row
 actions mirroring the backend's `isEditable`/`isCancellable`), `shipment-create` (the
-single-page booking screen below), `shipment-view` (detail + gated Edit/Cancel + links
-to the three sub-resource pages), `shipment-edit` (full replacement, 409 reload,
-booking branch shown read-only), `shipment-charges`, `shipment-history` (timeline),
-`shipment-documents` (list + an inline attach form — no dialog, since there's nothing
-to upload to yet).
+single-page booking screen below — since 0.23.0 also a "Shipment Image" picker card,
+placed after Parties per the user's own instruction; the file uploads only once
+`book()` returns a real shipment id, fire-and-forget so a failed upload never blocks
+the booking itself), `shipment-view` (detail + gated Edit/Cancel + links to the three
+sub-resource pages — the page `TrackBox`/`Track` resolve a search into, i.e. this
+app's actual "tracking page"; since 0.23.0 shows a "Shipment Photo" card when
+`shipmentImageUrl` is set, mirroring the existing "Proof of Delivery" block),
+`shipment-edit` (full replacement, 409 reload, booking branch shown read-only),
+`shipment-charges`, `shipment-history` (timeline), `shipment-documents` (list + an
+inline attach form — no dialog, since there's nothing to upload to yet).
 
 **`shipment-create` went through two layouts in one build.** It shipped first as a
 four-step wizard (Booking & Parties → Items & Package → Pricing → Confirm). The user
@@ -227,6 +272,26 @@ adding optional `bid`/`hid` claims to the access token (`auth.domain.User` gaine
 same `branch_id`/`hub_id` mapping `company.User` already had on the shared `users`
 table) and on the frontend by having both `hydrate()` and `applySession()` fall back to
 the JWT claim. Full detail in `MEMORY/modules/auth.md`.
+
+**GST on Other Charges + editable Freight Factor (0.24.0).** `otherCharges` now carries
+its own GST, at the **booking branch's** own `gstPercentage` (V25) — folded straight into
+the persisted `gstAmount`/`netAmount` in `ShipmentServiceImpl.copyCharge` (one combined
+figure, not a second column), via new `gstOnOtherCharges`/`netAmountWithOtherCharges`
+helpers that also keep the pre-booking wallet check and the audit log in step with what
+gets persisted. Separately, when a lane falls back to the Freight Factor grid (no
+route/rate — see `pricing-engine.md`'s "Freight Factor fallback"), `shipment-create.ts`
+now shows a "Freight Factor" input in the Booking Summary, pre-filled with the matched
+cell's own value and a "min X, increase only" hint; typing a higher number reprices
+through the same debounced `/pricing/calculate` call the rest of the page already uses —
+sent as `CreateShipmentRequest.freightFactorOverride`, the server (`PricingEngineImpl
+.priceByDistanceAndWeight`) is the only place "increase only" is actually enforced, a
+too-low value just surfaces its own 422 through the page's existing `pricingError` slot.
+Changing branch/service/weight clears any typed override, since a different lane may not
+even hit the fallback or may match a different cell. The live preview's own GST/Net
+Amount lines fold in Other Charges' GST too (client-side, mirroring `copyCharge`, off
+`BranchSummaryResponse.gstPercentage` — a new field on `GET /branches/directory`, the
+same "ride along for a preview" precedent `postalCode` already set there) so the sidebar
+total — and the printed consignment copy's total — match what booking actually persists.
 
 **111 frontend tests** (98 → 111): `shipment.service.spec.ts` (HTTP contract per
 endpoint, incl. the Pricing Engine call and the pincode-resolution lookup) and

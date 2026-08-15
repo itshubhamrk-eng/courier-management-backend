@@ -6,7 +6,9 @@ import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
 import com.courier.modules.manifest.domain.ManifestNumberGenerator;
 import com.courier.modules.manifest.domain.ManifestRepository;
+import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
 import com.courier.modules.manifest.domain.ManifestSpecifications;
+import com.courier.modules.manifest.domain.ManifestSummaryStats;
 import com.courier.modules.manifest.domain.Vehicle;
 import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
@@ -23,6 +25,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 import java.util.List;
 import java.util.Map;
@@ -107,9 +111,20 @@ public class ManifestServiceImpl implements ManifestService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public ManifestSummaryStats summaryStats(ManifestCriteria criteria) {
+        List<Manifest> matches = manifestRepository.findAll(ManifestSpecifications.matching(criteria));
+        List<UUID> ids = matches.stream().map(Manifest::getId).toList();
+        ManifestShipmentAggregate aggregate = ManifestShipmentAggregate.of(shipmentService.findByManifestIds(ids));
+        return new ManifestSummaryStats(matches.size(), aggregate.shipmentCount(),
+                aggregate.totalWeight(), aggregate.totalPackages());
+    }
+
+    @Override
     @Transactional
     @PreAuthorize(WRITERS)
-    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId) {
+    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(id, companyId);
 
@@ -133,7 +148,7 @@ public class ManifestServiceImpl implements ManifestService {
         // company role currently models "driver" cleanly enough to restrict further.
         userService.getById(driverUserId);
 
-        manifest.dispatch(vehicleId, driverUserId);
+        manifest.dispatch(vehicleId, driverUserId, departureTime);
         Manifest saved = manifestRepository.save(manifest);
 
         shipmentService.transitionToDispatched(
@@ -144,6 +159,26 @@ public class ManifestServiceImpl implements ManifestService {
                 saved.getManifestNumber(), saved.getId(), companyId, vehicleId, currentActor());
 
         return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public void removeShipment(UUID manifestId, UUID shipmentId) {
+        UUID companyId = requireCompany();
+        Manifest manifest = loadOrThrow(manifestId, companyId);
+
+        if (manifest.isDispatched()) {
+            throw new BusinessRuleException(
+                    "Manifest %s has already been dispatched.".formatted(manifest.getManifestNumber()));
+        }
+
+        shipmentService.detachFromManifest(shipmentId, manifestId);
+
+        log.info("Shipment {} removed from manifest {} ({}) in company {} by {}",
+                shipmentId, manifest.getManifestNumber(), manifestId, companyId, currentActor());
+        auditService.record(AuditAction.MANIFEST_SHIPMENT_REMOVED, ENTITY, manifestId,
+                Map.of("shipmentId", shipmentId.toString()));
     }
 
     private Manifest loadOrThrow(UUID id, UUID companyId) {

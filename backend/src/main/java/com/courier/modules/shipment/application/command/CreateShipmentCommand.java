@@ -40,6 +40,8 @@ public record CreateShipmentCommand(
         BigDecimal declaredValue,
         Integer numberOfPackages,
         String remarks,
+        BigDecimal otherCharges,
+        BigDecimal freightFactorOverride,
         List<ShipmentItemCommand> items,
         BigDecimal actualWeight,
         BigDecimal length,

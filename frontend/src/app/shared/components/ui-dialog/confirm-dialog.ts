@@ -32,9 +32,9 @@ export interface ConfirmData {
     </div>
   `,
   styles: [`
-    .cd { padding:24px; width:380px; max-width:90vw; text-align:center; }
-    .cd__icon { width:52px; height:52px; margin:0 auto 12px; display:grid; place-items:center;
-      border-radius:50%; background:var(--brand-50); color:var(--brand-600); }
+    .cd { padding:28px; width:380px; max-width:90vw; text-align:center; }
+    .cd__icon { width:56px; height:56px; margin:0 auto 14px; display:grid; place-items:center;
+      border-radius:20px; background:var(--brand-50); color:var(--brand-600); box-shadow:var(--shadow-clay-sm); }
     .cd__icon--danger { background:var(--danger-bg); color:var(--danger); }
     .cd__msg { color:var(--content-muted); margin:6px 0 20px; }
     .cd__actions { display:flex; gap:10px; justify-content:center; }

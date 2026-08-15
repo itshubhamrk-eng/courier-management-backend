@@ -50,8 +50,23 @@ public record UpdateBranchRequest(
 
         Boolean allowBooking, Boolean allowDelivery, Boolean allowPickup,
         Boolean allowManifest, Boolean allowCashCollection, Boolean allowWallet,
+        @Schema(description = "Credit branch commission to the wallet the instant a PREPAID "
+                + "booking debit settles.")
+        Boolean instantCommission,
 
         @Size(max = 500) String remarks,
+
+        @NotNull @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "GST percentage", example = "18") BigDecimal gstPercentage,
+        @NotNull @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Company's commission percentage on other charges", example = "20") BigDecimal commissionOnOtherCharges,
+        @NotNull @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Commission percentage on basic freight", example = "10") BigDecimal commissionOnBasicFreight,
+        @NotNull @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Company service charge percentage", example = "10") BigDecimal companyServiceChargePercentage,
+        @NotNull @DecimalMin("0.0")
+        @Schema(description = "DRS charge per item quantity, debited on delivery "
+                + "(drsCharge = drsChargePerQty * qty)", example = "2") BigDecimal drsChargePerQty,
 
         @NotNull @PositiveOrZero
         @Schema(description = "Version last read; a stale value returns 409") Long version

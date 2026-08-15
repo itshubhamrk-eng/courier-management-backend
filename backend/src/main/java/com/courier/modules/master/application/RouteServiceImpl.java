@@ -9,6 +9,7 @@ import com.courier.modules.master.infrastructure.MasterTable;
 import com.courier.modules.master.infrastructure.MasterUniquenessChecker;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.RouteRateUnavailableException;
 import com.courier.shared.security.Roles;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -107,14 +108,18 @@ public class RouteServiceImpl extends AbstractMasterDataService<Route> implement
         doDelete(id);
     }
 
+    // noRollbackFor: this joins the caller's own transaction (e.g. Shipment Booking's),
+    // and a nested @Transactional method throwing marks the *whole* shared transaction
+    // rollback-only even if the caller catches it — Shipment Booking's Freight Factor
+    // fallback depends on catching this one and continuing normally.
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = RouteRateUnavailableException.class)
     @PreAuthorize(READ)
     public Route findByBranches(UUID bookingBranchId, UUID deliveryBranchId) {
         UUID companyId = requireCompany();
         return routes.findByCompanyIdAndBookingBranchIdAndDeliveryBranchId(
                         companyId, bookingBranchId, deliveryBranchId)
-                .orElseThrow(() -> new BusinessRuleException(
+                .orElseThrow(() -> new RouteRateUnavailableException(
                         "No route runs from branch %s to branch %s."
                                 .formatted(bookingBranchId, deliveryBranchId)));
     }

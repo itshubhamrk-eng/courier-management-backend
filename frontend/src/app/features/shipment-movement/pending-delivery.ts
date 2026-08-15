@@ -38,7 +38,7 @@ import { ShipmentMovementService } from './shipment-movement.service';
         <app-card><p class="empty">No branch assigned — ask an admin.</p></app-card>
       } @else {
         <app-card>
-          <app-select [control]="deliveryUserControl" label="Delivery User (for Out For Delivery)" [options]="userOptions()" placeholder="Select delivery user" />
+          <app-select [control]="deliveryUserControl" label="Delivery User (for DRS)" [options]="userOptions()" placeholder="Select delivery user" />
         </app-card>
 
         @if (loading()) {
@@ -50,11 +50,12 @@ import { ShipmentMovementService } from './shipment-movement.service';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>Tracking No.</th><th>Receiver</th><th>Status</th><th class="tbl--right">Actions</th></tr>
+                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Status</th><th class="tbl--right">Actions</th></tr>
                 </thead>
                 <tbody>
-                  @for (s of pendingDelivery(); track s.id) {
+                  @for (s of pendingDelivery(); track s.id; let i = $index) {
                     <tr>
+                      <td>{{ i + 1 }}</td>
                       <td>{{ s.trackingNumber }}</td>
                       <td>{{ s.receiverName }}</td>
                       <td><app-shipment-status-badge [status]="s.status" /></td>
@@ -62,7 +63,7 @@ import { ShipmentMovementService } from './shipment-movement.service';
                         <div class="rowbtns">
                           <app-button variant="stroked" icon="directions_run"
                             [disabled]="s.status !== 'IN_SCAN' || !deliveryUserControl.value"
-                            [loading]="assigningId() === s.id" (pressed)="outForDeliveryOne(s)">Out For Delivery</app-button>
+                            [loading]="assigningId() === s.id" (pressed)="outForDeliveryOne(s)">DRS</app-button>
                           <app-button icon="task_alt"
                             [disabled]="s.status !== 'OUT_FOR_DELIVERY'"
                             (pressed)="goToDeliver(s)">Deliver</app-button>
@@ -138,7 +139,7 @@ export class PendingDelivery implements OnInit {
         this.assigningId.set(null);
         const failed = r.results.find((o) => !o.success);
         if (failed) this.notify.error(failed.message ?? 'Could not assign.');
-        else this.notify.success(`${s.trackingNumber} out for delivery.`);
+        else this.notify.success(`${s.trackingNumber} DRS.`);
         this.load();
       },
       error: (e: HttpErrorResponse) => { this.assigningId.set(null); this.notify.error(e.error?.message ?? 'Could not assign.'); }

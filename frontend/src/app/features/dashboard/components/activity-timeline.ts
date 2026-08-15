@@ -47,11 +47,11 @@ const ICONS: Record<ActivityKind, string> = {
   styles: [`
     .tl-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 0; color:var(--content-muted); text-align:center; }
     .tl-empty mat-icon { font-size:40px; width:40px; height:40px; opacity:.45; }
-    .tl { list-style:none; margin:0; padding:0; }
-    .tl__item { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--surface-border); }
-    .tl__item:last-child { border-bottom:0; }
-    .tl__dot { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; flex:none;
-      background:var(--brand-50); color:var(--brand-600); }
+    .tl { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+    .tl__item { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; border-radius:16px; }
+    .tl__item:hover { background:var(--surface-muted); }
+    .tl__dot { display:grid; place-items:center; width:36px; height:36px; border-radius:14px; flex:none;
+      background:var(--brand-50); color:var(--brand-600); box-shadow:var(--shadow-clay-inset); }
     .tl__dot mat-icon { font-size:18px; width:18px; height:18px; }
     .tl__item[data-kind="DELIVERY"] .tl__dot { background:var(--success-bg); color:var(--success); }
     .tl__item[data-kind="WALLET"] .tl__dot { background:var(--info-bg); color:var(--info); }

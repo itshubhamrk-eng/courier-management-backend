@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.application;
 
+import com.courier.modules.customer.application.CustomerService;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.master.application.PackageTypeService;
@@ -23,11 +24,14 @@ import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.ShipmentItemCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.application.event.ShipmentEvent;
+import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.shipment.domain.BranchShipmentSequenceRepository;
+import com.courier.modules.shipment.domain.CompanyDrsSequenceRepository;
 import com.courier.modules.shipment.domain.CompanyShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.DeliveryAssignmentRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignmentStatus;
+import com.courier.modules.shipment.domain.BranchCommissionSummary;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
@@ -37,10 +41,14 @@ import com.courier.modules.shipment.domain.ShipmentDocumentRepository;
 import com.courier.modules.shipment.domain.ShipmentDocumentType;
 import com.courier.modules.shipment.domain.ShipmentItem;
 import com.courier.modules.shipment.domain.ShipmentItemRepository;
+import com.courier.modules.shipment.domain.ShipmentAsset;
+import com.courier.modules.shipment.domain.ShipmentAssetRepository;
+import com.courier.modules.shipment.domain.ShipmentAssetType;
 import com.courier.modules.shipment.domain.ShipmentRepository;
 import com.courier.modules.shipment.domain.ShipmentSpecifications;
 import com.courier.modules.shipment.domain.ShipmentStatus;
 import com.courier.modules.shipment.domain.ShipmentStatusHistory;
+import com.courier.modules.shipment.domain.ShipmentSummaryStats;
 import com.courier.modules.shipment.domain.ShipmentStatusHistoryRepository;
 import com.courier.modules.shipment.domain.ShipmentType;
 import com.courier.shared.audit.application.AuditService;
@@ -48,6 +56,7 @@ import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.domain.TimeOrderedUuid;
 import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.Roles;
 import com.courier.shared.security.SecurityUtils;
@@ -56,12 +65,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -72,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -82,7 +94,13 @@ import java.util.stream.Collectors;
  * load, so a foreign shipment id 404s.
  *
  * <p>This class orchestrates; it does not re-decide. Sender/receiver are plain text typed
- * at booking time — no Customer module lookup. Every cross-module id it does still carry
+ * at booking time, stored on the shipment row exactly as typed — {@link Shipment} itself
+ * still carries no {@code customerId} FK. On {@link #create}, both are separately
+ * find-or-created as {@code Customer} master data by exact mobile match
+ * ({@link CustomerService#findOrCreateForBooking}), purely so the next booking's
+ * name/mobile search surfaces them — that write never affects the shipment's own fields
+ * and its failure is not expected (see the method for why it isn't wrapped defensively).
+ * Every cross-module id it does still carry
  * (branch, service/package/payment type, route, rate) is validated by the module that owns
  * it — most of that validation happens inside one call to
  * {@link PricingEngine#calculate}, which already runs route, serviceability, rate and
@@ -113,6 +131,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final BranchShipmentSequenceRepository branchShipmentSequenceRepository;
     private final CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
+    private final CompanyDrsSequenceRepository companyDrsSequenceRepository;
 
     private final ServiceTypeService serviceTypeService;
     private final PackageTypeService packageTypeService;
@@ -124,9 +143,12 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final WalletService walletService;
     private final com.courier.modules.company.application.UserService userService;
     private final com.courier.modules.company.application.BranchService branchService;
+    private final CustomerService customerService;
 
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final FileStoragePort fileStoragePort;
+    private final ShipmentAssetRepository shipmentAssetRepository;
 
     // ------------------------------------------------------------------- create
 
@@ -143,20 +165,25 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         LocalDate bookingDate = command.bookingDate() == null ? LocalDate.now() : command.bookingDate();
 
+        com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
+
         PricingResult priced = priceIt(command.bookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
-                command.declaredValue(), bookingDate);
+                command.declaredValue(), bookingDate, command.freightFactorOverride());
 
         PaymentMode paymentMode = paymentModeService.getById(command.paymentModeId());
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
+        BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
+        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, bookingBranch);
+
         if (paymentMode.isCollectAtBooking()) {
-            requireSufficientBalance(command.bookingBranchId(), priced.netAmount());
+            requireSufficientBalance(command.bookingBranchId(), netAmount);
         }
 
         Shipment shipment = Shipment.builder()
-                .shipmentNumber(nextShipmentNumber(command.bookingBranchId()))
+                .shipmentNumber(nextShipmentNumber(command.bookingBranchId(), bookingBranch.getBranchCode()))
                 .trackingNumber(nextTrackingNumber(companyId))
                 .bookingDate(bookingDate)
                 .bookingBranchId(command.bookingBranchId())
@@ -185,8 +212,14 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
 
+        // Reuse-or-create master data for next time's search suggestion; not a shipment
+        // field, so a bad name/mobile here fails the whole booking same as any other
+        // write in this transaction — no separate try/catch carve-out for it.
+        customerService.findOrCreateForBooking(command.senderName(), command.senderContact());
+        customerService.findOrCreateForBooking(command.receiverName(), command.receiverContact());
+
         persistItems(saved, companyId, items);
-        persistCharges(saved, companyId, priced);
+        persistCharges(saved, companyId, priced, otherCharges, bookingBranch);
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
 
         log.info("Shipment {} ({}) booked in company {} by {}", saved.getShipmentNumber(),
@@ -194,12 +227,14 @@ public class ShipmentServiceImpl implements ShipmentService {
         auditService.record(AuditAction.SHIPMENT_BOOKED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
                         "trackingNumber", saved.getTrackingNumber(),
-                        "netAmount", priced.netAmount().toPlainString()));
+                        "netAmount", netAmount.toPlainString()));
 
         if (paymentMode.isCollectAtBooking()) {
+            // Commission itself is credited later, on Trip Challan creation — see
+            // ShipmentEvent.DispatchCommissionEarned, published from transitionToDispatched.
             eventPublisher.publishEvent(new ShipmentEvent.PrepaidBookingConfirmed(
                     saved.getId(), companyId, saved.getBookingBranchId(), saved.getShipmentNumber(),
-                    priced.netAmount(), Instant.now()));
+                    netAmount, Instant.now()));
         }
 
         return saved;
@@ -230,7 +265,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         PricingResult priced = priceIt(shipment.getBookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
-                command.declaredValue(), bookingDate);
+                command.declaredValue(), bookingDate, command.freightFactorOverride());
 
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
@@ -258,15 +293,19 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
 
+        BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
+        com.courier.modules.company.domain.Branch bookingBranch =
+                branchService.getById(shipment.getBookingBranchId());
+
         itemRepository.deleteAllByShipmentIdAndCompanyId(saved.getId(), companyId);
         persistItems(saved, companyId, items);
-        replaceCharges(saved, companyId, priced);
+        replaceCharges(saved, companyId, priced, otherCharges, bookingBranch);
 
         log.info("Shipment {} ({}) updated in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
-                        "netAmount", priced.netAmount().toPlainString()));
+                        "netAmount", netAmountWithOtherCharges(priced, otherCharges, bookingBranch).toPlainString()));
 
         return saved;
     }
@@ -292,8 +331,85 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
+    public DeliveryAssignment getDeliveryAssignment(UUID shipmentId) {
+        return deliveryAssignmentRepository
+                .findByShipmentIdWithinCompany(shipmentId, requireCompany())
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
     public Page<Shipment> search(ShipmentCriteria criteria, Pageable pageable) {
-        return shipmentRepository.findAll(ShipmentSpecifications.matching(criteria), pageable);
+        return shipmentRepository.findAll(buildSpecification(criteria), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public ShipmentSummaryStats summaryStats(ShipmentCriteria criteria) {
+        // Report summary row: aggregates over every matching shipment, not just the current
+        // page — unpaged on purpose. This module's data volumes are a company's own shipment
+        // history, not a platform-wide table, so an in-memory reduce (matching the existing
+        // netAmountsFor/deliveredAtFor "batch by id" style) is simpler than hand-written JPQL
+        // aggregate queries for what stays a modest row count.
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
+        List<UUID> ids = matches.stream().map(Shipment::getId).toList();
+        BigDecimal totalAmount = netAmountsFor(ids).values().stream()
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalWeight = matches.stream().map(Shipment::getChargeableWeight)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        Map<ShipmentStatus, Long> statusCounts = matches.stream()
+                .collect(Collectors.groupingBy(Shipment::getStatus, Collectors.counting()));
+        return new ShipmentSummaryStats(matches.size(), totalWeight, totalAmount, statusCounts);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<BranchCommissionSummary> commissionSummary(ShipmentCriteria criteria) {
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
+        Map<UUID, ShipmentCharge> charges = chargesFor(matches.stream().map(Shipment::getId).toList());
+        return matches.stream()
+                .filter(s -> charges.containsKey(s.getId()))
+                .collect(Collectors.groupingBy(Shipment::getBookingBranchId))
+                .entrySet().stream()
+                .map(e -> {
+                    List<ShipmentCharge> branchCharges = e.getValue().stream()
+                            .map(s -> charges.get(s.getId())).toList();
+                    return new BranchCommissionSummary(
+                            e.getKey(),
+                            branchCharges.size(),
+                            sum(branchCharges, ShipmentCharge::getNetAmount),
+                            sum(branchCharges, ShipmentCharge::getCommissionOnBasicFreight),
+                            sum(branchCharges, ShipmentCharge::getBranchCommissionOnOtherAmount),
+                            sum(branchCharges, ShipmentCharge::getCompanyCommissionOnBasicFreight),
+                            sum(branchCharges, ShipmentCharge::getTotalCommission));
+                })
+                .sorted(Comparator.comparing(BranchCommissionSummary::totalCommission).reversed())
+                .toList();
+    }
+
+    private static BigDecimal sum(List<ShipmentCharge> charges, java.util.function.Function<ShipmentCharge, BigDecimal> field) {
+        return charges.stream().map(field).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Shared by {@link #search} and {@link #summaryStats} — see the class-level note on
+     *  {@code ShipmentCriteria.deliveredDateFrom}/{@code deliveredDateTo} for why this can't
+     *  live entirely inside {@link ShipmentSpecifications}. */
+    private Specification<Shipment> buildSpecification(ShipmentCriteria criteria) {
+        ShipmentCriteria safe = criteria == null ? ShipmentCriteria.none() : criteria;
+        var spec = ShipmentSpecifications.matching(safe);
+        if (safe.deliveredDateFrom() != null || safe.deliveredDateTo() != null) {
+            Instant from = safe.deliveredDateFrom() != null
+                    ? safe.deliveredDateFrom().atStartOfDay(ZoneOffset.UTC).toInstant() : Instant.EPOCH;
+            Instant to = safe.deliveredDateTo() != null
+                    ? safe.deliveredDateTo().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant() : Instant.now();
+            List<UUID> deliveredIds = deliveryAssignmentRepository.findShipmentIdsDeliveredBetween(from, to);
+            spec = spec.and((root, query, cb) -> deliveredIds.isEmpty()
+                    ? cb.disjunction() : root.get("id").in(deliveredIds));
+        }
+        return spec;
     }
 
     @Override
@@ -303,6 +419,33 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (shipmentIds.isEmpty()) return Map.of();
         return chargeRepository.findByShipmentIdIn(shipmentIds).stream()
                 .collect(Collectors.toMap(ShipmentCharge::getShipmentId, ShipmentCharge::getNetAmount));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, ShipmentCharge> chargesFor(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        return chargeRepository.findByShipmentIdIn(shipmentIds).stream()
+                .collect(Collectors.toMap(ShipmentCharge::getShipmentId, c -> c));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, Instant> deliveredAtFor(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        return deliveryAssignmentRepository.findByShipmentIdIn(shipmentIds).stream()
+                .filter(a -> a.getDeliveredAt() != null)
+                .collect(Collectors.toMap(DeliveryAssignment::getShipmentId, DeliveryAssignment::getDeliveredAt));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<Shipment> findByManifestIds(Collection<UUID> manifestIds) {
+        if (manifestIds.isEmpty()) return List.of();
+        return shipmentRepository.findAllByCompanyIdAndManifestIdIn(requireCompany(), manifestIds);
     }
 
     @Override
@@ -342,6 +485,15 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
         return documentRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<ShipmentAsset> getAssets(UUID shipmentId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        return shipmentAssetRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
     }
 
     // ------------------------------------------------------------------- cancel
@@ -443,11 +595,32 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public Shipment detachFromManifest(UUID shipmentId, UUID manifestId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+
+        if (shipment.getStatus() != ShipmentStatus.MANIFEST_CREATED
+                || !Objects.equals(shipment.getManifestId(), manifestId)) {
+            throw new BusinessRuleException("Shipment %s is not on this manifest.".formatted(
+                    shipment.getShipmentNumber()));
+        }
+
+        ShipmentStatus previous = shipment.getStatus();
+        shipment.setManifestId(null);
+        shipment.transitionTo(ShipmentStatus.BOOKED);
+        Shipment saved = shipmentRepository.save(shipment);
+        appendHistory(saved, companyId, previous, ShipmentStatus.BOOKED, "Removed from manifest");
+        return saved;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public List<Shipment> findManifestCreatedShipments(UUID manifestId) {
         ShipmentCriteria criteria = new ShipmentCriteria(
-                java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, manifestId, null, null, null);
+                java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, manifestId, null, null, null, null, null);
         return shipmentRepository.findAll(ShipmentSpecifications.matching(criteria));
     }
 
@@ -458,6 +631,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                                                  UUID bookingBranchId) {
         UUID companyId = requireCompany();
         List<Shipment> shipments = shipmentRepository.findAllByCompanyIdAndIdIn(companyId, shipmentIds);
+        Map<UUID, ShipmentCharge> charges = chargesFor(shipmentIds);
         List<Shipment> saved = new ArrayList<>(shipments.size());
         for (Shipment shipment : shipments) {
             ShipmentStatus previous = shipment.getStatus();
@@ -466,10 +640,40 @@ public class ShipmentServiceImpl implements ShipmentService {
             appendHistory(s, companyId, previous, ShipmentStatus.DISPATCHED, "Manifest dispatched",
                     bookingBranchId, manifestId, vehicleId);
             saved.add(s);
+            publishDispatchCommissionIfEarned(s, companyId, charges.get(s.getId()));
         }
         auditService.record(AuditAction.MANIFEST_DISPATCHED, "Manifest", manifestId,
                 Map.of("shipmentCount", saved.size(), "vehicleId", vehicleId.toString()));
         return saved;
+    }
+
+    // Branch commission is credited here, on Trip Challan (manifest dispatch) creation —
+    // not at booking time. Same condition booking used to gate the credit on: the payment
+    // mode collects at booking, and the booking branch itself has instantCommission on.
+    private void publishDispatchCommissionIfEarned(Shipment shipment, UUID companyId, ShipmentCharge charge) {
+        if (charge == null) {
+            return;
+        }
+        PaymentMode paymentMode = paymentModeService.getById(shipment.getPaymentModeId());
+        if (!paymentMode.isCollectAtBooking()) {
+            return;
+        }
+        com.courier.modules.company.domain.Branch bookingBranch =
+                branchService.getById(shipment.getBookingBranchId());
+        if (!bookingBranch.isInstantCommission()) {
+            return;
+        }
+        // Only the branch's own two lines — totalCommission (V28) also folds in the
+        // company's own commissionOnBasicFreight, which is company revenue and must
+        // never land in the branch's wallet.
+        BigDecimal branchCommission = charge.getCommissionOnBasicFreight()
+                .add(charge.getBranchCommissionOnOtherAmount());
+        if (branchCommission.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        eventPublisher.publishEvent(new ShipmentEvent.DispatchCommissionEarned(
+                shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
+                branchCommission, Instant.now()));
     }
 
     @Override
@@ -516,14 +720,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID companyId = requireCompany();
         userService.getById(deliveryUserId); // 404s if foreign/missing — no role restriction, see module doc
 
+        String drsNumber = nextDrsNumber(companyId);
         List<MovementOutcome> outcomes = new ArrayList<>();
         for (UUID shipmentId : shipmentIds) {
-            outcomes.add(assignOneOutForDelivery(companyId, shipmentId, deliveryUserId));
+            outcomes.add(assignOneOutForDelivery(companyId, shipmentId, deliveryUserId, drsNumber));
         }
-        return new BulkMovementResult(outcomes);
+        return new BulkMovementResult(outcomes, drsNumber);
     }
 
-    private MovementOutcome assignOneOutForDelivery(UUID companyId, UUID shipmentId, UUID deliveryUserId) {
+    private MovementOutcome assignOneOutForDelivery(UUID companyId, UUID shipmentId, UUID deliveryUserId,
+                                                      String drsNumber) {
         Shipment shipment = shipmentRepository.findByIdWithinCompany(shipmentId, companyId).orElse(null);
         if (shipment == null) {
             return new MovementOutcome(shipmentId.toString(), false, "No such shipment.");
@@ -548,12 +754,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         } else {
             assignment.reassign(deliveryUserId, shipment.getDeliveryBranchId());
         }
+        assignment.setDrsNumber(drsNumber);
         deliveryAssignmentRepository.save(assignment);
 
         ShipmentStatus previous = shipment.getStatus();
         shipment.transitionTo(ShipmentStatus.OUT_FOR_DELIVERY);
         Shipment saved = shipmentRepository.save(shipment);
-        appendHistory(saved, companyId, previous, ShipmentStatus.OUT_FOR_DELIVERY, "Out for delivery",
+        appendHistory(saved, companyId, previous, ShipmentStatus.OUT_FOR_DELIVERY, "DRS",
                 shipment.getDeliveryBranchId(), saved.getManifestId(), null);
         auditService.record(AuditAction.SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "deliveryUserId", deliveryUserId.toString()));
@@ -575,9 +782,10 @@ public class ShipmentServiceImpl implements ShipmentService {
         DeliveryAssignment assignment = deliveryAssignmentRepository
                 .findByShipmentIdWithinCompany(shipmentId, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("DeliveryAssignment", shipmentId));
-        assignment.markDelivered(command.receiverName(), command.remarks(), command.otp(),
-                command.signatureUrl(), command.photoUrl());
+        assignment.markDelivered(command.receiverName(), command.remarks(), command.otp());
         deliveryAssignmentRepository.save(assignment);
+        recordAsset(shipmentId, companyId, ShipmentAssetType.POD, "SIGNATURE", command.signatureUrl());
+        recordAsset(shipmentId, companyId, ShipmentAssetType.POD, "PHOTO", command.photoUrl());
 
         ShipmentStatus previous = shipment.getStatus();
         shipment.transitionTo(ShipmentStatus.DELIVERED);
@@ -588,17 +796,124 @@ public class ShipmentServiceImpl implements ShipmentService {
                 shipment.getDeliveryBranchId(), saved.getManifestId(), null);
         auditService.record(AuditAction.SHIPMENT_DELIVERED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "receiverName", command.receiverName()));
+
+        PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
+        if (paymentMode.isCollectAtDelivery()) {
+            ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
+            eventPublisher.publishEvent(new ShipmentEvent.CodCollectedAtDelivery(
+                    saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
+                    charge.getNetAmount(), Instant.now()));
+        }
+
+        int totalQty = itemRepository.findAllByShipmentIdWithinCompany(saved.getId(), companyId).stream()
+                .mapToInt(ShipmentItem::getQuantity).sum();
+        BigDecimal drsChargePerQty = branchService.getById(saved.getDeliveryBranchId()).getDrsChargePerQty();
+        BigDecimal drsCharge = drsChargePerQty.multiply(BigDecimal.valueOf(totalQty));
+        if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
+            eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(
+                    saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
+                    drsCharge, Instant.now()));
+        }
+
         return saved;
     }
 
-    // MANIFEST_CREATED doubles as "Out Scan Created" (V20, on direct request) — one
+    /** Persists one asset row if {@code url} is actually present — {@code deliver()} calls
+     *  this once for signature and once for photo, either of which is commonly blank. */
+    private void recordAsset(UUID shipmentId, UUID companyId, ShipmentAssetType type, String kind, String url) {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        shipmentAssetRepository.save(ShipmentAsset.builder()
+                .shipmentId(shipmentId)
+                .assetType(type)
+                .kind(kind)
+                .assetUrl(url.trim())
+                .build());
+    }
+
+    private static final Set<String> BOOKING_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "heic");
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public String uploadShipmentImage(UUID shipmentId, UploadShipmentImageCommand command) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+
+        String extension = extensionOf(command.filename());
+        if (!BOOKING_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new BusinessRuleException(ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                    "Only JPEG/PNG/WEBP/HEIC images are accepted for a shipment photo.");
+        }
+
+        String key = "%s/%s/photo-%s.%s".formatted(companyId, shipmentId, UUID.randomUUID(), extension);
+        FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
+                command.content(), key, command.contentType(), "shipment-photo"));
+
+        recordAsset(shipmentId, companyId, ShipmentAssetType.BOOKING, "PHOTO", stored.url());
+
+        auditService.record(AuditAction.SHIPMENT_IMAGE_UPLOADED, ENTITY, shipment.getId(),
+                Map.of("shipmentNumber", shipment.getShipmentNumber()));
+
+        return stored.url();
+    }
+
+    private static final Set<String> POD_FILE_KINDS = Set.of("PHOTO", "SIGNATURE");
+
+    /** Original-filename extension -> accepted, deliberately not the declared
+     *  {@code Content-Type} header: browsers set that inconsistently for some video/HEIC
+     *  variants, while the extension the user actually picked is what ends up in the S3
+     *  key anyway. */
+    private static final Set<String> POD_FILE_EXTENSIONS = Set.of(
+            "jpg", "jpeg", "png", "webp", "heic", "mp4", "mov", "pdf");
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public String uploadPodFile(UUID shipmentId, UploadPodFileCommand command) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+
+        String kind = command.kind() == null ? "" : command.kind().trim().toUpperCase();
+        if (!POD_FILE_KINDS.contains(kind)) {
+            throw new BusinessRuleException("File kind must be one of " + POD_FILE_KINDS + ".");
+        }
+        String extension = extensionOf(command.filename());
+        if (!POD_FILE_EXTENSIONS.contains(extension)) {
+            throw new BusinessRuleException(ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                    "Only JPEG/PNG/WEBP/HEIC images, MP4/MOV video, or PDF are accepted for "
+                            + "proof of delivery.");
+        }
+
+        String key = "%s/%s/%s-%s.%s".formatted(companyId, shipmentId, kind.toLowerCase(),
+                UUID.randomUUID(), extension);
+        FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
+                command.content(), key, command.contentType(), "pod"));
+
+        auditService.record(AuditAction.SHIPMENT_POD_UPLOADED, ENTITY, shipment.getId(),
+                Map.of("shipmentNumber", shipment.getShipmentNumber(), "kind", kind));
+
+        return stored.url();
+    }
+
+    private static String extensionOf(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase();
+    }
+
+    // MANIFEST_CREATED doubles as "Loading Sheet Created" (V20, on direct request) — one
     // milestone, not two; see ShipmentStatus's own class doc.
     private static final Map<ShipmentStatus, String> TIMELINE_LABELS = Map.of(
             ShipmentStatus.BOOKED, "Booked",
-            ShipmentStatus.MANIFEST_CREATED, "Out Scan Created",
+            ShipmentStatus.MANIFEST_CREATED, "Loading Sheet Created",
             ShipmentStatus.DISPATCHED, "Dispatched",
             ShipmentStatus.IN_SCAN, "Received",
-            ShipmentStatus.OUT_FOR_DELIVERY, "Out For Delivery",
+            ShipmentStatus.OUT_FOR_DELIVERY, "DRS",
             ShipmentStatus.DELIVERED, "Delivered");
 
     private static final List<ShipmentStatus> TIMELINE_ORDER = List.of(
@@ -628,6 +943,81 @@ public class ShipmentServiceImpl implements ShipmentService {
         return steps;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<DrsSummary> listDrs(LocalDate from, LocalDate to, UUID deliveryBranchId) {
+        UUID companyId = requireCompany();
+        LocalDate rangeFrom = from != null ? from : LocalDate.now().minusDays(30);
+        LocalDate rangeTo = to != null ? to : LocalDate.now();
+        List<DeliveryAssignment> rows = deliveryAssignmentRepository.findByCompanyAndAssignedAtBetween(
+                companyId, rangeFrom.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                rangeTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
+        if (deliveryBranchId != null) {
+            rows = rows.stream().filter(d -> d.getDeliveryBranchId().equals(deliveryBranchId)).toList();
+        }
+
+        return rows.stream()
+                .collect(Collectors.groupingBy(d -> new DrsGroupKey(d.getDeliveryUserId(),
+                        d.getDeliveryBranchId(), d.getAssignedAt().atZone(ZoneOffset.UTC).toLocalDate())))
+                .entrySet().stream()
+                .map(e -> {
+                    long delivered = e.getValue().stream()
+                            .filter(d -> d.getStatus() == DeliveryAssignmentStatus.DELIVERED).count();
+                    return new DrsSummary(e.getKey().deliveryUserId(), e.getKey().deliveryBranchId(),
+                            e.getKey().runDate(), representativeDrsNumber(e.getValue()), e.getValue().size(),
+                            (int) delivered, e.getValue().size() - (int) delivered);
+                })
+                .sorted(Comparator.comparing(DrsSummary::runDate).reversed())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public DrsDetail getDrsDetail(UUID deliveryUserId, UUID deliveryBranchId, LocalDate runDate) {
+        UUID companyId = requireCompany();
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByCompanyAndAssignedAtBetween(
+                companyId, runDate.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                runDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())
+                .stream()
+                .filter(d -> d.getDeliveryUserId().equals(deliveryUserId)
+                        && d.getDeliveryBranchId().equals(deliveryBranchId))
+                .toList();
+        if (assignments.isEmpty()) {
+            throw new ResourceNotFoundException("DRS", deliveryUserId);
+        }
+
+        List<UUID> shipmentIds = assignments.stream().map(DeliveryAssignment::getShipmentId).toList();
+        Map<UUID, Shipment> shipments = shipmentRepository.findAllByCompanyIdAndIdIn(companyId, shipmentIds)
+                .stream().collect(Collectors.toMap(Shipment::getId, s -> s));
+        Map<UUID, BigDecimal> netAmounts = chargeRepository.findByShipmentIdIn(shipmentIds).stream()
+                .collect(Collectors.toMap(ShipmentCharge::getShipmentId, ShipmentCharge::getNetAmount));
+
+        List<DrsShipmentRow> rows = assignments.stream()
+                .map(a -> {
+                    Shipment s = shipments.get(a.getShipmentId());
+                    if (s == null) return null;
+                    return new DrsShipmentRow(s.getId(), s.getShipmentNumber(), s.getTrackingNumber(),
+                            s.getReceiverName(), s.getReceiverContact(), s.getPaymentModeId(),
+                            netAmounts.get(s.getId()), s.getStatus(), a.getDeliveredAt());
+                })
+                .filter(Objects::nonNull)
+                .toList();
+        return new DrsDetail(deliveryUserId, deliveryBranchId, runDate, representativeDrsNumber(assignments), rows);
+    }
+
+    /** {@code assignments} is already ordered newest-first (the repository query's own
+     *  {@code order by assignedAt desc}) — the most recently generated number in the group
+     *  represents the run; null once no assignment in it carries one (pre-V31 rows only). */
+    private String representativeDrsNumber(List<DeliveryAssignment> assignments) {
+        return assignments.stream().map(DeliveryAssignment::getDrsNumber)
+                .filter(Objects::nonNull).findFirst().orElse(null);
+    }
+
+    private record DrsGroupKey(UUID deliveryUserId, UUID deliveryBranchId, LocalDate runDate) {
+    }
+
     // ------------------------------------------------------------- cross-module
 
     /**
@@ -643,15 +1033,21 @@ public class ShipmentServiceImpl implements ShipmentService {
      * .calculate(chargeableWeight, 0) == chargeableWeight}, so the Pricing Engine's own
      * internal volumetric/chargeable recomputation is a no-op and the weight it prices
      * against is exactly the one this module already derived from the item grid.
+     *
+     * <p>Falling back to the company's distance+weight Freight Factor grid when no
+     * route/rate is available for this lane is the Pricing Engine's own job now (any
+     * caller of {@link PricingEngine#calculate} gets it, not just this one) — see {@code
+     * PricingEngineImpl.priceByDistanceAndWeight}.
      */
     private PricingResult priceIt(UUID bookingBranchId, UUID deliveryBranchId,
                                   String pickupPincode, String deliveryPincode,
                                   UUID serviceTypeId, UUID packageTypeId, UUID paymentModeId,
                                   BigDecimal chargeableWeight, BigDecimal declaredValue,
-                                  LocalDate bookingDate) {
+                                  LocalDate bookingDate, BigDecimal freightFactorOverride) {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 pickupPincode, deliveryPincode, serviceTypeId, packageTypeId, paymentModeId,
-                chargeableWeight, null, null, null, declaredValue, bookingDate, null, null);
+                chargeableWeight, null, null, null, declaredValue, bookingDate, null, null,
+                freightFactorOverride);
         return pricingEngine.calculate(command);
     }
 
@@ -755,14 +1151,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
     }
 
-    private void persistCharges(Shipment shipment, UUID companyId, PricingResult priced) {
-        ShipmentCharge charge = toCharge(priced);
+    private ShipmentCharge persistCharges(Shipment shipment, UUID companyId, PricingResult priced,
+                                          BigDecimal otherCharges, com.courier.modules.company.domain.Branch bookingBranch) {
+        ShipmentCharge charge = toCharge(priced, otherCharges, bookingBranch);
         charge.setCompanyId(companyId);
         charge.setShipmentId(shipment.getId());
-        chargeRepository.save(charge);
+        return chargeRepository.save(charge);
     }
 
-    private void replaceCharges(Shipment shipment, UUID companyId, PricingResult priced) {
+    private void replaceCharges(Shipment shipment, UUID companyId, PricingResult priced, BigDecimal otherCharges,
+                                com.courier.modules.company.domain.Branch bookingBranch) {
         ShipmentCharge existing = chargeRepository
                 .findByShipmentIdWithinCompany(shipment.getId(), companyId)
                 .orElseGet(() -> {
@@ -771,28 +1169,99 @@ public class ShipmentServiceImpl implements ShipmentService {
                     fresh.setShipmentId(shipment.getId());
                     return fresh;
                 });
-        copyCharge(priced, existing);
+        copyCharge(priced, otherCharges, bookingBranch, existing);
         chargeRepository.save(existing);
     }
 
-    private ShipmentCharge toCharge(PricingResult priced) {
+    private ShipmentCharge toCharge(PricingResult priced, BigDecimal otherCharges,
+                                    com.courier.modules.company.domain.Branch bookingBranch) {
         ShipmentCharge charge = ShipmentCharge.builder().build();
-        copyCharge(priced, charge);
+        copyCharge(priced, otherCharges, bookingBranch, charge);
         return charge;
     }
 
-    private void copyCharge(PricingResult priced, ShipmentCharge charge) {
-        charge.setFreight(priced.freight());
+    /** Scale/rounding for money derived from a percentage — matches the column's own
+     *  {@code DECIMAL(19,4)}. */
+    private static final int MONEY_SCALE = 4;
+
+    /**
+     * {@code otherCharges} is manual, typed at booking time — not part of the Pricing
+     * Engine's own rate-driven breakup — so it is added on top of {@code priced.netAmount()}
+     * rather than folded into the engine's calculation. GST on it is likewise computed here,
+     * not by the Pricing Engine (which never sees {@code otherCharges} at all): at the
+     * <b>booking</b> branch's own {@code gstPercentage} (V25, the same source the commission
+     * percentages below already use), folded straight into the persisted {@code gstAmount} —
+     * one combined GST figure, not a second line, so every report/receipt that already reads
+     * {@code gstAmount} picks it up for free.
+     *
+     * <p>The commission breakdown (V28) is computed here from the <b>booking</b> branch's
+     * own percentages (V25) — "use this percentage from login branch config", each branch
+     * carries its own rate:
+     * <ul>
+     *   <li>{@code commissionOnBasicFreight = freight * commissionOnBasicFreight%}</li>
+     *   <li>{@code branchCommissionOnOtherAmount = otherCharges * (100 -
+     *       commissionOnOtherCharges)%} — the branch's remainder after the company's cut</li>
+     *   <li>{@code companyCommissionOnBasicFreight = freight *
+     *       companyServiceChargePercentage%}</li>
+     *   <li>{@code totalCommission = commissionOnBasicFreight +
+     *       branchCommissionOnOtherAmount + companyCommissionOnBasicFreight} — every
+     *       commission line on this shipment, summed and stored rather than re-derived on
+     *       every report</li>
+     * </ul>
+     * The remaining freight share is company/head-office revenue, not stored separately.
+     */
+    private void copyCharge(PricingResult priced, BigDecimal otherCharges,
+                            com.courier.modules.company.domain.Branch bookingBranch, ShipmentCharge charge) {
+        BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
+        BigDecimal freight = priced.freight();
+        BigDecimal gstOnOtherCharges = gstOnOtherCharges(safeOtherCharges, bookingBranch);
+
+        BigDecimal branchShareOfOtherCharges = BigDecimal.valueOf(100)
+                .subtract(bookingBranch.getCommissionOnOtherCharges());
+        BigDecimal commissionOnBasicFreight = percentOf(freight, bookingBranch.getCommissionOnBasicFreight());
+        BigDecimal branchCommissionOnOtherAmount = percentOf(safeOtherCharges, branchShareOfOtherCharges);
+        BigDecimal companyCommissionOnBasicFreight =
+                percentOf(freight, bookingBranch.getCompanyServiceChargePercentage());
+        BigDecimal totalCommission = commissionOnBasicFreight
+                .add(branchCommissionOnOtherAmount)
+                .add(companyCommissionOnBasicFreight);
+
+        charge.setFreight(freight);
         charge.setFuelCharge(priced.fuelCharge());
         charge.setHandlingCharge(priced.handlingCharge());
         charge.setOdaCharge(priced.odaCharge());
         charge.setInsuranceCharge(priced.insuranceCharge());
-        charge.setGstAmount(priced.gstAmount());
+        charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges));
         charge.setDiscountAmount(priced.discountAmount());
         charge.setRoundOff(priced.roundOff());
-        charge.setNetAmount(priced.netAmount());
+        charge.setOtherCharges(safeOtherCharges);
+        charge.setCommissionOnBasicFreight(commissionOnBasicFreight);
+        charge.setBranchCommissionOnOtherAmount(branchCommissionOnOtherAmount);
+        charge.setCompanyCommissionOnBasicFreight(companyCommissionOnBasicFreight);
+        charge.setTotalCommission(totalCommission);
+        charge.setNetAmount(priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges));
         charge.setMatchedRouteId(priced.matchedRoute() == null ? null : priced.matchedRoute().getId());
         charge.setMatchedRateId(priced.matchedRate() == null ? null : priced.matchedRate().getId());
+        charge.setAppliedFreightFactor(priced.appliedFreightFactor());
+    }
+
+    private static BigDecimal percentOf(BigDecimal amount, BigDecimal percentage) {
+        return amount.multiply(percentage)
+                .divide(BigDecimal.valueOf(100), MONEY_SCALE, java.math.RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal gstOnOtherCharges(BigDecimal otherCharges,
+                                                com.courier.modules.company.domain.Branch bookingBranch) {
+        return percentOf(otherCharges, bookingBranch.getGstPercentage());
+    }
+
+    /** Same total {@link #copyCharge} persists as {@code netAmount} — used ahead of that
+     *  call too, for the pre-booking wallet-sufficiency check and audit logging, so both
+     *  never drift apart. */
+    private static BigDecimal netAmountWithOtherCharges(PricingResult priced, BigDecimal otherCharges,
+                                                         com.courier.modules.company.domain.Branch bookingBranch) {
+        BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
+        return priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges(safeOtherCharges, bookingBranch));
     }
 
     private void appendHistory(Shipment shipment, UUID companyId, ShipmentStatus previous,
@@ -866,11 +1335,10 @@ public class ShipmentServiceImpl implements ShipmentService {
      * lock, so no existence-check-and-retry is needed, the same as {@link
      * #nextTrackingNumber}.
      */
-    private String nextShipmentNumber(UUID bookingBranchId) {
+    private String nextShipmentNumber(UUID bookingBranchId, String branchCode) {
         byte[] branchIdBytes = TimeOrderedUuid.toBytes(bookingBranchId);
         branchShipmentSequenceRepository.advance(branchIdBytes);
         long serial = branchShipmentSequenceRepository.nextValue();
-        String branchCode = branchService.getById(bookingBranchId).getBranchCode();
         return "%s-%06d".formatted(branchCode, serial);
     }
 
@@ -886,6 +1354,18 @@ public class ShipmentServiceImpl implements ShipmentService {
         long serial = companyShipmentSequenceRepository.nextValue();
         String yearMonth = YEAR_MONTH.format(Instant.now());
         return "%s%07d".formatted(yearMonth, serial);
+    }
+
+    /**
+     * {@code "DRS" + 6-digit serial}, e.g. {@code DRS000001} — a company-wide counter, one
+     * value per bulk {@link #assignOutForDelivery} call. Same collision-free counter
+     * contract as {@link #nextShipmentNumber}/{@link #nextTrackingNumber}.
+     */
+    private String nextDrsNumber(UUID companyId) {
+        byte[] companyIdBytes = TimeOrderedUuid.toBytes(companyId);
+        companyDrsSequenceRepository.advance(companyIdBytes);
+        long serial = companyDrsSequenceRepository.nextValue();
+        return "DRS%06d".formatted(serial);
     }
 
     private void requireCurrentVersion(Shipment shipment, Long expectedVersion) {

@@ -7,6 +7,6 @@ import java.util.UUID;
 
 public record DispatchManifestResponse(
         UUID manifestId, String manifestNumber, ManifestStatus status,
-        UUID vehicleId, UUID driverUserId, Instant dispatchedAt, int shipmentCount
+        UUID vehicleId, UUID driverUserId, Instant dispatchedAt, Instant departureTime, int shipmentCount
 ) {
 }

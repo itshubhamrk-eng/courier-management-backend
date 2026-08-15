@@ -27,8 +27,9 @@ const SHIPMENT_WRITERS = [...UPDATERS, AppRole.BOOKING_OPERATOR];
 // it's asked to move) and accounts — SUPER_ADMIN excluded, day-to-day operations are a
 // company's own work, not the platform's.
 const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
-// Shipment Movement: the same desks as Shipment Booking, plus the delivery desk — Out
-// Scan/Dispatch are typically the booking branch, In Scan/Out For Delivery/Deliver the
+// Shipment Movement: the same desks as Shipment Booking, plus the delivery desk —
+// Loading Sheet/Trip Hire Challan (THC) are typically the booking branch, In Scan/Out
+// For Delivery/Deliver the
 // delivery branch. Mirrors ShipmentServiceImpl's movement WRITERS (COMPANY_ADMIN,
 // BRANCH_MANAGER, OPERATOR) the same way SHIPMENT_WRITERS does for booking.
 const MOVEMENT_WRITERS = [...UPDATERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR];
@@ -194,11 +195,13 @@ export const routes: Routes = [
         path: 'customers/:id/edit', title: 'Edit Customer', canActivate: [roleGuard], data: { roles: CUSTOMER_WRITERS },
         loadComponent: () => import('@features/customer/customer-edit').then((m) => m.CustomerEdit)
       },
-      // Rate Master — company rate cards. Reads (list/view) and the calculator are
+      // Rate Master — company rate cards. Reads (list/view/calculator) are
       // isAuthenticated() on the backend, so no roles restriction admits every signed-in
       // company user, same as Customers; create/update is COMPANY_ADMIN only, mirroring
-      // RateServiceImpl's WRITE gate. 'new' and 'calculate' are declared before ':id' so
-      // neither literal segment is swallowed by the parameter.
+      // RateServiceImpl's WRITE gate. 'new' and 'calculator' are declared before ':id' so
+      // neither literal segment is swallowed by the parameter. The Calculator page now
+      // hosts both the Rate and Freight Factor calculators as tabs (the rate list's own
+      // quick-lookup dialog, RateCalculatorDialog, is a separate, untouched entry point).
       {
         path: 'rates', title: 'Rate Master', canActivate: [roleGuard], data: { roles: RATE_READERS },
         loadComponent: () => import('@features/rate-master/rate-list').then((m) => m.RateList)
@@ -208,7 +211,7 @@ export const routes: Routes = [
         loadComponent: () => import('@features/rate-master/rate-create').then((m) => m.RateCreate)
       },
       {
-        path: 'rates/calculator', title: 'Rate Calculator', canActivate: [roleGuard], data: { roles: RATE_READERS },
+        path: 'rates/calculator', title: 'Calculator', canActivate: [roleGuard], data: { roles: RATE_READERS },
         loadComponent: () => import('@features/rate-master/rate-calculator').then((m) => m.RateCalculator)
       },
       {
@@ -218,6 +221,38 @@ export const routes: Routes = [
       {
         path: 'rates/:id/edit', title: 'Edit Rate', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN] },
         loadComponent: () => import('@features/rate-master/rate-edit').then((m) => m.RateEdit)
+      },
+      // Address Distance — resolve/list the road distance between two branches.
+      // isAuthenticated() on the backend, same posture as Rate Master's reads/calculator.
+      {
+        path: 'distances', title: 'Address Distance', canActivate: [roleGuard], data: { roles: RATE_READERS },
+        loadComponent: () => import('@features/address-distance/address-distance').then((m) => m.AddressDistance)
+      },
+      // Freight Factor — standalone distance x weight pricing grid, independent of Rate
+      // Master. isAuthenticated() reads/calculate on the backend (RATE_READERS reused,
+      // same audience); COMPANY_ADMIN-only writes are hidden in-page, not route-guarded,
+      // since Add/Edit/Activate live on the same page as the read-only grid.
+      {
+        path: 'freight-factors', title: 'Freight Factor', canActivate: [roleGuard], data: { roles: RATE_READERS },
+        loadComponent: () => import('@features/freight-factor/freight-factor').then((m) => m.FreightFactorPage)
+      },
+      // Vehicles (fleet) — bespoke module, not one of the generic master-data lists;
+      // COMPANY_ADMIN/BRANCH_MANAGER, matching VehicleServiceImpl's own gate. Routed
+      // create/edit pages, not a dialog — seventeen fields read poorly in a modal
+      // (direct user feedback, 0.25.2). 'new' declared before ':id/edit' so the
+      // literal segment isn't swallowed by the parameter, same convention Shipment
+      // Booking's own routes already use.
+      {
+        path: 'masters/vehicles', title: 'Vehicles', canActivate: [roleGuard], data: { roles: UPDATERS },
+        loadComponent: () => import('@features/manifest/vehicle-list').then((m) => m.VehicleList)
+      },
+      {
+        path: 'masters/vehicles/new', title: 'New Vehicle', canActivate: [roleGuard], data: { roles: UPDATERS },
+        loadComponent: () => import('@features/manifest/vehicle-create').then((m) => m.VehicleCreate)
+      },
+      {
+        path: 'masters/vehicles/:id/edit', title: 'Edit Vehicle', canActivate: [roleGuard], data: { roles: UPDATERS },
+        loadComponent: () => import('@features/manifest/vehicle-edit').then((m) => m.VehicleEdit)
       },
       // Shipment Booking — the core transaction. Reads (list/view/charges/history/
       // documents) are isAuthenticated() on the backend, so no roles restriction admits
@@ -231,6 +266,31 @@ export const routes: Routes = [
       {
         path: 'shipments', title: 'Shipments', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/shipment/shipment-list').then((m) => m.ShipmentList)
+      },
+      {
+        path: 'reports/bookings', title: 'Booking Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/booking-report').then((m) => m.BookingReport)
+      },
+      {
+        path: 'reports/deliveries', title: 'Delivery Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/delivery-report').then((m) => m.DeliveryReport)
+      },
+      {
+        path: 'reports/commissions', title: 'Commission Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/commission-report').then((m) => m.CommissionReport)
+      },
+      {
+        path: 'reports/drs', title: 'DRS Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/drs-report').then((m) => m.DrsReport)
+      },
+      {
+        path: 'reports/drs/:deliveryUserId/:deliveryBranchId/:runDate', title: 'DRS Detail',
+        canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/drs-detail').then((m) => m.DrsDetailPage)
+      },
+      {
+        path: 'reports/thc', title: 'Trip Hire Challan Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/thc-report').then((m) => m.ThcReport)
       },
       {
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
@@ -263,12 +323,12 @@ export const routes: Routes = [
       // Shipment Movement — the minimal Manifest module (see MEMORY/modules/shipment-movement.md)
       // plus the five movement steps the brief's own REST API list names.
       {
-        path: 'movement/out-scan', title: 'Out Scan', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
-        loadComponent: () => import('@features/shipment-movement/out-scan').then((m) => m.OutScan)
+        path: 'movement/loading-sheet', title: 'Loading Sheet', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
       },
       {
-        path: 'movement/dispatch', title: 'Dispatch', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
-        loadComponent: () => import('@features/shipment-movement/dispatch').then((m) => m.Dispatch)
+        path: 'movement/trip-hire-challan', title: 'Trip Hire Challan (THC)', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/trip-hire-challan').then((m) => m.TripHireChallan)
       },
       {
         path: 'movement/in-scan', title: 'In Scan', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
@@ -279,7 +339,7 @@ export const routes: Routes = [
         loadComponent: () => import('@features/shipment-movement/pending-delivery').then((m) => m.PendingDelivery)
       },
       {
-        path: 'movement/out-for-delivery', title: 'Out For Delivery', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        path: 'movement/out-for-delivery', title: 'DRS', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/shipment-movement/out-for-delivery').then((m) => m.OutForDelivery)
       },
       {

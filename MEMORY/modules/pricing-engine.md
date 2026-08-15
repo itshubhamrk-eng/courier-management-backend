@@ -82,6 +82,93 @@ for Rate Master:
   `CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, ...)` wrapper `doGetById`
   already uses for every other global-list read.
 
+## Freight Factor fallback (0.20.7)
+
+Direct user request, arriving through Shipment Booking: "while shipment booking check if
+route rate is available or not if not then calculate charges based on company level
+weight and distance and book shipment order." `PricingEngineImpl.calculate` wraps
+`RouteValidation` → `BookingValidation` → `RateValidation` → the charge-calculator chain
+in one `try`, catching a new `RouteRateUnavailableException` (a `BusinessRuleException`
+subtype thrown from `RouteValidation`/`RateValidation`/`FreightCalculator` — no route, an
+inactive route, no active rate for the combination, or no weight slab covering the
+chargeable weight) and falling back to one call to `FreightFactorService.calculate`
+(`com.courier.modules.freight` — the standalone distance×weight×factor grid, 0.20.0),
+resolving the branch pair's road distance the same way that module's own Calculate card
+does. The fallback `PricingResult` carries `matchedRoute`/`matchedRate` both null and
+every Rate-Master-only line (fuel/handling/ODA/insurance/GST/discount/round-off) at zero
+— `netAmount` is the freight figure alone, since Freight Factor deliberately carries none
+of those. A gap in the Freight Factor grid itself, or an unresolvable branch-pair
+distance, still fails the call with its own exception — there is no third fallback tier.
+
+**Deliberately lives here, not in `ShipmentServiceImpl`** — it shipped there first
+(0.20.6), then moved (0.20.7) once live testing showed the frontend's own live pricing
+preview (`POST /pricing/calculate`, called directly by `shipment-create.ts`'s debounced
+`schedulePricing`) surfaced the raw "No route runs..." refusal instead of a quote, because
+it calls this engine directly and never went through Shipment Booking's own catch. Putting
+the fallback in the engine itself means every caller — Shipment Booking, the live preview,
+any future Quotation/mobile consumer — gets it for free.
+
+**Two real bugs found live, not by the mocked unit tests, while wiring this up:**
+
+1. **`UnexpectedRollbackException`** on the first live booking attempt, even though the
+   exception was caught correctly. `RouteServiceImpl.findByBranches` is
+   `@Transactional(readOnly = true)` and *joins* the caller's own transaction (default
+   `REQUIRED` propagation) — a nested `@Transactional` method throwing marks the **whole
+   shared transaction** rollback-only the instant it throws, regardless of whether the
+   caller catches the exception afterward; only the method that physically opened the
+   transaction can un-mark it, and nothing in Spring lets a caller do that after the fact.
+   Fixed with `@Transactional(readOnly = true, noRollbackFor =
+   RouteRateUnavailableException.class)` on `findByBranches` alone — `RateValidation`'s
+   "no active rate" throw and `FreightCalculator`'s "no weight slab" throw are both plain,
+   non-`@Transactional` components, so they don't cross this boundary and needed no fix.
+2. **`NullPointerException` in `PricingMapper.toResponse`**, hit only by the standalone
+   `POST /pricing/calculate` endpoint (Shipment Booking's own path never called this
+   mapper with a fallback result until the fix above even reached it) — it unconditionally
+   called `result.matchedRoute().getBookingBranchId()` etc., which NPEs when
+   `matchedRoute` is null. Fixed by null-checking `matchedRoute`/`matchedRate` throughout
+   and sourcing `bookingBranchId`/`deliveryBranchId` from the original `PricingCommand`
+   (now a required second parameter to `toResponse`) instead of the absent matched route;
+   `weightUnit` defaults to `WeightUnit.KG` (Freight Factor's own always-kg convention)
+   when there's no matched rate to read a unit off of.
+
+**Verified live end to end, twice** — first over raw HTTP, then through the actual browser
+UI as `pune@gmail.com` (`BRANCH_MANAGER`) — against real MySQL (`SERVER_PORT=8081`, schema
+`V30`): a Freight Factor cell (100–200 km/0–10 kg/factor 7.50) covering the real, cached
+148.728 km distance between `PUNE`/`MUMBAI_GEOTEST` (no route runs between them) priced a
+3 kg quote at exactly **22.50** (`7.50 × 3`) in both the live pricing preview panel and the
+final persisted charge, booked clean from the real **New Shipment** page
+(`PUNE-000012`/`26080000018`) — confirmed via the API that the charge row's
+`matched_route_id`/`matched_rate_id` are both `NULL`. A same-session regression booking on
+the real PUNE→LATUR route/rate confirmed the normal path is undisturbed — real, non-null
+matched ids. `mvn test` 709 → 711 (`PricingEngineImplTest` gained the two fallback cases;
+`ShipmentServiceImplTest` needed none, since it no longer knows Freight Factor exists).
+Full detail in `CHANGELOG.md` 0.20.6/0.20.7 and `MEMORY/modules/freight-factor.md`.
+
+### Editable, increase-only Freight Factor override (0.24.0)
+
+Direct request, arriving through Shipment Booking again: "show applied freight factor and
+it should be editable, only should be increse freight factore." `PricingCommand` gained
+`freightFactorOverride` (nullable); `priceByDistanceAndWeight` reads the grid's own matched
+cell as before, but now accepts a caller override **only when `>=` that matched value** —
+a smaller override throws `BusinessRuleException` ("Freight factor can only be increased —
+matched X, requested Y.") before anything is repriced. When accepted (or when no override
+is supplied, in which case it defaults to the matched cell), `freight = effectiveFactor *
+chargeableWeight` and GST/net amount are computed off that — so raising the factor changes
+freight, GST and net amount together, never freight alone. `PricingResult` gained
+`appliedFreightFactor` (the effective factor actually priced with — null on the normal
+Route/Rate path, which never uses a freight factor at all) — surfaced through
+`PricingResponse`/`ShipmentChargeResponse` (`shipment_charges.applied_freight_factor`,
+`V35`) so a caller can show what was applied without re-deriving it. `PricingRequest`/
+`CreateShipmentRequest`/`UpdateShipmentRequest` all gained the same
+`freightFactorOverride` field, threaded straight through — the live preview
+(`POST /pricing/calculate`) and the actual booking share the identical validation, same
+"one seam, every caller gets it" reasoning 0.20.7 already established. See
+`MEMORY/modules/shipment-booking.md`'s frontend section for how `shipment-create.ts`
+surfaces the input. `mvn test` green — `PricingEngineImplTest` gained two new cases (the
+refusal, the successful raise) plus a `getFactor()` stub on the existing fallback test's
+mock (needed now that the no-override path also reads it, to populate
+`appliedFreightFactor`). Full detail in `CHANGELOG.md` 0.24.0.
+
 ## Strategy + Factory
 
 - **`ChargeCalculator`** (Strategy, one per charge line) — `type()`, `order()`,

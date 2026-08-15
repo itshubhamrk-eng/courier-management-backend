@@ -60,12 +60,13 @@ import { CompanyService } from '@features/company/company.service';
             <table class="renewals">
               <thead>
                 <tr>
-                  <th>Company</th><th>Code</th><th>Status</th><th>Ends</th><th class="num">Days</th>
+                  <th>#</th><th>Company</th><th>Code</th><th>Status</th><th>Ends</th><th class="num">Days</th>
                 </tr>
               </thead>
               <tbody>
-                @for (row of board().upcomingRenewals; track row.id) {
+                @for (row of board().upcomingRenewals; track row.id; let i = $index) {
                   <tr (click)="open(row.id)" tabindex="0" (keydown.enter)="open(row.id)">
+                    <td>{{ i + 1 }}</td>
                     <td>{{ row.companyName }}</td>
                     <td class="mono">{{ row.companyCode }}</td>
                     <td><app-status-badge [value]="row.status" /></td>

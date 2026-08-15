@@ -5,6 +5,7 @@ import com.courier.modules.auth.application.UserProvisioningService.NewBranchUse
 import com.courier.modules.auth.application.UserProvisioningService.ProvisionedBranchUser;
 import com.courier.modules.company.application.command.CreateBranchCommand;
 import com.courier.modules.company.application.command.UpdateBranchCommand;
+import com.courier.modules.company.application.geocoding.GeocodingPort;
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchRepository;
 import com.courier.modules.company.domain.BranchStatus;
@@ -40,6 +41,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -73,6 +75,7 @@ class BranchServiceImplTest {
     @Mock private BranchRoleProvisioningService branchRoleProvisioningService;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private GeocodingPort geocodingPort;
 
     private BranchServiceImpl service;
 
@@ -80,10 +83,11 @@ class BranchServiceImplTest {
     void setUp() {
         service = new BranchServiceImpl(repository, userRepository, companyRepository,
                 userProvisioningService, branchRoleProvisioningService, auditService,
-                eventPublisher);
+                eventPublisher, geocodingPort);
         CompanyContext.setCompanyId(TENANT);
         planted(CALLER, Roles.COMPANY_ADMIN);
 
+        when(geocodingPort.geocode(any())).thenReturn(Optional.empty());
         when(repository.save(any(Branch.class))).thenAnswer(i -> i.getArgument(0));
         when(repository.isCodeTaken(any(), any(), any())).thenReturn(false);
         when(repository.isNameTaken(any(), any(), any())).thenReturn(false);
@@ -150,7 +154,8 @@ class BranchServiceImplTest {
                 null, null, null, managerId,
                 null, null, null, null, "Pune", null, null, "411001",
                 null, null, null, null, null,
-                null, null, null, null, null, null, null, branchUser);
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, branchUser);
     }
 
     private Branch existing(String code) {
@@ -297,13 +302,42 @@ class BranchServiceImplTest {
                 .isInstanceOf(BusinessRuleException.class).hasMessageContaining("No company is bound");
     }
 
+    @Test
+    @DisplayName("create geocodes when the administrator leaves latitude/longitude blank")
+    void createGeocodesWhenBlank() {
+        when(geocodingPort.geocode(any())).thenReturn(Optional.of(
+                new GeocodingPort.Coordinates(new BigDecimal("18.5204300"), new BigDecimal("73.8567400"))));
+
+        Branch saved = service.create(createCommand("pune_main", "Pune Main", null)).branch();
+
+        assertThat(saved.getLatitude()).isEqualByComparingTo("18.520430");
+        assertThat(saved.getLongitude()).isEqualByComparingTo("73.856740");
+    }
+
+    @Test
+    @DisplayName("create never geocodes when latitude/longitude were supplied")
+    void createSkipsGeocodeWhenSupplied() {
+        CreateBranchCommand command = new CreateBranchCommand(
+                "pune_main", "Pune Main", BranchType.BOOKING_BRANCH,
+                null, null, null, null,
+                null, null, null, null, "Pune", null, null, "411001",
+                new BigDecimal("18.0"), new BigDecimal("73.0"), null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null);
+
+        service.create(command);
+
+        verify(geocodingPort, never()).geocode(any());
+    }
+
     // ------------------------------------------------------------------- update
 
     private UpdateBranchCommand updateCommand(String name, Long version) {
         return new UpdateBranchCommand(name, BranchType.BOOKING_DELIVERY_BRANCH,
                 null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
                 null, null, null, null, null,
-                null, null, null, null, null, null, null, version);
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, version);
     }
 
     @Test
@@ -315,6 +349,42 @@ class BranchServiceImplTest {
         Branch saved = service.update(b.getId(), updateCommand("Pune Central", 2L));
         assertThat(saved.getBranchName()).isEqualTo("Pune Central");
         assertThat(saved.getCity()).isEqualTo("Mumbai");
+    }
+
+    @Test
+    @DisplayName("update geocodes when the request leaves latitude/longitude blank, same as create")
+    void updateGeocodesWhenBlank() {
+        Branch b = existing("PUNE_MAIN");
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(geocodingPort.geocode(any())).thenReturn(Optional.of(
+                new GeocodingPort.Coordinates(new BigDecimal("19.0760000"), new BigDecimal("72.8777000"))));
+
+        // updateCommand() carries no latitude/longitude but does carry city "Mumbai" /
+        // postal "400001" — exactly the shape a real edit-without-coordinates request has.
+        Branch saved = service.update(b.getId(), updateCommand("Pune Central", 2L));
+
+        assertThat(saved.getLatitude()).isEqualByComparingTo("19.076000");
+        assertThat(saved.getLongitude()).isEqualByComparingTo("72.877700");
+    }
+
+    @Test
+    @DisplayName("update never geocodes when latitude/longitude were supplied, including to clear them")
+    void updateSkipsGeocodeWhenSupplied() {
+        Branch b = existing("PUNE_MAIN");
+        b.setLatitude(new BigDecimal("18.000000"));
+        b.setLongitude(new BigDecimal("73.000000"));
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+
+        UpdateBranchCommand command = new UpdateBranchCommand(
+                "Pune Central", BranchType.BOOKING_DELIVERY_BRANCH,
+                null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
+                new BigDecimal("21.0"), new BigDecimal("79.0"), null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, 2L);
+
+        service.update(b.getId(), command);
+
+        verify(geocodingPort, never()).geocode(any());
     }
 
     @Test

@@ -23,13 +23,15 @@ import { PermissionToggle } from './module-permission-card';
         <table class="mx__table">
           <thead>
             <tr>
+              <th class="mx__sno">#</th>
               <th class="mx__corner">Module</th>
               @for (a of columns(); track a) { <th class="mx__col" [title]="prettyToken(a)">{{ prettyToken(a) }}</th> }
             </tr>
           </thead>
           <tbody>
-            @for (g of groups(); track g.module) {
+            @for (g of groups(); track g.module; let i = $index) {
               <tr>
+                <td class="mx__sno">{{ i + 1 }}</td>
                 <th class="mx__row" scope="row">
                   <span class="mx__mod">{{ prettyToken(g.module) }}</span>
                   <span class="mx__sub">{{ count(g) }}/{{ g.permissions.length }}</span>
@@ -65,15 +67,18 @@ import { PermissionToggle } from './module-permission-card';
     .mx__table { border-collapse:collapse; width:100%; font:500 13px var(--font-sans); }
     .mx__table th, .mx__table td { border-bottom:1px solid var(--surface-border); }
     thead th { position:sticky; top:0; background:var(--surface-muted); z-index:1; }
-    .mx__corner { position:sticky; left:0; z-index:2; background:var(--surface-muted); text-align:left;
+    .mx__sno { position:sticky; left:0; z-index:2; background:var(--surface-muted); text-align:center;
+      padding:10px 8px; color:var(--content-muted); font:600 12px var(--font-sans); width:40px; }
+    .mx__corner { position:sticky; left:40px; z-index:2; background:var(--surface-muted); text-align:left;
       padding:10px 14px; font:600 12px var(--font-sans); color:var(--content-muted); min-width:150px; }
     .mx__col { padding:10px 8px; font:600 11px var(--font-sans); color:var(--content-muted); text-align:center;
       white-space:nowrap; min-width:74px; }
-    .mx__row { position:sticky; left:0; background:var(--surface); text-align:left; padding:8px 14px;
+    .mx__row { position:sticky; left:40px; background:var(--surface); text-align:left; padding:8px 14px;
       display:flex; flex-direction:column; gap:1px; z-index:1; }
     .mx__mod { font:600 13px var(--font-sans); color:var(--content-fg); white-space:nowrap; }
     .mx__sub { font:600 11px var(--font-sans); color:var(--content-muted); }
-    tbody tr:hover .mx__row, tbody tr:hover .mx__cell { background:var(--surface-muted); }
+    tbody .mx__sno { background:var(--surface); }
+    tbody tr:hover .mx__row, tbody tr:hover .mx__cell, tbody tr:hover .mx__sno { background:var(--surface-muted); }
     .mx__cell { text-align:center; padding:4px; }
     .mx__na { color:var(--surface-border); }
     .mx__ok { color:var(--success); font-size:20px; width:20px; height:20px; }

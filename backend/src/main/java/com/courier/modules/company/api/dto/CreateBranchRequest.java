@@ -67,8 +67,28 @@ public record CreateBranchRequest(
 
         Boolean allowBooking, Boolean allowDelivery, Boolean allowPickup,
         Boolean allowManifest, Boolean allowCashCollection, Boolean allowWallet,
+        @Schema(description = "Credit branch commission to the wallet the instant a PREPAID "
+                + "booking debit settles. Defaults to true when omitted.")
+        Boolean instantCommission,
 
         @Size(max = 500) String remarks,
+
+        @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "GST percentage. Defaults to 18 when omitted.", example = "18")
+        BigDecimal gstPercentage,
+        @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Company's commission percentage on other charges. Defaults to 20 when omitted.", example = "20")
+        BigDecimal commissionOnOtherCharges,
+        @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Commission percentage on basic freight. Defaults to 10 when omitted.", example = "10")
+        BigDecimal commissionOnBasicFreight,
+        @DecimalMin("0.0") @DecimalMax("100.0")
+        @Schema(description = "Company service charge percentage. Defaults to 10 when omitted.", example = "10")
+        BigDecimal companyServiceChargePercentage,
+        @DecimalMin("0.0")
+        @Schema(description = "DRS charge per item quantity, debited on delivery "
+                + "(drsCharge = drsChargePerQty * qty). Defaults to 2 when omitted.", example = "2")
+        BigDecimal drsChargePerQty,
 
         @Valid
         @Schema(description = "The branch's login account. Omit to have one derived from "

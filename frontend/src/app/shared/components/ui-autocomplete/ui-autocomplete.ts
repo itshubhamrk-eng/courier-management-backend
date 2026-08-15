@@ -34,6 +34,12 @@ const MAX_VISIBLE_OPTIONS = 10;
     .ac { display:flex; flex-direction:column; gap:6px; }
     .ac__label { font:500 13px var(--font-sans); color:var(--content-fg); }
     .ac__field { width:100%; }
+    .ac__field ::ng-deep .mdc-notched-outline > * { border-color:transparent !important; }
+    .ac__field ::ng-deep .mat-mdc-text-field-wrapper {
+      background:var(--surface-muted); border-radius:var(--r-field); box-shadow:var(--shadow-clay-inset);
+    }
+    .ac__field ::ng-deep .mat-mdc-form-field-flex { min-height:44px; align-items:center; }
+    .ac__field.mat-focused ::ng-deep .mat-mdc-text-field-wrapper { box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
   `]
 })
 export class UiAutocomplete {

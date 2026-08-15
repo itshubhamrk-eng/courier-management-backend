@@ -11,8 +11,14 @@ public record ShipmentChargeResponse(
         UUID shipmentId,
         BigDecimal freight, BigDecimal fuelCharge, BigDecimal handlingCharge, BigDecimal odaCharge,
         BigDecimal insuranceCharge, BigDecimal gstAmount, BigDecimal discountAmount,
-        BigDecimal roundOff, BigDecimal netAmount,
+        BigDecimal roundOff, BigDecimal otherCharges,
+        BigDecimal commissionOnBasicFreight, BigDecimal branchCommissionOnOtherAmount,
+        BigDecimal companyCommissionOnBasicFreight, BigDecimal totalCommission, BigDecimal netAmount,
         UUID matchedRouteId, String matchedRouteCode,
-        UUID matchedRateId, String matchedRateCode
+        UUID matchedRateId, String matchedRateCode,
+        @Schema(description = "The Freight Factor grid cell's own factor, or an accepted "
+                + "override of it — null unless this shipment priced through the Freight "
+                + "Factor fallback (matchedRouteId/matchedRateId both null).")
+        BigDecimal appliedFreightFactor
 ) {
 }

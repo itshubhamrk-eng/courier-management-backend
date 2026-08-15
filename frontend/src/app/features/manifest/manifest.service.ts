@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import { PageQuery } from '@core/models/page.model';
-import { Manifest, CreateManifestRequest, Shipment } from '@core/models/shipment.model';
+import {
+  Manifest, CreateManifestRequest, ManifestSearchRequest, ManifestSummaryStats, Shipment
+} from '@core/models/shipment.model';
 
 /**
  * The minimal Manifest module Shipment Movement needs underneath it — see
@@ -16,5 +18,12 @@ export class ManifestService {
   create(body: CreateManifestRequest) { return this.api.post<Manifest>(API.manifests, body); }
   get(id: string) { return this.api.get<Manifest>(`${API.manifests}/${id}`); }
   list(query: PageQuery) { return this.api.page<Manifest>(API.manifests, query); }
+  /** Unpaged aggregates for the THC Report summary row — same filters as `list`, minus paging. */
+  summary(filters: ManifestSearchRequest) {
+    return this.api.get<ManifestSummaryStats>(`${API.manifests}/summary`, filters as Record<string, unknown>);
+  }
   shipments(id: string) { return this.api.get<Shipment[]>(`${API.manifests}/${id}/shipments`); }
+  removeShipment(id: string, shipmentId: string) {
+    return this.api.delete<void>(`${API.manifests}/${id}/shipments/${shipmentId}`);
+  }
 }

@@ -23,12 +23,12 @@ function leaf(id: string): NavNode {
  * should see a different slice of the nav. These pin that mapping down.
  */
 describe('NAVIGATION — branch staff visibility', () => {
-  // Shipment Movement (V19) split "the road" in two: Out Scan/Dispatch happen at the
+  // Shipment Movement (V19) split "the road" in two: Loading Sheet/Trip Hire Challan (THC) happen at the
   // booking branch (before the run leaves), In Scan/Out For Delivery/Deliver at the
   // delivery branch (after it arrives) — see MEMORY/modules/shipment-movement.md. The
   // aspirational placeholder this replaced had guessed the whole block was delivery-desk
   // work; the real module's own business flow says otherwise for the first two steps.
-  it('the booking desk sees booking, out scan and dispatch, not masters or the delivery-branch steps', () => {
+  it('the booking desk sees booking, loading sheet and dispatch, not masters or the delivery-branch steps', () => {
     expect(leaf('booking').roles).toContain(AppRole.BOOKING_OPERATOR);
     expect(leaf('manifest').roles).toContain(AppRole.BOOKING_OPERATOR);
     expect(leaf('dispatch').roles).toContain(AppRole.BOOKING_OPERATOR);
@@ -41,7 +41,7 @@ describe('NAVIGATION — branch staff visibility', () => {
     expect(leaf('branch-wallet').roles).not.toContain(AppRole.BOOKING_OPERATOR);
   });
 
-  it('the road sees in scan through delivery, not booking, out scan/dispatch, or masters', () => {
+  it('the road sees in scan through delivery, not booking, loading sheet/dispatch, or masters', () => {
     expect(leaf('receive').roles).toContain(AppRole.DELIVERY_OPERATOR);
     expect(leaf('out-for-delivery').roles).toContain(AppRole.DELIVERY_OPERATOR);
     expect(leaf('delivery').roles).toContain(AppRole.DELIVERY_OPERATOR);

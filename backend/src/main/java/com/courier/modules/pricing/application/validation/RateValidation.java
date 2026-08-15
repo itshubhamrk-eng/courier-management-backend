@@ -3,7 +3,7 @@ package com.courier.modules.pricing.application.validation;
 import com.courier.modules.pricing.application.command.PricingCommand;
 import com.courier.modules.rate.application.RateService;
 import com.courier.modules.rate.domain.Rate;
-import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.RouteRateUnavailableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +31,7 @@ public class RateValidation {
         List<Rate> candidates = rateService.findActiveCandidates(routeId, command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), bookingDate);
         if (candidates.isEmpty()) {
-            throw new BusinessRuleException(
+            throw new RouteRateUnavailableException(
                     ("No active rate is effective on %s for this route, service type, "
                             + "package type and payment mode.").formatted(bookingDate));
         }

@@ -52,7 +52,7 @@ import { environment } from '@env/environment';
     </div>
   `,
   styles: [`
-    .login { width:400px; max-width:100%; padding:32px; }
+    .login { width:400px; max-width:100%; padding:36px; }
     .login__head { margin-bottom:24px; }
     .login__form { display:flex; flex-direction:column; gap:16px; }
     .login__row { display:flex; align-items:center; justify-content:space-between; }
@@ -63,9 +63,9 @@ import { environment } from '@env/environment';
     .login__dev { margin-top:20px; padding-top:16px; border-top:1px dashed var(--surface-border); }
     .login__dev-label { display:block; font:600 10px var(--font-sans); letter-spacing:.06em; text-transform:uppercase; color:var(--content-muted); margin-bottom:8px; }
     .login__dev-btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .login__dev-btn { flex:1; padding:8px 10px; border:1px solid var(--surface-border); border-radius:8px; background:var(--surface-muted);
-      color:var(--content-fg); font:600 12px var(--font-sans); cursor:pointer; transition:background .15s; }
-    .login__dev-btn:hover { background:var(--brand-50); border-color:var(--brand-100); color:var(--brand-700); }
+    .login__dev-btn { flex:1; padding:8px 10px; border:0; border-radius:10px; background:var(--surface-muted);
+      box-shadow:var(--shadow-clay-inset); color:var(--content-fg); font:600 12px var(--font-sans); cursor:pointer; transition:color .15s; }
+    .login__dev-btn:hover { color:var(--brand-700); }
   `]
 })
 export class Login {
@@ -96,7 +96,7 @@ export class Login {
     this.error.set(null);
     const creds: Record<typeof kind, { companyCode: string; email: string; password: string }> = {
       admin:   { companyCode: '', email: 'super.admin@gmail.com', password: 'Pass@1234' },
-      company: { companyCode: 'COMPANY-C1', email: 'first.admin@gmail.com', password: 'Tf5qUfoV2*N!@!' },
+      company: { companyCode: 'COMPANY-C1', email: 'first.admin@gmail.com', password: 'Password@1234' },
       pune:    { companyCode: 'COMPANY-C1', email: 'pune@gmail.com', password: 'Password@1234' },
       latur:   { companyCode: 'COMPANY-C1', email: 'latur@gmail.com', password: 'Password@1234' },
       hub:     { companyCode: 'COMPANY-C1', email: 'hub@legacy.test', password: 'Password@123' }

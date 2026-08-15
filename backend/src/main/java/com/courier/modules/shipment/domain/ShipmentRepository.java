@@ -32,11 +32,15 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     List<Shipment> findAllByCompanyIdAndIdIn(UUID companyId, Collection<UUID> ids);
 
+    List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);
+
     long countByBookingDate(LocalDate bookingDate);
 
     long countByStatus(ShipmentStatus status);
 
     long countByStatusIn(Collection<ShipmentStatus> statuses);
+
+    long countByDeliveryBranchIdAndStatusIn(UUID deliveryBranchId, Collection<ShipmentStatus> statuses);
 
     List<Shipment> findTop5ByOrderByCreatedAtDesc();
 }

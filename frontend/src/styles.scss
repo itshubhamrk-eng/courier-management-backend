@@ -9,7 +9,7 @@
 html {
   color-scheme: light dark;
   @include mat.theme((
-    color: (primary: mat.$violet-palette, tertiary: mat.$blue-palette),
+    color: (primary: mat.$blue-palette, tertiary: mat.$orange-palette),
     typography: Inter,
     density: -1
   ));
@@ -34,7 +34,42 @@ body {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-clay);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+
+// Raised clay surface — same recipe as .app-card, for one-off elements that aren't a
+// full app-card (illustration frames, KPI wells, dev-tool panels).
+.clay-surface {
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-clay);
+}
+
+// Pressed-in "well" look — inputs, search bars, KPI icon wells sit inside the surface
+// rather than floating above it.
+.clay-inset {
+  background: var(--surface-muted);
+  border-radius: var(--r-field);
+  box-shadow: var(--shadow-clay-inset);
+}
+
+// Consistent frame every illustration sits inside, wherever it's dropped in a page —
+// same padding/bg/soft shadow so the illustration set reads as one family.
+.illustration-frame {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  border-radius: var(--r-card-lg);
+  background: linear-gradient(160deg, var(--brand-50), var(--surface));
+  box-shadow: var(--shadow-clay);
+}
+:root[data-theme='dark'] .illustration-frame {
+  background: linear-gradient(160deg, var(--brand-900), var(--surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-card, .clay-surface, .clay-inset { transition: none; }
 }
 
 // Canonical page layout — one source of truth so every feature has identical
@@ -53,6 +88,12 @@ body {
   flex-wrap: wrap;
 }
 .page__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+// Optional small illustration accent next to a page__head's title — used on a few
+// logistics-heavy pages (Loading Sheet, In Scan, THC, DRS, Delivery). Subtle, hidden on
+// narrow screens so it never competes with the title for space.
+.page__head-row { display: flex; align-items: center; gap: 14px; }
+.page__head-ill { flex-shrink: 0; }
+@media (max-width: 560px) { .page__head-ill { display: none; } }
 
 // Table cells declared via the `#row` template are content-projected, so app-table's
 // own (encapsulated) td styles don't reach them. This global rule keeps projected cells
@@ -64,6 +105,21 @@ body {
 }
 .app-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .app-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,.5); border-radius: 999px; }
+
+// Every MatMenu panel (notification bell, user menu, mat-select overlay, etc.) gets the
+// same clay chrome from this one global rule.
+.mat-mdc-menu-panel {
+  border-radius: var(--r-card) !important;
+  box-shadow: var(--shadow-clay-hover) !important;
+}
+
+// Every MatDialog opened with panelClass:'app-dialog' (confirm/reason + every bespoke
+// feature dialog — branch/user/customer/rate/wallet forms) gets the clay treatment on
+// its container chrome from this one rule, no per-dialog edit needed.
+.app-dialog .mdc-dialog__surface {
+  border-radius: var(--r-card-lg) !important;
+  box-shadow: var(--shadow-clay-hover) !important;
+}
 
 // Toast tones for the notification service.
 .toast-success { --mdc-snackbar-container-color: var(--success); }

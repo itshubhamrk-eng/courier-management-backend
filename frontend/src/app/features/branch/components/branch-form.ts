@@ -123,6 +123,8 @@ function emailish(control: AbstractControl): ValidationErrors | null {
             <span><strong>Cash Collection</strong><em>Collect COD at counter</em></span></label>
           <label class="flag"><mat-slide-toggle [formControl]="c('allowWallet')" />
             <span><strong>Wallet</strong><em>Prepaid wallet billing</em></span></label>
+          <label class="flag"><mat-slide-toggle [formControl]="c('instantCommission')" />
+            <span><strong>Instant Commission</strong><em>Credit branch commission the moment a PREPAID booking debits</em></span></label>
         </div>
       </app-card>
 
@@ -149,6 +151,16 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           </p>
         </app-card>
       }
+
+      <app-card title="Charges" subtitle="Branch-level percentages applied to shipment charges.">
+        <div class="grid">
+          <app-input [control]="c('gstPercentage')" label="GST %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="18" />
+          <app-input [control]="c('commissionOnOtherCharges')" label="Company Commission on Other Charges %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="20" />
+          <app-input [control]="c('commissionOnBasicFreight')" label="Commission on Basic Freight %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="10" />
+          <app-input [control]="c('companyServiceChargePercentage')" label="Company Service Charge %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="10" />
+          <app-input [control]="c('drsChargePerQty')" label="DRS Charge per Qty" type="number" [min]="0" [step]="0.01" placeholder="2" />
+        </div>
+      </app-card>
 
       <app-card title="Notes" subtitle="Internal remarks.">
         <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this branch" />
@@ -251,7 +263,12 @@ export class BranchForm {
       workingDays: b.workingDays ? b.workingDays.split(',').map((d) => d.trim().toUpperCase()).filter(Boolean) : [],
       allowBooking: b.allowBooking, allowDelivery: b.allowDelivery, allowPickup: b.allowPickup,
       allowManifest: b.allowManifest, allowCashCollection: b.allowCashCollection, allowWallet: b.allowWallet,
-      remarks: b.remarks ?? ''
+      instantCommission: b.instantCommission,
+      remarks: b.remarks ?? '',
+      gstPercentage: b.gstPercentage, commissionOnOtherCharges: b.commissionOnOtherCharges,
+      commissionOnBasicFreight: b.commissionOnBasicFreight,
+      companyServiceChargePercentage: b.companyServiceChargePercentage,
+      drsChargePerQty: b.drsChargePerQty
     }, { emitEvent: false });
     this.form.markAsPristine();
     this.hydrated.set(true);
@@ -279,7 +296,13 @@ export class BranchForm {
       workingDays: [[] as string[]],
       allowBooking: [true], allowDelivery: [true], allowPickup: [true],
       allowManifest: [true], allowCashCollection: [true], allowWallet: [false],
+      instantCommission: [true],
       remarks: ['', Validators.maxLength(500)],
+      gstPercentage: [18, [Validators.required, Validators.min(0), Validators.max(100)]],
+      commissionOnOtherCharges: [20, [Validators.required, Validators.min(0), Validators.max(100)]],
+      commissionOnBasicFreight: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
+      companyServiceChargePercentage: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
+      drsChargePerQty: [2, [Validators.required, Validators.min(0)]],
       // Create-only. Kept as a group so the payload maps straight onto BranchUserRequest;
       // no minimum length on the password — the server's policy owns that rule and its
       // message names the one that failed.
@@ -309,7 +332,13 @@ export class BranchForm {
       workingDays: days.length ? days.join(',') : null,
       allowBooking: !!v.allowBooking, allowDelivery: !!v.allowDelivery, allowPickup: !!v.allowPickup,
       allowManifest: !!v.allowManifest, allowCashCollection: !!v.allowCashCollection, allowWallet: !!v.allowWallet,
-      remarks: trim(v.remarks)
+      instantCommission: !!v.instantCommission,
+      remarks: trim(v.remarks),
+      gstPercentage: Number(v.gstPercentage),
+      commissionOnOtherCharges: Number(v.commissionOnOtherCharges),
+      commissionOnBasicFreight: Number(v.commissionOnBasicFreight),
+      companyServiceChargePercentage: Number(v.companyServiceChargePercentage),
+      drsChargePerQty: Number(v.drsChargePerQty)
     };
 
     if (this.isCreate()) {

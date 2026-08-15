@@ -13,8 +13,8 @@ export const SHIPMENT_TYPES: ShipmentType[] = ['DOCUMENT', 'NON_DOCUMENT', 'CARG
  * Renamed in V19 (Shipment Movement) to match that module's own vocabulary exactly:
  * `MANIFESTED` -> `MANIFEST_CREATED`, `RECEIVED` -> `IN_SCAN`, `RETURN_INITIATED` folded
  * into a direct edge to `RETURNED`. V20, on direct request, folded the separate
- * `OUT_SCAN` state back into `MANIFEST_CREATED` — one milestone ("out scan created"),
- * not two; adding a shipment to a manifest already is the out-scan action. See backend
+ * `OUT_SCAN` state back into `MANIFEST_CREATED` — one milestone ("loading sheet created"),
+ * not two; adding a shipment to a manifest already is the loading sheet action. See backend
  * `ShipmentStatus.java`.
  */
 export type ShipmentStatus =
@@ -52,6 +52,7 @@ export interface Shipment {
   bookingBranchId: string;
   deliveryBranchId: string;
   manifestId?: string | null;
+  paymentModeId: string;
   senderName: string;
   senderContact: string;
   receiverName: string;
@@ -59,7 +60,14 @@ export interface Shipment {
   chargeableWeight: number;
   /** Null only for a row with no charge record — see backend `ShipmentSummaryResponse`. */
   netAmount: number | null;
+  /** Commission breakdown (V28), null only for a row with no charge record. */
+  totalCommission: number | null;
+  commissionOnBasicFreight: number | null;
+  branchCommissionOnOtherAmount: number | null;
+  companyCommissionOnBasicFreight: number | null;
   status: ShipmentStatus;
+  /** Null until `DeliveryAssignment.markDelivered` has run — the Delivery Report's own column. */
+  deliveredAt?: string | null;
   createdDate?: string | null;
   version: number;
 }
@@ -94,6 +102,10 @@ export interface ShipmentResponse {
   numberOfPackages: number;
   status: ShipmentStatus;
   remarks?: string | null;
+  deliveredAt?: string | null;
+  podPhotoUrl?: string | null;
+  podSignatureUrl?: string | null;
+  shipmentImageUrl?: string | null;
   createdBy?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
@@ -113,11 +125,21 @@ export interface ShipmentCharge {
   gstAmount: number;
   discountAmount: number;
   roundOff: number;
+  otherCharges: number;
+  /** Commission breakdown (V28), computed from the booking branch's own charge percentages. */
+  commissionOnBasicFreight: number;
+  branchCommissionOnOtherAmount: number;
+  companyCommissionOnBasicFreight: number;
+  /** {@code commissionOnBasicFreight + branchCommissionOnOtherAmount} — the branch's total earning. */
+  totalCommission: number;
   netAmount: number;
   matchedRouteId?: string | null;
   matchedRouteCode?: string | null;
   matchedRateId?: string | null;
   matchedRateCode?: string | null;
+  /** The Freight Factor grid cell's own factor, or an accepted override of it — null unless
+   *  this shipment priced through the Freight Factor fallback. */
+  appliedFreightFactor?: number | null;
 }
 
 /** One entry of a shipment's status timeline — GET /shipments/{id}/history. */
@@ -176,6 +198,13 @@ export interface ShipmentFields {
   declaredValue?: number | null;
   numberOfPackages?: number | null;
   remarks?: string | null;
+  /** Manual, typed at booking time — not computed by the Pricing Engine — added on top of
+   *  its net amount server-side. See `ShipmentCharge.otherCharges`. */
+  otherCharges?: number | null;
+  /** Only meaningful when this lane falls back to the Freight Factor grid (no route/rate
+   *  available) — raises the matched cell's own factor. Must be >= the matched factor;
+   *  the server refuses a smaller value. See `PricingResponse.appliedFreightFactor`. */
+  freightFactorOverride?: number | null;
   items?: ShipmentItemRequest[];
   actualWeight?: number | null;
   length?: number | null;
@@ -202,7 +231,32 @@ export interface ShipmentSearchRequest {
   manifestId?: string;
   bookingDateFrom?: string;
   bookingDateTo?: string;
+  /** Delivery Report's own range — matched against when the shipment was actually
+   *  delivered, not when it was booked. */
+  deliveredDateFrom?: string;
+  deliveredDateTo?: string;
   search?: string;
+}
+
+/** Unpaged aggregates for GET /shipments/summary — the Booking/Delivery Report summary row.
+ *  Mirrors backend `ShipmentSummaryStatsResponse`. */
+export interface ShipmentSummaryStats {
+  totalCount: number;
+  totalChargeableWeight: number;
+  totalNetAmount: number;
+  statusCounts: Partial<Record<ShipmentStatus, number>>;
+}
+
+/** One row of GET /shipments/commission-summary — the Commission Report's branch-wise
+ *  summary table. Mirrors backend `BranchCommissionSummaryResponse`. */
+export interface BranchCommissionSummary {
+  bookingBranchId: string;
+  shipmentCount: number;
+  totalNetAmount: number;
+  commissionOnBasicFreight: number;
+  branchCommissionOnOtherAmount: number;
+  companyCommissionOnBasicFreight: number;
+  totalCommission: number;
 }
 
 /** Body of POST /shipments/{id}/documents — mirrors backend `AddShipmentDocumentRequest`. */
@@ -235,6 +289,9 @@ export interface PricingRequest {
   bookingDate?: string | null;
   discountPercentage?: number | null;
   discountAmount?: number | null;
+  /** Only meaningful when this lane falls back to the Freight Factor grid — raises the
+   *  matched cell's own factor. Must be >= the matched factor; a smaller value is refused. */
+  freightFactorOverride?: number | null;
 }
 
 export interface ChargeBreakup {
@@ -261,12 +318,15 @@ export interface PricingResponse {
   volumetricWeight: number;
   chargeableWeight: number;
   weightUnit: string;
+  /** The Freight Factor grid cell's own factor, or an accepted override of it — set only
+   *  on the Freight Factor fallback (matchedRouteCode/matchedRateCode both null/absent). */
+  appliedFreightFactor?: number | null;
   chargeBreakup: ChargeBreakup;
 }
 
 /**
- * Shipment Movement (V19) — Booking Branch -> Create Manifest -> Assign Vehicle -> Out
- * Scan -> Dispatch -> Delivery Branch -> In Scan -> Out For Delivery -> Delivered. Mirrors
+ * Shipment Movement (V19) — Booking Branch -> Create Manifest (Loading Sheet Created) ->
+ * Trip Hire Challan (THC) -> Delivery Branch -> In Scan -> Out For Delivery -> Delivered. Mirrors
  * `com.courier.modules.manifest`/`com.courier.modules.shipment`'s movement additions
  * one-to-one. See MEMORY/modules/shipment-movement.md.
  */
@@ -283,11 +343,15 @@ export interface Manifest {
   driverUserId?: string | null;
   status: ManifestStatus;
   dispatchedAt?: string | null;
+  departureTime?: string | null;
   completedAt?: string | null;
   remarks?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   version: number;
+  shipmentCount: number;
+  totalWeight: number;
+  totalPackages: number;
 }
 
 /** Body of POST /manifests — mirrors backend `CreateManifestRequest`. */
@@ -298,6 +362,15 @@ export interface CreateManifestRequest {
   remarks?: string | null;
 }
 
+/** GET /manifests/summary — the THC Report summary row. Mirrors backend
+ *  `ManifestSummaryStatsResponse`. */
+export interface ManifestSummaryStats {
+  totalManifests: number;
+  totalShipments: number;
+  totalWeight: number;
+  totalPackages: number;
+}
+
 export interface ManifestSearchRequest {
   status?: ManifestStatus;
   bookingBranchId?: string;
@@ -305,24 +378,74 @@ export interface ManifestSearchRequest {
   search?: string;
 }
 
-export type VehicleStatus = 'ACTIVE' | 'INACTIVE';
+export type VehicleType = 'BIKE' | 'SCOOTER' | 'AUTO' | 'VAN' | 'PICKUP' | 'TRUCK' | 'TEMPO' | 'OTHER';
+export type FuelType = 'PETROL' | 'DIESEL' | 'CNG' | 'EV' | 'OTHER';
+export type VehicleStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
 
-/** Mirrors backend `VehicleResponse` — the fleet Dispatch's "Assign Vehicle" picker reads. */
+/** Mirrors backend `VehicleResponse` — the fleet Trip Hire Challan (THC)'s "Assign Vehicle" picker reads. */
 export interface Vehicle {
   id: string;
+  companyId: string;
   vehicleNumber: string;
-  vehicleTypeId?: string | null;
+  vehicleType: VehicleType;
+  make?: string | null;
+  model?: string | null;
+  fuelType?: FuelType | null;
   capacityKg?: number | null;
+  currentOdometer?: number | null;
+  purchaseDate?: string | null;
+  registrationDate?: string | null;
+  insuranceExpiry?: string | null;
+  pucExpiry?: string | null;
+  fitnessExpiry?: string | null;
+  permitExpiry?: string | null;
   status: VehicleStatus;
+  branchId?: string | null;
   remarks?: string | null;
+  active: boolean;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  updatedBy?: string | null;
+  updatedAt?: string | null;
   version: number;
 }
 
 export interface CreateVehicleRequest {
   vehicleNumber: string;
-  vehicleTypeId?: string | null;
+  vehicleType: VehicleType;
+  make?: string | null;
+  model?: string | null;
+  fuelType?: FuelType | null;
   capacityKg?: number | null;
+  currentOdometer?: number | null;
+  purchaseDate?: string | null;
+  registrationDate?: string | null;
+  insuranceExpiry?: string | null;
+  pucExpiry?: string | null;
+  fitnessExpiry?: string | null;
+  permitExpiry?: string | null;
+  branchId?: string | null;
   remarks?: string | null;
+}
+
+export interface UpdateVehicleRequest {
+  vehicleNumber: string;
+  vehicleType: VehicleType;
+  make?: string | null;
+  model?: string | null;
+  fuelType?: FuelType | null;
+  capacityKg?: number | null;
+  currentOdometer?: number | null;
+  purchaseDate?: string | null;
+  registrationDate?: string | null;
+  insuranceExpiry?: string | null;
+  pucExpiry?: string | null;
+  fitnessExpiry?: string | null;
+  permitExpiry?: string | null;
+  status: VehicleStatus;
+  branchId?: string | null;
+  remarks?: string | null;
+  version: number;
 }
 
 /** Bulk-operation per-item result — mirrors backend `MovementOutcomeResponse`. */
@@ -332,11 +455,13 @@ export interface MovementOutcome {
   message?: string | null;
 }
 
-/** Mirrors backend `BulkMovementResponse` — In Scan/Out For Delivery both return this. */
+/** Mirrors backend `BulkMovementResponse` — In Scan/Out For Delivery both return this.
+ *  `drsNumber` is only ever set on Out For Delivery's response — null for In Scan. */
 export interface BulkMovementResult {
   results: MovementOutcome[];
   successCount: number;
   failureCount: number;
+  drsNumber: string | null;
 }
 
 /** Body of POST /shipment-movement/dispatch. */
@@ -344,6 +469,7 @@ export interface DispatchManifestRequest {
   manifestId: string;
   vehicleId: string;
   driverUserId: string;
+  departureTime?: string | null;
 }
 
 export interface DispatchManifestResponse {
@@ -353,6 +479,7 @@ export interface DispatchManifestResponse {
   vehicleId: string;
   driverUserId: string;
   dispatchedAt?: string | null;
+  departureTime?: string | null;
   shipmentCount: number;
 }
 
@@ -385,4 +512,39 @@ export interface TimelineStep {
   changedAt?: string | null;
   changedBy?: string | null;
   completed: boolean;
+}
+
+/** One row of GET /shipment-movement/drs — a DRS "run" (delivery user + delivery branch +
+ *  calendar day), grouped server-side from `DeliveryAssignment` rows. There is no separate
+ *  DRS/batch table — see `MEMORY/modules/shipment-movement.md`. Mirrors `DrsSummaryResponse`. */
+export interface DrsSummary {
+  deliveryUserId: string;
+  deliveryBranchId: string;
+  runDate: string;
+  drsNumber: string | null;
+  shipmentCount: number;
+  deliveredCount: number;
+  pendingCount: number;
+}
+
+/** One shipment row of GET /shipment-movement/drs/detail — mirrors `DrsShipmentRowResponse`. */
+export interface DrsShipmentRow {
+  shipmentId: string;
+  shipmentNumber: string;
+  trackingNumber: string;
+  receiverName: string;
+  receiverContact: string;
+  paymentModeId: string;
+  netAmount: number | null;
+  status: ShipmentStatus;
+  deliveredAt?: string | null;
+}
+
+/** Body of GET /shipment-movement/drs/detail — mirrors `DrsDetailResponse`. */
+export interface DrsDetail {
+  deliveryUserId: string;
+  deliveryBranchId: string;
+  runDate: string;
+  drsNumber: string | null;
+  shipments: DrsShipmentRow[];
 }

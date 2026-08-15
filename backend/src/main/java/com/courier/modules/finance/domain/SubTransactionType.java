@@ -29,7 +29,8 @@ public enum SubTransactionType {
     TRI(Direction.CREDIT, "Transfer In"),
     TRO(Direction.DEBIT, "Transfer Out"),
     ADJ(Direction.BOTH, "Adjustment"),
-    PNL(Direction.DEBIT, "Penalty");
+    PNL(Direction.DEBIT, "Penalty"),
+    DRS(Direction.CREDIT, "DRS Commission");
 
     /** Which {@link TransactionType} a reason may be filed under. */
     public enum Direction {

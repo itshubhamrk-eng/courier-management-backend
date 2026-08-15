@@ -96,9 +96,22 @@ export const NAVIGATION: NavNode[] = [
     id: 'rate-master', title: 'Rate Master', icon: 'price_change', order: 2.7,
     children: [
       { id: 'rates', title: 'Rate Cards', icon: 'request_quote', route: '/rates', permission: 'RATE_MASTER_READ', roles: COMPANY_AND_BRANCH },
-      { id: 'rate-calculator', title: 'Calculator', icon: 'calculate', route: '/rates/calculator', permission: 'RATE_MASTER_CALCULATE', roles: COMPANY_AND_BRANCH }
+      // Calculator page hosts both the Rate and Freight Factor calculators as tabs —
+      // one calculator entry point for both pricing mechanisms, by direct request.
+      { id: 'rate-calculator', title: 'Calculator', icon: 'calculate', route: '/rates/calculator', permission: 'RATE_MASTER_CALCULATE', roles: COMPANY_AND_BRANCH },
+      // Standalone distance x weight pricing grid, independent of Rate Master's own
+      // Route-based rates above — grouped here as a submenu for nav convenience only.
+      // No `permission` key: backend has no permission codes for this module, writes
+      // are COMPANY_ADMIN-only in-page. Its own Calculate card moved to the Calculator
+      // page above as a tab — this leaf is the grid itself now.
+      { id: 'freight-factor', title: 'Freight Factor', icon: 'grid_on', route: '/freight-factors', roles: COMPANY_AND_BRANCH }
     ]
   },
+
+  // Resolve/list the road distance between two branches — groundwork for distance/freight-
+  // factor pricing, not itself a pricing feature. Same isAuthenticated() posture as Rate
+  // Master, so the same role tier (company + branch) is reused.
+  { id: 'address-distance', title: 'Address Distance', icon: 'social_distance', route: '/distances', order: 2.8, roles: COMPANY_AND_BRANCH },
 
   {
     id: 'masters', title: 'Masters', icon: 'inventory_2', order: 3,
@@ -117,6 +130,12 @@ export const NAVIGATION: NavNode[] = [
       { id: 'global-pincodes', title: 'Pincode', icon: 'markunread_mailbox', route: '/masters/pincodes', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
       // The company's own six catalogues — COMPANY_ADMIN only, both read and write.
       { id: 'vehicle-types', title: 'Vehicle Type', icon: 'local_shipping', route: '/masters/vehicle-types', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
+      // The fleet itself (registration, class, ownership dates, statutory document
+      // expiries) — a separate, bespoke module (com.courier.modules.manifest.Vehicle),
+      // not one of the twelve generic master-data catalogues above; COMPANY_ADMIN and
+      // BRANCH_MANAGER both write, matching VehicleServiceImpl's own gate (no
+      // permission code exists for it yet, same as Freight Factor/Address Distance).
+      { id: 'vehicles', title: 'Vehicles', icon: 'local_shipping', route: '/masters/vehicles', roles: COMPANY_AND_BRANCH },
       { id: 'package-types', title: 'Package Type', icon: 'inventory_2', route: '/masters/package-types', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
       { id: 'service-types', title: 'Service Type', icon: 'bolt', route: '/masters/service-types', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
       { id: 'payment-modes', title: 'Payment Mode', icon: 'payments', route: '/masters/payment-modes', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
@@ -140,18 +159,18 @@ export const NAVIGATION: NavNode[] = [
       // Booking is the counter desk's job (SHIPMENT_CREATE); manifest through delivery is
       // the road (MANIFEST_DISPATCH, MANIFEST_RECEIVE, DELIVERY_DISPATCH, DELIVERY_DELIVER)
       // — see DefaultRoleCatalog's BOOKING_OPERATOR / DELIVERY_OPERATOR definitions.
-      // Shipment Movement (V19) shipped these five: Out Scan/Dispatch happen at the
+      // Shipment Movement (V19) shipped these five: Loading Sheet/Trip Hire Challan (THC) happen at the
       // booking branch (OPS_BOOKING), In Scan/Out For Delivery/Deliver at the delivery
       // branch (OPS_DELIVERY_DESK) — see MEMORY/modules/shipment-movement.md.
       // 'sorting' has no module behind it yet and stays aspirational.
       { id: 'booking', title: 'Shipment Booking', icon: 'add_box', route: '/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       { id: 'shipment-search', title: 'Shipment Search', icon: 'search', route: '/shipments', permission: 'SHIPMENT_VIEW', roles: OPS_SHIPMENT_READERS },
       { id: 'track', title: 'Track Shipment', icon: 'my_location', route: '/track', permission: 'SHIPMENT_VIEW', roles: OPS_SHIPMENT_READERS },
-      { id: 'manifest', title: 'Out Scan', icon: 'qr_code_scanner', route: '/movement/out-scan', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },
-      { id: 'dispatch', title: 'Dispatch', icon: 'outbound', route: '/movement/dispatch', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
+      { id: 'manifest', title: 'Loading Sheet', icon: 'qr_code_scanner', route: '/movement/loading-sheet', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },
+      { id: 'dispatch', title: 'Trip Hire Challan (THC)', icon: 'outbound', route: '/movement/trip-hire-challan', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
       { id: 'receive', title: 'In Scan', icon: 'move_to_inbox', route: '/movement/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK },
       { id: 'pending-delivery', title: 'Pending Delivery', icon: 'pending_actions', route: '/movement/pending-delivery', permission: 'DELIVERY_ASSIGN', roles: OPS_DELIVERY_DESK },
-      { id: 'out-for-delivery', title: 'Out For Delivery', icon: 'directions_run', route: '/movement/out-for-delivery', permission: 'DELIVERY_ASSIGN', roles: OPS_DELIVERY_DESK },
+      { id: 'out-for-delivery', title: 'Generate DRS', icon: 'directions_run', route: '/movement/out-for-delivery', permission: 'DELIVERY_ASSIGN', roles: OPS_DELIVERY_DESK },
       { id: 'delivery', title: 'Delivery', icon: 'task_alt', route: '/movement/delivery', permission: 'DELIVERY_DELIVER', roles: OPS_DELIVERY_DESK }
     ]
   },
@@ -172,11 +191,14 @@ export const NAVIGATION: NavNode[] = [
   },
 
   {
-    id: 'reports', title: 'Reports (Soon)', icon: 'insights', order: 7,
+    id: 'reports', title: 'Reports', icon: 'insights', order: 7,
     children: [
+      { id: 'booking-report', title: 'Booking Report', icon: 'summarize', route: '/reports/bookings', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'delivery-report', title: 'Delivery Report', icon: 'local_shipping', route: '/reports/deliveries', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
       // Branch responsibility #11 — every branch staff role reads reports on the work it did.
-      { id: 'reports-dashboard', title: 'Dashboard (Soon)', icon: 'dashboard', route: '/reports', permission: 'REPORT_VIEW', roles: BRANCH_REPORT_READERS },
-      { id: 'shipment-reports', title: 'Shipment Reports (Soon)', icon: 'summarize', route: '/reports/shipments', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
       { id: 'finance-reports', title: 'Finance Reports (Soon)', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
       { id: 'branch-reports', title: 'Branch Reports (Soon)', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_VIEW', roles: BRANCH_REPORT_READERS }
     ]

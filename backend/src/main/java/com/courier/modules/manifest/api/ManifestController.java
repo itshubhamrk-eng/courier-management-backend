@@ -3,8 +3,10 @@ package com.courier.modules.manifest.api;
 import com.courier.modules.manifest.api.dto.CreateManifestRequest;
 import com.courier.modules.manifest.api.dto.ManifestResponse;
 import com.courier.modules.manifest.api.dto.ManifestSearchRequest;
+import com.courier.modules.manifest.api.dto.ManifestSummaryStatsResponse;
 import com.courier.modules.manifest.application.ManifestService;
 import com.courier.modules.manifest.domain.Manifest;
+import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
 import com.courier.modules.shipment.api.ShipmentMapper;
 import com.courier.modules.shipment.api.dto.ShipmentSummaryResponse;
 import com.courier.modules.shipment.application.ShipmentService;
@@ -23,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,6 +38,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * The minimal Manifest module Shipment Movement needs underneath it — see {@code Manifest}'s
@@ -61,15 +65,17 @@ public class ManifestController {
     public ResponseEntity<ApiResponse<ManifestResponse>> create(
             @Valid @RequestBody CreateManifestRequest request) {
         Manifest created = manifestService.create(mapper.toCommand(request));
+        ManifestShipmentAggregate aggregate = aggregateFor(created.getId());
         return ResponseEntity
                 .created(UriComponentsBuilder.fromPath("/api/v1/manifests/{id}")
                         .buildAndExpand(created.getId()).toUri())
-                .body(ApiResponse.success(mapper.toResponse(created), "Manifest created"));
+                .body(ApiResponse.success(mapper.toResponse(created, aggregate), "Manifest created"));
     }
 
     @GetMapping("/{id}")
     public ApiResponse<ManifestResponse> get(@PathVariable UUID id) {
-        return ApiResponse.success(mapper.toResponse(manifestService.getById(id)));
+        Manifest manifest = manifestService.getById(id);
+        return ApiResponse.success(mapper.toResponse(manifest, aggregateFor(manifest.getId())));
     }
 
     @GetMapping
@@ -79,22 +85,52 @@ public class ManifestController {
             @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         Page<Manifest> page = manifestService.search(mapper.toCriteria(search), pageable);
-        return ApiResponse.success(PageResponse.from(page, mapper::toResponse));
+        List<UUID> ids = page.getContent().stream().map(Manifest::getId).toList();
+        Map<UUID, ManifestShipmentAggregate> aggregates = shipmentService.findByManifestIds(ids).stream()
+                .collect(Collectors.groupingBy(Shipment::getManifestId,
+                        Collectors.collectingAndThen(Collectors.toList(), ManifestShipmentAggregate::of)));
+        return ApiResponse.success(PageResponse.from(page,
+                m -> mapper.toResponse(m, aggregates.getOrDefault(m.getId(), ManifestShipmentAggregate.EMPTY))));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Summary stats for a manifest search",
+            description = "Same filters as the list endpoint (`ManifestSearchRequest`), unpaged — "
+                    + "manifest count, total shipment count, total weight and total package count "
+                    + "over every matching manifest, not just one page. Powers the THC Report summary row.")
+    public ApiResponse<ManifestSummaryStatsResponse> summary(@ParameterObject ManifestSearchRequest search) {
+        return ApiResponse.success(mapper.toSummaryStats(manifestService.summaryStats(mapper.toCriteria(search))));
+    }
+
+    private ManifestShipmentAggregate aggregateFor(UUID manifestId) {
+        return ManifestShipmentAggregate.of(shipmentService.findByManifestIds(List.of(manifestId)));
     }
 
     @GetMapping("/{id}/shipments")
     @Operation(summary = "List the shipments scanned onto this manifest",
-            description = "Out Scan's own \"Search Manifest -> Display Shipments\" and Dispatch's "
+            description = "Loading Sheet's own \"Search Manifest -> Display Shipments\" and Dispatch's "
                     + "manifest picker both read this.")
     public ApiResponse<List<ShipmentSummaryResponse>> shipments(@PathVariable UUID id) {
         manifestService.getById(id); // 404s a foreign/unknown manifest before listing anything
-        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, id, null, null, null);
+        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, id, null, null, null, null, null);
         Page<Shipment> page = shipmentService.search(criteria, Pageable.unpaged());
-        Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(
-                page.getContent().stream().map(Shipment::getId).toList());
+        List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
+        Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
+        Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> charges = shipmentService.chargesFor(ids);
+        Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
         List<ShipmentSummaryResponse> summaries = page.getContent().stream()
-                .map(s -> shipmentMapper.toSummary(s, netAmounts.get(s.getId())))
+                .map(s -> shipmentMapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()),
+                        deliveredAt.get(s.getId())))
                 .toList();
         return ApiResponse.success(summaries);
+    }
+
+    @DeleteMapping("/{id}/shipments/{shipmentId}")
+    @Operation(summary = "Remove a shipment from a manifest",
+            description = "Only while the manifest is still CREATED — reverts the shipment to BOOKED "
+                    + "so a future manifest can pick it up.")
+    public ApiResponse<Void> removeShipment(@PathVariable UUID id, @PathVariable UUID shipmentId) {
+        manifestService.removeShipment(id, shipmentId);
+        return ApiResponse.success("Shipment removed from the manifest");
     }
 }

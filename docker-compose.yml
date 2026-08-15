@@ -65,6 +65,11 @@ services:
       # No default: the app must not start with a guessable signing key.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AWS_S3_ENABLED: ${AWS_S3_ENABLED:-false}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     ports:
       - "${BACKEND_PORT:-8091}:8080"
     networks:

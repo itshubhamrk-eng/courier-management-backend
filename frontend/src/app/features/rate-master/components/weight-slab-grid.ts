@@ -28,11 +28,12 @@ interface SlabRow {
     } @else {
       <table class="grid">
         <thead>
-          <tr><th>Rate Code</th><th>Weight Slab</th><th>Base Rate</th><th>Status</th></tr>
+          <tr><th>#</th><th>Rate Code</th><th>Weight Slab</th><th>Base Rate</th><th>Status</th></tr>
         </thead>
         <tbody>
-          @for (row of slabRows(); track row.rate.id) {
+          @for (row of slabRows(); track row.rate.id; let i = $index) {
             <tr [class.current]="row.rate.id === currentId()" [class.conflict]="row.overlapsAnother">
+              <td>{{ i + 1 }}</td>
               <td class="mono">{{ row.rate.rateCode }}@if (row.rate.id === currentId()) { <em>(this rate)</em> }</td>
               <td class="mono">[{{ row.rate.minimumWeight }}, {{ row.rate.maximumWeight }}) {{ row.rate.weightUnit }}</td>
               <td class="mono">{{ row.rate.baseRate | number: '1.2-2' }}</td>

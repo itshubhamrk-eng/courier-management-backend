@@ -44,6 +44,12 @@ public record CreateShipmentRequest(
         @DecimalMin(value = "0") BigDecimal declaredValue,
         @Min(1) Integer numberOfPackages,
         @Size(max = 500) String remarks,
+        @DecimalMin(value = "0") BigDecimal otherCharges,
+        @Schema(description = "Only meaningful when this lane falls back to the Freight "
+                + "Factor grid (no route/rate available) — raises the matched cell's own "
+                + "factor. Must be greater than or equal to the matched factor.")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal freightFactorOverride,
         @Valid @Schema(description = "The packed item grid; may be empty if actualWeight is supplied instead")
         List<ShipmentItemRequest> items,
         @Schema(description = "Required only when items is empty") BigDecimal actualWeight,

@@ -48,8 +48,8 @@ import { NotificationFeedService } from '@core/services/notification-feed.servic
   `,
   styles: [`
     .nm__btn { position:relative; display:grid; place-items:center; width:40px; height:40px;
-      border-radius:10px; border:0; background:transparent; color:var(--content-muted); cursor:pointer; }
-    .nm__btn:hover { background:var(--surface-muted); color:var(--content-fg); }
+      border-radius:12px; border:0; background:transparent; color:var(--content-muted); cursor:pointer; transition:background .15s, box-shadow .15s; }
+    .nm__btn:hover { background:var(--surface-muted); color:var(--content-fg); box-shadow:var(--shadow-clay-inset); }
     .nm__badge { position:absolute; top:5px; right:5px; min-width:16px; height:16px; padding:0 4px;
       border-radius:999px; background:var(--danger); color:#fff; font:700 10px var(--font-sans);
       display:grid; place-items:center; }

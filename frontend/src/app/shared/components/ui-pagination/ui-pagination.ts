@@ -24,9 +24,13 @@ import { Page } from '@core/models/page.model';
     .pg { display:flex; align-items:center; justify-content:space-between; padding:12px 4px; }
     .pg__ctrls { display:flex; align-items:center; gap:8px; }
     .pg__cur { font:500 13px var(--font-sans); color:var(--content-muted); }
-    .pg__btn { display:grid; place-items:center; width:34px; height:34px; border-radius:8px;
-      border:1px solid var(--surface-border); background:var(--surface); cursor:pointer; }
-    .pg__btn:disabled { opacity:.4; cursor:not-allowed; }
+    .pg__btn { display:grid; place-items:center; width:34px; height:34px; border-radius:10px;
+      border:0; background:var(--surface-muted); box-shadow:var(--shadow-clay-sm); cursor:pointer;
+      transition:transform .12s ease, box-shadow .12s ease; }
+    .pg__btn:hover:not(:disabled) { box-shadow:var(--shadow-clay); }
+    .pg__btn:active:not(:disabled) { transform:translateY(1px); box-shadow:var(--shadow-clay-inset); }
+    .pg__btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+    @media (prefers-reduced-motion: reduce) { .pg__btn { transition:box-shadow .12s ease; } .pg__btn:active:not(:disabled) { transform:none; } }
   `]
 })
 export class UiPagination<T> {

@@ -74,6 +74,37 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal roundOff = BigDecimal.ZERO;
 
+    @Column(name = "other_charges", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal otherCharges = BigDecimal.ZERO;
+
+    /** {@code freight * commissionOnBasicFreight%} — the booking branch's own percentage
+     *  ({@code Branch}) at booking time. */
+    @Column(name = "commission_on_basic_freight", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal commissionOnBasicFreight = BigDecimal.ZERO;
+
+    /** The branch's share of other charges: {@code otherCharges * (100 -
+     *  commissionOnOtherCharges)%} — the remainder after the company's own cut. */
+    @Column(name = "branch_commission_on_other_amount", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal branchCommissionOnOtherAmount = BigDecimal.ZERO;
+
+    /** {@code freight * companyServiceChargePercentage%} — the company's own commission on
+     *  basic freight, same booking-branch percentage. */
+    @Column(name = "company_commission_on_basic_freight", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal companyCommissionOnBasicFreight = BigDecimal.ZERO;
+
+    /** {@code commissionOnBasicFreight + branchCommissionOnOtherAmount +
+     *  companyCommissionOnBasicFreight} — every commission line on this shipment, stored
+     *  rather than re-derived on every report. <b>Not</b> what gets credited to the branch
+     *  wallet — that uses only the branch's own two lines, since this also folds in the
+     *  company's own cut. See {@code ShipmentBookingWalletListener}. */
+    @Column(name = "total_commission", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal totalCommission = BigDecimal.ZERO;
+
     @Column(name = "net_amount", nullable = false, precision = 19, scale = 4)
     @Builder.Default
     private BigDecimal netAmount = BigDecimal.ZERO;
@@ -85,4 +116,11 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "matched_rate_id", columnDefinition = "BINARY(16)")
     private UUID matchedRateId;
+
+    /** The Freight Factor grid cell's own factor, or an accepted override of it — null
+     *  unless this shipment priced through the Freight Factor fallback ({@code
+     *  matchedRouteId}/{@code matchedRateId} both null). See {@code
+     *  PricingResult#appliedFreightFactor}. */
+    @Column(name = "applied_freight_factor", precision = 19, scale = 4)
+    private BigDecimal appliedFreightFactor;
 }

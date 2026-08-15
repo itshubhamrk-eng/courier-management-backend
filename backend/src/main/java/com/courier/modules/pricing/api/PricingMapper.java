@@ -5,6 +5,7 @@ import com.courier.modules.pricing.api.dto.PricingRequest;
 import com.courier.modules.pricing.api.dto.PricingResponse;
 import com.courier.modules.pricing.application.PricingResult;
 import com.courier.modules.pricing.application.command.PricingCommand;
+import com.courier.modules.rate.domain.WeightUnit;
 import org.springframework.stereotype.Component;
 
 /** The only place this module's other-module domain entities ({@code Route}, {@code Rate})
@@ -28,10 +29,18 @@ public class PricingMapper {
                 request.declaredValue(),
                 request.bookingDate(),
                 request.discountPercentage(),
-                request.discountAmount());
+                request.discountAmount(),
+                request.freightFactorOverride());
     }
 
-    public PricingResponse toResponse(PricingResult result) {
+    /**
+     * {@code matchedRoute}/{@code matchedRate} are both null when the Pricing Engine fell
+     * back to Freight Factor (no route/rate for this lane) — {@code bookingBranchId}/
+     * {@code deliveryBranchId} come from the original request instead of the (absent)
+     * matched route in that case; {@code weightUnit} defaults to plain kg, the unit
+     * Freight Factor itself always prices in.
+     */
+    public PricingResponse toResponse(PricingCommand command, PricingResult result) {
         ChargeBreakup breakup = new ChargeBreakup(
                 result.freight(),
                 result.fuelCharge(),
@@ -43,18 +52,22 @@ public class PricingMapper {
                 result.roundOff(),
                 result.netAmount());
 
+        var route = result.matchedRoute();
+        var rate = result.matchedRate();
+
         return new PricingResponse(
-                result.matchedRoute().getBookingBranchId(),
-                result.matchedRoute().getDeliveryBranchId(),
-                result.matchedRoute().getId(),
-                result.matchedRoute().getCode(),
-                result.matchedRate().getId(),
-                result.matchedRate().getRateCode(),
-                result.matchedRate().getRateName(),
+                route == null ? command.bookingBranchId() : route.getBookingBranchId(),
+                route == null ? command.deliveryBranchId() : route.getDeliveryBranchId(),
+                route == null ? null : route.getId(),
+                route == null ? null : route.getCode(),
+                rate == null ? null : rate.getId(),
+                rate == null ? null : rate.getRateCode(),
+                rate == null ? null : rate.getRateName(),
                 result.actualWeight(),
                 result.volumetricWeight(),
                 result.chargeableWeight(),
-                result.matchedRate().getWeightUnit().name(),
+                rate == null ? WeightUnit.KG.name() : rate.getWeightUnit().name(),
+                result.appliedFreightFactor(),
                 breakup);
     }
 }

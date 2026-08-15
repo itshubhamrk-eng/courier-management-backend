@@ -6,6 +6,8 @@ import com.courier.modules.auth.domain.Role;
 import com.courier.modules.company.application.command.CreateBranchCommand;
 import com.courier.modules.company.application.command.UpdateBranchCommand;
 import com.courier.modules.company.application.event.BranchEvent;
+import com.courier.modules.company.application.geocoding.BranchGeocoder;
+import com.courier.modules.company.application.geocoding.GeocodingPort;
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchCriteria;
 import com.courier.modules.company.domain.BranchRepository;
@@ -78,6 +80,7 @@ public class BranchServiceImpl implements BranchService {
     private final BranchRoleProvisioningService branchRoleProvisioningService;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final GeocodingPort geocodingPort;
 
     // ------------------------------------------------------------------- create
 
@@ -123,10 +126,22 @@ public class BranchServiceImpl implements BranchService {
                 .allowManifest(orTrue(command.allowManifest()))
                 .allowCashCollection(orTrue(command.allowCashCollection()))
                 .allowWallet(Boolean.TRUE.equals(command.allowWallet()))
+                .instantCommission(orTrue(command.instantCommission()))
                 .remarks(command.remarks())
+                .gstPercentage(orDefault(command.gstPercentage(), DEFAULT_GST_PERCENTAGE))
+                .commissionOnOtherCharges(orDefault(command.commissionOnOtherCharges(),
+                        DEFAULT_COMMISSION_ON_OTHER_CHARGES))
+                .commissionOnBasicFreight(orDefault(command.commissionOnBasicFreight(),
+                        DEFAULT_COMMISSION_ON_BASIC_FREIGHT))
+                .companyServiceChargePercentage(orDefault(command.companyServiceChargePercentage(),
+                        DEFAULT_COMPANY_SERVICE_CHARGE_PERCENTAGE))
+                .drsChargePerQty(orDefault(command.drsChargePerQty(), DEFAULT_DRS_CHARGE_PER_QTY))
                 .build();
 
         branch.applyInvariants();
+        if (branch.getLatitude() == null || branch.getLongitude() == null) {
+            geocodeInto(branch);
+        }
         Branch saved = repository.save(branch);
 
         ProvisionedBranchUser user = provisionUser(companyId, saved, command.branchUser());
@@ -166,6 +181,16 @@ public class BranchServiceImpl implements BranchService {
         return new BranchCreation(saved, user.userId(), user.email(),
                 user.temporaryPassword(), assignedAsManager,
                 roleAssignment.role().getId(), roleAssignment.role().getRoleCode());
+    }
+
+    /**
+     * Fills in latitude/longitude from whatever address fields the administrator gave
+     * (taluka/city/district/state/postal code) when they left both blank. Best-effort: a
+     * geocoding miss leaves the branch exactly as it would have been before this existed —
+     * it never blocks or fails the create.
+     */
+    private void geocodeInto(Branch branch) {
+        BranchGeocoder.fillIfMissing(geocodingPort, branch);
     }
 
     // --------------------------------------------------------- the branch's own user
@@ -291,7 +316,20 @@ public class BranchServiceImpl implements BranchService {
         branch.setAllowManifest(orTrue(command.allowManifest()));
         branch.setAllowCashCollection(orTrue(command.allowCashCollection()));
         branch.setAllowWallet(Boolean.TRUE.equals(command.allowWallet()));
+        branch.setInstantCommission(orTrue(command.instantCommission()));
         branch.setRemarks(command.remarks());
+        branch.setGstPercentage(command.gstPercentage());
+        branch.setCommissionOnOtherCharges(command.commissionOnOtherCharges());
+        branch.setCommissionOnBasicFreight(command.commissionOnBasicFreight());
+        branch.setCompanyServiceChargePercentage(command.companyServiceChargePercentage());
+        branch.setDrsChargePerQty(command.drsChargePerQty());
+
+        // Same fallback as create(): only when the caller left both blank. An explicit
+        // pair (including one that clears a previous geocode) is a deliberate choice and
+        // is never second-guessed.
+        if (branch.getLatitude() == null || branch.getLongitude() == null) {
+            geocodeInto(branch);
+        }
 
         branch.applyInvariants();
         Branch saved = repository.save(branch);
@@ -574,6 +612,16 @@ public class BranchServiceImpl implements BranchService {
         return value == null || value;
     }
 
+    private static final java.math.BigDecimal DEFAULT_GST_PERCENTAGE = new java.math.BigDecimal("18.00");
+    private static final java.math.BigDecimal DEFAULT_COMMISSION_ON_OTHER_CHARGES = new java.math.BigDecimal("20.00");
+    private static final java.math.BigDecimal DEFAULT_COMMISSION_ON_BASIC_FREIGHT = new java.math.BigDecimal("10.00");
+    private static final java.math.BigDecimal DEFAULT_COMPANY_SERVICE_CHARGE_PERCENTAGE = new java.math.BigDecimal("10.00");
+    private static final java.math.BigDecimal DEFAULT_DRS_CHARGE_PER_QTY = new java.math.BigDecimal("2.00");
+
+    private static java.math.BigDecimal orDefault(java.math.BigDecimal value, java.math.BigDecimal fallback) {
+        return value == null ? fallback : value;
+    }
+
     private Map<String, Object> snapshot(Branch b) {
         Map<String, Object> v = new java.util.LinkedHashMap<>();
         v.put("branchName", b.getBranchName());
@@ -600,7 +648,13 @@ public class BranchServiceImpl implements BranchService {
         v.put("allowManifest", b.isAllowManifest());
         v.put("allowCashCollection", b.isAllowCashCollection());
         v.put("allowWallet", b.isAllowWallet());
+        v.put("instantCommission", b.isInstantCommission());
         v.put("remarks", b.getRemarks());
+        v.put("gstPercentage", String.valueOf(b.getGstPercentage()));
+        v.put("commissionOnOtherCharges", String.valueOf(b.getCommissionOnOtherCharges()));
+        v.put("commissionOnBasicFreight", String.valueOf(b.getCommissionOnBasicFreight()));
+        v.put("companyServiceChargePercentage", String.valueOf(b.getCompanyServiceChargePercentage()));
+        v.put("drsChargePerQty", String.valueOf(b.getDrsChargePerQty()));
         return v;
     }
 

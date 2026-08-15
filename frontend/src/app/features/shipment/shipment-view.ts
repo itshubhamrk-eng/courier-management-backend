@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
@@ -18,6 +19,7 @@ import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES } 
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentService } from './shipment.service';
+import { printConsignmentCopies } from './consignment-print.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
 const TIMELINE_ICONS: Record<string, string> = {
@@ -49,6 +51,9 @@ const TIMELINE_ICONS: Record<string, string> = {
           <a class="sv__link" [routerLink]="['/shipments', id, 'history']"><mat-icon>history</mat-icon> History</a>
           <a class="sv__link" [routerLink]="['/shipments', id, 'documents']"><mat-icon>description</mat-icon> Documents</a>
           <span class="sv__spacer"></span>
+          @if (charge(); as c) {
+            <app-button variant="stroked" icon="print" (pressed)="print(c)">Print LR</app-button>
+          }
           @if (can().update && shipment()!.status === 'BOOKED') {
             <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button>
           }
@@ -105,6 +110,17 @@ const TIMELINE_ICONS: Record<string, string> = {
           </app-card>
         </div>
 
+        @if (!loadingDetails() && charge(); as c) {
+          <app-card title="Booking Branch Commission" subtitle="Computed from the booking branch's own charge percentages.">
+            <div class="commission">
+              <div class="commission__row"><span>Commission on Basic Freight</span><strong>{{ c.commissionOnBasicFreight | number:'1.2-2' }}</strong></div>
+              <div class="commission__row"><span>Branch Commission on Other Amount</span><strong>{{ c.branchCommissionOnOtherAmount | number:'1.2-2' }}</strong></div>
+              <div class="commission__row"><span>Company Commission on Basic Freight</span><strong>{{ c.companyCommissionOnBasicFreight | number:'1.2-2' }}</strong></div>
+              <div class="commission__row commission__row--total"><span>Total Commission</span><strong>{{ c.totalCommission | number:'1.2-2' }}</strong></div>
+            </div>
+          </app-card>
+        }
+
         <div class="sv__grid">
           <app-card title="Service">
             <dl class="kv">
@@ -141,6 +157,18 @@ const TIMELINE_ICONS: Record<string, string> = {
 
           @if (shipment()!.remarks) {
             <app-card title="Remarks"><p class="sv__remarks">{{ shipment()!.remarks }}</p></app-card>
+          }
+
+          @if (shipment()!.shipmentImageUrl) {
+            <app-card title="Shipment Photo">
+              <img class="sv__pod" [src]="shipment()!.shipmentImageUrl" alt="Shipment photo" />
+            </app-card>
+          }
+
+          @if (shipment()!.podPhotoUrl) {
+            <app-card title="Proof of Delivery" [subtitle]="shipment()!.deliveredAt ? ('Delivered ' + (shipment()!.deliveredAt | date: 'medium')) : ''">
+              <img class="sv__pod" [src]="shipment()!.podPhotoUrl" alt="Proof of delivery photo" />
+            </app-card>
           }
         </div>
       </div>
@@ -179,12 +207,19 @@ const TIMELINE_ICONS: Record<string, string> = {
     .tag { font:600 10px var(--font-sans); padding:2px 6px; border-radius:6px; background:var(--warning-bg); color:var(--warning); margin-left:6px; }
     .tag--d { background:var(--danger-bg); color:var(--danger); }
     .sv__remarks { margin:0; font:400 14px var(--font-sans); color:var(--content-fg); }
+    .sv__pod { display:block; max-width:100%; max-height:360px; border-radius:var(--r-field); border:1px solid var(--surface-border); }
     .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:24px; }
+    .commission { display:flex; flex-direction:column; gap:10px; }
+    .commission__row { display:flex; align-items:center; justify-content:space-between; font:400 14px var(--font-sans); color:var(--content-fg); }
+    .commission__row strong { font-weight:600; }
+    .commission__row--total { border-top:1px solid var(--surface-border); padding-top:10px; margin-top:2px; }
+    .commission__row--total strong { color:var(--brand-600); }
     @media (max-width:860px){ .sv__grid-parties { grid-template-columns:1fr; } .sv__grid { grid-template-columns:1fr; } .sv__grid app-card:nth-child(3) { grid-column:auto; } .sv__grid2 { grid-template-columns:1fr; } }
   `]
 })
 export class ShipmentView implements OnInit {
   private readonly service = inject(ShipmentService);
+  private readonly auth = inject(AuthService);
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
@@ -257,6 +292,29 @@ export class ShipmentView implements OnInit {
   paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? id; }
 
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }
+
+  print(c: ShipmentCharge): void {
+    const s = this.shipment()!;
+    printConsignmentCopies({
+      companyName: this.auth.companyName() ?? 'Courier SaaS',
+      shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+      expectedDeliveryDate: s.expectedDeliveryDate ?? null,
+      bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
+      senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
+      receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
+      serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
+      paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
+      numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
+      declaredValue: s.declaredValue ?? null,
+      charges: {
+        freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
+        insuranceCharge: c.insuranceCharge, gstAmount: c.gstAmount, discount: c.discountAmount,
+        roundOff: c.roundOff, netAmount: c.netAmount
+      },
+      otherCharges: c.otherCharges,
+      remarks: s.remarks ?? null
+    });
+  }
 
   cancel(): void {
     this.confirmDialog.prompt({

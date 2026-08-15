@@ -1,5 +1,49 @@
 # Shipment Movement
 
+**v0.17.7 update (read this first — Out For Delivery UX rework):** on direct user
+request, `OutForDelivery` now picks the Delivery User *first* (nothing else renders
+until that select has a value), then shows a checkbox `<table>` of this branch's
+IN_SCAN shipments — the old multi-select-shipments `app-select` is gone. Selection is a
+`Set<string>` signal, not a form array. Submit button renamed "Bulk Assign" → "Generate
+DRS". v0.17.5's `printDrs()` is untouched underneath — only the selection UI feeding
+`assign()` changed. Full detail in `CHANGELOG.md` 0.17.7.
+
+**v0.17.5 update (read this first — Print DRS on Out For Delivery):** on direct user
+request ("Allocate order to delivery boy and allocated order list should be print"),
+`OutForDelivery` gained a **Print DRS** action, same client-side pattern as THC's own
+Print (`window.open` + `document.write` + `window.print()`, no PDF service, no new
+endpoint). The allocation itself was already there — `assignOutForDelivery` — this only
+adds a printable Delivery Run Sheet once a bulk assign succeeds, for the shipments that
+actually got assigned (not the whole selection — a partial-failure batch only prints
+the successes, matched back by `shipmentNumber` since that's what `MovementOutcome
+.reference` carries here, not the tracking number the UI column label might suggest).
+Full detail in `CHANGELOG.md` 0.17.5.
+
+**v0.17.4 update (read this first — Dispatch renamed too, plus two new features):** on
+direct user request, "Dispatch" → "Trip Hire Challan (THC)" — `dispatch.ts` →
+`trip-hire-challan.ts`, route `/movement/dispatch` → `/movement/trip-hire-challan`, same
+mechanical treatment 0.17.3 gave Out Scan → Loading Sheet (`DISPATCHED` status and
+`dispatch()` internals untouched, only the page label). Two real additions in the same
+pass: **Print THC** (`window.open` + `document.write` + `window.print()`, no PDF
+service) once a manifest is dispatched; and **remove a shipment from a still-CREATED
+manifest** on the Loading Sheet page — new `ShipmentStatus` edge `MANIFEST_CREATED` ->
+`BOOKED`, `ShipmentService.detachFromManifest`, `ManifestService.removeShipment`,
+`DELETE /api/v1/manifests/{id}/shipments/{shipmentId}`. `ManifestCard` owns the removal
+mutation itself (`showRemoveAction` input, `removed` output), wired true only from
+Loading Sheet. Verified live end-to-end. Full detail in `CHANGELOG.md` 0.17.4.
+
+**v0.17.3 update (read this first too — corrects the v0.17.1 note below):** on direct
+user request, the page itself was renamed — it did *not* keep its name after all.
+`out-scan.ts` → `loading-sheet.ts`, component `OutScan` → `LoadingSheet`, route
+`/movement/out-scan` → `/movement/loading-sheet`, nav title/breadcrumb/tour all now say
+**"Loading Sheet"**, and the `MANIFEST_CREATED` display label is now **"Loading Sheet
+Created"** (was "Out Scan Created") everywhere — status badge, timeline, backend
+`TIMELINE_LABELS`. No behavior change, no DB/enum change — `OUT_SCAN` the status value
+was already gone (v0.17.1); this only renamed the surviving UI/label text. Full detail
+in `CHANGELOG.md` 0.17.3. Everywhere below this point that says "Out Scan" is
+describing the page/label as it was named through v0.17.2 — mentally substitute
+"Loading Sheet" for current-state UI text; the status/behavior narrative is unaffected.
+
 **Status:** DONE (v0.17.0, 2026-08-03; updated v0.17.1, same day). New package
 `com.courier.modules.manifest` (the minimal Manifest prerequisite, built in this same
 pass — see "Manifest didn't exist" below), migrations `V19`+`V20`, extends
@@ -118,20 +162,45 @@ Manifest (com.courier.modules.manifest, CompanyOwnedEntity)
 │            no "close the manifest" step in this module's own scope)
 └── dispatchedAt, completedAt, remarks
 
-Vehicle (com.courier.modules.manifest)
+Vehicle (com.courier.modules.manifest) — grew from a minimal fleet-picker record into a
+full fleet entity in 0.25.0 (2026-08-14); see that CHANGELOG entry for the full story.
+0.25.1 (same day) added a management UI — `features/manifest/vehicle-list.ts`, nav leaf
+under Masters (`COMPANY_AND_BRANCH`, an exception to Masters' usual COMPANY_ADMIN-only
+gate — see `nav-scoping-2026-07-31.md`). 0.25.2 (2026-08-15, direct feedback the dialog
+form "is not proper") replaced the create/edit dialog with routed pages —
+`components/vehicle-form.ts` + `vehicle-create.ts`/`vehicle-edit.ts`, mirroring
+`branch-form.ts`/`branch-create.ts`/`branch-edit.ts`'s own shape.
 ├── vehicleNumber   unique per company, upper-cased on save
-├── vehicleTypeId   optional, no physical FK — master.domain.VehicleType
-├── capacityKg, status (ACTIVE | INACTIVE), remarks
+├── vehicleType   enum BIKE|SCOOTER|AUTO|VAN|PICKUP|TRUCK|TEMPO|OTHER — NOT the same
+│                  thing as master.domain.VehicleType (a separate, company-editable
+│                  catalogue table Rate Master uses); the two are unrelated, no FK
+├── make, model, fuelType (PETROL|DIESEL|CNG|EV|OTHER)
+├── capacityKg, currentOdometer
+├── purchaseDate, registrationDate, insuranceExpiry, pucExpiry, fitnessExpiry,
+│   permitExpiry — statutory dates, no expiry-alert job reads them (not built)
+├── status   AVAILABLE | IN_USE | MAINTENANCE | INACTIVE — operational state, replaces
+│            the old ACTIVE|INACTIVE dichotomy
+├── branchId   base branch, no physical FK
+├── active   boolean, separate from status — the enable/disable toggle every other
+│            module's activate/deactivate uses; isActive() reads THIS, not status, so
+│            Dispatch's "vehicle must be active" check (ManifestServiceImpl.dispatch)
+│            needed no code change when status grew from 2 to 4 values
+└── remarks
 
 DeliveryAssignment (com.courier.modules.shipment — new table, current-state not ledger)
 ├── shipmentId   unique per company — one live assignment per shipment, re-assign updates in place
 ├── deliveryBranchId, deliveryUserId, assignedAt, status (ASSIGNED | DELIVERED)
-└── deliveredAt, receiverName, deliveryRemarks, otp, signatureUrl, photoUrl
-    — the proof-of-delivery capture point. otp/signatureUrl/photoUrl are plain
-      optional strings: no OTP-generation flow, no signature-pad, no camera capture
-      exist anywhere in this project. "API Ready" per the brief's own wording — the
-      field is wired straight to the API, same "URL is the source of truth" honesty
-      note CompanyLogo/ShipmentDocument already carry.
+└── deliveredAt, receiverName, deliveryRemarks, otp
+    — the proof-of-delivery capture point. otp is still a plain optional string: no
+      OTP-generation flow exists anywhere in this project. deliver() still takes
+      signatureUrl/photoUrl as caller-supplied URL strings — 0.17.9 (2026-08-12) made
+      those come from a real upload, POST /shipment-movement/{shipmentId}/pod-upload
+      (multipart) via FileStoragePort/S3FileStorage — but as of 0.23.0 (2026-08-14) the
+      URLs themselves are no longer columns on this row: markDelivered() dropped both
+      parameters, and deliver() writes them as ShipmentAsset rows (assetType POD, kind
+      SIGNATURE/PHOTO) instead, in the same shipment_assets table a new booking-time
+      image upload also uses (assetType BOOKING). See CHANGELOG.md 0.23.0 and
+      shipment-booking.md's own section on this table.
 
 shipment_status_history (existing table, V17) gained three columns:
 ├── branch_id     which branch this transition happened at (null for BOOKED/CANCELLED)
@@ -176,7 +245,12 @@ only service-to-service edges can deadlock Spring's bean graph.
   `OUT_SCAN` shipments ("Manifest ... has no OUT_SCAN shipment to dispatch."), refuses
   an inactive vehicle, 404s an unknown vehicle/driver id. On success: manifest →
   `DISPATCHED` with vehicle+driver+timestamp, every `OUT_SCAN` shipment on it →
-  `DISPATCHED` in the same transaction.
+  `DISPATCHED` in the same transaction. **(2026-08-14)** This is also where branch
+  commission is now earned — `ShipmentServiceImpl.transitionToDispatched` publishes
+  `ShipmentEvent.DispatchCommissionEarned` per shipment (PAID + booking branch's
+  `instantCommission` on), moved off booking time on direct user request. See
+  `branch-wallet.md`'s "Branch commission moved from booking-time to Trip Challan
+  (dispatch) time".
 - **IN_SCAN**: shipment must be `DISPATCHED` *and* `receivingBranchId` must equal the
   shipment's own `deliveryBranchId` — "Receiving branch does not match this
   shipment's delivery branch." verified live, distinct from a plain wrong-status
@@ -186,7 +260,9 @@ only service-to-service edges can deadlock Spring's bean graph.
 - **DELIVER**: shipment must be `OUT_FOR_DELIVERY`; `receiverName` is
   `@NotBlank`-validated at the DTO layer (verified: blank value → 400 with the field
   named, not a generic message) and again defensively in
-  `DeliveryAssignment.markDelivered`.
+  `DeliveryAssignment.markDelivered`. As of 0.23.0, a non-blank `signatureUrl`/
+  `photoUrl` is recorded as a `ShipmentAsset` row (`POD`/`SIGNATURE`,`POD`/`PHOTO`) in
+  the same transaction, not written onto `DeliveryAssignment` itself any more.
 - **Cancel** (existing endpoint, unchanged code): refused from `DISPATCHED` onward,
   verified live against an `OUT_FOR_DELIVERY` shipment — "is OUT_FOR_DELIVERY and can
   no longer be cancelled — it has left the branch."
@@ -197,12 +273,13 @@ only service-to-service edges can deadlock Spring's bean graph.
 |---|---|---|
 | `POST` | `/api/v1/manifests` | Create — the prerequisite, not in the brief's own list |
 | `GET` | `/api/v1/manifests` / `/{id}` / `/{id}/shipments` | Same prerequisite |
-| `POST` | `/api/v1/vehicles` | Create; `GET`/`PATCH .../activate`/`.../deactivate` alongside |
+| `POST` | `/api/v1/vehicles` | Create; `PUT`/`GET`/`PATCH .../activate`/`.../deactivate` alongside |
 | `POST` | `/api/v1/shipment-movement/out-scan` | `{manifestId, trackingNumbers[]}` → `BulkMovementResponse` |
 | `POST` | `/api/v1/shipment-movement/dispatch` | `{manifestId, vehicleId, driverUserId}` |
 | `POST` | `/api/v1/shipment-movement/in-scan` | `{receivingBranchId, trackingNumbers[]}` → `BulkMovementResponse` |
 | `POST` | `/api/v1/shipment-movement/out-for-delivery` | `{shipmentIds[], deliveryUserId}` → `BulkMovementResponse` |
 | `POST` | `/api/v1/shipment-movement/deliver` | `{shipmentId, receiverName, remarks?, otp?, signatureUrl?, photoUrl?}` |
+| `POST` | `/api/v1/shipment-movement/{shipmentId}/pod-upload` | multipart `file` + `kind` (`PHOTO`\|`SIGNATURE`) → `{url}`, 0.17.9 |
 | `GET` | `/api/v1/shipments/{id}/timeline` | 7 named steps, `completed` + `changedAt`/`changedBy` per step — distinct from the existing raw `/history` |
 
 ## Frontend (`features/shipment-movement`, `features/manifest`)
@@ -214,8 +291,9 @@ Shipments / Scan Tracking Number / Bulk Scan / Show Scan Count, all present),
 `in-scan.ts` (defaults the receiving branch to the signed-in user's own branch, same
 "no picker, my own branch" pattern `shipment-create.ts` set for Booking Branch),
 `out-for-delivery.ts` (lists the caller's own branch's `IN_SCAN` worklist, bulk-assigns
-a delivery user), `delivery.ts` (Search Shipment + Delivery Form, OTP/signature/photo
-as plain optional text fields per the "API Ready" wording), `timeline.ts` (linked from
+a delivery user), `delivery.ts` (Search Shipment + Delivery Form; OTP still a plain
+optional text field, Signature/Photo now a real file-upload button — 0.17.9 — that
+posts to `pod-upload` and fills the same URL field it always had), `timeline.ts` (linked from
 `shipment-view`'s action bar next to Charges/History/Documents).
 
 **Nav**: the five aspirational `Operations` leaves (`manifest`, `receive`, `dispatch`,
@@ -266,6 +344,76 @@ pre-filled the receiver name, and closing it produced a live toast and reset the
 Dispatch/In Scan/Out For Delivery all rendered cleanly, the last correctly showing an
 empty "Nothing waiting" state once both fixtures had already passed through it. No
 console errors during the session.
+
+## Follow-up
+
+- 2026-08-05: `deliver()` now publishes `ShipmentEvent.CodCollectedAtDelivery` (delivery
+  branch, shipment's `ShipmentCharge.netAmount`) whenever `paymentMode
+  .isCollectAtDelivery()` — closes the "COD delivery debit seam" this module left open
+  (finance's `COD` `SubTransactionType` existed but nothing ever fired it). Handled by
+  `finance`-owned `ShipmentDeliveryWalletListener`. Not yet verified live — see
+  `MEMORY/modules/branch-wallet.md`'s Next list.
+- 2026-08-13 (v0.20.8): DRS Report added — `ShipmentService.listDrs`/`getDrsDetail`, two
+  new `GET /shipment-movement/drs`/`/drs/detail` endpoints, `features/reports/
+  drs-report.ts`/`drs-detail.ts`. A DRS "run" for reporting is delivery user + delivery
+  branch + calendar day, grouped in Java from `DeliveryAssignment` rows — there is still
+  no persisted DRS/batch entity; this reads the same rows `printDrs()` (0.17.5, above)
+  already relied on, just after the fact and grouped. Verified live. Full detail in
+  `CHANGELOG.md` 0.20.8.
+- 2026-08-13 (v0.20.9), same day: every DRS now gets a real, unique, printable number —
+  direct request "every drs should have a uniq number as DRS000001". `V31` migration adds
+  `delivery_assignment.drs_number` (nullable) + `company_drs_sequences` (one row per
+  company, same `LAST_INSERT_ID(expr)` upsert idiom as `company_shipment_sequences`/
+  `branch_shipment_sequences`). `ShipmentServiceImpl.nextDrsNumber` generates one number
+  per bulk `assignOutForDelivery` call ("Generate DRS") — `"DRS" + 6-digit serial`, e.g.
+  `DRS000001` — stamped on every `DeliveryAssignment` row that call touches (new or
+  reassigned). **The grouping key for a "run" is still delivery user + delivery branch +
+  calendar day, unchanged** — the number is an attribute on top of that grouping, not a new
+  identity for it, so two separate "Generate DRS" clicks for the same user/branch on the
+  same day still report as one run (pre-existing behavior, not touched); `DrsSummary`/
+  `DrsDetail` surface the most recent `drsNumber` in the group (null for runs made entirely
+  of pre-V31 rows). `BulkMovementResult`/`BulkMovementResponse` gained a `drsNumber` field
+  (null for `inScan`, the only other caller). Frontend: DRS Report table and DRS Detail page
+  both show the number; Out For Delivery's Result card and Print DRS sheet show it too,
+  sourced straight off the `assignOutForDelivery` response rather than a second fetch. `mvn
+  test` green (`ShipmentServiceImplTest`/`ShipmentMovementServiceImplTest`), `tsc --noEmit`
+  clean. **Not verified live** — no local MySQL session this task; `V31` not yet applied.
+  Full detail in `CHANGELOG.md` 0.20.9.
+- 2026-08-13 (v0.21.1): **DRS charge per item quantity** — direct request "when shipment
+  order delivered through DRS then 2 rs should be debited for every qty ... set branch
+  level while creating branch same as gst and commission". `deliver()` now also computes
+  `drsCharge = delivery branch's own branches.drs_charge_per_qty (V32, default 2.00) *
+  total item quantity` (summed from `ShipmentItemRepository
+  .findAllByShipmentIdWithinCompany`) and, when positive, publishes a new
+  `ShipmentEvent.DrsChargeApplicable` — unlike `CodCollectedAtDelivery`, on **every**
+  delivery, not gated by payment mode. Handled by a second method on the existing
+  `ShipmentDeliveryWalletListener`, calling new `WalletService.debitForDrsCharge`
+  (`DRS` `SubTransactionType`). See `MEMORY/modules/branch-wallet.md`'s "DRS charge credit
+  seam" and `MEMORY/modules/branch.md`. `mvn test` 712 → 713. **Not verified live** — no
+  local MySQL session this task; `V32` not yet applied. Full detail in `CHANGELOG.md`
+  0.21.1.
+- 2026-08-14 (v0.24.2): **direction bug fixed** — 0.21.1 above shipped `DRS` as a debit on
+  a miscommunication; it was always meant to be a commission *credited* to the delivery
+  branch. `SubTransactionType.DRS` flipped `Direction.DEBIT` → `Direction.CREDIT`,
+  `WalletService.debitForDrsCharge` renamed `creditForDrsCharge`
+  (`DrsChargeCreditCommand`), posts `TransactionType.CR`. Amount formula (`drsChargePerQty
+  * qty`) unchanged. Full detail in `CHANGELOG.md` 0.24.2.
+- 2026-08-14 (v0.23.1, corrected same day in v0.23.2): THC gained its own
+  shipment-removal checkbox list (reuses `ManifestService.removeShipment`, no new
+  endpoint — previously Loading-Sheet-only via `ManifestCard`'s `showRemoveAction`) and
+  an optional operator-entered **Departure Time** (`Manifest.departureTime`, `V34`,
+  falls back to `dispatchedAt` when blank). v0.23.2, on direct request, made the
+  checkbox removal deferred rather than instant: unchecking only drops the row
+  client-side (`pendingRemovals`), no confirm popup, no immediate `removeShipment`
+  call — the actual removals fire from `dispatch()` itself, right before the dispatch
+  POST. Full detail in `CHANGELOG.md` 0.23.1/0.23.2. **Not yet applied**: `V34`.
+- 2026-08-14 (v0.23.3): In Scan's `receiveManifest` no longer bulk-receives every
+  pending shipment on a manifest blind — it opens a checkbox checklist
+  (`receivingManifest`/`selectedTrackingNumbers`, all checked by default) so a
+  short-received shipment (not physically on the vehicle) can be unchecked before the
+  `inScan` POST, which only carries the checked trackingNumbers. Same
+  checklist-before-bulk-action shape THC's own checklist (0.23.1/0.23.2) and Out For
+  Delivery's (v0.17.7) already use. Full detail in `CHANGELOG.md` 0.23.3.
 
 ## Not exercised
 

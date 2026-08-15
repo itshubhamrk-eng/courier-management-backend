@@ -72,7 +72,7 @@ rewrite the past.
 | Enum | Values |
 |---|---|
 | `TransactionType` | `CR`, `DR` — the accounting codes, because statements and settlement files speak them |
-| `SubTransactionType` | `WRC` recharge · `SBK` booking · `SRF` refund · `COD` COD settlement · `COM` commission · `BST` branch settlement · `MCR` manual credit · `MDB` manual debit · `TRI` transfer in · `TRO` transfer out · `ADJ` adjustment · `PNL` penalty |
+| `SubTransactionType` | `WRC` recharge · `SBK` booking · `SRF` refund · `COD` COD settlement · `COM` commission · `BST` branch settlement · `MCR` manual credit · `MDB` manual debit · `TRI` transfer in · `TRO` transfer out · `ADJ` adjustment · `PNL` penalty · `DRS` DRS commission (credit, flipped from debit 2026-08-14) |
 | `ReferenceType` | `PAYMENT`, `SHIPMENT`, `SETTLEMENT`, `SYSTEM`, `MANUAL` |
 | `PaymentStatus` | `PENDING`, `SUCCESS`, `FAILED`, `REFUNDED` — null on non-payment entries |
 | `WalletStatus` | `ACTIVE`, `INACTIVE`, `SUSPENDED`, `CLOSED` — only ACTIVE moves money |
@@ -298,6 +298,51 @@ runtime evidence**. Provision an active `RIVAL_CO` admin and a rival branch, the
       `WalletService.debitForBooking(BookingDebitCommand)`, `isAuthenticated()` not
       `COMPANY_ADMIN`-gated, debited AFTER_COMMIT via `ShipmentBookingWalletListener`.
       See `MEMORY/modules/shipment-booking.md`.
+- [x] **COD delivery debit seam** — closed 2026-08-05: `COD` `SubTransactionType` (seeded
+      since this module shipped) was never wired to anything — a collect-at-delivery
+      shipment (`TO_PAY`/`COD`) reached `DELIVERED` with no wallet entry at all, found live
+      chasing why shipment `26080000004` (COD) never debited its delivery branch. Mirrors
+      the booking seam exactly: `WalletService.debitForCodDelivery(CodDeliveryDebitCommand)`,
+      `isAuthenticated()`, debited AFTER_COMMIT via a new
+      `ShipmentDeliveryWalletListener` off `ShipmentEvent.CodCollectedAtDelivery`
+      (published from `ShipmentServiceImpl.deliver()` when `paymentMode.isCollectAtDelivery()`
+      is true, amount = the shipment's persisted `ShipmentCharge.netAmount`, branch = the
+      *delivery* branch, not booking). Reason code `COD` (`Direction.BOTH`), not a new one.
+      `mvn test` 664 → 665 (2 new, 1 existing `deliverHappyPath` fixed — it never stubbed
+      `paymentModeService`, latent because nothing read it in `deliver()` before this).
+      **Not yet verified live** — no working DB credentials this session; verify against a
+      real COD shipment before trusting this in production. See
+      `MEMORY/modules/shipment-movement.md`.
+- [x] **DRS charge credit seam** — closed 2026-08-13, direction fixed 2026-08-14: new `DRS`
+      `SubTransactionType`, same `isAuthenticated()`/AFTER_COMMIT shape as the COD seam
+      above, handled by a second method on the same `ShipmentDeliveryWalletListener` off a
+      new `ShipmentEvent.DrsChargeApplicable`. Unlike `CodCollectedAtDelivery`, published on
+      **every** delivery (not gated by payment mode) — amount = the delivery branch's own
+      `branches.drs_charge_per_qty` (`V32`, default 2.00) times the shipment's total item
+      quantity, published only when that product is greater than zero. **2026-08-14: it
+      shipped as a debit on a miscommunication** ("when shipment order delivered through
+      DRS then 2 rs should be debited for every qty" was read literally; the actual intent
+      was a commission credited to the branch) — direct bug report fixed it: `DRS` is now
+      `Direction.CREDIT` (label "DRS Commission", was "DRS Charges"),
+      `WalletService.debitForDrsCharge(DrsChargeDebitCommand)` renamed to
+      `creditForDrsCharge(DrsChargeCreditCommand)`, posts `TransactionType.CR`. The amount
+      formula itself never changed. **Not yet verified live** — no local MySQL session
+      either task; `V32` not yet applied. See `MEMORY/modules/shipment-movement.md`.
+- [x] **Branch commission moved from booking-time to Trip Challan (dispatch) time** —
+      closed 2026-08-14, direct user request: "for now i credit branch commision when
+      order book it should be creadit after Trip challan created". `ShipmentEvent
+      .PrepaidBookingConfirmed` no longer carries `branchCommission` — it now only drives
+      the freight debit. New `ShipmentEvent.DispatchCommissionEarned`, published per
+      shipment from `ShipmentServiceImpl.transitionToDispatched` (called by
+      `ManifestServiceImpl.dispatch`, i.e. Trip Challan creation), same eligibility as
+      before (payment mode collects at booking, booking branch has `instantCommission`
+      on, amount > 0). Handled by a second method on the same
+      `ShipmentBookingWalletListener`, same AFTER_COMMIT/`REQUIRES_NEW`/try-catch-and-log
+      shape as every other wallet seam here — a credit failure leaves the manifest
+      dispatched, commission uncredited, for manual reconciliation. Freight debit itself
+      is unchanged — still happens at booking, only commission's timing moved. `mvn test`
+      719/719. **Not yet verified live** — no local MySQL session this task. See
+      `MEMORY/modules/shipment-booking.md`/`shipment-movement.md`.
 - [ ] Razorpay **webhook** endpoint (`payment.captured`), so a closed browser still settles.
       `PaymentStatus.PENDING`/`FAILED` exist for it.
 - [ ] Refunds — a `SRF`/`REFUNDED` reversal path.

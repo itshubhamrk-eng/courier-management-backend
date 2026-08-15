@@ -26,7 +26,11 @@ public class BranchMapper {
                 r.district(), r.taluka(), r.postalCode(), r.latitude(), r.longitude(),
                 r.openingTime(), r.closingTime(), r.workingDays(),
                 r.allowBooking(), r.allowDelivery(), r.allowPickup(),
-                r.allowManifest(), r.allowCashCollection(), r.allowWallet(), r.remarks(),
+                r.allowManifest(), r.allowCashCollection(), r.allowWallet(), r.instantCommission(),
+                r.remarks(),
+                r.gstPercentage(), r.commissionOnOtherCharges(),
+                r.commissionOnBasicFreight(), r.companyServiceChargePercentage(),
+                r.drsChargePerQty(),
                 toCommand(r.branchUser()));
     }
 
@@ -43,7 +47,11 @@ public class BranchMapper {
                 r.district(), r.taluka(), r.postalCode(), r.latitude(), r.longitude(),
                 r.openingTime(), r.closingTime(), r.workingDays(),
                 r.allowBooking(), r.allowDelivery(), r.allowPickup(),
-                r.allowManifest(), r.allowCashCollection(), r.allowWallet(), r.remarks(),
+                r.allowManifest(), r.allowCashCollection(), r.allowWallet(), r.instantCommission(),
+                r.remarks(),
+                r.gstPercentage(), r.commissionOnOtherCharges(),
+                r.commissionOnBasicFreight(), r.companyServiceChargePercentage(),
+                r.drsChargePerQty(),
                 r.version());
     }
 
@@ -72,7 +80,11 @@ public class BranchMapper {
                 branch.openingTime(), branch.closingTime(), branch.workingDays(),
                 branch.allowBooking(), branch.allowDelivery(), branch.allowPickup(),
                 branch.allowManifest(), branch.allowCashCollection(), branch.allowWallet(),
+                branch.instantCommission(),
                 branch.remarks(),
+                branch.gstPercentage(), branch.commissionOnOtherCharges(),
+                branch.commissionOnBasicFreight(), branch.companyServiceChargePercentage(),
+                branch.drsChargePerQty(),
                 branch.createdBy(), branch.createdDate(), branch.updatedBy(),
                 branch.updatedDate(), branch.version(),
                 new BranchUserResponse(created.userId(), created.userEmail(),
@@ -90,7 +102,11 @@ public class BranchMapper {
                 b.getOpeningTime(), b.getClosingTime(), b.getWorkingDays(),
                 b.isAllowBooking(), b.isAllowDelivery(), b.isAllowPickup(),
                 b.isAllowManifest(), b.isAllowCashCollection(), b.isAllowWallet(),
+                b.isInstantCommission(),
                 b.getRemarks(),
+                b.getGstPercentage(), b.getCommissionOnOtherCharges(),
+                b.getCommissionOnBasicFreight(), b.getCompanyServiceChargePercentage(),
+                b.getDrsChargePerQty(),
                 b.getCreatedBy(), b.getCreatedAt(), b.getUpdatedBy(), b.getUpdatedAt(), b.getVersion(),
                 null);
     }
@@ -101,6 +117,6 @@ public class BranchMapper {
                 b.getBranchType(), b.getStatus(),
                 b.getCity(), b.getState(), b.getPostalCode(), b.getManagerId(),
                 b.isAllowBooking(), b.isAllowDelivery(),
-                b.getCreatedAt(), b.getVersion());
+                b.getCreatedAt(), b.getVersion(), b.getGstPercentage());
     }
 }

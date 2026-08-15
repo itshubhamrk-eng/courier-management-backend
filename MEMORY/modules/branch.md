@@ -1,6 +1,18 @@
 # Module: branch (Branch Management)
 
-**Status:** DONE and verified against MySQL 8.0.46 (Phase 4, v0.9.0). Extended 2026-07-29:
+**Status:** DONE and verified against MySQL 8.0.46 (Phase 4, v0.9.0). Extended 2026-08-12
+(`V25`): four branch-level charge percentages — `gstPercentage` (default 18),
+`commissionOnOtherCharges` (default 20), `commissionOnBasicFreight` (default 10),
+`companyServiceChargePercentage` (default 10). Optional-with-default on create, required
+on update (full-replacement PUT, same as every other editable field). **Code complete,
+not yet run against MySQL** — see `CHANGELOG.md` 0.17.8. Extended 2026-08-13 (`V32`): a
+fifth charge, `drsChargePerQty` (default 2.00) — same optional-on-create/required-on-update
+treatment as the other four, but a **fixed amount, not a percentage**. Consumed by
+Shipment Movement's `deliver()` to compute a per-delivery DRS wallet **credit** (shipped
+as a debit on a miscommunication, fixed 2026-08-14) — see
+`MEMORY/modules/shipment-movement.md`'s "DRS charge per qty" and
+`MEMORY/modules/branch-wallet.md`'s `DRS` sub-transaction type. **Code complete, not yet
+run against MySQL** — see `CHANGELOG.md` 0.21.1/0.24.2. Extended 2026-07-29:
 creating a branch also creates its **login account**, and then that account's **company
 role** (see *Creating a branch creates four things*). The role half is **code complete, not
 yet run against MySQL**.

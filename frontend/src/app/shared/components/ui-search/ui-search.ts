@@ -21,8 +21,9 @@ import { debounceTime, distinctUntilChanged } from 'rxjs';
     </div>
   `,
   styles: [`
-    .search { display:flex; align-items:center; gap:8px; height:40px; padding:0 12px;
-      background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); min-width:240px; }
+    .search { display:flex; align-items:center; gap:8px; height:42px; padding:0 14px;
+      background:var(--surface-muted); border:0; border-radius:var(--r-field); min-width:240px;
+      box-shadow:var(--shadow-clay-inset); }
     .search__icon { color:var(--content-muted); font-size:20px; }
     .search__input { border:0; outline:0; background:transparent; flex:1; font:400 14px var(--font-sans); color:var(--content-fg); }
     .search__clear { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:flex; }

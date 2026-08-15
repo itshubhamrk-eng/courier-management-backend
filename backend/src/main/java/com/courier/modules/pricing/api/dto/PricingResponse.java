@@ -23,6 +23,11 @@ public record PricingResponse(
         BigDecimal chargeableWeight,
         String weightUnit,
 
+        @Schema(description = "The Freight Factor grid cell's own factor, or an accepted "
+                + "caller override of it — null except on the Freight Factor fallback path "
+                + "(matchedRouteId/matchedRateId both null).")
+        BigDecimal appliedFreightFactor,
+
         ChargeBreakup chargeBreakup
 ) {
 }

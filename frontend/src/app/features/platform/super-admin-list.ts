@@ -49,11 +49,12 @@ import { SuperAdminService } from './super-admin.service';
         } @else {
           <table class="ops">
             <thead>
-              <tr><th>Email</th><th>Name</th><th>Roles</th><th>Status</th><th>Last sign-in</th></tr>
+              <tr><th>#</th><th>Email</th><th>Name</th><th>Roles</th><th>Status</th><th>Last sign-in</th></tr>
             </thead>
             <tbody>
-              @for (user of users(); track user.id) {
+              @for (user of users(); track user.id; let i = $index) {
                 <tr>
+                  <td>{{ i + 1 }}</td>
                   <td class="mono">{{ user.email }}</td>
                   <td>{{ fullName(user) }}</td>
                   <td class="roles">

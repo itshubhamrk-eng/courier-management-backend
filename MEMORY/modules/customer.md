@@ -7,8 +7,12 @@ explicit request — see `MEMORY/BACKLOG.md`.
 **Depends on:** `shared`; `com.courier.modules.master`'s `CountryService` /
 `StateService` / `DistrictService` / `CityService` / `AreaService` / `PincodeService`
 (application interfaces, not repositories or entities — see *Geography validation*).
-**Depended on by:** Shipment, eventually, through a bare `customerId` — see the
-independence rule below. Nothing depends on it yet.
+**Depended on by:** Shipment (since 0.18.1) — `ShipmentServiceImpl.create()` calls
+`CustomerService.findOrCreateForBooking(name, mobile)` for both sender and receiver, so a
+booking's parties become reusable Customer master data for the next booking's search
+suggestion. This is **not** the `customerId` FK this line originally anticipated — no FK
+ever shipped, and this call doesn't read/validate a `Customer`, only writes one. See the
+independence rule below (still intact) and `shipment-booking.md`'s correction note.
 
 ## Purpose
 

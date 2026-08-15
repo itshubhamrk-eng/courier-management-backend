@@ -30,6 +30,7 @@ export interface QuickActionDef {
   id: string;
   label: string;
   icon: string;
+  tone: Tone;
   /** Existing app route; omitted for actions whose module is not built yet. */
   route?: string;
 }
@@ -61,7 +62,7 @@ const T = {
   activeBranches: { key: 'activeBranches', label: 'Active Branches', icon: 'store', tone: 'brand' },
   // activeHubs: { key: 'activeHubs', label: 'Active Hubs', icon: 'hub', tone: 'info' }, // hub module not built yet
   wallet:         { key: 'walletBalance', label: 'Wallet Balance', icon: 'account_balance_wallet', tone: 'brand', prefix: '₹' },
-  todayBookings:  { key: 'todayBookings', label: "Today's Bookings", icon: 'add_box', tone: 'brand' },
+  todayBookings:  { key: 'todayBookings', label: "Today's Bookings", icon: 'add_box', tone: 'info' },
   todayCollection:{ key: 'todayCollection', label: "Today's Collection", icon: 'savings', tone: 'success', prefix: '₹' },
   pendingDelivery:{ key: 'pendingDelivery', label: 'Pending Delivery', icon: 'local_shipping', tone: 'warning' },
   toReceive:      { key: 'toReceive', label: 'To Receive', icon: 'call_received', tone: 'brand' },
@@ -74,17 +75,17 @@ const T = {
 
 // --- quick actions --------------------------------------------------------
 const QA = {
-  book:     { id: 'book', label: 'Book Shipment', icon: 'add_box', route: '/shipments/new' },
-  search:   { id: 'search', label: 'Search Shipment', icon: 'search', route: '/shipments' },
-  track:    { id: 'track', label: 'Track Shipment', icon: 'my_location', route: '/track' },
-  print:    { id: 'print', label: 'Print Label', icon: 'print' },
-  outscan:  { id: 'outscan', label: 'Out Scan', icon: 'qr_code_scanner', route: '/movement/out-scan' },
-  dispatch: { id: 'dispatch', label: 'Dispatch', icon: 'send' },
-  receive:  { id: 'receive', label: 'Receive', icon: 'call_received' },
-  branches: { id: 'branches', label: 'Branches', icon: 'store', route: '/branches' },
+  book:     { id: 'book', label: 'Book Shipment', icon: 'add_box', tone: 'brand', route: '/shipments/new' },
+  search:   { id: 'search', label: 'Search Shipment', icon: 'search', tone: 'info', route: '/shipments' },
+  track:    { id: 'track', label: 'Track Shipment', icon: 'my_location', tone: 'success', route: '/track' },
+  print:    { id: 'print', label: 'Print Label', icon: 'print', tone: 'warning' },
+  loadingSheet: { id: 'loadingSheet', label: 'Loading Sheet', icon: 'qr_code_scanner', tone: 'danger', route: '/movement/loading-sheet' },
+  dispatch: { id: 'dispatch', label: 'THC', icon: 'send', tone: 'info' },
+  receive:  { id: 'receive', label: 'Receive', icon: 'call_received', tone: 'success' },
+  branches: { id: 'branches', label: 'Branches', icon: 'store', tone: 'brand', route: '/branches' },
   // hubs: { id: 'hubs', label: 'Hubs', icon: 'hub', route: '/hubs' }, // hub module not built yet
-  users:    { id: 'users', label: 'Users', icon: 'group', route: '/users' },
-  companies:{ id: 'companies', label: 'Companies', icon: 'apartment', route: '/companies' }
+  users:    { id: 'users', label: 'Users', icon: 'group', tone: 'warning', route: '/users' },
+  companies:{ id: 'companies', label: 'Companies', icon: 'apartment', tone: 'danger', route: '/companies' }
 } satisfies Record<string, QuickActionDef>;
 
 const allSectionsOff: SectionFlags = {
@@ -94,12 +95,12 @@ const allSectionsOff: SectionFlags = {
 
 export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
   PLATFORM: {
-    stats: [T.totalCompanies, T.activeCompanies, T.totalShipments, T.revenue],
+    stats: [T.totalCompanies, T.activeCompanies, T.totalShipments, { ...T.revenue, tone: 'warning' }],
     quickActions: [QA.companies, QA.users, QA.branches],
     sections: { ...allSectionsOff, shipmentTrend: true, revenueTrend: true, recentActivity: true }
   },
   COMPANY: {
-    stats: [T.todayShipments, T.delivered, T.inTransit, T.pending, T.revenue, T.activeBranches],
+    stats: [T.todayShipments, T.delivered, T.inTransit, T.pending, T.revenue, { ...T.activeBranches, tone: 'danger' }],
     quickActions: [QA.book, QA.search, QA.track, QA.branches, QA.users],
     sections: {
       shipmentTrend: true, deliveryPerformance: true, revenueTrend: true,
@@ -108,24 +109,24 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
   },
   BRANCH_MANAGER: {
     stats: [T.wallet, T.todayBookings, T.pendingDelivery, T.todayCollection],
-    quickActions: [QA.book, QA.search, QA.track, QA.outscan, QA.print],
+    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
     sections: {
       ...allSectionsOff, shipmentTrend: true, deliveryPerformance: true,
       recentActivity: true, recentShipments: true
     }
   },
   BRANCH_OPERATOR: {
-    stats: [T.todayBookings, T.todayShipments, T.wallet, T.pending],
-    quickActions: [QA.book, QA.search, QA.track, QA.outscan, QA.print],
+    stats: [T.todayBookings, T.todayShipments, { ...T.wallet, tone: 'success' }, T.pending],
+    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
     sections: { ...allSectionsOff, recentActivity: true, recentShipments: true }
   },
   HUB_MANAGER: {
-    stats: [T.toReceive, T.inSorting, T.toDispatch, T.pending],
-    quickActions: [QA.receive, QA.dispatch, QA.outscan, QA.search, QA.track],
+    stats: [T.toReceive, { ...T.inSorting, tone: 'danger' }, T.toDispatch, T.pending],
+    quickActions: [QA.receive, QA.dispatch, QA.loadingSheet, QA.search, QA.track],
     sections: { ...allSectionsOff, shipmentTrend: true, recentActivity: true }
   },
   HUB_OPERATOR: {
-    stats: [T.toReceive, T.toDispatch, T.todayShipments],
+    stats: [T.toReceive, T.toDispatch, { ...T.todayShipments, tone: 'success' }],
     quickActions: [QA.receive, QA.dispatch, QA.search, QA.track],
     sections: { ...allSectionsOff, recentActivity: true }
   }

@@ -18,7 +18,7 @@ import { environment } from '@env/environment';
   `,
   styles: [`
     .ft { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 32px;
-      border-top:1px solid var(--surface-border); color:var(--content-muted); font:400 13px var(--font-sans); }
+      border-top:0; color:var(--content-muted); font:400 13px var(--font-sans); }
     @media (max-width:1024px){ .ft{ padding:14px 24px; } }
     @media (max-width:640px){ .ft{ padding:12px 16px; } }
     .ft__meta { display:flex; align-items:center; gap:16px; }

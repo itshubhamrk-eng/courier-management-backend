@@ -71,7 +71,7 @@ interface ChartVm {
     .chart-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:8px; color:var(--content-muted); }
     .chart-empty mat-icon { font-size:36px; width:36px; height:36px; opacity:.45; }
-    .chart-skeleton { border-radius:12px;
+    .chart-skeleton { border-radius:var(--r-card);
       background:linear-gradient(90deg,var(--surface-muted),var(--surface-border),var(--surface-muted));
       background-size:200% 100%; animation:sh 1.3s infinite; }
     @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }

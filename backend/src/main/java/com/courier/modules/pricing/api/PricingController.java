@@ -36,7 +36,8 @@ public class PricingController {
             + "runs every enabled charge calculator; returns the full breakup. Prices "
             + "without booking — no data is persisted.")
     public ApiResponse<PricingResponse> calculate(@Valid @RequestBody PricingRequest request) {
-        var result = pricingEngine.calculate(mapper.toCommand(request));
-        return ApiResponse.success(mapper.toResponse(result), "Price calculated");
+        var command = mapper.toCommand(request);
+        var result = pricingEngine.calculate(command);
+        return ApiResponse.success(mapper.toResponse(command, result), "Price calculated");
     }
 }

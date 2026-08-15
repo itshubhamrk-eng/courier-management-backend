@@ -1,8 +1,11 @@
 package com.courier.modules.finance.application;
 
 import com.courier.modules.finance.application.command.BookingDebitCommand;
+import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
+import com.courier.modules.finance.application.command.CommissionCreditCommand;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
+import com.courier.modules.finance.application.command.DrsChargeCreditCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.Wallet;
@@ -83,6 +86,50 @@ public interface WalletService {
      *         caller's own and the caller is not a company admin
      */
     WalletTransaction debitForBooking(BookingDebitCommand command);
+
+    /**
+     * Debits the delivery branch's wallet for a shipment collected at delivery
+     * ({@code COD}, referencing the shipment number) — the delivery-side mirror of
+     * {@link #debitForBooking}. Same non-{@code COMPANY_ADMIN}-only shape: Shipment
+     * Movement has already decided who may deliver through that branch, and this seam
+     * only moves the money that decision earns.
+     *
+     * @param command branch, amount, and the shipment the debit answers to
+     * @throws com.courier.shared.exception.BusinessRuleException insufficient balance, a
+     *         non-ACTIVE wallet, or a non-positive amount
+     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
+     *         caller's own and the caller is not a company admin
+     */
+    WalletTransaction debitForCodDelivery(CodDeliveryDebitCommand command);
+
+    /**
+     * Credits the delivery branch's wallet with DRS commission on a delivered shipment
+     * ({@code DRS}, referencing the shipment number) — {@code drsCharge = branch's own
+     * drsChargePerQty * item quantity}, published from {@code ShipmentServiceImpl.deliver}
+     * for every delivery, not only collect-at-delivery ones. Same non-{@code
+     * COMPANY_ADMIN}-only shape as {@link #debitForCodDelivery}.
+     *
+     * @param command branch, amount, and the shipment the credit answers to
+     * @throws com.courier.shared.exception.BusinessRuleException a non-ACTIVE wallet or a
+     *         non-positive amount
+     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
+     *         caller's own and the caller is not a company admin
+     */
+    WalletTransaction creditForDrsCharge(DrsChargeCreditCommand command);
+
+    /**
+     * Credits the booking branch's wallet with its commission share of a PREPAID shipment
+     * ({@code COM}, referencing the shipment number) — posted right after
+     * {@link #debitForBooking} settles, only when the branch has {@code instantCommission}
+     * on. Same non-{@code COMPANY_ADMIN}-only shape as {@link #debitForBooking}.
+     *
+     * @param command branch, amount, and the shipment the credit answers to
+     * @throws com.courier.shared.exception.BusinessRuleException a non-ACTIVE wallet or a
+     *         non-positive amount
+     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
+     *         caller's own and the caller is not a company admin
+     */
+    WalletTransaction creditCommission(CommissionCreditCommand command);
 
     /**
      * Derived view of a wallet, assembled for the summary endpoint.

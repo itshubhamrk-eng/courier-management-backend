@@ -2,11 +2,15 @@ package com.courier.modules.shipment.application;
 
 import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
+import com.courier.modules.shipment.domain.BranchCommissionSummary;
+import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.Shipment;
+import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentCriteria;
 import com.courier.modules.shipment.domain.ShipmentDocument;
 import com.courier.modules.shipment.domain.ShipmentItem;
 import com.courier.modules.shipment.domain.ShipmentStatusHistory;
+import com.courier.modules.shipment.domain.ShipmentSummaryStats;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -62,7 +66,22 @@ public interface ShipmentService {
 
     Shipment getByTrackingNumber(String trackingNumber);
 
+    /** POD/delivery data for a shipment — null once it's never been assigned for delivery,
+     *  and unset (delivered fields null) until {@link #deliver} closes it out. */
+    DeliveryAssignment getDeliveryAssignment(UUID shipmentId);
+
     Page<Shipment> search(ShipmentCriteria criteria, Pageable pageable);
+
+    /** Unpaged aggregates for the same search — the Booking/Delivery Report summary row. */
+    ShipmentSummaryStats summaryStats(ShipmentCriteria criteria);
+
+    /**
+     * Commission totals for the same search, grouped by booking branch — the Commission
+     * Report's branch-wise summary table. One row per booking branch with at least one
+     * matching, charged shipment; a branch with no charge record on any matching shipment
+     * is simply absent, not a zero row.
+     */
+    List<BranchCommissionSummary> commissionSummary(ShipmentCriteria criteria);
 
     /**
      * Net amount per shipment, for the list row — batch-fetched (one query for the whole
@@ -71,6 +90,29 @@ public interface ShipmentService {
      * from the returned map has no charge record.
      */
     Map<UUID, BigDecimal> netAmountsFor(Collection<UUID> shipmentIds);
+
+    /**
+     * The commission breakdown (V28) per shipment, for the list row and the Booking/Delivery
+     * Report exports — batch-fetched the same way as {@link #netAmountsFor}, since it lives
+     * on the same {@code shipment_charges} row. A shipment missing from the returned map has
+     * no charge record.
+     */
+    Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> chargesFor(Collection<UUID> shipmentIds);
+
+    /**
+     * Delivered-at per shipment, for the Delivery Report's list row — batch-fetched the
+     * same way as {@link #netAmountsFor}, since {@code deliveredAt} lives on the separate
+     * {@code DeliveryAssignment} row. A shipment missing from the returned map has not
+     * been delivered (or has no assignment at all).
+     */
+    Map<UUID, java.time.Instant> deliveredAtFor(Collection<UUID> shipmentIds);
+
+    /**
+     * Every shipment scanned onto any of these manifests, within the caller's company —
+     * the THC Report's shipment-count/weight/package-count aggregate, batch-fetched the
+     * same "one query, not one per row" way as {@link #netAmountsFor}.
+     */
+    List<Shipment> findByManifestIds(Collection<UUID> manifestIds);
 
     /**
      * Cancels a shipment. Refused once it has left the branch —
@@ -88,6 +130,25 @@ public interface ShipmentService {
     List<ShipmentDocument> getDocuments(UUID shipmentId);
 
     ShipmentDocument addDocument(UUID shipmentId, AddDocumentCommand command);
+
+    /** Every uploaded image of this shipment (booking photo, POD photo/signature), newest
+     *  first — see {@link ShipmentAsset}. */
+    List<ShipmentAsset> getAssets(UUID shipmentId);
+
+    /**
+     * Stores a shipment photo — taken during booking, before the shipment leaves the
+     * branch — in the configured object store and records it as a {@code BOOKING} asset.
+     * Unlike {@link #uploadPodFile}, this persists the reference itself rather than
+     * handing the URL back for a later call to fold in: a booking image is not part of any
+     * state-machine step, so there is nothing else to wait for.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException the content type is not
+     *         an accepted image, or no storage backend is configured
+     */
+    String uploadShipmentImage(UUID shipmentId, UploadShipmentImageCommand command);
+
+    record UploadShipmentImageCommand(byte[] content, String filename, String contentType) {
+    }
 
     /** @param documentType one of the five the brief names, as a string on the wire */
     record AddDocumentCommand(String documentType, String documentName, String documentUrl,
@@ -118,10 +179,20 @@ public interface ShipmentService {
     Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
                              UUID expectedDeliveryBranchId);
 
+    /**
+     * Called only by {@code ManifestServiceImpl.removeShipment} — the inverse of
+     * {@link #attachToManifest}. Clears {@code manifestId} and reverts the shipment to
+     * {@code BOOKED} so it can be picked up by a future manifest.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException the shipment is not
+     *         {@code MANIFEST_CREATED}, or not currently on {@code manifestId}
+     */
+    Shipment detachFromManifest(UUID shipmentId, UUID manifestId);
+
     /** Read-only — {@code ManifestServiceImpl.dispatch} uses this to enforce "at least one
-     * shipment on the manifest" before it will dispatch. Out Scan folded into
+     * shipment on the manifest" before it will dispatch. Loading Sheet folded into
      * {@code MANIFEST_CREATED} itself (V20, on direct request) — adding a shipment to a
-     * manifest already is the "out scan created" milestone, so this simply reads every
+     * manifest already is the "loading sheet created" milestone, so this simply reads every
      * {@code MANIFEST_CREATED} shipment on the manifest rather than a separate scanned
      * subset. */
     List<Shipment> findManifestCreatedShipments(UUID manifestId);
@@ -160,19 +231,78 @@ public interface ShipmentService {
      */
     Shipment deliver(UUID shipmentId, DeliverCommand command);
 
+    /**
+     * Stores one POD file (photo or signature capture) in the configured object store
+     * and returns its URL — the caller then passes that URL into {@link #deliver} as
+     * {@code signatureUrl}/{@code photoUrl}, the same "URL is what deliver() takes"
+     * contract as before, now backed by a real upload instead of a caller-supplied link.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException {@code kind} is not
+     *         {@code PHOTO}/{@code SIGNATURE}, the content type is not an accepted
+     *         image/video/PDF, or no storage backend is configured
+     */
+    String uploadPodFile(UUID shipmentId, UploadPodFileCommand command);
+
     /** Oldest first, one step per status the shipment has actually reached — see {@code getHistory}
      * for the raw append-only log this is built from. */
     List<TimelineStep> timeline(UUID shipmentId);
 
+    /**
+     * One row per DRS "run" — a delivery user + delivery branch + calendar day, grouped
+     * from {@code DeliveryAssignment} rows (there is still no separate DRS/batch table; a
+     * run's identity is still this grouping, not the number — see {@code
+     * MEMORY/modules/shipment-movement.md}). Since V31, each {@link #assignOutForDelivery}
+     * call stamps a unique {@code drsNumber} ({@code "DRS" + 6-digit serial}) on every row
+     * it touches; the summary surfaces the most recent one in the group, null for runs made
+     * entirely of rows that predate that column. {@code from}/{@code to} default to the
+     * trailing 30 days when null. {@code deliveryBranchId} restricts to one branch's runs
+     * when given (a {@code BRANCH_MANAGER}'s own branch) — filtered server-side so a caller
+     * scoped to one branch never receives another branch's rows over the wire.
+     */
+    List<DrsSummary> listDrs(java.time.LocalDate from, java.time.LocalDate to, UUID deliveryBranchId);
+
+    /** Every shipment on one DRS run — same grouping key {@link #listDrs} used to build the row. */
+    DrsDetail getDrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate);
+
+    /** {@code drsNumber} is the most recently generated number among the run's assignments
+     *  (null for runs made entirely of pre-V31 rows) — the grouping key itself is still
+     *  delivery user + delivery branch + calendar day, unchanged. */
+    record DrsSummary(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,
+                      String drsNumber, int shipmentCount, int deliveredCount, int pendingCount) {
+    }
+
+    record DrsShipmentRow(UUID shipmentId, String shipmentNumber, String trackingNumber,
+                          String receiverName, String receiverContact, UUID paymentModeId,
+                          BigDecimal netAmount, com.courier.modules.shipment.domain.ShipmentStatus status,
+                          java.time.Instant deliveredAt) {
+    }
+
+    record DrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,
+                     String drsNumber, List<DrsShipmentRow> shipments) {
+    }
+
     record DeliverCommand(String receiverName, String remarks, String otp, String signatureUrl,
                           String photoUrl) {
+    }
+
+    /**
+     * @param kind {@code PHOTO} or {@code SIGNATURE} — controls only the storage key,
+     *             both kinds accept the same content types
+     */
+    record UploadPodFileCommand(byte[] content, String filename, String contentType, String kind) {
     }
 
     /** One outcome per input item — {@code message} is null on success. */
     record MovementOutcome(String reference, boolean success, String message) {
     }
 
-    record BulkMovementResult(List<MovementOutcome> results) {
+    /** {@code drsNumber} is only ever set by {@link #assignOutForDelivery} — null for
+     *  every other bulk movement (e.g. {@link #inScan}). */
+    record BulkMovementResult(List<MovementOutcome> results, String drsNumber) {
+        public BulkMovementResult(List<MovementOutcome> results) {
+            this(results, null);
+        }
+
         public long successCount() {
             return results.stream().filter(MovementOutcome::success).count();
         }

@@ -14,9 +14,10 @@ import { ShipmentService } from '@features/shipment/shipment.service';
 import { Manifest, Shipment } from '@core/models/shipment.model';
 import { ManifestService } from '@features/manifest/manifest.service';
 import { ManifestCard } from './components/manifest-card';
+import { WarehouseIllustration } from '@shared/components/illustrations/warehouse-illustration';
 
 /**
- * Out Scan — creating a manifest already is "out scan created" (V20, on direct
+ * Loading Sheet — creating a manifest already is "loading sheet created" (V20, on direct
  * request: "manifest created as outscan created" — one milestone, not two, so there is
  * no separate scan action here any more). The brief's own page asked for "Search
  * Manifest / Display Shipments / Scan Tracking Number / Bulk Scan / Show Scan Count",
@@ -27,19 +28,22 @@ import { ManifestCard } from './components/manifest-card';
  * total weight and total parcel count, with the LR table underneath. See ManifestCard.
  */
 @Component({
-  selector: 'app-out-scan',
+  selector: 'app-loading-sheet',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiSelect, ManifestCard],
+  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiSelect, ManifestCard, WarehouseIllustration],
   template: `
     <div class="page">
-      <header class="page__head" data-tour="out-scan-head">
-        <div><h1 class="text-h1">Out Scan</h1>
-          <p class="text-caption">Manifests ready to dispatch — creating one already counts as out scan created.</p></div>
+      <header class="page__head" data-tour="loading-sheet-head">
+        <div class="page__head-row">
+          <app-warehouse-illustration class="page__head-ill" [size]="52" />
+          <div><h1 class="text-h1">Loading Sheet</h1>
+          <p class="text-caption">Manifests ready to dispatch — creating one already counts as loading sheet created.</p></div>
+        </div>
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
       </header>
 
-      <app-card title="Create Manifest" subtitle="Group booked shipments travelling this branch pair.">
+      <app-card title="Create Loading Sheet" subtitle="Group booked shipments travelling this branch pair.">
         <form [formGroup]="createForm" (ngSubmit)="createManifest()" class="df">
           <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Select branch" />
           @if (!loadingBranches() && !branchOptions().length) {
@@ -52,12 +56,13 @@ import { ManifestCard } from './components/manifest-card';
                 <div class="tbl__wrap">
                   <table class="tbl">
                     <thead>
-                      <tr><th></th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th></tr>
+                      <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th></tr>
                     </thead>
                     <tbody>
-                      @for (s of bookedShipments(); track s.id) {
+                      @for (s of bookedShipments(); track s.id; let i = $index) {
                         <tr (click)="toggleShipment(s.id)">
                           <td><input type="checkbox" [checked]="isSelected(s.id)" (click)="$event.stopPropagation()" (change)="toggleShipment(s.id)" /></td>
+                          <td>{{ i + 1 }}</td>
                           <td>{{ s.trackingNumber }}</td>
                           <td>{{ s.senderName }} → {{ s.receiverName }}</td>
                           <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
@@ -72,7 +77,7 @@ import { ManifestCard } from './components/manifest-card';
             }
           }
           <div class="df__bar">
-            <app-button type="submit" icon="add_box" [loading]="creating()" [disabled]="!myBranchId">Create Manifest</app-button>
+            <app-button type="submit" icon="add_box" [loading]="creating()" [disabled]="!myBranchId">Create Loading Sheet</app-button>
           </div>
         </form>
       </app-card>
@@ -92,7 +97,8 @@ import { ManifestCard } from './components/manifest-card';
       } @else {
         @for (m of openManifests(); track m.id) {
           <app-manifest-card [manifest]="m" [branchNames]="branchNames()"
-            [showDispatchAction]="true" (dispatch)="goToDispatch($event)" />
+            [showDispatchAction]="true" [showRemoveAction]="true"
+            (dispatch)="goToDispatch($event)" (removed)="onShipmentRemoved()" />
         }
       }
     </div>
@@ -115,7 +121,7 @@ import { ManifestCard } from './components/manifest-card';
     .tbl--right { text-align:right; }
   `]
 })
-export class OutScan implements OnInit {
+export class LoadingSheet implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
@@ -155,7 +161,7 @@ export class OutScan implements OnInit {
   });
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Operations' }, { label: 'Out Scan' }]);
+    this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
     this.masterData.branchDirectory().subscribe((list) => {
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
       this.loadEligibleDeliveryBranches();
@@ -167,7 +173,12 @@ export class OutScan implements OnInit {
   }
 
   goToDispatch(m: Manifest): void {
-    this.router.navigate(['/movement/dispatch'], { queryParams: { manifestNumber: m.manifestNumber } });
+    this.router.navigate(['/movement/trip-hire-challan'], { queryParams: { manifestNumber: m.manifestNumber } });
+  }
+
+  onShipmentRemoved(): void {
+    this.loadOpenManifests();
+    this.loadEligibleDeliveryBranches();
   }
 
   protected c(name: string): FormControl { return this.createForm.get(name) as FormControl; }

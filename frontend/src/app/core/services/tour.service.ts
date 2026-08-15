@@ -53,14 +53,14 @@ const BRANCH_MANAGER_STEPS: TourStep[] = [
     popover: { title: 'Track Shipment', description: 'Look up a single AWB or shipment number and see its full status.', side: 'bottom' }
   },
   {
-    data: { route: '/movement/out-scan' },
-    element: '[data-tour="out-scan-head"]',
-    popover: { title: 'Out Scan', description: 'Batch your booked shipments bound for one branch into a manifest — this is the out-scan.', side: 'bottom' }
+    data: { route: '/movement/loading-sheet' },
+    element: '[data-tour="loading-sheet-head"]',
+    popover: { title: 'Loading Sheet', description: 'Batch your booked shipments bound for one branch into a manifest — this is the loading sheet.', side: 'bottom' }
   },
   {
-    data: { route: '/movement/dispatch' },
-    element: '[data-tour="dispatch-head"]',
-    popover: { title: 'Dispatch', description: 'Assign a vehicle and driver to a manifest and send it out — its last stop at your branch.', side: 'bottom' }
+    data: { route: '/movement/trip-hire-challan' },
+    element: '[data-tour="thc-head"]',
+    popover: { title: 'Trip Hire Challan (THC)', description: 'Assign a vehicle and driver to a manifest and send it out — its last stop at your branch.', side: 'bottom' }
   },
   {
     data: { route: '/movement/in-scan' },
@@ -75,7 +75,7 @@ const BRANCH_MANAGER_STEPS: TourStep[] = [
   {
     data: { route: '/movement/out-for-delivery' },
     element: '[data-tour="out-for-delivery-head"]',
-    popover: { title: 'Out For Delivery', description: 'Bulk-assign a batch of received shipments to a delivery run in one go.', side: 'bottom' }
+    popover: { title: 'DRS', description: 'Bulk-assign a batch of received shipments to a delivery run in one go.', side: 'bottom' }
   },
   {
     data: { route: '/movement/delivery' },

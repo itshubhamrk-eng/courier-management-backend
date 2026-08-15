@@ -17,6 +17,7 @@ import { RecentShipments } from './components/recent-shipments';
 import { QuickActions } from './components/quick-actions';
 import { BranchSummary } from './components/branch-summary';
 import { TrackBox } from '@features/shipment-movement/components/track-box';
+import { PackageIllustration } from '@shared/components/illustrations/package-illustration';
 // import { HubSummary } from './components/hub-summary'; // hub module not built yet
 
 const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
@@ -34,20 +35,21 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe, MatIconModule, StatisticCard, UiCard, ChartCard, ActivityTimeline,
-    RecentShipments, QuickActions, BranchSummary, TrackBox /*, HubSummary */
+    RecentShipments, QuickActions, BranchSummary, TrackBox, PackageIllustration /*, HubSummary */
   ],
   template: `
     <div class="dash">
       <!-- welcome / context -->
-      <header class="dash__welcome">
-        <div>
+      <header class="dash__welcome clay-surface">
+        <div class="dash__welcome-text">
           <h1 class="text-h1">{{ greeting() }}, {{ auth.displayName() || 'there' }}</h1>
           <p class="text-caption">{{ companyName }} · {{ scopeLabel() }}</p>
+          <div class="dash__date">
+            <mat-icon>calendar_today</mat-icon>
+            <span>{{ now | date:'EEEE, d MMM y' }}</span>
+          </div>
         </div>
-        <div class="dash__date">
-          <mat-icon>calendar_today</mat-icon>
-          <span>{{ now | date:'EEEE, d MMM y' }}</span>
-        </div>
+        <app-package-illustration class="dash__welcome-ill" [size]="88" />
       </header>
 
       @if (profile() !== 'PLATFORM') {
@@ -125,20 +127,34 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
     </div>
   `,
   styles: [`
-    .dash { display:flex; flex-direction:column; gap:20px; width:100%; }
-    .dash__welcome { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
-    .dash__date { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--r-pill);
-      background:var(--surface); border:1px solid var(--surface-border); font:600 13px var(--font-sans); color:var(--content-muted); }
+    /* Ambient color wash behind the whole page — sits under the (globally clay-styled)
+       cards, doesn't override any surface/shadow token itself so light/dark both hold. */
+    .dash {
+      display:flex; flex-direction:column; gap:22px; width:100%;
+      background:
+        radial-gradient(720px 320px at 8% 0%, rgba(129,140,248,.14), transparent 60%),
+        radial-gradient(640px 300px at 92% 12%, rgba(52,211,153,.1), transparent 60%),
+        radial-gradient(680px 340px at 50% 100%, rgba(251,191,36,.08), transparent 60%);
+    }
+    .dash__welcome { display:flex; align-items:center; justify-content:space-between; gap:16px;
+      flex-wrap:wrap; padding:20px 26px; }
+    .dash__welcome-text { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+    .dash__welcome-ill { flex-shrink:0; }
+    @media (max-width:560px){ .dash__welcome-ill { display:none; } }
+    .dash__date { display:inline-flex; align-items:center; gap:8px; padding:8px 16px; border-radius:var(--r-pill);
+      background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); font:600 13px var(--font-sans); color:var(--content-muted); }
     .dash__date mat-icon { font-size:18px; width:18px; height:18px; }
-    .dash__grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px; }
-    .dash__charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:16px; }
-    .dash__cols { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; align-items:start; }
-    .dash__main, .dash__side { display:flex; flex-direction:column; gap:16px; min-width:0; }
+    .dash__grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px; }
+    .dash__charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:18px; }
+    .dash__cols { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; align-items:start; }
+    .dash__main, .dash__side { display:flex; flex-direction:column; gap:18px; min-width:0; }
     .dash__error { display:flex; align-items:center; gap:16px; padding:8px; }
     .dash__error mat-icon { font-size:36px; width:36px; height:36px; color:var(--danger); }
     .dash__error div { flex:1; }
-    .dash__retry { padding:8px 16px; border-radius:var(--r-pill); border:0; cursor:pointer;
-      background:var(--brand-600); color:#fff; font:600 13px var(--font-sans); }
+    .dash__retry { padding:10px 20px; border-radius:var(--r-pill); border:0; cursor:pointer;
+      background:linear-gradient(155deg, var(--brand-500), var(--brand-600)); color:#fff; font:600 13px var(--font-sans);
+      box-shadow:var(--shadow-clay-sm); }
+    .dash__retry:active { box-shadow:var(--shadow-clay-inset); }
     @media (max-width:1100px){ .dash__grid{grid-template-columns:repeat(2,1fr)} .dash__cols{grid-template-columns:1fr} }
     @media (max-width:560px){ .dash__grid{grid-template-columns:1fr} }
   `]

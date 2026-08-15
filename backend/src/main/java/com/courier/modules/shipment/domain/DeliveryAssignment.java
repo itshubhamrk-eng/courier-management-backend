@@ -63,6 +63,12 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
     @Column(name = "assigned_at", nullable = false)
     private Instant assignedAt;
 
+    /** {@code "DRS" + 6-digit serial}, e.g. {@code DRS000001} — one number per bulk
+     *  {@code assignOutForDelivery} call, stamped on every row it touches. Null on rows
+     *  created before this column existed. */
+    @Column(name = "drs_number", length = 20)
+    private String drsNumber;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
@@ -80,12 +86,6 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
     @Column(name = "otp", length = 10)
     private String otp;
 
-    @Column(name = "signature_url", length = 1000)
-    private String signatureUrl;
-
-    @Column(name = "photo_url", length = 1000)
-    private String photoUrl;
-
     public void reassign(UUID deliveryUserId, UUID deliveryBranchId) {
         if (status == DeliveryAssignmentStatus.DELIVERED) {
             throw new BusinessRuleException("This shipment has already been delivered.");
@@ -95,8 +95,10 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
         this.assignedAt = Instant.now();
     }
 
-    public void markDelivered(String receiverName, String remarks, String otp, String signatureUrl,
-                              String photoUrl) {
+    /** Signature/photo capture urls are no longer stored here — see {@code ShipmentAsset}
+     *  (V33); {@code ShipmentServiceImpl.deliver} records them as {@code POD} assets in the
+     *  same transaction as this call. */
+    public void markDelivered(String receiverName, String remarks, String otp) {
         if (status == DeliveryAssignmentStatus.DELIVERED) {
             throw new BusinessRuleException("This shipment has already been delivered.");
         }
@@ -108,7 +110,5 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
         this.receiverName = receiverName.trim();
         this.deliveryRemarks = remarks == null || remarks.isBlank() ? null : remarks.trim();
         this.otp = otp == null || otp.isBlank() ? null : otp.trim();
-        this.signatureUrl = signatureUrl == null || signatureUrl.isBlank() ? null : signatureUrl.trim();
-        this.photoUrl = photoUrl == null || photoUrl.isBlank() ? null : photoUrl.trim();
     }
 }

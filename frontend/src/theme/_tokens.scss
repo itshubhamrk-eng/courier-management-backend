@@ -2,46 +2,69 @@
 // Design tokens — the single source for palette, spacing, radius, shadows, type.
 // Exposed as CSS custom properties so Tailwind utilities, Material 3 and component
 // SCSS all read the same values. Light is the default; [data-theme="dark"] overrides.
+//
+// Visual language: Modern Logistics / Fleet Management SaaS — flat enterprise
+// surfaces, subtle 1px borders, soft single-layer shadows (no dual-shadow glow),
+// navy sidebar, blue primary accent. Variable *names* are kept identical to the
+// prior claymorphism pass (--shadow-clay*, --r-field/--r-card, --brand-*) since
+// ~90 consumer files already read them — only the values change here, so this
+// file alone re-themes the app.
 // =============================================================================
 
 :root {
-  // Brand (indigo/blue enterprise) — the primary accent.
-  --brand-50:#eef2ff; --brand-100:#e0e7ff; --brand-200:#c7d2fe; --brand-300:#a5b4fc;
-  --brand-400:#818cf8; --brand-500:#6366f1; --brand-600:#4f46e5; --brand-700:#4338ca;
-  --brand-800:#3730a3; --brand-900:#312e81;
+  // Brand — Primary Blue #2563EB / hover #1D4ED8 anchor the 600/700 steps.
+  --brand-50:#eff6ff; --brand-100:#dbeafe; --brand-200:#bfdbfe; --brand-300:#93c5fd;
+  --brand-400:#60a5fa; --brand-500:#3b82f6; --brand-600:#2563eb; --brand-700:#1d4ed8;
+  --brand-800:#1e40af; --brand-900:#1e3a8a;
 
-  // Dark sidebar (the signature nav rail).
-  --sidebar-bg:#0f172a; --sidebar-hover:#1e293b; --sidebar-active:#4f46e5;
-  --sidebar-fg:#cbd5e1; --sidebar-fg-strong:#f8fafc; --sidebar-section:#64748b;
+  // Sidebar — fixed dark-navy surface, same in both light and dark app themes (standard
+  // enterprise admin pattern: sidebar doesn't follow the content theme toggle).
+  --sidebar-bg:#0f172a; --sidebar-hover:#1e293b; --sidebar-active:rgba(37,99,235,.18);
+  --sidebar-fg:#94a3b8; --sidebar-fg-strong:#f8fafc; --sidebar-section:#64748b;
+  --sidebar-border:#1e293b;
 
   // Light content area.
-  --surface:#ffffff; --surface-muted:#f8fafc; --surface-border:#e5e7eb;
-  --content-fg:#111827; --content-muted:#6b7280;
+  --surface:#ffffff; --surface-muted:#f4f7fa; --surface-border:#e2e8f0;
+  --content-fg:#172033; --content-muted:#64748b;
 
-  // Semantic status.
-  --success:#16a34a; --success-bg:#dcfce7; --warning:#d97706; --warning-bg:#fef3c7;
+  // Semantic status (pastel bg, saturated fg).
+  --success:#16a34a; --success-bg:#dcfce7; --warning:#f59e0b; --warning-bg:#fef3c7;
   --danger:#dc2626; --danger-bg:#fee2e2; --info:#2563eb; --info-bg:#dbeafe;
-  --neutral:#6b7280; --neutral-bg:#f3f4f6;
+  --neutral:#64748b; --neutral-bg:#eef2f6;
 
   // Spacing scale (4px base).
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px;
   --sp-8:32px; --sp-10:40px; --sp-12:48px;
 
-  // Radius.
+  // Radius — clean enterprise scale: 10px fields/buttons, 14–16px cards.
   --r-field:10px; --r-card:14px; --r-card-lg:16px; --r-pill:999px;
 
-  // Shadows.
-  --shadow-card:0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
-  --shadow-card-hover:0 8px 24px rgba(16,24,40,.10);
-  --shadow-pop:0 12px 32px rgba(16,24,40,.14);
+  // Flat single-layer shadow recipe (replaces the old dual dark+light "clay" glow).
+  // --shadow-clay-inset now renders as a crisp 1px border via inset box-shadow — used
+  // by every form field/search/menu-trigger "well" so borders show up with no per-file
+  // edits. Names kept for backwards compatibility with existing consumers.
+  --shadow-clay-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-clay:0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-clay-hover:0 4px 12px rgba(15,23,42,.10), 0 2px 4px rgba(15,23,42,.06);
+  --shadow-clay-inset:inset 0 0 0 1px var(--surface-border);
+
+  // Back-compat aliases — every existing consumer of --shadow-card* keeps working.
+  --shadow-card:var(--shadow-clay);
+  --shadow-card-hover:var(--shadow-clay-hover);
+  --shadow-pop:var(--shadow-clay-hover);
 
   // Layout metrics.
   --sidebar-w:264px; --sidebar-w-collapsed:76px; --header-h:64px;
 }
 
 :root[data-theme="dark"] {
-  --surface:#111827; --surface-muted:#0b1220; --surface-border:#1f2937;
-  --content-fg:#e5e7eb; --content-muted:#9ca3af;
-  --sidebar-bg:#0b1220; --sidebar-hover:#111a2e;
-  --success-bg:#052e16; --warning-bg:#3b2f0a; --danger-bg:#3b0d0d; --info-bg:#0b2447; --neutral-bg:#1f2937;
+  --surface:#141a2b; --surface-muted:#0b0f1a; --surface-border:#263047;
+  --content-fg:#e7ecf5; --content-muted:#94a3b8;
+  --success-bg:#052e16; --warning-bg:#3b2f0a; --danger-bg:#3b0d0d; --info-bg:#0b2447; --neutral-bg:#1a2235;
+
+  // Dark: shadows read as a soft black diffuse; the inset "border" formula is unchanged
+  // (it already resolves against the dark --surface-border above).
+  --shadow-clay-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-clay:0 2px 6px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+  --shadow-clay-hover:0 6px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.35);
 }

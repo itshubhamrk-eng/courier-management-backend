@@ -108,6 +108,14 @@ public enum AuditAction {
     RATE_ACTIVATED,
     RATE_DEACTIVATED,
 
+    // --- freight factor: a standalone, company-level distance x weight pricing grid,
+    // independent of rate master. FREIGHT_CALCULATED is deliberately absent, same
+    // reasoning as RATE_CALCULATED above.
+    FREIGHT_FACTOR_CREATED,
+    FREIGHT_FACTOR_UPDATED,
+    FREIGHT_FACTOR_ACTIVATED,
+    FREIGHT_FACTOR_DEACTIVATED,
+
     // --- branch wallet (Phase 5, Finance). Every one of these is money moving, or an
     // attempt to move it, so the trail is the record of record: WALLET_RECHARGE_INITIATED
     // is written when a gateway order is opened, which is intent rather than money — it has
@@ -142,17 +150,21 @@ public enum AuditAction {
     SHIPMENT_UPDATED,
     SHIPMENT_CANCELLED,
     SHIPMENT_DOCUMENT_UPLOADED,
+    SHIPMENT_IMAGE_UPLOADED,
 
     // --- shipment movement (V19: minimal Manifest + the movement pipeline on top of it)
     VEHICLE_CREATED,
+    VEHICLE_UPDATED,
     VEHICLE_ACTIVATED,
     VEHICLE_DEACTIVATED,
     MANIFEST_CREATED,
     SHIPMENT_OUT_SCANNED,
     MANIFEST_DISPATCHED,
+    MANIFEST_SHIPMENT_REMOVED,
     SHIPMENT_IN_SCANNED,
     SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED,
     SHIPMENT_DELIVERED,
+    SHIPMENT_POD_UPLOADED,
 
     // --- subscription plans (Phase 2, SUPER_ADMIN only)
     SUBSCRIPTION_PLAN_CREATED,

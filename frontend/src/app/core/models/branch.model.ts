@@ -69,7 +69,14 @@ export interface BranchResponse {
   allowManifest: boolean;
   allowCashCollection: boolean;
   allowWallet: boolean;
+  instantCommission: boolean;
   remarks?: string | null;
+  gstPercentage: number;
+  commissionOnOtherCharges: number;
+  commissionOnBasicFreight: number;
+  companyServiceChargePercentage: number;
+  /** DRS charge per item quantity, debited on delivery (drsCharge = drsChargePerQty * qty). */
+  drsChargePerQty: number;
   createdBy?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
@@ -141,7 +148,19 @@ export interface CreateBranchRequest {
   allowManifest?: boolean;
   allowCashCollection?: boolean;
   allowWallet?: boolean;
+  /** Omitted defaults to true on the backend. */
+  instantCommission?: boolean;
   remarks?: string | null;
+  /** Omitted defaults to 18 on the backend. */
+  gstPercentage?: number | null;
+  /** Omitted defaults to 20 on the backend. */
+  commissionOnOtherCharges?: number | null;
+  /** Omitted defaults to 10 on the backend. */
+  commissionOnBasicFreight?: number | null;
+  /** Omitted defaults to 10 on the backend. */
+  companyServiceChargePercentage?: number | null;
+  /** Omitted defaults to 2 on the backend. */
+  drsChargePerQty?: number | null;
   /** Optional; a branch always gets a user, this only says who it is. */
   branchUser?: BranchUserRequest | null;
 }
@@ -174,7 +193,13 @@ export interface UpdateBranchRequest {
   allowManifest?: boolean;
   allowCashCollection?: boolean;
   allowWallet?: boolean;
+  instantCommission?: boolean;
   remarks?: string | null;
+  gstPercentage: number;
+  commissionOnOtherCharges: number;
+  commissionOnBasicFreight: number;
+  companyServiceChargePercentage: number;
+  drsChargePerQty: number;
   version: number;
 }
 

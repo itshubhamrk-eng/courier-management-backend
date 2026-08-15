@@ -90,6 +90,8 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
                 <input class="fld__i" type="number" min="1" [formControl]="c('numberOfPackages')" /></label>
               <label class="fld"><span class="fld__l">Declared Value</span>
                 <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('declaredValue')" /></label>
+              <label class="fld"><span class="fld__l">Other Charges</span>
+                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
             </div>
           </app-card>
 
@@ -187,6 +189,7 @@ export class ShipmentEdit implements OnInit {
     bookingDate: [''],
     numberOfPackages: [1],
     declaredValue: [null as number | null],
+    otherCharges: [null as number | null],
     remarks: ['']
   });
 
@@ -236,6 +239,12 @@ export class ShipmentEdit implements OnInit {
           widthCm: i.widthCm, heightCm: i.heightCm, declaredValue: i.declaredValue,
           fragile: i.fragile, dangerousGoods: i.dangerousGoods
         })));
+        // Other Charges lives on the persisted charge row, not ShipmentResponse itself —
+        // fetched separately so an edit doesn't silently reset it to zero on save.
+        this.service.charges(this.id).subscribe({
+          next: (c) => this.form.patchValue({ otherCharges: c.otherCharges || null }),
+          error: () => {}
+        });
         this.loading.set(false);
       },
       error: () => { this.shipment.set(null); this.loading.set(false); }
@@ -255,7 +264,7 @@ export class ShipmentEdit implements OnInit {
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
       shipmentType: v.shipmentType, bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
-      remarks: v.remarks || null, items: this.items()
+      remarks: v.remarks || null, otherCharges: v.otherCharges || null, items: this.items()
     };
 
     this.saving.set(true);

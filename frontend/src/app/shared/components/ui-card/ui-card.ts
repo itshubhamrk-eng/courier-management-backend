@@ -22,8 +22,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   styles: [`
     .ac { overflow:hidden; }
     .ac__head { display:flex; align-items:flex-start; justify-content:space-between;
-      padding:16px 20px; border-bottom:1px solid var(--surface-border); }
-    .ac__body { padding:20px; }
+      padding:20px 24px 16px; border-bottom:1px solid var(--surface-border); }
+    .ac__body { padding:24px; }
     .ac__actions { display:flex; gap:8px; }
   `]
 })

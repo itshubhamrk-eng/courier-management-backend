@@ -15,7 +15,8 @@ import { MatIconModule } from '@angular/material/icon';
       <span class="field__wrap" [class.field__wrap--err]="invalid">
         @if (icon()) { <mat-icon class="field__icon">{{ icon() }}</mat-icon> }
         <input class="field__input" [type]="effectiveType()" [placeholder]="placeholder()"
-               [formControl]="control()" [attr.autocomplete]="autocomplete()" />
+               [formControl]="control()" [attr.autocomplete]="autocomplete()"
+               [attr.min]="min()" [attr.max]="max()" [attr.step]="step()" />
         @if (canToggle()) {
           <button type="button" class="field__eye" (click)="reveal.set(!reveal())"
                   [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'" tabindex="-1">
@@ -30,12 +31,19 @@ import { MatIconModule } from '@angular/material/icon';
     .field { display:flex; flex-direction:column; gap:6px; }
     .field__label { font:500 13px var(--font-sans); color:var(--content-fg); }
     .field__label i { color:var(--danger); margin-left:2px; font-style:normal; }
-    .field__wrap { display:flex; align-items:center; gap:8px; height:42px; padding:0 12px;
-      background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); transition:.15s; }
-    .field__wrap:focus-within { border-color:var(--brand-500); box-shadow:0 0 0 3px var(--brand-100); }
+    .field__wrap { display:flex; align-items:center; gap:8px; height:44px; padding:0 14px;
+      background:var(--surface-muted); border:1px solid transparent; border-radius:var(--r-field);
+      box-shadow:var(--shadow-clay-inset); transition:box-shadow .15s, border-color .15s; }
+    .field__wrap:focus-within { border-color:var(--brand-400); box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
     .field__wrap--err { border-color:var(--danger); }
     .field__icon { color:var(--content-muted); font-size:20px; }
     .field__input { border:0; outline:0; background:transparent; flex:1; font:400 14px var(--font-sans); color:var(--content-fg); }
+    .field__input:-webkit-autofill, .field__input:-webkit-autofill:hover,
+    .field__input:-webkit-autofill:focus, .field__input:-webkit-autofill:active {
+      -webkit-text-fill-color:var(--content-fg); caret-color:var(--content-fg);
+      -webkit-box-shadow:0 0 0 1000px var(--surface-muted) inset;
+      transition:background-color 9999s ease-in-out 0s;
+    }
     .field__eye { display:grid; place-items:center; border:0; background:transparent; cursor:pointer; color:var(--content-muted); padding:0; }
     .field__eye mat-icon { font-size:20px; width:20px; height:20px; }
     .field__err { font:500 12px var(--font-sans); color:var(--danger); }
@@ -44,12 +52,15 @@ import { MatIconModule } from '@angular/material/icon';
 export class UiInput {
   readonly control = input.required<FormControl>();
   readonly label = input('');
-  readonly type = input<'text' | 'password' | 'email' | 'tel'>('text');
+  readonly type = input<'text' | 'password' | 'email' | 'tel' | 'number' | 'date'>('text');
   readonly placeholder = input('');
   readonly icon = input<string | null>(null);
   readonly required = input(false);
   readonly autocomplete = input('off');
   readonly togglePassword = input(false);
+  readonly min = input<number | null>(null);
+  readonly max = input<number | null>(null);
+  readonly step = input<number | null>(null);
   /**
    * Overrides the generic message when the caller knows a better one — a pattern the
    * caller declared, for instance, where "Invalid value." says nothing useful. Empty
@@ -69,6 +80,8 @@ export class UiInput {
     if (e['required']) return 'This field is required.';
     if (e['email']) return 'Enter a valid email address.';
     if (e['minlength']) return `At least ${e['minlength'].requiredLength} characters.`;
+    if (e['min']) return `Must be at least ${e['min'].min}.`;
+    if (e['max']) return `Must be at most ${e['max'].max}.`;
     return 'Invalid value.';
   }
 }

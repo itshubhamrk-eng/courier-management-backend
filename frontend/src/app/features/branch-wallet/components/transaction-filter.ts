@@ -51,6 +51,7 @@ const SUB_TYPES: SelectOption[] = TRANSACTION_SUB_TYPES.map((s) => ({ value: s, 
       border-radius:var(--r-field); font:400 14px var(--font-sans); color:var(--content-fg); }
     .dt__i:focus { outline:0; border-color:var(--brand-500); box-shadow:0 0 0 3px var(--brand-100); }
     .tf__bar { display:flex; justify-content:space-between; gap:10px; margin-top:8px; }
+    @media (max-width:400px) { .tf__row { grid-template-columns:1fr; } }
   `]
 })
 export class TransactionFilter {

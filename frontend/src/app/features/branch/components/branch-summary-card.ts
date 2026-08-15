@@ -61,7 +61,8 @@ export class BranchSummaryCard {
     const b = this.branch();
     return [
       b.allowBooking && 'Booking', b.allowDelivery && 'Delivery', b.allowPickup && 'Pickup',
-      b.allowManifest && 'Manifest', b.allowCashCollection && 'Cash Collection', b.allowWallet && 'Wallet'
+      b.allowManifest && 'Manifest', b.allowCashCollection && 'Cash Collection', b.allowWallet && 'Wallet',
+      b.instantCommission && 'Instant Commission'
     ].filter(Boolean) as string[];
   });
 }

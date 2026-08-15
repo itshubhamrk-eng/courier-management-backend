@@ -201,6 +201,55 @@ class CustomerServiceImplTest {
         assertThat(reactivated.getStatus()).isEqualTo(CustomerStatus.ACTIVE);
     }
 
+    // ---------------------------------------------------------------- findOrCreateForBooking
+
+    @Test
+    @DisplayName("findOrCreateForBooking reuses an existing customer matched by exact mobile")
+    void findOrCreateReusesExisting() {
+        Customer existing = existing("CUST1", "9876500000");
+        when(repository.findByCompanyIdAndMobile(COMPANY, "9876500000")).thenReturn(Optional.of(existing));
+
+        Customer result = service.findOrCreateForBooking("Ramesh Kadam", "9876500000");
+
+        assertThat(result).isSameAs(existing);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("findOrCreateForBooking creates an INDIVIDUAL customer, splitting the name on the first space")
+    void findOrCreateCreatesWhenAbsent() {
+        when(repository.findByCompanyIdAndMobile(COMPANY, "9876500001")).thenReturn(Optional.empty());
+
+        Customer result = service.findOrCreateForBooking("Ramesh Kadam Patil", "9876500001");
+
+        assertThat(result.getCustomerType()).isEqualTo(CustomerType.INDIVIDUAL);
+        assertThat(result.getFirstName()).isEqualTo("Ramesh");
+        assertThat(result.getLastName()).isEqualTo("Kadam Patil");
+        assertThat(result.getMobile()).isEqualTo("9876500001");
+        verify(repository).save(any(Customer.class));
+    }
+
+    @Test
+    @DisplayName("findOrCreateForBooking with a single-word name leaves the surname blank, not guessed")
+    void findOrCreateSingleWordName() {
+        when(repository.findByCompanyIdAndMobile(COMPANY, "9876500002")).thenReturn(Optional.empty());
+
+        Customer result = service.findOrCreateForBooking("Ramesh", "9876500002");
+
+        assertThat(result.getFirstName()).isEqualTo("Ramesh");
+        assertThat(result.getLastName()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findOrCreateForBooking writes nothing for a blank mobile")
+    void findOrCreateBlankMobileNoOp() {
+        Customer result = service.findOrCreateForBooking("Ramesh Kadam", "  ");
+
+        assertThat(result).isNull();
+        verify(repository, never()).findByCompanyIdAndMobile(any(), any());
+        verify(repository, never()).save(any());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void signedIn(String role) {

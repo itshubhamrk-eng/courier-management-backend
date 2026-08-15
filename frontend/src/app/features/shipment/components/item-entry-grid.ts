@@ -78,7 +78,7 @@ function emptyRow(): ItemRow {
   styles: [`
     .ieg { display:flex; flex-direction:column; gap:12px; }
     .ieg__table { border:1px solid var(--surface-border); border-radius:var(--r-field); overflow:auto; }
-    .ieg__head, .ieg__row { display:grid; grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1fr 40px; gap:8px; align-items:center; padding:8px 10px; }
+    .ieg__head, .ieg__row { display:grid; grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1fr 40px; gap:8px; align-items:center; padding:8px 10px; min-width:640px; }
     .ieg__head { background:var(--surface-muted); font:600 12px var(--font-sans); color:var(--content-muted); }
     .ieg__row { border-top:1px solid var(--surface-border); }
     .ieg__i { height:36px; padding:0 8px; background:var(--surface); border:1px solid var(--surface-border);

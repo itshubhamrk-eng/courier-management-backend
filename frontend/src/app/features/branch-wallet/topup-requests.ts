@@ -61,13 +61,14 @@ const STATUS_OPTIONS: SelectOption[] = [
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Amount</th><th>Remarks</th><th>Status</th><th>Requested</th>
+                  <th>#</th><th>Amount</th><th>Remarks</th><th>Status</th><th>Requested</th>
                   @if (isAdmin()) { <th class="tbl--right">Actions</th> }
                 </tr>
               </thead>
               <tbody>
-                @for (r of rows(); track r.id) {
+                @for (r of rows(); track r.id; let i = $index) {
                   <tr>
+                    <td>{{ i + 1 }}</td>
                     <td class="mono">{{ money(r.requestedAmount) }}</td>
                     <td>{{ r.remarks || '—' }}</td>
                     <td><span class="badge" [class]="'badge--' + r.status.toLowerCase()">{{ r.status }}</span></td>

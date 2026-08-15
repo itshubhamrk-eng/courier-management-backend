@@ -1,22 +1,30 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { ShipmentStatusBadge } from '@features/shipment/components/shipment-status-badge';
 import { Manifest, Shipment } from '@core/models/shipment.model';
 import { ManifestService } from '@features/manifest/manifest.service';
+import { NotificationService } from '@core/services/notification.service';
+import { DialogService } from '@shared/components/ui-dialog/dialog.service';
 
 /**
  * One open manifest's own card: heading (manifest number, lane, total weight, total
  * parcels) and its LR table underneath. Adding a shipment to a manifest already is the
- * "out scan created" milestone (V20, on direct request — there is no separate scan
+ * "loading sheet created" milestone (V20, on direct request — there is no separate scan
  * action any more; see ManifestService.create and ShipmentStatus's own class doc), so
  * this card stays a read-only worklist by default — the next action for any of these
- * shipments is Dispatch. `showDispatchAction` opts a card into surfacing that action
- * itself (Dispatch's own worklist), instead of every consumer building its own trigger.
+ * shipments is a Trip Hire Challan (THC). `showDispatchAction` opts a card into
+ * surfacing that action itself (THC's own worklist), instead of every consumer building
+ * its own trigger.
  * `showInScanAction` does the same for In Scan's pending-manifest worklist — receives
- * every shipment on the manifest that isn't `IN_SCAN` yet.
+ * every shipment on the manifest that isn't `IN_SCAN` yet. `showRemoveAction` (Loading
+ * Sheet only — a manifest is always still CREATED there) adds a per-row remove button
+ * that calls `ManifestService.removeShipment` directly and reverts the shipment to
+ * BOOKED; the card owns this mutation itself rather than delegating to a parent output,
+ * the same way it already owns fetching its own shipment list.
  */
 @Component({
   selector: 'app-manifest-card',
@@ -34,7 +42,7 @@ import { ManifestService } from '@features/manifest/manifest.service';
           <div class="stat"><span class="stat__value">{{ totalWeight() }} kg</span><span class="stat__label">Total Weight</span></div>
           <div class="stat"><span class="stat__value">{{ totalParcels() }}</span><span class="stat__label">Total Parcels</span></div>
           @if (showDispatchAction()) {
-            <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">Dispatch</app-button>
+            <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">THC</app-button>
           }
           @if (showInScanAction()) {
             <app-button icon="qr_code_scanner" [loading]="inScanLoading()"
@@ -53,15 +61,25 @@ import { ManifestService } from '@features/manifest/manifest.service';
         <div class="tbl__wrap">
           <table class="tbl">
             <thead>
-              <tr><th>LR / Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th><th>Status</th></tr>
+              <tr>
+                <th>#</th><th>LR / Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th><th>Status</th>
+                @if (showRemoveAction()) { <th></th> }
+              </tr>
             </thead>
             <tbody>
-              @for (s of shipments(); track s.id) {
+              @for (s of shipments(); track s.id; let i = $index) {
                 <tr>
+                  <td>{{ i + 1 }}</td>
                   <td><a [routerLink]="['/shipments', s.id]">{{ s.trackingNumber }}</a></td>
                   <td>{{ s.senderName }} → {{ s.receiverName }}</td>
                   <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                   <td><app-shipment-status-badge [status]="s.status" /></td>
+                  @if (showRemoveAction()) {
+                    <td class="tbl--right">
+                      <app-button variant="text" icon="remove_circle" [loading]="removingId() === s.id"
+                        (pressed)="removeShipment(s)">Remove</app-button>
+                    </td>
+                  }
                 </tr>
               }
             </tbody>
@@ -88,17 +106,22 @@ import { ManifestService } from '@features/manifest/manifest.service';
 })
 export class ManifestCard implements OnInit {
   private readonly manifestService = inject(ManifestService);
+  private readonly notify = inject(NotificationService);
+  private readonly confirm = inject(DialogService);
 
   readonly manifest = input.required<Manifest>();
   readonly branchNames = input<Map<string, string>>(new Map());
   readonly showDispatchAction = input(false);
   readonly showInScanAction = input(false);
+  readonly showRemoveAction = input(false);
   readonly inScanLoading = input(false);
   readonly dispatch = output<Manifest>();
   readonly inScan = output<Manifest>();
+  readonly removed = output<Manifest>();
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);
+  readonly removingId = signal<string | null>(null);
 
   protected readonly fromLabel = computed(() =>
     this.branchNames().get(this.manifest().bookingBranchId) ?? 'Booking branch');
@@ -114,6 +137,30 @@ export class ManifestCard implements OnInit {
     this.manifestService.shipments(this.manifest().id).subscribe({
       next: (s) => { this.shipments.set(s); this.loading.set(false); },
       error: () => { this.shipments.set([]); this.loading.set(false); }
+    });
+  }
+
+  protected removeShipment(shipment: Shipment): void {
+    this.confirm.confirm({
+      title: 'Remove shipment',
+      message: `${shipment.trackingNumber} will come off this manifest and go back to BOOKED.`,
+      confirmLabel: 'Remove', danger: true
+    }).subscribe((ok) => { if (ok) this.doRemove(shipment.id); });
+  }
+
+  private doRemove(shipmentId: string): void {
+    this.removingId.set(shipmentId);
+    this.manifestService.removeShipment(this.manifest().id, shipmentId).subscribe({
+      next: () => {
+        this.shipments.update((list) => list.filter((s) => s.id !== shipmentId));
+        this.removingId.set(null);
+        this.notify.success('Shipment removed — back to BOOKED.');
+        this.removed.emit(this.manifest());
+      },
+      error: (e: HttpErrorResponse) => {
+        this.removingId.set(null);
+        this.notify.error(e.error?.message ?? 'Could not remove the shipment.');
+      }
     });
   }
 }

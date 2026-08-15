@@ -1,25 +1,30 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Observable, Subject, catchError, debounceTime, merge, of, switchMap } from 'rxjs';
+import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, merge, of, switchMap } from 'rxjs';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { CustomerService } from '@features/customer/customer.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
+import { Customer } from '@core/models/customer.model';
 import {
   ShipmentItemRequest, CreateShipmentRequest, PricingResponse
 } from '@core/models/shipment.model';
 import { ItemEntryGrid } from './components/item-entry-grid';
 import { ChargeSummary } from './components/charge-summary';
+import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
 import { printConsignmentCopies } from './consignment-print.util';
+import { parseVoiceBooking } from './voice-booking.util';
 
 /** `yyyy-MM-dd` in the local timezone — a native `<input type="date">` value, and what
  *  `bookingDate` defaults to on the server if omitted; setting it explicitly here just
@@ -47,13 +52,19 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
   selector: 'app-shipment-create',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton, UiCard, ItemEntryGrid, ChargeSummary],
+  imports: [DecimalPipe, ReactiveFormsModule, MatIconModule, UiSelect, UiAutocomplete, UiButton, UiCard, ItemEntryGrid, ChargeSummary, VoiceMicButton],
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
-        <div><h1 class="text-h1">New Shipment</h1><p class="text-caption">Fill in the booking — the summary prices it as you go.</p></div>
-        <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
+        <div><h1 class="text-h1">New Shipment</h1><p class="text-caption">Fill in the booking — the summary prices it as you go, or speak it.</p></div>
+        <div class="page__head-actions">
+          <app-voice-mic-button (transcriptReady)="onVoiceTranscript($event)" (error)="onVoiceError($event)" />
+          <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
+        </div>
       </header>
+      @if (voiceSummary(); as vs) {
+        <p class="voice-banner">{{ vs }}</p>
+      }
 
       <div class="lr">
         <div class="lr__main">
@@ -67,7 +78,7 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
           </app-card>
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
-            <app-item-entry-grid (itemsChange)="onItems($event)" (weightChange)="onWeight($event)" (packagesChange)="onPackages($event)">
+            <app-item-entry-grid [initial]="voiceItems()" (itemsChange)="onItems($event)" (weightChange)="onWeight($event)" (packagesChange)="onPackages($event)">
               <app-autocomplete class="fld--sm" [control]="c('packageTypeId')" label="Package Type" [options]="packageTypeOptions()" placeholder="Search package type…" />
               <label class="fld fld--sm"><span class="fld__l">Number of Packages</span>
                 <input class="fld__i" type="number" [value]="c('numberOfPackages').value" disabled /></label>
@@ -83,14 +94,38 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
             <div class="parties">
               <div class="party party--sender">
                 <div class="party__title">Consignor (Sender)</div>
-                <label class="fld"><span class="fld__l">Name</span>
-                  <input class="fld__i" [formControl]="c('senderName')" placeholder="Sender's full name" /></label>
+                <label class="fld party__lookup"><span class="fld__l">Name</span>
+                  <input class="fld__i" [formControl]="c('senderName')" placeholder="Sender's full name, or search by name / mobile"
+                    (focus)="openSuggest('sender', 'name')" (blur)="closeSuggest('sender')" />
+                  @if (senderSuggestOpen() === 'name' && senderSuggestions().length) {
+                    <ul class="lookup__list">
+                      @for (cust of senderSuggestions(); track cust.id) {
+                        <li class="lookup__item" (mousedown)="pickCustomer('sender', cust)">
+                          <span class="lookup__name">{{ cust.displayName }}</span>
+                          <span class="lookup__mobile">{{ cust.mobile }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">Address</span>
                   <textarea class="ta" rows="2" [formControl]="c('senderAddress')" placeholder="Pickup address"></textarea></label>
                 <div class="spacer"></div>
-                <label class="fld"><span class="fld__l">Contact Number</span>
-                  <input class="fld__i" type="tel" [formControl]="c('senderContact')" placeholder="10-digit mobile number" /></label>
+                <label class="fld party__lookup"><span class="fld__l">Contact Number</span>
+                  <input class="fld__i" type="tel" [formControl]="c('senderContact')" placeholder="10-digit mobile number, or search"
+                    (focus)="openSuggest('sender', 'contact')" (blur)="closeSuggest('sender')" />
+                  @if (senderSuggestOpen() === 'contact' && senderSuggestions().length) {
+                    <ul class="lookup__list">
+                      @for (cust of senderSuggestions(); track cust.id) {
+                        <li class="lookup__item" (mousedown)="pickCustomer('sender', cust)">
+                          <span class="lookup__name">{{ cust.displayName }}</span>
+                          <span class="lookup__mobile">{{ cust.mobile }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">From Pincode</span>
                   <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" /></label>
@@ -98,18 +133,60 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
 
               <div class="party party--receiver">
                 <div class="party__title">Consignee (Receiver)</div>
-                <label class="fld"><span class="fld__l">Name</span>
-                  <input class="fld__i" [formControl]="c('receiverName')" placeholder="Receiver's full name" /></label>
+                <label class="fld party__lookup"><span class="fld__l">Name</span>
+                  <input class="fld__i" [formControl]="c('receiverName')" placeholder="Receiver's full name, or search by name / mobile"
+                    (focus)="openSuggest('receiver', 'name')" (blur)="closeSuggest('receiver')" />
+                  @if (receiverSuggestOpen() === 'name' && receiverSuggestions().length) {
+                    <ul class="lookup__list">
+                      @for (cust of receiverSuggestions(); track cust.id) {
+                        <li class="lookup__item" (mousedown)="pickCustomer('receiver', cust)">
+                          <span class="lookup__name">{{ cust.displayName }}</span>
+                          <span class="lookup__mobile">{{ cust.mobile }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">Address</span>
                   <textarea class="ta" rows="2" [formControl]="c('receiverAddress')" placeholder="Delivery address"></textarea></label>
                 <div class="spacer"></div>
-                <label class="fld"><span class="fld__l">Contact Number</span>
-                  <input class="fld__i" type="tel" [formControl]="c('receiverContact')" placeholder="10-digit mobile number" /></label>
+                <label class="fld party__lookup"><span class="fld__l">Contact Number</span>
+                  <input class="fld__i" type="tel" [formControl]="c('receiverContact')" placeholder="10-digit mobile number, or search"
+                    (focus)="openSuggest('receiver', 'contact')" (blur)="closeSuggest('receiver')" />
+                  @if (receiverSuggestOpen() === 'contact' && receiverSuggestions().length) {
+                    <ul class="lookup__list">
+                      @for (cust of receiverSuggestions(); track cust.id) {
+                        <li class="lookup__item" (mousedown)="pickCustomer('receiver', cust)">
+                          <span class="lookup__name">{{ cust.displayName }}</span>
+                          <span class="lookup__mobile">{{ cust.mobile }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">To Pincode</span>
                   <input class="fld__i" [formControl]="c('deliveryPincode')" placeholder="e.g. 400008" /></label>
               </div>
+            </div>
+          </app-card>
+
+          <app-card title="Shipment Image" subtitle="Optional — a photo of the parcel, uploaded once the shipment is booked.">
+            <div class="img">
+              @if (imagePreviewUrl(); as preview) {
+                <div class="img__preview">
+                  <img [src]="preview" alt="Shipment photo preview" />
+                  <button type="button" class="img__remove" (click)="removeImage()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+              } @else {
+                <button type="button" class="img__btn" (click)="imageFile.click()">
+                  <mat-icon>add_a_photo</mat-icon> Choose photo
+                </button>
+              }
+              <input #imageFile type="file" accept="image/*" hidden (change)="onImageFile($event)" />
             </div>
           </app-card>
         </div>
@@ -125,6 +202,18 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
             <span class="sum__val">{{ c('numberOfPackages').value || 1 }} pkg · {{ weight().chargeable | number: '1.3-3' }} kg</span>
 
             <div class="sum__body">
+              @if (freightFactorApplicable()) {
+                <div class="factor-row">
+                  <span class="sum__lbl">Freight Factor
+                    @if (matchedFreightFactor() != null) {
+                      <span class="hint">(min {{ matchedFreightFactor() | number: '1.2-2' }}, increase only)</span>
+                    }
+                  </span>
+                  <input class="factor-input" type="number" step="0.01" [min]="matchedFreightFactor()"
+                         [value]="freightFactorOverride() ?? matchedFreightFactor()"
+                         (input)="onFreightFactorInput($event)" />
+                </div>
+              }
               @if (!myBranchIdPresent()) {
                 <p class="err">Your account has no branch assigned — ask an admin before booking.</p>
               } @else if (!readyToPrice()) {
@@ -141,10 +230,13 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
                 <app-charge-summary [charges]="{
                   freight: p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
                   handlingCharge: p.chargeBreakup.handlingCharge, odaCharge: p.chargeBreakup.odaCharge,
-                  insuranceCharge: p.chargeBreakup.insuranceCharge, gstAmount: p.chargeBreakup.gstAmount,
+                  insuranceCharge: p.chargeBreakup.insuranceCharge,
+                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges(),
                   discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
-                  netAmount: manualNetAmount() ?? p.chargeBreakup.netAmount
-                }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)" />
+                  otherCharges: otherCharges(),
+                  netAmount: (manualNetAmount() ?? p.chargeBreakup.netAmount) + otherCharges() + gstOnOtherCharges()
+                }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
+                  (otherChargesChange)="otherCharges.set($event)" />
               }
             </div>
 
@@ -161,8 +253,11 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
     </div>
   `,
   styles: [`
-    .page__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+    .page__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
     .page__head { margin-bottom:4px; }
+    .page__head-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .voice-banner { margin:4px 0 0; font:500 13px var(--font-sans); color:var(--brand-700); background:var(--brand-50);
+      border-radius:var(--r-field); padding:8px 12px; }
     .lr { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:10px; }
     .lr__main { display:flex; flex-direction:column; gap:10px; min-width:0; }
     .lr__main ::ng-deep .ac__head { padding:10px 16px; }
@@ -174,6 +269,11 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
     .sum__lbl { font:500 12px var(--font-sans); color:var(--content-muted); margin-top:8px; }
     .sum__val { font:600 14px var(--font-sans); color:var(--content-fg); }
     .sum__body { margin-top:12px; }
+    .factor-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+    .factor-row .hint { font:400 11px var(--font-sans); }
+    .factor-input { width:90px; text-align:right; font:700 14px var(--font-mono, ui-monospace); color:var(--brand-600);
+      background:transparent; border:1px solid var(--surface-border); border-radius:6px; padding:2px 6px; }
+    .factor-input:focus { outline:0; border-color:var(--brand-500); }
     .sum__paymode { margin-top:12px; }
     .sum__cta { margin-top:10px; }
     .sum__cta app-button, .sum__cta ::ng-deep .app-btn { width:100%; }
@@ -191,6 +291,14 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
     .party--sender .party__title { color:var(--info); }
     .party--receiver .party__title { color:var(--brand-600); }
     .fld { display:flex; flex-direction:column; gap:4px; }
+    .party__lookup { position:relative; }
+    .lookup__list { position:absolute; top:100%; left:0; right:0; z-index:20; margin-top:2px; max-height:220px; overflow-y:auto;
+      background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); box-shadow:0 4px 14px rgba(0,0,0,.12);
+      list-style:none; padding:4px; }
+    .lookup__item { display:flex; justify-content:space-between; gap:8px; padding:7px 9px; border-radius:6px; cursor:pointer; font:400 13px var(--font-sans); }
+    .lookup__item:hover { background:var(--brand-50); }
+    .lookup__name { color:var(--content-fg); font-weight:500; }
+    .lookup__mobile { color:var(--content-muted); }
     .fld--sm { width:160px; }
     .fld__l { font:500 13px var(--font-sans); color:var(--content-fg); }
     .fld__i { height:38px; padding:0 12px; background:var(--surface); border:1px solid var(--surface-border);
@@ -198,6 +306,17 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
     .ta { width:100%; padding:8px 12px; background:var(--surface); border:1px solid var(--surface-border);
       border-radius:var(--r-field); font:400 14px var(--font-sans); color:var(--content-fg); resize:vertical; }
     .spacer { height:8px; }
+    .img__btn { display:inline-flex; align-items:center; gap:6px;
+      border:1px dashed var(--surface-border); background:var(--surface); border-radius:var(--r-field);
+      padding:10px 16px; font:600 13px var(--font-sans); color:var(--content-fg); cursor:pointer; }
+    .img__btn mat-icon { font-size:18px; width:18px; height:18px; }
+    .img__preview { position:relative; display:inline-block; }
+    .img__preview img { display:block; max-width:220px; max-height:160px; border-radius:var(--r-field);
+      border:1px solid var(--surface-border); }
+    .img__remove { position:absolute; top:-8px; right:-8px; width:26px; height:26px; border-radius:50%;
+      border:1px solid var(--surface-border); background:var(--surface); color:var(--content-fg);
+      display:grid; place-items:center; cursor:pointer; }
+    .img__remove mat-icon { font-size:16px; width:16px; height:16px; }
     @media (max-width:960px){ .lr { grid-template-columns:1fr; } .lr__sum { position:static; } }
     @media (max-width:760px){ .grid2, .grid3, .parties { grid-template-columns:1fr; } }
   `]
@@ -205,6 +324,7 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
 export class ShipmentCreate implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ShipmentService);
+  private readonly customers = inject(CustomerService);
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
@@ -231,6 +351,13 @@ export class ShipmentCreate implements OnInit {
   protected readonly items = signal<ShipmentItemRequest[]>([]);
   protected readonly weight = signal({ actual: 0, volumetric: 0, chargeable: 0 });
 
+  /** Fed to `ItemEntryGrid`'s `initial` input only after a voice command supplies a
+   *  weight/package count — `null` otherwise, so the grid keeps its own default row. */
+  protected readonly voiceItems = signal<ShipmentItemRequest[] | null>(null);
+  /** What the last voice command actually filled — shown as a small confirmation banner;
+   *  the user still reviews and clicks Book, nothing books itself off a voice command. */
+  protected readonly voiceSummary = signal<string | null>(null);
+
   protected readonly pricing = signal<PricingResponse | null>(null);
   protected readonly pricingLoading = signal(false);
   protected readonly pricingError = signal<string | null>(null);
@@ -240,7 +367,52 @@ export class ShipmentCreate implements OnInit {
    *  priced server-side from the actual booking fields, not from what was shown here. */
   protected readonly manualNetAmount = signal<number | null>(null);
 
+  /** Other Charges — a manual, typed-at-booking amount (e.g. packing, handling extras) on
+   *  top of the Pricing Engine's own rate-driven breakup. Unlike {@link manualNetAmount}
+   *  this one IS sent to the server, see {@link book}; it survives a reprice since it's
+   *  the desk's own figure, not a stale echo of one specific preview. */
+  protected readonly otherCharges = signal<number>(0);
+
+  /** Set only when the current preview priced through the Freight Factor fallback (no
+   *  route/rate for this lane) — gates the "Freight Factor" input in the summary. */
+  protected readonly freightFactorApplicable = signal(false);
+  /** The grid cell's own factor, as last returned by a preview that carried no override —
+   *  shown as the floor a typed value may not go below (server-enforced; see {@link
+   *  onFreightFactorInput}). */
+  protected readonly matchedFreightFactor = signal<number | null>(null);
+  /** `null` until the desk types a raised factor — sent to the server as-is, which is the
+   *  only place "increase only" is actually enforced. */
+  protected readonly freightFactorOverride = signal<number | null>(null);
+
+  /** The booking branch's own GST% (V25) — Other Charges is a manual, booking-time amount
+   *  the Pricing Engine never sees, so GST on it is computed here (mirroring
+   *  `ShipmentServiceImpl.copyCharge`) purely so the live preview's total matches what
+   *  actually gets persisted at booking. */
+  protected readonly myBranchGstPercentage = signal<number>(18);
+
+  /** Picked at booking time but only uploaded once the shipment id exists — the endpoint
+   *  is `POST /shipments/{id}/image-upload`, so there is nothing to upload to until
+   *  `book()` succeeds. `imagePreviewUrl` is a local `URL.createObjectURL`, revoked on
+   *  removal/replacement so it doesn't leak. */
+  protected readonly selectedImageFile = signal<File | null>(null);
+  protected readonly imagePreviewUrl = signal<string | null>(null);
+
   private readonly pricingTrigger$ = new Subject<void>();
+
+  /** Search-as-you-type over the Customer module by name or mobile (see `CustomerSpecifications`
+   *  on the backend) — matches existing prior parties into `senderName`/`senderContact` and
+   *  `receiverName`/`receiverContact` without joining Shipment to Customer at booking time; the
+   *  picked customer's plain values are copied into the free-text fields exactly like manual
+   *  typing, nothing here becomes a foreign key. */
+  protected readonly senderSuggestions = signal<Customer[]>([]);
+  protected readonly receiverSuggestions = signal<Customer[]>([]);
+  /** Which field within the party currently owns the dropdown — `null` closes it. Both
+   *  Name and Contact Number search into the same suggestion list, but only the focused
+   *  field should show it, not both at once. */
+  protected readonly senderSuggestOpen = signal<'name' | 'contact' | null>(null);
+  protected readonly receiverSuggestOpen = signal<'name' | 'contact' | null>(null);
+  private readonly senderQuery$ = new Subject<string>();
+  private readonly receiverQuery$ = new Subject<string>();
 
   protected readonly form: FormGroup = this.fb.group({
     bookingBranchId: [this.myBranchId, Validators.required],
@@ -278,6 +450,7 @@ export class ShipmentCreate implements OnInit {
       if (mine?.postalCode && !this.form.get('pickupPincode')?.value) {
         this.form.get('pickupPincode')?.setValue(mine.postalCode);
       }
+      if (mine?.gstPercentage != null) this.myBranchGstPercentage.set(mine.gstPercentage);
     });
     this.form.get('deliveryBranchId')?.valueChanges.subscribe((id) => {
       if (!id) return;
@@ -307,7 +480,7 @@ export class ShipmentCreate implements OnInit {
     const PRICE_AFFECTING_CONTROLS = ['deliveryBranchId', 'serviceTypeId', 'packageTypeId',
       'paymentModeId', 'declaredValue', 'bookingDate'];
     merge(...PRICE_AFFECTING_CONTROLS.map((name) => this.form.get(name)!.valueChanges))
-      .subscribe(() => this.schedulePricing());
+      .subscribe(() => { this.resetFreightFactor(); this.schedulePricing(); });
 
     this.pricingTrigger$.pipe(
       debounceTime(500),
@@ -315,9 +488,63 @@ export class ShipmentCreate implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe((outcome) => {
       this.pricingLoading.set(false);
-      if (outcome.ok) { this.pricing.set(outcome.data); this.pricingError.set(null); }
-      else { this.pricing.set(null); this.pricingError.set(outcome.message); }
+      if (outcome.ok) {
+        this.pricing.set(outcome.data);
+        this.pricingError.set(null);
+        const applied = outcome.data.appliedFreightFactor;
+        if (applied != null) {
+          this.freightFactorApplicable.set(true);
+          // Only capture the floor from a response priced with no override — an overridden
+          // response echoes back the override itself, not the grid's own matched value.
+          if (this.freightFactorOverride() == null) this.matchedFreightFactor.set(applied);
+        } else {
+          this.freightFactorApplicable.set(false);
+          this.matchedFreightFactor.set(null);
+          this.freightFactorOverride.set(null);
+        }
+      } else {
+        this.pricing.set(null);
+        this.pricingError.set(outcome.message);
+      }
     });
+
+    // Name and Contact Number both feed the same free-text search — typing either one
+    // looks up prior customers matching it (CustomerSpecifications LIKEs code/name/mobile/email).
+    merge(this.c('senderName').valueChanges, this.c('senderContact').valueChanges)
+      .subscribe((v) => this.senderQuery$.next(v ?? ''));
+    merge(this.c('receiverName').valueChanges, this.c('receiverContact').valueChanges)
+      .subscribe((v) => this.receiverQuery$.next(v ?? ''));
+
+    this.senderQuery$.pipe(
+      debounceTime(300), distinctUntilChanged(), filter((q) => q.trim().length >= 2),
+      switchMap((q) => this.customers.list({ page: 0, size: 6, status: 'ACTIVE', search: q })),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((page) => this.senderSuggestions.set(page.content));
+
+    this.receiverQuery$.pipe(
+      debounceTime(300), distinctUntilChanged(), filter((q) => q.trim().length >= 2),
+      switchMap((q) => this.customers.list({ page: 0, size: 6, status: 'ACTIVE', search: q })),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((page) => this.receiverSuggestions.set(page.content));
+  }
+
+  /** Marks which field owns the dropdown; the template only renders it once that party's
+   *  suggestions list is non-empty, so an empty focus shows nothing until a search resolves. */
+  protected openSuggest(party: 'sender' | 'receiver', field: 'name' | 'contact'): void {
+    (party === 'sender' ? this.senderSuggestOpen : this.receiverSuggestOpen).set(field);
+  }
+
+  /** Copies the picked customer's plain name/mobile into the party's free-text fields —
+   *  no Customer id is ever stored on the shipment, matching the rest of this form. */
+  protected pickCustomer(party: 'sender' | 'receiver', cust: Customer): void {
+    this.c(`${party}Name`).setValue(cust.displayName);
+    this.c(`${party}Contact`).setValue(cust.mobile);
+    (party === 'sender' ? this.senderSuggestOpen : this.receiverSuggestOpen).set(null);
+  }
+
+  /** Deferred so `mousedown` on a suggestion fires before the input's own `blur` closes the list. */
+  protected closeSuggest(party: 'sender' | 'receiver'): void {
+    setTimeout(() => (party === 'sender' ? this.senderSuggestOpen : this.receiverSuggestOpen).set(null), 150);
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -338,7 +565,30 @@ export class ShipmentCreate implements OnInit {
 
   protected onWeight(weight: { actual: number; volumetric: number; chargeable: number }): void {
     this.weight.set(weight);
+    this.resetFreightFactor();
     this.schedulePricing();
+  }
+
+  /** A different lane or weight may not hit the Freight Factor fallback at all, or may
+   *  match a different grid cell — any typed override from the previous quote no longer
+   *  means anything, so it's cleared rather than silently resubmitted. */
+  private resetFreightFactor(): void {
+    this.freightFactorOverride.set(null);
+    this.matchedFreightFactor.set(null);
+  }
+
+  protected onFreightFactorInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isNaN(v)) return;
+    this.freightFactorOverride.set(v);
+    this.schedulePricing();
+  }
+
+  /** Manual Other Charges (never priced by the Pricing Engine) at the booking branch's own
+   *  GST% (V25) — mirrors `ShipmentServiceImpl.copyCharge`'s server-side math so the live
+   *  total shown here matches what actually gets booked. */
+  protected gstOnOtherCharges(): number {
+    return (this.otherCharges() * this.myBranchGstPercentage()) / 100;
   }
 
   protected onPackages(count: number): void {
@@ -346,6 +596,95 @@ export class ShipmentCreate implements OnInit {
   }
 
   protected cancel(): void { this.router.navigate(['/shipments']); }
+
+  protected onImageFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const previous = this.imagePreviewUrl();
+    if (previous) URL.revokeObjectURL(previous);
+    this.selectedImageFile.set(file);
+    this.imagePreviewUrl.set(URL.createObjectURL(file));
+  }
+
+  protected removeImage(): void {
+    const previous = this.imagePreviewUrl();
+    if (previous) URL.revokeObjectURL(previous);
+    this.selectedImageFile.set(null);
+    this.imagePreviewUrl.set(null);
+  }
+
+  /**
+   * Rule-based transcript → form fields (see `voice-booking.util.ts`). Only ever
+   * `setValue`s a control when the transcript actually supplied that field — an
+   * incomplete voice command leaves the rest of the form exactly as it was, never
+   * clears anything. Nothing books itself: the existing pricing debounce and the
+   * Booking Summary sidebar pick up the filled fields the same way manual typing does,
+   * and the user still has to review and click Book Shipment.
+   */
+  protected onVoiceTranscript(transcript: string): void {
+    const fields = parseVoiceBooking(transcript);
+    const applied: string[] = [];
+
+    const setIfPresent = (control: string, value: string | number | null | undefined, label: string) => {
+      if (value === null || value === undefined || value === '') return;
+      this.form.get(control)?.setValue(value);
+      applied.push(label);
+    };
+
+    setIfPresent('senderName', fields.senderName, 'sender name');
+    setIfPresent('senderContact', fields.senderContact, 'sender contact');
+    setIfPresent('senderAddress', fields.senderAddress, 'sender address');
+    setIfPresent('pickupPincode', fields.pickupPincode, 'pickup pincode');
+    setIfPresent('receiverName', fields.receiverName, 'receiver name');
+    setIfPresent('receiverContact', fields.receiverContact, 'receiver contact');
+    setIfPresent('receiverAddress', fields.receiverAddress, 'receiver address');
+    setIfPresent('deliveryPincode', fields.deliveryPincode, 'delivery pincode');
+    setIfPresent('declaredValue', fields.declaredValue, 'declared value');
+    setIfPresent('remarks', fields.remarks, 'remarks');
+
+    const branchId = fields.deliveryBranchText && this.matchOption(this.branchOptions(), fields.deliveryBranchText);
+    setIfPresent('deliveryBranchId', branchId || null, 'delivery branch');
+
+    const serviceTypeId = fields.serviceTypeText && this.matchOption(this.serviceTypeOptions(), fields.serviceTypeText);
+    setIfPresent('serviceTypeId', serviceTypeId || null, 'service type');
+
+    const packageTypeId = fields.packageTypeText && this.matchOption(this.packageTypeOptions(), fields.packageTypeText);
+    setIfPresent('packageTypeId', packageTypeId || null, 'package type');
+
+    const paymentModeId = fields.paymentModeText && this.matchOption(this.paymentModeOptions(), fields.paymentModeText);
+    setIfPresent('paymentModeId', paymentModeId || null, 'payment mode');
+
+    if (fields.weightKg != null || fields.numberOfPackages != null) {
+      this.voiceItems.set([{
+        itemName: 'Package', quantity: fields.numberOfPackages ?? 1, weight: fields.weightKg ?? 5,
+        lengthCm: null, widthCm: null, heightCm: null,
+        declaredValue: fields.declaredValue ?? null, fragile: false, dangerousGoods: false
+      }]);
+      applied.push('items (weight/packages)');
+    }
+
+    if (applied.length) {
+      this.voiceSummary.set(`Voice filled: ${applied.join(', ')}. Review and click Book Shipment.`);
+      this.notify.success(`Voice booking filled ${applied.length} field${applied.length > 1 ? 's' : ''} from what you said.`);
+    } else {
+      this.voiceSummary.set(null);
+      this.notify.error('Could not pick out any booking details from that. Try naming sender/receiver, pincode, weight and payment mode.');
+    }
+  }
+
+  protected onVoiceError(message: string): void { this.notify.error(message); }
+
+  private matchOption(options: SelectOption[], spoken: string): string | null {
+    const needle = spoken.trim().toLowerCase();
+    if (!needle) return null;
+    const found = options.find((o) => {
+      const label = o.label.toLowerCase();
+      return label.includes(needle) || needle.includes(label);
+    });
+    return found?.value ?? null;
+  }
 
   /**
    * A plain method, not `computed()` — see `MEMORY/modules/shipment-booking.md`'s note
@@ -383,7 +722,7 @@ export class ShipmentCreate implements OnInit {
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
       actualWeight: this.weight().chargeable, declaredValue: v.declaredValue || null,
-      bookingDate: v.bookingDate || null
+      bookingDate: v.bookingDate || null, freightFactorOverride: this.freightFactorOverride()
     }).pipe(
       switchMap((data) => of({ ok: true, data }) as Observable<PriceOutcome>),
       catchError((e: HttpErrorResponse) =>
@@ -404,7 +743,8 @@ export class ShipmentCreate implements OnInit {
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
       bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
-      remarks: v.remarks || null, items: this.items()
+      remarks: v.remarks || null, otherCharges: this.otherCharges() || null,
+      freightFactorOverride: this.freightFactorOverride(), items: this.items()
     };
 
     this.submitting.set(true);
@@ -415,6 +755,7 @@ export class ShipmentCreate implements OnInit {
         printConsignmentCopies({
           companyName: this.auth.companyName() ?? 'Courier SaaS',
           shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+          expectedDeliveryDate: s.expectedDeliveryDate ?? null,
           bookingBranchLabel: this.myBranchLabel(), deliveryBranchLabel: this.branchLabel(v.deliveryBranchId),
           senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
           receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
@@ -422,8 +763,21 @@ export class ShipmentCreate implements OnInit {
           packageTypeLabel: this.labelOf(this.packageTypeOptions(), v.packageTypeId),
           paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
           numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,
-          declaredValue: v.declaredValue || null, charges: p.chargeBreakup
+          declaredValue: v.declaredValue || null,
+          charges: {
+            ...p.chargeBreakup,
+            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges(),
+            netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
+          },
+          otherCharges: this.otherCharges(),
+          remarks: v.remarks || null
         });
+        const image = this.selectedImageFile();
+        if (image) {
+          this.service.uploadImage(s.id, image).subscribe({
+            error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but the photo could not be uploaded.`)
+          });
+        }
         this.router.navigate(['/shipments', s.id]);
       },
       error: (err: HttpErrorResponse) => {

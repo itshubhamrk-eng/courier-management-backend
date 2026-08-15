@@ -15,7 +15,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
 
     boolean existsByCompanyIdAndVehicleNumber(UUID companyId, String vehicleNumber);
 
-    List<Vehicle> findAllByCompanyIdAndStatusOrderByVehicleNumberAsc(UUID companyId, VehicleStatus status);
+    List<Vehicle> findAllByCompanyIdAndActiveTrueOrderByVehicleNumberAsc(UUID companyId);
 
     List<Vehicle> findAllByCompanyIdOrderByVehicleNumberAsc(UUID companyId);
 }

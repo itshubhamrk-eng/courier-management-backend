@@ -20,11 +20,13 @@ import com.courier.modules.shipment.application.command.ShipmentItemCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.shipment.application.event.ShipmentEvent;
+import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.shipment.domain.BranchShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.CompanyShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignmentRepository;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
+import com.courier.modules.shipment.domain.ShipmentAssetRepository;
 import com.courier.modules.shipment.domain.ShipmentDocumentRepository;
 import com.courier.modules.shipment.domain.ShipmentItemRepository;
 import com.courier.modules.shipment.domain.ShipmentRepository;
@@ -93,8 +95,10 @@ class ShipmentServiceImplTest {
     @Mock private DeliveryAssignmentRepository deliveryAssignmentRepository;
     @Mock private BranchShipmentSequenceRepository branchShipmentSequenceRepository;
     @Mock private CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
+    @Mock private com.courier.modules.shipment.domain.CompanyDrsSequenceRepository companyDrsSequenceRepository;
     @Mock private com.courier.modules.company.application.UserService userService;
     @Mock private com.courier.modules.company.application.BranchService branchService;
+    @Mock private com.courier.modules.customer.application.CustomerService customerService;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
     @Mock private PaymentModeService paymentModeService;
@@ -104,6 +108,8 @@ class ShipmentServiceImplTest {
     @Mock private WalletService walletService;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private FileStoragePort fileStoragePort;
+    @Mock private ShipmentAssetRepository shipmentAssetRepository;
 
     private ShipmentServiceImpl service;
 
@@ -111,10 +117,11 @@ class ShipmentServiceImplTest {
     void setUp() {
         service = new ShipmentServiceImpl(shipmentRepository, itemRepository, chargeRepository,
                 historyRepository, documentRepository, deliveryAssignmentRepository,
-                branchShipmentSequenceRepository, companyShipmentSequenceRepository,
+                branchShipmentSequenceRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
-                userService, branchService, auditService, eventPublisher);
+                userService, branchService, customerService, auditService, eventPublisher, fileStoragePort,
+                shipmentAssetRepository);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -166,6 +173,8 @@ class ShipmentServiceImplTest {
         verify(historyRepository).save(any());
         verify(walletService, never()).getForBranch(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(customerService).findOrCreateForBooking("Asha Shah", "9876543210");
+        verify(customerService).findOrCreateForBooking("Rahul Verma", "9876500000");
     }
 
     @Test
@@ -201,6 +210,109 @@ class ShipmentServiceImplTest {
     }
 
     @Test
+    @DisplayName("the commission breakdown is computed from the booking branch's own "
+            + "percentages and stored on the charge row")
+    void commissionComputedFromBookingBranchPercentages() {
+        // freight 100.00, otherCharges 0; PUNE's default percentages (V25): commission on
+        // basic freight 10%, company service charge 10%, commission on other charges 20%
+        // (so the branch keeps 80% of other charges — none here).
+        Shipment created = service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
+        assertThat(captor.getValue().getBranchCommissionOnOtherAmount()).isEqualByComparingTo("0.0000");
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
+        // totalCommission is every line summed (10 + 0 + 10) — not just the branch's own
+        // two, which is the (smaller) amount that actually gets credited to its wallet.
+        assertThat(captor.getValue().getTotalCommission()).isEqualByComparingTo("20.0000");
+        assertThat(created.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
+    }
+
+    @Test
+    @DisplayName("a PREPAID booking's commission is not published at booking time any more — "
+            + "only the debit event is")
+    void prepaidBookingNoLongerPublishesCommissionAtBooking() {
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        Wallet wallet = mock(Wallet.class);
+        when(wallet.getAvailableBalance()).thenReturn(new BigDecimal("1000.00"));
+        when(walletService.getForBranch(BOOKING_BRANCH)).thenReturn(wallet);
+        when(branchService.getById(any())).thenReturn(
+                Branch.builder().branchCode("PUNE").instantCommission(true).build());
+
+        service.create(command());
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+        verify(eventPublisher).publishEvent(any(ShipmentEvent.PrepaidBookingConfirmed.class));
+    }
+
+    // ------------------------------------------------------------ transitionToDispatched
+
+    @Test
+    @DisplayName("dispatching a manifest credits only the branch's own commission (not the "
+            + "company's) for a PREPAID shipment when its booking branch has instantCommission on")
+    void dispatchPublishesCommissionWhenInstant() {
+        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
+        UUID manifestId = UUID.randomUUID();
+        UUID vehicleId = UUID.randomUUID();
+        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
+                .thenReturn(List.of(shipment));
+        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
+                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        when(branchService.getById(BOOKING_BRANCH)).thenReturn(
+                Branch.builder().branchCode("PUNE").instantCommission(true).build());
+
+        service.transitionToDispatched(List.of(shipment.getId()), manifestId, vehicleId, BOOKING_BRANCH);
+
+        org.mockito.ArgumentCaptor<ShipmentEvent.DispatchCommissionEarned> captor =
+                org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DispatchCommissionEarned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        // commissionOnBasicFreight (10) + branchCommissionOnOtherAmount (5), never the
+        // stored totalCommission, which also folds in the company's own cut.
+        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
+        assertThat(captor.getValue().shipmentId()).isEqualTo(shipment.getId());
+        assertThat(captor.getValue().bookingBranchId()).isEqualTo(BOOKING_BRANCH);
+    }
+
+    @Test
+    @DisplayName("dispatching a manifest publishes no commission when the booking branch has "
+            + "instantCommission off")
+    void dispatchSkipsCommissionWhenNotInstant() {
+        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
+        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
+                .thenReturn(List.of(shipment));
+        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
+                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        when(branchService.getById(BOOKING_BRANCH)).thenReturn(
+                Branch.builder().branchCode("PUNE").instantCommission(false).build());
+
+        service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
+                BOOKING_BRANCH);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+    }
+
+    @Test
+    @DisplayName("dispatching a manifest publishes no commission for a TO_PAY/COD shipment")
+    void dispatchSkipsCommissionWhenNotCollectAtBooking() {
+        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
+        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
+                .thenReturn(List.of(shipment));
+        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
+                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(false));
+
+        service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
+                BOOKING_BRANCH);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+    }
+
+    @Test
     @DisplayName("a blank sender name/address/contact is refused")
     void blankSenderRejected() {
         assertThatThrownBy(() -> service.create(command("", "", "")))
@@ -216,7 +328,7 @@ class ShipmentServiceImplTest {
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care",
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null);
@@ -309,6 +421,43 @@ class ShipmentServiceImplTest {
         verify(itemRepository).deleteAllByShipmentIdAndCompanyId(existing.getId(), COMPANY);
     }
 
+    // ------------------------------------------------------------- uploadShipmentImage
+
+    @Test
+    @DisplayName("uploadShipmentImage refuses a file extension outside the accepted image set")
+    void uploadShipmentImageRefusesUnacceptedExtension() {
+        Shipment existing = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findByIdWithinCompany(existing.getId(), COMPANY))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.uploadShipmentImage(existing.getId(),
+                new ShipmentService.UploadShipmentImageCommand(new byte[]{1}, "photo.mp4", "video/mp4")))
+                .isInstanceOf(BusinessRuleException.class);
+        verify(fileStoragePort, never()).upload(any());
+    }
+
+    @Test
+    @DisplayName("uploadShipmentImage stores the file and records it as a BOOKING asset")
+    void uploadShipmentImageHappyPath() {
+        Shipment existing = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findByIdWithinCompany(existing.getId(), COMPANY))
+                .thenReturn(Optional.of(existing));
+        when(fileStoragePort.upload(any())).thenReturn(new FileStoragePort.StoredFile(
+                "https://bucket.s3.amazonaws.com/shipment-photo/x.jpg", "shipment-photo/x.jpg"));
+
+        String url = service.uploadShipmentImage(existing.getId(),
+                new ShipmentService.UploadShipmentImageCommand(new byte[]{1, 2, 3}, "photo.JPG", "image/jpeg"));
+
+        assertThat(url).isEqualTo("https://bucket.s3.amazonaws.com/shipment-photo/x.jpg");
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.courier.modules.shipment.domain.ShipmentAsset.class);
+        verify(shipmentAssetRepository).save(captor.capture());
+        assertThat(captor.getValue().getAssetType())
+                .isEqualTo(com.courier.modules.shipment.domain.ShipmentAssetType.BOOKING);
+        assertThat(captor.getValue().getKind()).isEqualTo("PHOTO");
+        assertThat(captor.getValue().getAssetUrl()).isEqualTo("https://bucket.s3.amazonaws.com/shipment-photo/x.jpg");
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void signedIn(String role) {
@@ -328,7 +477,7 @@ class ShipmentServiceImplTest {
                 senderName, senderAddress, senderContact,
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care",
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null);
@@ -340,7 +489,7 @@ class ShipmentServiceImplTest {
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma (updated)", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "updated",
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "updated", null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null);
@@ -376,6 +525,15 @@ class ShipmentServiceImplTest {
         return shipment;
     }
 
+    private static com.courier.modules.shipment.domain.ShipmentCharge charge(
+            UUID shipmentId, String commissionOnBasicFreight, String branchCommissionOnOtherAmount) {
+        return com.courier.modules.shipment.domain.ShipmentCharge.builder()
+                .shipmentId(shipmentId)
+                .commissionOnBasicFreight(new BigDecimal(commissionOnBasicFreight))
+                .branchCommissionOnOtherAmount(new BigDecimal(branchCommissionOnOtherAmount))
+                .build();
+    }
+
     private static ServiceType serviceType(int deliveryDays) {
         ServiceType serviceType = new ServiceType();
         serviceType.setCode("STD");
@@ -409,6 +567,6 @@ class ShipmentServiceImplTest {
         return new PricingResult(route, rate, new BigDecimal("5.000"), BigDecimal.ZERO,
                 new BigDecimal("5.000"), new BigDecimal("100.00"), new BigDecimal("10.00"),
                 new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("20.70"),
-                BigDecimal.ZERO, new BigDecimal("0.30"), netAmount);
+                BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
     }
 }

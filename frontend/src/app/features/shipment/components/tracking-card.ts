@@ -34,13 +34,14 @@ import { ShipmentStatus } from '@core/models/shipment.model';
   `,
   styles: [`
     .tc { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
-      padding:20px 24px; border:1px solid var(--surface-border); border-radius:var(--r-field); background:var(--surface); }
+      padding:22px 26px; border:0; border-radius:var(--r-card-lg); background:var(--surface); box-shadow:var(--shadow-clay); }
     .tc__ids { display:flex; gap:32px; flex-wrap:wrap; }
     .tc__id { display:flex; flex-direction:column; gap:4px; }
     .tc__label { font:500 12px var(--font-sans); color:var(--content-muted); }
-    .tc__value { font:700 16px var(--font-mono, ui-monospace); color:var(--content-fg); }
+    .tc__value { font:700 17px var(--font-mono, ui-monospace); color:var(--content-fg); }
     .tc__value.awb { color:var(--brand-600); }
     .tc__meta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .tc__meta app-shipment-status-badge ::ng-deep .badge { height:28px; padding:0 14px; font-size:13px; }
     .tc__date { font:400 13px var(--font-sans); color:var(--content-muted); }
     .mono { font-family:var(--font-mono, ui-monospace); }
   `]

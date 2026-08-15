@@ -3,7 +3,7 @@ package com.courier.modules.pricing.application.calculator;
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.domain.ChargeType;
 import com.courier.modules.rate.domain.Rate;
-import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.RouteRateUnavailableException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -70,7 +70,7 @@ public class FreightCalculator implements ChargeCalculator {
                 BigDecimal units = extra.divide(matched.getAdditionalWeight(), 0, RoundingMode.CEILING);
                 freight = matched.getBaseRate().add(units.multiply(matched.getAdditionalWeightRate()));
             } else {
-                throw new BusinessRuleException(
+                throw new RouteRateUnavailableException(
                         ("No rate slab covers %s %s for this route, service type, package "
                                 + "type and payment mode — there is a gap between the "
                                 + "configured slabs.")

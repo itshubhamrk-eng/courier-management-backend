@@ -22,10 +22,11 @@ import { MatIconModule } from '@angular/material/icon';
     }
   `,
   styles: [`
-    .dw__scrim { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:60; animation:fade .15s; }
-    .dw { position:fixed; top:0; right:0; bottom:0; max-width:92vw; background:var(--surface);
-      z-index:61; display:flex; flex-direction:column; box-shadow:var(--shadow-pop); animation:slide .2s ease; }
-    .dw__head { display:flex; align-items:flex-start; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--surface-border); }
+    .dw__scrim { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(1px); z-index:60; animation:fade .15s; }
+    .dw { position:fixed; top:12px; right:12px; bottom:12px; max-width:92vw; background:var(--surface);
+      border-radius:var(--r-card-lg); z-index:61; display:flex; flex-direction:column;
+      box-shadow:var(--shadow-clay-hover); animation:slide .2s ease; overflow:hidden; }
+    .dw__head { display:flex; align-items:flex-start; justify-content:space-between; padding:22px 24px; border-bottom:1px solid var(--surface-border); }
     .dw__x { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:flex; }
     .dw__body { flex:1; overflow:auto; padding:24px; }
     .dw__foot { padding:16px 24px; border-top:1px solid var(--surface-border); display:flex; justify-content:flex-end; gap:8px; }

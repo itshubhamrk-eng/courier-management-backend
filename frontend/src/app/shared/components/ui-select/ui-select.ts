@@ -28,6 +28,14 @@ export interface SelectOption { value: string; label: string; }
     .sel { display:flex; flex-direction:column; gap:6px; }
     .sel__label { font:500 13px var(--font-sans); color:var(--content-fg); }
     .sel__field { width:100%; }
+    // Material's outline appearance, restyled into a clay "well" to match app-input —
+    // ::ng-deep since the outline/wrapper are Material internals, not this component's own DOM.
+    .sel__field ::ng-deep .mdc-notched-outline > * { border-color:transparent !important; }
+    .sel__field ::ng-deep .mat-mdc-text-field-wrapper {
+      background:var(--surface-muted); border-radius:var(--r-field); box-shadow:var(--shadow-clay-inset);
+    }
+    .sel__field ::ng-deep .mat-mdc-form-field-flex { min-height:44px; align-items:center; }
+    .sel__field.mat-focused ::ng-deep .mat-mdc-text-field-wrapper { box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
   `]
 })
 export class UiSelect {

@@ -25,7 +25,7 @@ export const API = {
    *  not part of the movement brief's own REST list, which assumes a manifest exists. */
   manifests: '/manifests',
   vehicles: '/vehicles',
-  /** Out Scan, Dispatch, In Scan, Out For Delivery, Deliver. */
+  /** Loading Sheet, Trip Hire Challan (THC), In Scan, Out For Delivery, Deliver. */
   shipmentMovement: '/shipment-movement',
   branchWallet: '/branch-wallet',
   hubs: '/hubs',
@@ -35,5 +35,7 @@ export const API = {
   superAdmin: '/super-admin',
   /** The geography every company shares. SUPER_ADMIN writes, anyone signed in reads. */
   globalMasters: '/global-masters',
-  dashboard: '/dashboard/summary'
+  dashboard: '/dashboard/summary',
+  distances: '/distances',
+  freightFactors: '/freight-factors'
 } as const;

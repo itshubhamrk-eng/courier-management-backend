@@ -32,11 +32,11 @@ import { AuthService } from '@core/auth/auth.service';
     </mat-menu>
   `,
   styles: [`
-    .um__trigger { display:flex; align-items:center; gap:8px; padding:5px 8px 5px 5px; border-radius:10px;
-      border:1px solid var(--surface-border); background:var(--surface); cursor:pointer; }
-    .um__trigger:hover { background:var(--surface-muted); }
-    .um__avatar { width:30px; height:30px; border-radius:50%; background:var(--brand-600); color:#fff;
-      display:grid; place-items:center; font:700 12px var(--font-sans); flex-shrink:0; }
+    .um__trigger { display:flex; align-items:center; gap:8px; padding:5px 10px 5px 5px; border-radius:14px;
+      border:0; background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); cursor:pointer; }
+    .um__trigger:hover { box-shadow:var(--shadow-clay-inset), 0 0 0 2px var(--brand-100); }
+    .um__avatar { width:32px; height:32px; border-radius:12px; background:linear-gradient(155deg, var(--brand-400), var(--brand-600)); color:#fff;
+      display:grid; place-items:center; font:700 12px var(--font-sans); flex-shrink:0; box-shadow:var(--shadow-clay-sm); }
     .um__avatar--lg { width:40px; height:40px; font-size:15px; }
     .um__name { font:600 13px var(--font-sans); color:var(--content-fg); max-width:140px; overflow:hidden;
       text-overflow:ellipsis; white-space:nowrap; }

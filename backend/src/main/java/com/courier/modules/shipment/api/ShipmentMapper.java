@@ -1,6 +1,7 @@
 package com.courier.modules.shipment.api;
 
 import com.courier.modules.shipment.api.dto.AddShipmentDocumentRequest;
+import com.courier.modules.shipment.api.dto.BranchCommissionSummaryResponse;
 import com.courier.modules.shipment.api.dto.CreateShipmentRequest;
 import com.courier.modules.shipment.api.dto.ShipmentChargeResponse;
 import com.courier.modules.shipment.api.dto.ShipmentDocumentResponse;
@@ -10,12 +11,18 @@ import com.courier.modules.shipment.api.dto.ShipmentResponse;
 import com.courier.modules.shipment.api.dto.ShipmentSearchRequest;
 import com.courier.modules.shipment.api.dto.ShipmentStatusHistoryResponse;
 import com.courier.modules.shipment.api.dto.ShipmentSummaryResponse;
+import com.courier.modules.shipment.api.dto.ShipmentSummaryStatsResponse;
 import com.courier.modules.shipment.api.dto.UpdateShipmentRequest;
 import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.ShipmentItemCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
+import com.courier.modules.shipment.domain.BranchCommissionSummary;
+import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.Shipment;
+import com.courier.modules.shipment.domain.ShipmentAsset;
+import com.courier.modules.shipment.domain.ShipmentAssetType;
+import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentCriteria;
 import com.courier.modules.shipment.domain.ShipmentDocument;
 import com.courier.modules.shipment.domain.ShipmentItem;
@@ -23,6 +30,7 @@ import com.courier.modules.shipment.domain.ShipmentStatusHistory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 /** Wire contract <-> application/domain types for Shipment Booking. */
@@ -37,7 +45,7 @@ public class ShipmentMapper {
                 r.receiverName(), r.receiverAddress(), r.receiverContact(),
                 r.serviceTypeId(), r.packageTypeId(), r.paymentModeId(),
                 r.shipmentType(), r.bookingDate(), r.declaredValue(), r.numberOfPackages(),
-                r.remarks(), toItemCommands(r.items()),
+                r.remarks(), r.otherCharges(), r.freightFactorOverride(), toItemCommands(r.items()),
                 r.actualWeight(), r.length(), r.width(), r.height());
     }
 
@@ -49,7 +57,7 @@ public class ShipmentMapper {
                 r.receiverName(), r.receiverAddress(), r.receiverContact(),
                 r.serviceTypeId(), r.packageTypeId(), r.paymentModeId(),
                 r.shipmentType(), r.bookingDate(), r.declaredValue(), r.numberOfPackages(),
-                r.remarks(), toItemCommands(r.items()),
+                r.remarks(), r.otherCharges(), r.freightFactorOverride(), toItemCommands(r.items()),
                 r.actualWeight(), r.length(), r.width(), r.height());
     }
 
@@ -65,7 +73,8 @@ public class ShipmentMapper {
     public ShipmentCriteria toCriteria(ShipmentSearchRequest r) {
         ShipmentSearchRequest safe = r == null ? ShipmentSearchRequest.empty() : r;
         return new ShipmentCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(),
-                safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(), safe.search());
+                safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
+                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.search());
     }
 
     public ShipmentService.AddDocumentCommand toCommand(AddShipmentDocumentRequest r) {
@@ -74,6 +83,11 @@ public class ShipmentMapper {
     }
 
     public ShipmentResponse toResponse(Shipment s, List<ShipmentItem> items) {
+        return toResponse(s, items, null, List.of());
+    }
+
+    public ShipmentResponse toResponse(Shipment s, List<ShipmentItem> items, DeliveryAssignment pod,
+                                       List<ShipmentAsset> assets) {
         return new ShipmentResponse(
                 s.getId(), s.getCompanyId(), s.getShipmentNumber(), s.getTrackingNumber(),
                 s.getBookingDate(), s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(),
@@ -84,16 +98,47 @@ public class ShipmentMapper {
                 s.getShipmentType(), s.getExpectedDeliveryDate(),
                 s.getActualWeight(), s.getVolumetricWeight(), s.getChargeableWeight(),
                 s.getDeclaredValue(), s.getNumberOfPackages(), s.getStatus(), s.getRemarks(),
+                pod != null ? pod.getDeliveredAt() : null,
+                latestAssetUrl(assets, ShipmentAssetType.POD, "PHOTO"),
+                latestAssetUrl(assets, ShipmentAssetType.POD, "SIGNATURE"),
+                latestAssetUrl(assets, ShipmentAssetType.BOOKING, "PHOTO"),
                 s.getCreatedBy(), s.getCreatedAt(), s.getUpdatedBy(), s.getUpdatedAt(), s.getVersion(),
                 items.stream().map(this::toResponse).toList());
     }
 
-    public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount) {
+    /** Assets arrive newest-first ({@code ShipmentAssetRepository}'s own ordering) — the
+     *  first match for this (type, kind) pair is the current one. */
+    private String latestAssetUrl(List<ShipmentAsset> assets, ShipmentAssetType type, String kind) {
+        return assets.stream()
+                .filter(a -> a.getAssetType() == type && kind.equals(a.getKind()))
+                .findFirst()
+                .map(ShipmentAsset::getAssetUrl)
+                .orElse(null);
+    }
+
+    public ShipmentSummaryStatsResponse toSummaryStats(com.courier.modules.shipment.domain.ShipmentSummaryStats s) {
+        return new ShipmentSummaryStatsResponse(
+                s.totalCount(), s.totalChargeableWeight(), s.totalNetAmount(), s.statusCounts());
+    }
+
+    public BranchCommissionSummaryResponse toCommissionSummary(BranchCommissionSummary s) {
+        return new BranchCommissionSummaryResponse(s.bookingBranchId(), s.shipmentCount(), s.totalNetAmount(),
+                s.commissionOnBasicFreight(), s.branchCommissionOnOtherAmount(),
+                s.companyCommissionOnBasicFreight(), s.totalCommission());
+    }
+
+    public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,
+                                             Instant deliveredAt) {
         return new ShipmentSummaryResponse(
                 s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getBookingDate(),
-                s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(),
+                s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(), s.getPaymentModeId(),
                 s.getSenderName(), s.getSenderContact(), s.getReceiverName(), s.getReceiverContact(),
-                s.getChargeableWeight(), netAmount, s.getStatus(), s.getCreatedAt(), s.getVersion());
+                s.getChargeableWeight(), netAmount,
+                charge == null ? null : charge.getTotalCommission(),
+                charge == null ? null : charge.getCommissionOnBasicFreight(),
+                charge == null ? null : charge.getBranchCommissionOnOtherAmount(),
+                charge == null ? null : charge.getCompanyCommissionOnBasicFreight(),
+                s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion());
     }
 
     public ShipmentItemResponse toResponse(ShipmentItem i) {
@@ -108,9 +153,13 @@ public class ShipmentMapper {
                 c.charge().getShipmentId(),
                 c.charge().getFreight(), c.charge().getFuelCharge(), c.charge().getHandlingCharge(),
                 c.charge().getOdaCharge(), c.charge().getInsuranceCharge(), c.charge().getGstAmount(),
-                c.charge().getDiscountAmount(), c.charge().getRoundOff(), c.charge().getNetAmount(),
+                c.charge().getDiscountAmount(), c.charge().getRoundOff(), c.charge().getOtherCharges(),
+                c.charge().getCommissionOnBasicFreight(), c.charge().getBranchCommissionOnOtherAmount(),
+                c.charge().getCompanyCommissionOnBasicFreight(), c.charge().getTotalCommission(),
+                c.charge().getNetAmount(),
                 c.charge().getMatchedRouteId(), c.matchedRouteCode(),
-                c.charge().getMatchedRateId(), c.matchedRateCode());
+                c.charge().getMatchedRateId(), c.matchedRateCode(),
+                c.charge().getAppliedFreightFactor());
     }
 
     public ShipmentStatusHistoryResponse toResponse(ShipmentStatusHistory h) {
@@ -127,12 +176,32 @@ public class ShipmentMapper {
                         o.reference(), o.success(), o.message()))
                 .toList();
         return new com.courier.modules.shipment.api.dto.BulkMovementResponse(
-                results, r.successCount(), r.failureCount());
+                results, r.successCount(), r.failureCount(), r.drsNumber());
     }
 
     public com.courier.modules.shipment.api.dto.TimelineStepResponse toResponse(ShipmentService.TimelineStep s) {
         return new com.courier.modules.shipment.api.dto.TimelineStepResponse(
                 s.status(), s.label(), s.changedAt(), s.changedBy(), s.completed());
+    }
+
+    public com.courier.modules.shipment.api.dto.DrsSummaryResponse toResponse(ShipmentService.DrsSummary s) {
+        return new com.courier.modules.shipment.api.dto.DrsSummaryResponse(
+                s.deliveryUserId(), s.deliveryBranchId(), s.runDate(), s.drsNumber(),
+                s.shipmentCount(), s.deliveredCount(), s.pendingCount());
+    }
+
+    public com.courier.modules.shipment.api.dto.DrsDetailResponse toResponse(ShipmentService.DrsDetail d) {
+        return new com.courier.modules.shipment.api.dto.DrsDetailResponse(
+                d.deliveryUserId(), d.deliveryBranchId(), d.runDate(), d.drsNumber(),
+                d.shipments().stream().map(this::toResponse).toList());
+    }
+
+    private com.courier.modules.shipment.api.dto.DrsShipmentRowResponse toResponse(
+            ShipmentService.DrsShipmentRow r) {
+        return new com.courier.modules.shipment.api.dto.DrsShipmentRowResponse(
+                r.shipmentId(), r.shipmentNumber(), r.trackingNumber(),
+                r.receiverName(), r.receiverContact(), r.paymentModeId(),
+                r.netAmount(), r.status(), r.deliveredAt());
     }
 
     public ShipmentDocumentResponse toResponse(ShipmentDocument d) {

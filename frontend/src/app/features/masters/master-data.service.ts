@@ -6,14 +6,16 @@ import { Page, PageQuery } from '@core/models/page.model';
 import { MasterBootstrapResult, MasterOption, MasterRecord } from '@core/models/master.model';
 import { LookupSource, MASTER_DEFINITIONS, MasterDefinition, MasterKey } from './master.config';
 
-/** The branch fields this module reads — the two ends of a route, plus the postal code a
- *  booking screen defaults its pincode fields from. */
+/** The branch fields this module reads — the two ends of a route, the postal code a
+ *  booking screen defaults its pincode fields from, and the GST% (V25) it mirrors for its
+ *  own Other Charges preview math. */
 interface BranchSummary {
   id: string;
   branchCode: string;
   branchName: string;
   status: string;
   postalCode: string;
+  gstPercentage: number;
 }
 
 /**

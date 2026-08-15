@@ -13,11 +13,16 @@ export interface ChargeSummaryData {
   gstAmount: number;
   discountAmount: number;
   roundOff: number;
+  /** Manual, typed at booking time — not part of the Pricing Engine's own rate-driven
+   *  lines above; added on top of the engine's net amount by the caller. */
+  otherCharges: number;
   netAmount: number;
 }
 
-/** Freight through Net Amount, in calculation order — the Pricing Engine's own charge
- *  breakup, shown identically whether it is a live preview or what actually got booked. */
+/** Freight through Net Amount — the Pricing Engine's own charge breakup, shown identically
+ *  whether it is a live preview or what actually got booked. Other Charges sits above GST
+ *  (not calculation order) since `gstAmount` already includes tax on it — see
+ *  `ShipmentServiceImpl.copyCharge`. */
 @Component({
   selector: 'app-charge-summary',
   standalone: true,
@@ -25,12 +30,33 @@ export interface ChargeSummaryData {
   imports: [DecimalPipe],
   template: `
     <dl class="kv">
-      <dt>Freight</dt><dd class="mono">{{ charges().freight | number: '1.2-2' }}</dd>
-      <dt>Fuel Surcharge</dt><dd class="mono">{{ charges().fuelCharge | number: '1.2-2' }}</dd>
-      <dt>Handling</dt><dd class="mono">{{ charges().handlingCharge | number: '1.2-2' }}</dd>
-      <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
-      <dt>Insurance</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
-      <dt>GST</dt><dd class="mono">{{ charges().gstAmount | number: '1.2-2' }}</dd>
+      @if (charges().freight) {
+        <dt>Freight</dt><dd class="mono">{{ charges().freight | number: '1.2-2' }}</dd>
+      }
+      @if (charges().fuelCharge) {
+        <dt>Fuel Surcharge</dt><dd class="mono">{{ charges().fuelCharge | number: '1.2-2' }}</dd>
+      }
+      @if (charges().handlingCharge) {
+        <dt>Handling</dt><dd class="mono">{{ charges().handlingCharge | number: '1.2-2' }}</dd>
+      }
+      @if (charges().odaCharge) {
+        <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
+      }
+      @if (charges().insuranceCharge) {
+        <dt>Insurance</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
+      }
+      <dt>Other Charges</dt>
+      @if (editable()) {
+        <dd class="mono">
+          <input class="net-input" type="number" step="0.01" min="0"
+                 [value]="charges().otherCharges" (input)="onOtherChargesInput($event)" />
+        </dd>
+      } @else {
+        <dd class="mono">{{ charges().otherCharges | number: '1.2-2' }}</dd>
+      }
+      @if (charges().gstAmount) {
+        <dt>GST</dt><dd class="mono">{{ charges().gstAmount | number: '1.2-2' }}</dd>
+      }
       @if (charges().discountAmount) {
         <dt>Discount</dt><dd class="mono discount">-{{ charges().discountAmount | number: '1.2-2' }}</dd>
       }
@@ -66,9 +92,17 @@ export class ChargeSummary {
    *  server; the caller decides whether/how to use the edited value. */
   readonly editable = input<boolean>(false);
   readonly netAmountChange = output<number>();
+  /** Emits the typed Other Charges amount — unlike {@link netAmountChange}, this one IS
+   *  sent to the server (see `ShipmentCreate.otherCharges` form control). */
+  readonly otherChargesChange = output<number>();
 
   protected onNetAmountInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
     if (!Number.isNaN(v)) this.netAmountChange.emit(v);
+  }
+
+  protected onOtherChargesInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isNaN(v)) this.otherChargesChange.emit(v);
   }
 }

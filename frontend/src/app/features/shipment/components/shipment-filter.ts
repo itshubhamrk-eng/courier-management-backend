@@ -8,9 +8,13 @@ import { ShipmentSearchRequest, ShipmentStatus } from '@core/models/shipment.mod
 const STATUSES: SelectOption[] = ([
   'BOOKED', 'READY_FOR_MANIFEST', 'MANIFEST_CREATED', 'DISPATCHED', 'IN_SCAN',
   'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'CANCELLED'
-] as ShipmentStatus[]).map((s) => ({ value: s, label: s.split('_').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ') }));
+] as ShipmentStatus[]).map((s) => ({ value: s, label: s === 'OUT_FOR_DELIVERY' ? 'DRS' : s.split('_').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ') }));
 
-/** Advanced filter for the shipment list. Emits a ShipmentSearchRequest; parent merges it in. */
+/** Advanced filter for the shipment list, and for the Booking/Delivery Report screens.
+ *  Emits a ShipmentSearchRequest; parent merges it in. `mode` swaps the date range from
+ *  `bookingDate` (default, and the only option the shipment list ever used) to
+ *  `deliveredAt` for the Delivery Report — same two fields, different meaning, so one
+ *  component serves both rather than a near-duplicate filter form. */
 @Component({
   selector: 'app-shipment-filter',
   standalone: true,
@@ -22,12 +26,14 @@ const STATUSES: SelectOption[] = ([
       @if (!lockBookingBranch()) {
         <app-select [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
       }
-      <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+      @if (!lockDeliveryBranch()) {
+        <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+      }
 
-      <label class="fld"><span class="fld__l">Booked From</span>
-        <input class="fld__i" type="date" [formControl]="c('bookingDateFrom')" /></label>
-      <label class="fld"><span class="fld__l">Booked To</span>
-        <input class="fld__i" type="date" [formControl]="c('bookingDateTo')" /></label>
+      <label class="fld"><span class="fld__l">{{ mode() === 'delivery' ? 'Delivered From' : 'Booked From' }}</span>
+        <input class="fld__i" type="date" [formControl]="c('dateFrom')" /></label>
+      <label class="fld"><span class="fld__l">{{ mode() === 'delivery' ? 'Delivered To' : 'Booked To' }}</span>
+        <input class="fld__i" type="date" [formControl]="c('dateTo')" /></label>
 
       <div class="cf__bar">
         <app-button variant="text" (pressed)="clear()">Clear all</app-button>
@@ -51,6 +57,10 @@ export class ShipmentFilter {
   /** Set by ShipmentList for a branch-scoped viewer — the list already fixes
    *  bookingBranchId to their own branch, so the picker would just be misleading. */
   readonly lockBookingBranch = input(false);
+  /** Set by DeliveryReport for a branch-scoped viewer — the report already fixes
+   *  deliveryBranchId to their own branch, so the picker would just be misleading. */
+  readonly lockDeliveryBranch = input(false);
+  readonly mode = input<'booking' | 'delivery'>('booking');
 
   protected readonly statuses = STATUSES;
   protected readonly branchOptions = signal<SelectOption[]>([]);
@@ -59,8 +69,8 @@ export class ShipmentFilter {
     status: [[] as string[]],
     bookingBranchId: [null as string | null],
     deliveryBranchId: [null as string | null],
-    bookingDateFrom: [''],
-    bookingDateTo: ['']
+    dateFrom: [''],
+    dateTo: ['']
   });
 
   constructor() {
@@ -71,17 +81,19 @@ export class ShipmentFilter {
 
   protected apply(): void {
     const v = this.form.getRawValue();
+    const dateKeys = this.mode() === 'delivery'
+      ? { deliveredDateFrom: v.dateFrom || undefined, deliveredDateTo: v.dateTo || undefined }
+      : { bookingDateFrom: v.dateFrom || undefined, bookingDateTo: v.dateTo || undefined };
     this.changed.emit({
       status: v.status?.length ? (v.status as ShipmentStatus[]) : undefined,
       bookingBranchId: v.bookingBranchId || undefined,
       deliveryBranchId: v.deliveryBranchId || undefined,
-      bookingDateFrom: v.bookingDateFrom || undefined,
-      bookingDateTo: v.bookingDateTo || undefined
+      ...dateKeys
     });
   }
 
   protected clear(): void {
-    this.form.reset({ status: [], bookingBranchId: null, deliveryBranchId: null, bookingDateFrom: '', bookingDateTo: '' });
+    this.form.reset({ status: [], bookingBranchId: null, deliveryBranchId: null, dateFrom: '', dateTo: '' });
     this.changed.emit({});
   }
 }

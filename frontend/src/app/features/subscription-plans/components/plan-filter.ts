@@ -38,6 +38,7 @@ const TYPES: SelectOption[] = PLAN_TYPES.map((t) => ({
     .pf { display:flex; flex-direction:column; gap:16px; }
     .pf__row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .pf__bar { display:flex; justify-content:space-between; gap:10px; margin-top:8px; }
+    @media (max-width:400px) { .pf__row { grid-template-columns:1fr; } }
   `]
 })
 export class PlanFilter {

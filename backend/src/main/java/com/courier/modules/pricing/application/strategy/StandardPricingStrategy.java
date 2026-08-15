@@ -61,6 +61,7 @@ public class StandardPricingStrategy implements PricingStrategy {
                 context.charge(ChargeType.GST),
                 context.charge(ChargeType.DISCOUNT),
                 context.charge(ChargeType.ROUND_OFF),
-                context.netAmount());
+                context.netAmount(),
+                null);
     }
 }

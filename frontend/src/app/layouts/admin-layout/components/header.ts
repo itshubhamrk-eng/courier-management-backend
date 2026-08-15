@@ -7,16 +7,19 @@ import { Breadcrumb } from './breadcrumb';
 import { GlobalSearch } from './global-search';
 import { NotificationMenu } from './notification-menu';
 import { UserMenu } from './user-menu';
+import { AiAssistantButton } from './ai-assistant-button';
 
 /**
  * Top bar: sidebar toggle · company brand · breadcrumb · global search · theme switch ·
- * notifications · user profile menu. Composed from small reusable components.
+ * AI assistant · notifications · user profile menu. Composed from small reusable
+ * components. The AI assistant sits right next to notifications (not on any one page)
+ * since it's a global command router, not a dashboard-specific tool.
  */
 @Component({
   selector: 'app-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, Breadcrumb, GlobalSearch, NotificationMenu, UserMenu],
+  imports: [MatIconModule, Breadcrumb, GlobalSearch, NotificationMenu, UserMenu, AiAssistantButton],
   template: `
     <header class="hd">
       <div class="hd__left">
@@ -41,27 +44,28 @@ import { UserMenu } from './user-menu';
           <mat-icon>{{ theme.mode() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
         </button>
         <app-notification-menu />
+        <app-ai-assistant-button />
         <app-user-menu />
       </div>
     </header>
   `,
   styles: [`
     .hd { height:var(--header-h); display:flex; align-items:center; justify-content:space-between; gap:16px;
-      padding:0 32px; background:var(--surface); border-bottom:1px solid var(--surface-border);
-      position:sticky; top:0; z-index:20; }
-    @media (max-width:1024px){ .hd{ padding:0 24px; } }
-    @media (max-width:640px){ .hd{ padding:0 16px; gap:8px; } }
+      padding:0 28px; margin:14px 24px 0; background:var(--surface); border:1px solid var(--surface-border);
+      border-radius:var(--r-card); box-shadow:var(--shadow-clay-sm); position:sticky; top:14px; z-index:20; }
+    @media (max-width:1024px){ .hd{ padding:0 20px; margin:12px 16px 0; } }
+    @media (max-width:640px){ .hd{ padding:0 14px; margin:10px 10px 0; gap:8px; } }
     .hd__left, .hd__right { display:flex; align-items:center; gap:8px; min-width:0; }
     .hd__brand { display:flex; align-items:center; gap:9px; }
-    .hd__logo { width:30px; height:30px; border-radius:8px; background:var(--brand-600); color:#fff;
-      display:grid; place-items:center; font:800 12px var(--font-sans); flex-shrink:0; overflow:hidden; }
-    .hd__logo--img { background:var(--surface-muted); }
+    .hd__logo { width:32px; height:32px; border-radius:11px; background:linear-gradient(155deg, var(--brand-400), var(--brand-600)); color:#fff;
+      display:grid; place-items:center; font:800 12px var(--font-display); flex-shrink:0; overflow:hidden; box-shadow:var(--shadow-clay-sm); }
+    .hd__logo--img { background:var(--surface-muted); box-shadow:none; }
     .hd__logo--img img { width:100%; height:100%; object-fit:contain; }
-    .hd__company { font:700 15px var(--font-sans); color:var(--content-fg); white-space:nowrap; }
+    .hd__company { font:700 15px var(--font-display); color:var(--content-fg); white-space:nowrap; }
     .hd__divider { width:1px; height:24px; background:var(--surface-border); margin:0 4px; }
     .hd__icon-btn { position:relative; display:grid; place-items:center; width:40px; height:40px;
-      border-radius:10px; border:0; background:transparent; color:var(--content-muted); cursor:pointer; }
-    .hd__icon-btn:hover { background:var(--surface-muted); color:var(--content-fg); }
+      border-radius:12px; border:0; background:transparent; color:var(--content-muted); cursor:pointer; transition:background .15s, box-shadow .15s; }
+    .hd__icon-btn:hover { background:var(--surface-muted); color:var(--content-fg); box-shadow:var(--shadow-clay-inset); }
 
     /* Below the breadcrumb-crowding point, drop brand text and divider + breadcrumb. */
     @media (max-width: 900px) { .hd__divider, app-breadcrumb { display:none; } }

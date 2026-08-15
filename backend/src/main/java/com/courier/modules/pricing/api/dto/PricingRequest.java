@@ -53,6 +53,13 @@ public record PricingRequest(
         BigDecimal discountPercentage,
 
         @DecimalMin(value = "0.0", message = "cannot be negative")
-        BigDecimal discountAmount
+        BigDecimal discountAmount,
+
+        @Schema(description = "Only meaningful on the Freight Factor fallback (no route/rate "
+                + "for this lane): raises the matched grid cell's own factor before freight is "
+                + "computed. Must be greater than or equal to the matched factor — a smaller "
+                + "value is refused.")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal freightFactorOverride
 ) {
 }

@@ -26,6 +26,15 @@ public interface CustomerService {
 
     Customer create(CreateCustomerCommand command);
 
+    /**
+     * Reuses an existing customer matched by exact mobile number, or creates a bare-bones
+     * {@code INDIVIDUAL} one from a booking-time name + mobile — so Shipment Booking's
+     * sender/receiver are captured as reusable master data without the counter re-typing a
+     * customer that already exists. Returns {@code null} without writing anything if
+     * {@code mobile} is blank (booking still allows a contact-less party in some flows).
+     */
+    Customer findOrCreateForBooking(String fullName, String mobile);
+
     Customer update(UUID id, UpdateCustomerCommand command);
 
     Customer getById(UUID id);

@@ -55,9 +55,11 @@ export interface ReasonData {
     </form>
   `,
   styles: [`
-    .rd { padding:24px; width:480px; max-width:92vw; display:flex; flex-direction:column; gap:18px; }
+    .rd { padding:28px; width:480px; max-width:92vw; display:flex; flex-direction:column; gap:18px; }
     .rd__head { display:flex; gap:14px; align-items:flex-start; }
     .rd__icon { color:var(--brand-500); font-size:28px; width:28px; height:28px; }
+    .rd__icon { background:var(--brand-50); border-radius:14px; padding:8px; box-sizing:content-box; box-shadow:var(--shadow-clay-sm); }
+    .rd__icon.danger { background:var(--danger-bg); }
     .rd__icon.danger { color:var(--danger); }
     .rd__actions { display:flex; justify-content:flex-end; gap:10px; }
   `]

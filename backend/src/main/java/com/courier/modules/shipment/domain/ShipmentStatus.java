@@ -25,12 +25,17 @@ import java.util.Set;
  *
  * <p><b>V20, on direct request:</b> the standalone {@code OUT_SCAN} state (and the
  * separate "scan each shipment onto the manifest" action that wrote it) is gone —
- * {@link #MANIFEST_CREATED} now doubles as "out scan created" (see {@code ShipmentStatusBadge}'s
+ * {@link #MANIFEST_CREATED} now doubles as "loading sheet created" (see {@code ShipmentStatusBadge}'s
  * display label), and Dispatch's precondition moved from "at least one OUT_SCAN
  * shipment" to "at least one MANIFEST_CREATED shipment". The user's own words: "manifest
  * created as outscan created" — one milestone, not two. V20's migration folds any
  * `OUT_SCAN` rows (real ones exist from live verification of the two-step version) back
  * into {@code MANIFEST_CREATED}, the same fold-back-on-rename pattern V19 set.
+ *
+ * <p>{@link #MANIFEST_CREATED} -&gt; {@link #BOOKED} is the one backward edge in this
+ * graph: removing a shipment from a still-{@code CREATED} manifest (see
+ * {@code ManifestService.removeShipment}) reverts it to {@code BOOKED} so a future
+ * manifest can pick it up, rather than leaving it stranded off every worklist.
  */
 public enum ShipmentStatus {
 
@@ -47,7 +52,7 @@ public enum ShipmentStatus {
     private static final Map<ShipmentStatus, Set<ShipmentStatus>> TRANSITIONS = Map.ofEntries(
             Map.entry(BOOKED, EnumSet.of(READY_FOR_MANIFEST, MANIFEST_CREATED, CANCELLED)),
             Map.entry(READY_FOR_MANIFEST, EnumSet.of(MANIFEST_CREATED, CANCELLED)),
-            Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED)),
+            Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED, BOOKED)),
             Map.entry(DISPATCHED, EnumSet.of(IN_SCAN)),
             Map.entry(IN_SCAN, EnumSet.of(OUT_FOR_DELIVERY, RETURNED)),
             Map.entry(OUT_FOR_DELIVERY, EnumSet.of(DELIVERED, RETURNED)),

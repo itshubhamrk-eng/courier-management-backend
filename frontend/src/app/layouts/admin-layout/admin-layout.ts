@@ -30,12 +30,12 @@ import { Footer } from './components/footer';
     </div>
   `,
   styles: [`
-    .shell { display:flex; height:100vh; overflow:hidden; }
+    .shell { display:flex; height:100vh; overflow:hidden; background:var(--surface-muted); }
     .shell__main { flex:1; display:flex; flex-direction:column; min-width:0; }
-    .shell__content { flex:1; overflow:auto; padding:28px 32px; background:var(--surface-muted); }
+    .shell__content { flex:1; overflow:auto; padding:24px 32px 32px; background:var(--surface-muted); }
     .shell__backdrop { position:fixed; inset:0; z-index:50; background:rgba(15,23,42,.5); backdrop-filter:blur(1px); }
-    @media (max-width: 1024px) { .shell__content { padding:24px; } }
-    @media (max-width: 640px) { .shell__content { padding:16px; } }
+    @media (max-width: 1024px) { .shell__content { padding:20px 20px 24px; } }
+    @media (max-width: 640px) { .shell__content { padding:14px 14px 20px; } }
   `]
 })
 export class AdminLayout {

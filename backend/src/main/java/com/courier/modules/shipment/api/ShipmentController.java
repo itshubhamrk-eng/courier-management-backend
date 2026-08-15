@@ -4,11 +4,13 @@ import com.courier.modules.shipment.api.dto.AddShipmentDocumentRequest;
 import com.courier.modules.shipment.api.dto.CreateShipmentRequest;
 import com.courier.modules.shipment.api.dto.ShipmentChargeResponse;
 import com.courier.modules.shipment.api.dto.ShipmentDocumentResponse;
+import com.courier.modules.shipment.api.dto.ShipmentImageUploadResponse;
 import com.courier.modules.shipment.api.dto.ShipmentItemResponse;
 import com.courier.modules.shipment.api.dto.ShipmentResponse;
 import com.courier.modules.shipment.api.dto.ShipmentSearchRequest;
 import com.courier.modules.shipment.api.dto.ShipmentStatusHistoryResponse;
 import com.courier.modules.shipment.api.dto.ShipmentSummaryResponse;
+import com.courier.modules.shipment.api.dto.ShipmentSummaryStatsResponse;
 import com.courier.modules.shipment.api.dto.UpdateShipmentRequest;
 import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
@@ -27,6 +29,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,8 +39,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +119,8 @@ public class ShipmentController {
     @Operation(summary = "Fetch a shipment", description = "Includes its item grid.")
     public ApiResponse<ShipmentResponse> get(@PathVariable UUID id) {
         Shipment shipment = shipmentService.getById(id);
-        return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(id)));
+        return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(id),
+                shipmentService.getDeliveryAssignment(id), shipmentService.getAssets(id)));
     }
 
     @GetMapping("/track/{trackingNumber}")
@@ -123,7 +129,8 @@ public class ShipmentController {
                     + "`/shipments/{x}` route.")
     public ApiResponse<ShipmentResponse> getByTrackingNumber(@PathVariable String trackingNumber) {
         Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
-        return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(shipment.getId())));
+        return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(shipment.getId()),
+                shipmentService.getDeliveryAssignment(shipment.getId()), shipmentService.getAssets(shipment.getId())));
     }
 
     @GetMapping
@@ -138,9 +145,36 @@ public class ShipmentController {
             @ParameterObject @PageableDefault(size = 20, sort = "createdDate", direction = Sort.Direction.DESC)
             Pageable pageable) {
         Page<Shipment> page = shipmentService.search(mapper.toCriteria(search), sanitise(pageable));
-        Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(
-                page.getContent().stream().map(Shipment::getId).toList());
-        return ApiResponse.success(PageResponse.from(page, s -> mapper.toSummary(s, netAmounts.get(s.getId()))));
+        List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
+        Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
+        Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> charges = shipmentService.chargesFor(ids);
+        Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        return ApiResponse.success(PageResponse.from(page,
+                s -> mapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()), deliveredAt.get(s.getId()))));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Summary stats for a shipment search",
+            description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "
+                    + "unpaged — total count, total chargeable weight, total net amount and "
+                    + "a per-status breakdown over every matching shipment, not just one page. "
+                    + "Powers the Booking/Delivery Report summary row.")
+    public ApiResponse<ShipmentSummaryStatsResponse> summary(
+            @Valid @ParameterObject ShipmentSearchRequest search) {
+        return ApiResponse.success(mapper.toSummaryStats(
+                shipmentService.summaryStats(mapper.toCriteria(search))));
+    }
+
+    @GetMapping("/commission-summary")
+    @Operation(summary = "Commission totals grouped by booking branch",
+            description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "
+                    + "unpaged — one row per booking branch with at least one matching, "
+                    + "charged shipment, sorted by total commission descending. Powers the "
+                    + "Commission Report's branch-wise summary table.")
+    public ApiResponse<List<com.courier.modules.shipment.api.dto.BranchCommissionSummaryResponse>> commissionSummary(
+            @Valid @ParameterObject ShipmentSearchRequest search) {
+        return ApiResponse.success(shipmentService.commissionSummary(mapper.toCriteria(search)).stream()
+                .map(mapper::toCommissionSummary).toList());
     }
 
     @PostMapping("/{id}/cancel")
@@ -168,6 +202,24 @@ public class ShipmentController {
                 .body(ApiResponse.success(mapper.toResponse(created), "Document attached"));
     }
 
+    @PostMapping(value = "/{id}/image-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a shipment photo",
+            description = "JPEG/PNG/WEBP/HEIC only. Stores the image in the configured object "
+                    + "store and records it against the shipment immediately — unlike POD "
+                    + "upload, there is no separate confirm step.")
+    public ApiResponse<ShipmentImageUploadResponse> uploadImage(@PathVariable UUID id,
+                                                                 @RequestParam("file") MultipartFile file) {
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new BusinessRuleException("The uploaded file could not be read. Please retry.");
+        }
+        String url = shipmentService.uploadShipmentImage(id, new ShipmentService.UploadShipmentImageCommand(
+                content, file.getOriginalFilename(), file.getContentType()));
+        return ApiResponse.success(new ShipmentImageUploadResponse(url), "Image uploaded");
+    }
+
     @GetMapping("/{id}/charges")
     @Operation(summary = "Fetch a shipment's charge breakup",
             description = "The Pricing Engine's own charge lines, persisted at booking time.")
@@ -193,7 +245,7 @@ public class ShipmentController {
 
     @GetMapping("/{id}/timeline")
     @Operation(summary = "Fetch a shipment's movement timeline",
-            description = "Booked -> Manifest Created -> Out Scan -> Dispatched -> Received -> "
+            description = "Booked -> Manifest Created -> Dispatched -> Received -> "
                     + "Out For Delivery -> Delivered, each step flagged completed/pending with "
                     + "when and who — built from the same append-only log as `/history`, but one "
                     + "row per named step rather than the raw sequence of transitions.")

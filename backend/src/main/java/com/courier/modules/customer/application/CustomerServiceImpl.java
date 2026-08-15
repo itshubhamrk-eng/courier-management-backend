@@ -8,6 +8,7 @@ import com.courier.modules.customer.domain.CustomerCriteria;
 import com.courier.modules.customer.domain.CustomerRepository;
 import com.courier.modules.customer.domain.CustomerSpecifications;
 import com.courier.modules.customer.domain.CustomerStatus;
+import com.courier.modules.customer.domain.CustomerType;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
@@ -94,6 +95,37 @@ public class CustomerServiceImpl implements CustomerService {
                 Map.of("customerCode", saved.getCustomerCode(), "customerType", saved.getCustomerType().name()));
 
         return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public Customer findOrCreateForBooking(String fullName, String mobile) {
+        String trimmedMobile = trimOrNull(mobile);
+        if (trimmedMobile == null || trimmedMobile.isBlank()) {
+            return null;
+        }
+        UUID companyId = requireCompany();
+        return repository.findByCompanyIdAndMobile(companyId, trimmedMobile)
+                .orElseGet(() -> create(quickCreateCommand(fullName, trimmedMobile)));
+    }
+
+    /** Splits a single free-text booking name into first/last on the first space — the
+     *  best a counter-typed "Ramesh Kadam" string offers; {@code lastName} stays blank
+     *  (the column is {@code NOT NULL}, not "required non-empty") rather than guessed. */
+    private CreateCustomerCommand quickCreateCommand(String fullName, String mobile) {
+        String name = trimOrNull(fullName);
+        String firstName = name == null ? mobile : name;
+        String lastName = "";
+        if (name != null) {
+            int space = name.indexOf(' ');
+            if (space > 0) {
+                firstName = name.substring(0, space);
+                lastName = name.substring(space + 1).trim();
+            }
+        }
+        return new CreateCustomerCommand(null, CustomerType.INDIVIDUAL, null,
+                firstName, null, lastName, mobile, null, null, null, null);
     }
 
     /** Retries on collision, same shape as {@code WalletServiceImpl.nextWalletNumber()}. */

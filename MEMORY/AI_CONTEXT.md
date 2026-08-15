@@ -7,6 +7,821 @@
 
 ## Current Version
 
+`0.25.3` — **Modern Logistics / Fleet Management visual theme**, frontend-only, direct
+request for a theme-only redesign (navy/blue/green/orange/red enterprise palette, no
+layout/structure/nav/route/form/table changes). Leveraged 0.22.0's own token architecture
+— rewrote `theme/_tokens.scss` values in place (variable *names* unchanged) so ~90
+consumer files re-themed with zero edits: brand scale rebuilt around Primary Blue
+`#2563EB`, radii tightened 22–28px→10–16px, the old dual-shadow "clay" glow replaced with
+a flat single-layer shadow, and the "pressed well" input look now renders as a real 1px
+border via `inset 0 0 0 1px var(--surface-border)`. Typography simplified to Inter-only.
+Material's own M3 theme switched primary violet→blue, tertiary→orange. Six small targeted
+edits where components hardcoded a gradient/tint the spec ruled out:
+`ui-button.ts`/`status-badge.ts`/`sidebar.ts`/`header.ts` (see `CHANGELOG.md` for exact
+detail). Print sheets and a few isolated decorative accents deliberately untouched, same
+precedent 0.22.0 set. `tsc --noEmit`/`ng build` clean. **Partially verified live**: login
+page confirmed via `claude-in-chrome` on a throwaway `:4300` (`:8081`/`:4200` untouched);
+**could not get past login** — every dev quick-fill account 401'd against the already-
+running `:8081` backend, an unrelated auth/DB-state issue, not investigated. Confidence
+in the cascade to authenticated screens rests on a full component-source audit (every
+shared `ui-*` component confirmed 100% CSS-custom-property driven), not a live look. Full
+detail in `CHANGELOG.md` 0.25.3.
+
+Previously current:
+
+`0.25.2` — **Vehicle form: dialog replaced with routed create/edit pages**, same-day
+follow-up to 0.25.1 on direct feedback: "add vehical form is not proper insted of
+pop-up create another page for vehicl add and edit." Deleted `vehicle-form-dialog.ts`;
+new shared `components/vehicle-form.ts` (mirrors `branch-form.ts`'s mode/hydrate shape)
+wrapped by `vehicle-create.ts`/`vehicle-edit.ts` (mirror `branch-create.ts`/
+`branch-edit.ts`, including 409-reload-on-stale-version). List page's Add/Edit now
+`router.navigate` instead of opening a dialog; new routes `masters/vehicles/new` and
+`masters/vehicles/:id/edit`. `tsc --noEmit -p tsconfig.app.json`/`ng build` clean.
+**Verified live** via `claude-in-chrome` (`:8081`/`:4200` untouched): full page with
+sticky action bar, all 17 fields filled and saved successfully, edit page hydrated
+correctly with a real breadcrumb and correctly-disabled-until-dirty Save button. Full
+detail in `CHANGELOG.md` 0.25.2 and `MEMORY/modules/shipment-movement.md`.
+
+Previously current:
+
+`0.25.1` — **Vehicle Management UI, under Masters**, same-day follow-up to 0.25.0 on
+direct request: "in masters create sub menu." New `features/manifest/vehicle-list.ts` +
+`components/vehicle-form-dialog.ts` (create/edit-in-dialog, mirrors Freight Factor's own
+shape) covering every 0.25.0 field; `status` shown edit-only (new vehicles start
+`AVAILABLE` server-side). `UiInput` gained `type="date"` support (same "add what's
+missing" precedent as 0.17.8's `type="number"`). New nav leaf under Masters —
+deliberately `COMPANY_AND_BRANCH`, not `COMPANY_ONLY` like every sibling Masters entry,
+since Vehicle isn't one of the twelve generic catalogues and its backend gate already
+admits BRANCH_MANAGER (see `[[nav-scoping-2026-07-31]]`'s new 2026-08-14 note). `tsc
+--noEmit -p tsconfig.app.json`/`ng build` clean. **Verified live end to end** via
+`claude-in-chrome` on a throwaway `:8082`/`:4300` pair (`:8081`/`:4200` untouched) as
+`pune@gmail.com` (BRANCH_MANAGER): nav correctly shows only Vehicles under Masters for
+this role; create/edit/status-change/deactivate all round-tripped through the real UI
+against the real dev MySQL, and `active`/`status` were confirmed independent in the
+actual table, not just in tests (deactivating left `status: MAINTENANCE` untouched).
+Full detail in `CHANGELOG.md` 0.25.1 and `MEMORY/modules/shipment-movement.md`.
+
+Previously current:
+
+`0.25.0` — **Vehicle grew from a fleet picker into a full fleet entity**, direct request:
+"Implement the Vehicle Management Module... exactly these fields" (vehicleType/make/
+model/fuelType/currentOdometer/purchaseDate/registrationDate/insuranceExpiry/
+pucExpiry/fitnessExpiry/permitExpiry/branchId/active on top of what already existed),
+explicitly no Driver/Trip/Maintenance/Expense/Document modules. Found
+`manifest.domain.Vehicle` already existed (a deliberately minimal fleet-picker record
+feeding Dispatch/THC's "Assign Vehicle" picker) plus an unrelated `master.domain
+.VehicleType` catalogue table — flagged the collision via AskUserQuestion; user's own
+call was to grow the existing table/module rather than build a second, disconnected
+one. Requested field `tenantId` doesn't exist anywhere in current code (only
+`companyId` via `CompanyOwnedEntity`) — flagged and resolved to `companyId`, the
+user's own choice. `vehicleTypeId` (UUID pointing at nothing) replaced by a fixed
+`VehicleType` enum (BIKE/SCOOTER/AUTO/VAN/PICKUP/TRUCK/TEMPO/OTHER) — deliberately
+unrelated to `master.domain.VehicleType`'s own company-editable catalogue. `status`
+(old ACTIVE/INACTIVE) became an operational enum (AVAILABLE/IN_USE/MAINTENANCE/
+INACTIVE); new `active` boolean took over the enable/disable role — `isActive()`
+repointed to it, so `ManifestServiceImpl.dispatch`'s "vehicle must be active" check
+needed no code change. Added `VehicleService.update`/`PUT /api/v1/vehicles/{id}`
+(version-guarded), new `AuditAction.VEHICLE_UPDATED` — the original module had no
+update endpoint, but statutory-date tracking needs one. `V36` migration backfills
+`active`/`status` from the old dichotomy before dropping `vehicle_type_id`. Frontend
+model/service types updated to match (type-only — no new fleet-management UI, not
+requested). `mvn test` 719 → 721, `tsc --noEmit -p tsconfig.app.json`/`ng build`
+clean. **Verified live** on a throwaway `:8082` backend against the real dev MySQL
+(`:8081`/`:4200` untouched): `V36` applied clean, a pre-existing fixture vehicle
+backfilled correctly (old `ACTIVE` → `AVAILABLE` + `active=true`), create/update/
+duplicate-check/activate/deactivate/version-conflict all confirmed over real HTTP —
+including that `active` and `status` genuinely move independently. Dispatch's own
+"refuse an inactive vehicle" path wasn't re-driven live (unchanged code, covered by
+`ManifestServiceImplTest`). Full detail in `CHANGELOG.md` 0.25.0 and
+`MEMORY/modules/shipment-movement.md`.
+
+Previously current:
+
+`0.24.3` — **Branch commission moved from booking to Trip Challan creation**, direct user
+request: "for now i credit branch commision when order book it should be creadit after
+Trip challan created" — closes the exact refactor 0.24.2 found already mid-flight in the
+working tree. 0.18.0's instant-commission credit fired on a PREPAID shipment's own
+booking transaction; moved to fire instead when the shipment's Trip Challan is created
+(a manifest's `dispatch()`, 0.17.4's rename of "Dispatch"). `ShipmentEvent
+.PrepaidBookingConfirmed` dropped its `branchCommission` field — now only drives the
+freight debit. New `ShipmentEvent.DispatchCommissionEarned`, published once per shipment
+from `ShipmentServiceImpl.transitionToDispatched` (called by `ManifestServiceImpl
+.dispatch`), same eligibility booking used: payment mode `collectAtBooking`, booking
+branch's own `instantCommission` on, amount `> 0` — sourced from a batch
+`chargesFor(shipmentIds)` lookup. `ShipmentBookingWalletListener` split into two handlers
+on the same class: `PrepaidBookingConfirmed` → `WalletService.debitForBooking` only;
+new `DispatchCommissionEarned` → the unchanged `WalletService.creditCommission`, same
+AFTER_COMMIT/`REQUIRES_NEW`/try-catch-and-log shape (a credit failure leaves the manifest
+dispatched, commission uncredited, for manual reconciliation). Freight debit at booking
+itself is untouched. `ShipmentServiceImplTest` updated: the two booking-time commission
+tests replaced with `transitionToDispatched` coverage (instant on/off, not-collect-at-
+booking) plus a test confirming booking no longer publishes the dispatch event. `mvn
+test` 719/719. **Not verified live** — no local MySQL session this task. Full detail in
+`CHANGELOG.md` 0.24.3 and `MEMORY/modules/branch-wallet.md`/`shipment-booking.md`/
+`shipment-movement.md`.
+
+Previously current:
+
+`0.24.2` — **DRS charge fixed to a branch credit, not a debit**, direct bug report: "when
+order delivered due to communication issue i added functionality to debit amount insted of
+debit id should be credit 2 * qty DRS commission" — 0.21.1's DRS charge
+(`drsChargePerQty * item quantity`, default 2.00/qty) shipped as a debit against the
+delivery branch's own wallet on a miscommunication; it was always meant to be a commission
+*credited to* that branch, same direction as booking commission (`COM`). `SubTransactionType
+.DRS` flipped `Direction.DEBIT` (label "DRS Charges") → `Direction.CREDIT` (label "DRS
+Commission"). `WalletService.debitForDrsCharge(DrsChargeDebitCommand)` renamed to
+`creditForDrsCharge(DrsChargeCreditCommand)`, posts `TransactionType.CR` instead of `DR`,
+fires `WalletEvent.WalletCredited`/`AuditAction.WALLET_CREDITED`. `ShipmentServiceImpl
+.deliver()`'s amount computation is unchanged — only the wallet direction was wrong.
+`SubTransactionTypeTest`'s `creditable()`/`debitable()` lists updated. `mvn compile` clean.
+**Not verified live** — no local MySQL session this task; also blocked from a full `mvn
+test` run by an unrelated, already in-progress commission-at-dispatch refactor mid-flight
+in the same working tree (`ShipmentServiceImplTest`'s `branchCommission()` assertions
+against `PrepaidBookingConfirmed`, pre-existing before this task started, not touched
+here). Full detail in `CHANGELOG.md` 0.24.2 and `MEMORY/modules/branch-wallet.md`/
+`shipment-movement.md`.
+
+Previously current:
+
+`0.24.1` — **In Scan checklist: "Pending", not "Dispatched"**, direct follow-up to
+0.23.3's In Scan checklist — its Status column used the shared `ShipmentStatusBadge`,
+correct-but-wrong ("Dispatched") for a screen where every row is by construction
+`DISPATCHED`; swapped to the generic `StatusBadge` with a static "Pending" label. `tsc
+--noEmit` clean. Full detail in `CHANGELOG.md` 0.24.1.
+
+Previously current:
+
+`0.24.0` — **GST on Other Charges + editable, increase-only Freight Factor**, on direct
+request during Shipment Booking: "add GST on Other amount as well and show applied
+freight factor and it should be editable, only should be increse freight factore and
+based on that freight and other calculation happen." Two independent pieces, same
+booking screen. (1) `otherCharges` (0.17.6, a manual booking-time amount the Pricing
+Engine never sees) now carries its own GST at the **booking branch's** own
+`gstPercentage` (V25) — `ShipmentServiceImpl.copyCharge` folds `gstOnOtherCharges`
+straight into the persisted `gstAmount`/`netAmount`, one combined figure rather than a
+new column, so every existing report/receipt picks it up for free; new
+`netAmountWithOtherCharges` keeps the pre-booking wallet check, the audit log and the
+persisted row from drifting apart. (2) The Freight Factor fallback (0.20.6/0.20.7, no
+route/rate for a lane) gained `PricingCommand.freightFactorOverride` — accepted only when
+`>=` the grid's own matched cell (a smaller value is refused outright), then freight/GST/
+net amount are recomputed off the raised factor.
+`PricingResult`/`PricingResponse`/`ShipmentChargeResponse` all gained
+`appliedFreightFactor` (null outside this fallback) — new `shipment_charges
+.applied_freight_factor` column, `V35`. Frontend `shipment-create.ts`: a "Freight Factor"
+input appears only when a preview actually fell back to the grid, pre-filled with the
+matched value and a "min X, increase only" hint — typing higher reprices through the
+existing debounced `/pricing/calculate` call, the server is the only real enforcement
+point (a too-low value surfaces its own 422 through the existing `pricingError` slot);
+changing branch/service/weight clears any typed override since a new lane may match a
+different cell or not fall back at all. The live preview's GST/Net Amount now also fold
+in Other Charges' own GST (client-side, mirroring `copyCharge`) so the sidebar and the
+printed consignment copy both match what booking actually persists — needed
+`BranchSummaryResponse` (`GET /branches/directory`) to carry `gstPercentage`, the same
+"ride along for a live preview" precedent `postalCode` already set on that endpoint. `mvn
+test` green (record-constructor call sites updated across four test files, three new
+`PricingEngineImplTest` cases: the refusal, the successful raise, the default
+matched-factor echo). `tsc --noEmit`/`ng build` clean. **Not verified live** — no local
+MySQL session this task; `V35` not yet applied against a real database. Full detail in
+`CHANGELOG.md` 0.24.0 and `MEMORY/modules/shipment-booking.md`/`pricing-engine.md`.
+
+Previously current:
+
+`0.23.0` — **Shipment image upload, shown on the tracking/detail page**, on direct request:
+"Shipment booking upload shipment image and show in tracking page." Clarified via
+AskUserQuestion to: the existing `ShipmentView` detail page (`/shipments/:id`, what
+`TrackBox`/`Track` already resolve a search into) — not a new public/unauthenticated
+tracking page (`SecurityConfig` reserves `/api/v1/track/**` for that; unbuilt, out of
+scope); storage in a new `shipment_assets` table (`asset_type` `BOOKING`/`POD`), and — the
+user's own call — migrating POD's existing photo/signature storage into the same table
+rather than leaving two schemes. New `ShipmentAsset` entity/repository, `V33` copies every
+`delivery_assignment.photo_url`/`signature_url` into it before dropping those two columns;
+`DeliveryAssignment.markDelivered` no longer takes them, `ShipmentServiceImpl.deliver()`
+writes `POD` asset rows instead. New `ShipmentServiceImpl.uploadShipmentImage` (mirrors
+`uploadPodFile`'s `FileStoragePort` seam, JPEG/PNG/WEBP/HEIC only) persists a `BOOKING`
+asset immediately — no two-step "upload then pass into deliver()" needed, a booking photo
+isn't part of any state-machine step. New `POST /shipments/{id}/image-upload`,
+`ShipmentResponse` gained `shipmentImageUrl`, `ShipmentMapper` now resolves it plus
+`podPhotoUrl`/`podSignatureUrl` from the newest matching asset row. **Found and fixed in
+passing**: `GET /shipments/track/{trackingNumber}` never fetched `DeliveryAssignment` at
+all (pre-existing, documented gap — POD fields always null there) — fixed for free while
+already touching that line for `shipmentImageUrl`. Frontend: `shipment-create.ts` gained a
+"Shipment Image" card after Parties, per the user's own placement instruction — a picked
+file uploads only after `book()` succeeds (needs a real shipment id), fire-and-forget so a
+failed image upload never blocks the booking; `shipment-view.ts` gained a "Shipment Photo"
+card mirroring the existing "Proof of Delivery" block. `mvn test` green (constructor
+updates + new coverage), `tsc --noEmit`/`ng build` clean. **Not verified live** — no local
+MySQL session this task; `V33` not yet applied against a real database, so the POD-column
+migration (copy-then-drop) is compile/unit-test-verified only. Full detail in
+`CHANGELOG.md` 0.23.0 and `MEMORY/modules/shipment-booking.md`/`shipment-movement.md`.
+
+Previously current:
+
+`0.22.0` — **Claymorphism + soft 3D illustration redesign**, frontend-only visual reskin
+of the whole app on direct request — rounded clay surfaces, dual-shadow depth, indigo
+accent, 8 new inline-SVG logistics illustrations. Achieved as a cascade: rewrote design
+tokens (`_tokens.scss` — clay shadow recipe, 20–28px radii, theme-aware sidebar) +
+restyled every shared `app-*` component + the admin/auth shells, which alone propagated
+the look to ~90 consumer files across all 22 feature folders with no edits to those
+files; then targeted work on Dashboard (fixed a real dark-mode bug along the way — a
+pre-existing local clay override had hardcoded light-only shadow colors) and Shipment/
+Tracking (`TrackingCard` promoted to a clay hero banner, `ShipmentTimeline` gained a
+"current step" glow state). New `shared/components/illustrations/*` (package, truck,
+pin, warehouse, scanner, route, wallet, tracking) placed in the auth hero, dashboard
+welcome banner, wallet balance card, table empty states and a few page headers. Zero
+route/permission/API/business-logic changes — client-side print sheets (THC/DRS/
+consignment/receipt) deliberately untouched. `tsc`/`ng build` clean. **Verified live**
+via `claude-in-chrome` (login, dashboard, shipment list/detail/timeline, a form, a
+MatMenu + MatDialog, light+dark theme) on a throwaway `ng serve --port 4300`. **Gap**:
+mobile/tablet breakpoints not visually verified this session — the environment's
+`resize_window` tool didn't actually resize the tab's layout viewport; confirmed instead
+by code review that no pre-existing media query was touched. Full detail in
+`CHANGELOG.md` 0.22.0.
+
+Previously current:
+
+`0.21.1` — **DRS charge per item quantity**, on direct request: "when shipment order
+delivered through DRS then 2 rs should be debited for every qty ... this 2 rs set branch
+level while creating branch same as gst and commission" — a fifth branch-level charge
+alongside 0.17.8's four (`gstPercentage`/`commissionOnOtherCharges`/
+`commissionOnBasicFreight`/`companyServiceChargePercentage`), same shape: `V32` adds
+`branches.drs_charge_per_qty DECIMAL(10,2) DEFAULT 2.00`, threaded through
+`CreateBranchCommand`/`UpdateBranchCommand`/`BranchResponse`/`BranchMapper`/audit snapshot,
+Branch form's Charges card and Branch view gained the field. Unlike the other four, this is
+a **fixed amount, not a percentage** — `drsCharge = drsChargePerQty * total item quantity`.
+Wired into `ShipmentServiceImpl.deliver()`: on every delivery (not only collect-at-delivery
+payment modes, unlike 0.17.2's `CodCollectedAtDelivery`), sums `ShipmentItem.quantity`
+across the shipment's items, reads the **delivery branch's own** `drsChargePerQty`, and — if
+the product is greater than zero — publishes a new `ShipmentEvent.DrsChargeApplicable`,
+handled AFTER_COMMIT/`REQUIRES_NEW` by `ShipmentDeliveryWalletListener` (same file as the COD
+listener) calling a new `WalletService.debitForDrsCharge`, new `SubTransactionType.DRS`
+reason. Same accepted gap as every other delivery-side wallet seam: a debit failure leaves
+the shipment DELIVERED, undebited, for manual reconciliation. `mvn test` 712 → 713 (new
+`deliverPublishesDrsChargeEvent` case: 2 items qty 2 + 1 qty 1 at branch `drsChargePerQty`
+5.00 → event carries 15.00; two existing deliver tests needed a `branchService.getById`
+stub they didn't have before, since `deliver()` now reads the delivery branch unconditionally
+even when qty resolves to zero). `ng build` clean. **Not verified live** — no local MySQL
+session this task; `V32` not yet applied against a real database. **Found and fixed in
+passing, unrelated to this task**: `PricingEngineImplTest`/`SubTransactionTypeTest` were
+already broken in the working tree before this session started (an uncommitted,
+unrelated-to-DRS `CompanySettingsService`/GST-on-Freight-Factor-fallback change had no
+test update behind it) — fixed mechanically (missing mock/constructor arg, catalogue-size
+assertion) so `mvn test` could run at all; the GST-on-fallback feature itself was not
+touched or extended. Full detail in `CHANGELOG.md` 0.21.1 and
+`MEMORY/modules/branch.md`/`branch-wallet.md`/`shipment-movement.md`.
+
+Previously current:
+
+`0.21.0` — **Serial number (`#`) column added to every table and report**, on direct
+request. Frontend-only. The shared `UiTable` (`shared/components/ui-table/ui-table.ts`)
+gained a synthetic `#` column injected in its own template — ahead of both the plain
+`cell()` path and the `#row` custom-template projection — so all 18 pages built on
+`app-table` got it with **zero changes to those 18 files** (loading/empty `colspan` bumped
+by 1; new `startIndex` input, default 0, for future cross-page numbering — not wired up
+this pass, every list numbers 1,2,3… fresh per page). 13 more pages build their own raw
+`<table>` and got a manual `#`/`i+1` column each (Address Distance, Topup Requests,
+Recent Shipments, Freight Factor, Permission Matrix, Platform Dashboard, Super Admin list,
+Weight Slab Grid, DRS Detail, Manifest card, Delivery, Loading Sheet, Out For Delivery,
+Pending Delivery), plus the two client-side print sheets (Print DRS, Print THC).
+**Deliberately skipped**: `receipt.util.ts`/`consignment-print.util.ts` — both are
+key-value tables for one record (one row = one field), where a row serial number has no
+meaning. `tsc --noEmit` clean, `ng test` 124/125 (the one failure predates this task — see
+0.16.9/0.17.3). Not verified live. Full detail in `CHANGELOG.md` 0.21.0.
+
+Previously current:
+
+`0.20.9` — **Every DRS gets a unique, printable number** (`DRS000001`), same day as 0.20.8,
+on direct request. `V31` migration: `company_drs_sequences` (one row per company, same
+`LAST_INSERT_ID(expr)` upsert idiom as `company_shipment_sequences`/
+`branch_shipment_sequences`) + nullable `delivery_assignment.drs_number`. New
+`ShipmentServiceImpl.nextDrsNumber(companyId)` — `"DRS" + 6-digit serial` — generated once
+per bulk `assignOutForDelivery` call ("Generate DRS") and stamped on every
+`DeliveryAssignment` row that call touches. **DRS is still not a persisted batch entity** —
+0.20.8's grouping key (delivery user + delivery branch + calendar day) is unchanged; the
+number rides along as an extra attribute, taken as the most recent one in the group so two
+separate "Generate DRS" clicks for the same user/branch/day still report as one run, same
+as before. `DrsSummary`/`DrsDetail`/their DTOs gained `drsNumber`; `BulkMovementResult`/
+`BulkMovementResponse` gained it too (null for `inScan`, the only other bulk-movement
+caller) so Out For Delivery can show/print it the instant "Generate DRS" succeeds, no
+second fetch. Frontend: DRS Report table gained a "DRS No." column, DRS Detail page's
+header shows it, Out For Delivery's Result card and the client-side Print DRS sheet both
+show it. `mvn test` green (two test constructors updated for the new dependency), `tsc
+--noEmit` clean. **Not verified live** — no local MySQL session this task; `V31` not yet
+applied against a real database. Full detail in `CHANGELOG.md` 0.20.9 and
+`MEMORY/modules/shipment-movement.md`.
+
+Previously current:
+
+`0.20.8` — **DRS Report added** (table + drill-in detail), on direct request. DRS itself
+has never been a persisted entity — it's generated on the fly by Out For Delivery's
+"Generate DRS", backed only by `DeliveryAssignment` rows (one per shipment, current-state
+not ledger). A "DRS run" for reporting purposes = delivery user + delivery branch +
+calendar day, grouped in the service layer (`ShipmentService.listDrs`/`getDrsDetail`,
+plain `Collectors.groupingBy`, not SQL — no batch id exists to group on). Two new `GET
+/api/v1/shipment-movement/drs` / `/drs/detail` endpoints, new `features/reports/
+drs-report.ts` (table, date-range filter, branch-scoped for `BRANCH_MANAGER`) and
+`drs-detail.ts` (tracking/receiver/contact/payment/amount/status/deliveredAt, total row),
+new route + nav entry under Reports. **Real bug caught in live verification**: both
+pages' id→label lookup used a plain `Map` mutated inside an async `subscribe()` — under
+`OnPush`, that never re-triggers change detection once first paint has already happened,
+so the delivery-user column could silently show a raw UUID; fixed by making both maps
+`signal<Map<string,string>>`. **Verified live end to end** — raw HTTP against real grouped
+fixture data (six DRS runs), then the actual browser UI on a throwaway `ng serve --port
+4300` (`local-dev-environment.md`: never touch the user's own `:4200`/`:8081`) — table
+loads, row click opens detail, all fields and the ₹178.00 total correct. Mistakenly
+killed the user's own `:8081` backend once mid-task (against that same memory file's
+explicit instruction) to pick up new endpoints — restarted it immediately with identical
+behavior, then did all further iteration on `:4300` instead. Full detail in
+`CHANGELOG.md` 0.20.8.
+
+Previously current:
+
+`0.20.7` — **Freight Factor fallback moved from Shipment Booking into Pricing Engine
+itself**, same-day correction of 0.20.6 on direct user report: "not working ... getting
+this issue No route runs from branch ... to branch ...". Root cause: the reported failure
+was the frontend's own live pricing preview (`POST /pricing/calculate`, called directly
+by `shipment-create.ts`, not through Shipment Booking), which 0.20.6's fallback — caught
+only inside `ShipmentServiceImpl` — never covered. Fixed by moving the
+`RouteRateUnavailableException` catch and Freight Factor fallback into
+`PricingEngineImpl.calculate` itself, one level up, so every caller (Shipment Booking, the
+live preview, any future consumer) gets it for free. `ShipmentServiceImpl.priceIt`
+reverted to a plain call, no Freight Factor knowledge of its own; the two fallback tests
+moved from `ShipmentServiceImplTest` to `PricingEngineImplTest`. **A second real bug found
+live**: the standalone pricing endpoint 500'd with a `NullPointerException` —
+`PricingMapper.toResponse` unconditionally read `result.matchedRoute()`, which is null on
+a fallback quote; fixed by null-checking `matchedRoute`/`matchedRate` throughout and
+sourcing branch ids from the original `PricingCommand` instead. `mvn test` 711/711.
+**Verified live end to end, twice** — raw HTTP, then the actual browser UI as
+`pune@gmail.com` (`BRANCH_MANAGER`): the New Shipment page's live Booking Summary now
+shows **Freight 22.50 / Net Amount 22.5** for the exact reported PUNE→MUMBAI_GEOTEST pair
+the instant the form is filled in, and **Book Shipment** produced a real shipment
+(`PUNE-000012`/`26080000018`) confirmed via the API to carry null matched route/rate ids.
+Full detail in `CHANGELOG.md` 0.20.7 and `MEMORY/modules/pricing-engine.md`'s new
+"Freight Factor fallback" section.
+
+`0.20.6` — **Shipment Booking falls back to Freight Factor when no route/rate exists**
+(superseded same-day by 0.20.7 above, which moved this fallback out of
+`ShipmentServiceImpl` into `PricingEngineImpl` — read 0.20.7 first), backend only, direct
+request: "while shipment booking check if route rate is available or not if not then
+calculate charges based on company level weight and distance and book shipment order" —
+wired 0.20.0's previously-standalone Freight Factor module in as a fallback pricer, new
+`RouteRateUnavailableException extends BusinessRuleException`, `mvn test` 709 → 711.
+**A real bug found live, not by the mocked tests**: a nested `@Transactional` method
+(`RouteServiceImpl.findByBranches`) marked the whole booking transaction rollback-only the
+instant it threw, regardless of the downstream catch — `UnexpectedRollbackException` on
+commit. Fixed with `noRollbackFor = RouteRateUnavailableException.class` on that one
+method. Full detail in `CHANGELOG.md` 0.20.6.
+
+Previously current:
+
+`0.20.5` — **GST added to the Freight Factor calculator tab**, direct request "in
+calculator show gst", clarified via AskUser to the Freight Factor tab (Rate tab already
+had it) and calculator-only (no backend field — `FreightFactor`/its calculate response
+carry no GST anywhere). New GST % input on `FreightCalculatorForm`, `gstAmount`/`total`
+computed client-side as plain methods (not `computed()` — a `FormControl.value` isn't a
+signal, so `computed()` would freeze at the first read; plain methods stay live under
+OnPush because the reactive-forms directives mark the view dirty on their own
+`valueChanges`). Live-verified: Pune→Latur 4kg → freight 36.00, 18% GST → 42.48 exact,
+changing GST to 5% post-calculate updated the total immediately without recalculating.
+Full detail in `CHANGELOG.md` 0.20.5.
+
+Previously current:
+
+`0.20.4` — **Freight Factor grid: add-cell moved inline, no popup**, direct request: "add
+new freight factor should in table format no need to click and open pop up". "Add Cell"
+now renders an editable row inside the grid table itself (5 number inputs on the
+`<tbody>`'s own `[formGroup]`, Save/Cancel actions) instead of opening
+`FreightFactorFormDialog` — editing an existing cell is unchanged, still the dialog.
+Table columns split into five (From/To km, From/To kg, Factor) so the inline row has one
+input per column. Live-verified: real cell added inline, no dialog, landed sorted
+correctly. Full detail in `CHANGELOG.md` 0.20.4.
+
+Previously current:
+
+`0.20.3` — **Calculator restored as its own Rate Master submenu, hosting both tabs**,
+same-day reversal of part of 0.20.2's merge: the Calculate card (Freight Factor + Rate
+tabs) moved back out of the Freight Factor page into its own routed page,
+`rate-master/rate-calculator.ts` at `/rates/calculator`, nav child restored between Rate
+Cards and Freight Factor. Freight Factor's calc logic extracted into a new
+self-contained `freight-factor/components/freight-calculator-form.ts` (mirrors
+`RateCalculatorForm`'s own shape, drops into the tab with no host wiring); Freight
+Factor's own page is grid-only again. **Real gotcha hit live**: `ng serve`'s incremental
+builder didn't notice `rate-calculator.ts` being deleted (0.20.2) then recreated at the
+same path (this task) — kept serving the stale pre-0.20.2 bundle even past a hard
+browser reload, since the staleness was in the dev server, not the browser. Fixed by
+restarting `ng serve`, not an app bug — flag this pattern if a delete+recreate at the
+same path ever looks "not applied" again. Verified live post-restart: both tabs render
+correctly, Freight Factor page shows only its grid. Full detail in `CHANGELOG.md` 0.20.3.
+
+Previously current:
+
+`0.20.2` — **Freight Factor nav folded into Rate Master + Rate Calculator merged in as a
+tab**, two same-day follow-ups to 0.20.1. Freight Factor's nav leaf moved from top-level
+into `rate-master`'s children (route unchanged, `/freight-factors`). The standalone Rate
+Calculator page/route (`/rates/calculator`) is gone — `RateCalculatorForm` (already
+self-contained, no host wiring needed) now renders as a second "Rate" tab on Freight
+Factor's own Calculate card, next to the Freight Factor tab; a plain `activeTab` signal +
+CSS tabs, no Material tabs (none used elsewhere in the app). `rate-master/rate-calculator.ts`
+deleted; the rate list's own quick-lookup dialog (`RateCalculatorDialog`) is a separate,
+untouched entry point. `tsc --noEmit`/`ng build` clean, live-checked: old route now falls
+through to `/rates/:id` cleanly, Rate tab renders the full form, sidebar shows Freight
+Factor nested under Rate Master. Full detail in `CHANGELOG.md` 0.20.2.
+
+Previously current:
+
+`0.20.1` — **Freight Factor frontend**, same-day follow-up to 0.20.0: "create ui based on
+backend api". One page, `features/freight-factor/freight-factor.ts` — a **Calculate**
+card (branch pair + weight, mirrors Address Distance's own Resolve card almost exactly)
+above a **grid table** with inline Add/Edit (`components/freight-factor-form-dialog.ts`,
+directly mirrors `customer/components/address-form-dialog.ts`'s create/edit-in-dialog
+shape) and Activate/Deactivate row actions. Deliberately **no routed create/edit/view
+pages** like Rate Master's 4-page wizard — proportionate to a 5-field entity, not a
+~20-field one. Write actions (Add Cell/Edit/Activate/Deactivate) are hidden client-side
+via `AuthService.roles().includes('COMPANY_ADMIN')`, mirroring the backend's own
+`WRITE`/`READ` split — no route-level restriction, since reads and writes share one page.
+New nav leaf (`core/navigation/navigation.config.ts`, right after Address Distance, whose
+own comment already called this out as the follow-up) and one route (`/freight-factors`,
+`app.routes.ts`, reusing the existing `RATE_READERS` const). `tsc --noEmit`/`ng build`
+clean; no frontend unit tests added, same precedent Address Distance itself set (0.19.1).
+**Verified live end to end, closing 0.20.0's own gap**: recovered the running dev
+backend's DB credentials via `ps eww <pid>` (root / see local env, not committed anywhere),
+restarted it — `V30` applied clean against the real dev MySQL (`flyway_schema_history`
+confirms version 30). Through the actual browser (`claude-in-chrome`) as
+`first.admin@gmail.com` (COMPANY_ADMIN): created two cells (0-100km/0-10kg factor 12.50, 300-350km/0-10kg factor 8.00), ran
+Calculate for the real Pune→Latur branch pair (reusing 0.19.1's own resolved-distance
+fixture, 324.305 km) at 4kg — matched the second cell, returned freight **32.00**
+(8.00×4, exact), then edited that same cell's factor to 9.00 in place (table updated live)
+and deactivated then reactivated a cell (status badge flipped ACTIVE ↔ INACTIVE live). Then signed in as `pune@gmail.com`
+(BRANCH_MANAGER) and confirmed the grid renders read-only — both rows visible, Calculate
+still works, but Add Cell and every row's Edit/Activate/Deactivate are gone — the
+client-side role gate holds. Full detail in `CHANGELOG.md` 0.20.1.
+
+Previously current:
+
+`0.20.0` — **Freight Factor module**, new standalone package `com.courier.modules.freight`,
+direct user request: "company level freight calculation by distance range, weight range
+and freight factor", narrowed via clarifying questions to `freight = matched factor *
+weight`. **Deliberately independent of Rate Master/Pricing Engine** — no shared code, the
+user's own explicit call ("this module should be separate, don't depend on route, don't
+change existing"). `FreightFactor` (company-owned): half-open `[fromKm, toKm)` and
+`[fromWeight, toWeight)` ranges (same convention `rate.domain.Rate`'s weight slab uses,
+plain kg, no unit enum — matches `pricing`/`distance`'s existing weight convention, not
+Rate's) plus a `factor` and ACTIVE/INACTIVE lifecycle. **2D overlap rule**: a conflict
+between two ACTIVE cells needs the distance ranges *and* the weight ranges to overlap
+simultaneously (`FreightFactor.overlaps`), unlike Rate's single-dimension check.
+`FreightFactorService.calculate`'s one forward dependency is
+`AddressDistanceService.resolveBranchDistance` (the branch-pair distance module, 0.19.0) —
+resolves `distanceKm` from a branch pair, matches the one ACTIVE cell covering both
+`distanceKm` and the given weight, `freight = factor * weight`; no match throws (a gap in
+the grid), no floor/ceiling extrapolation like Rate's overage formula — a direct lookup
+only, per the user's spec. Migration `V30`. 7 endpoints under `/api/v1/freight-factors`
+(CRUD minus delete + activate/deactivate + `POST /calculate`), same `COMPANY_ADMIN`
+writes/any-authenticated-reads split as Rate Master, no new permission codes. `mvn test`
+692 → 709 (17 new). **Backend only, deliberately** — no frontend, no wiring into Shipment
+Booking/Pricing Engine, matching how 0.19.0 itself stopped short of consuming the distance
+module it built. **Not verified live at the time** — closed same-day by 0.20.1 above.
+Full detail in `CHANGELOG.md` 0.20.0.
+
+Previously current:
+
+`0.19.3` — **On-demand geocode inside distance resolve**, same-day follow-up: user hit the
+"needs a resolved location" refusal directly in the UI (Latur→Pune) and asked "if not setup
+location then setup from backend" — geocode it as part of resolving, don't send the user to
+Branches first. Extracted `BranchGeocoder.fillIfMissing` (`company.application.geocoding`)
+out of `BranchServiceImpl.geocodeInto` so both call sites share it rather than duplicating;
+`AddressDistanceService.locate(BRANCH, …)` calls it the moment a branch turns out to have
+no coordinates and persists the result (`branchRepository.save`) so it's permanent, not
+transient. `CUSTOMER` untouched — no geocode-on-save for `CustomerAddress` yet, documented
+in the class javadoc now. `mvn test` 691 → 692. **Verified live**: real `LATUR` branch
+(predates 0.19.0, never geocoded) had no lat/long; resolving `LATUR → PUNE` through the
+actual endpoint geocoded it on the spot (`18.398227, 76.562591`, correct), returned 323.4
+km/234 min (matches reality), and a follow-up branch fetch confirmed the coordinates were
+saved to the row, not just used once. Full detail in `CHANGELOG.md` 0.19.3.
+
+Previously current:
+
+`0.19.2` — **Geocode-on-update**, same-day follow-up: "set latitude longitude for existing
+branch" → clarified to a permanent fix, not a one-off. `BranchServiceImpl.update()` gets
+the same geocode fallback `create()` has (blank lat/long only; an explicit pair, including
+one that clears a previous geocode, is never second-guessed). **Using it live on the real
+`PUNE` branch found a real bug**: `NominatimGeocodingService` mapped `district` straight to
+Nominatim's structured `county` param, but this app's `district` is user-typed and often a
+locality name ("Kothrud" for Pune), not a formal administrative district — an
+over-constrained structured query silently returned zero results (`geocodeInto`'s
+`ifPresent` logged nothing on a miss). Fixed: try with `county` first, retry without it on
+a miss, log at INFO when both come back empty. Confirmed live: `PUNE` now geocodes to
+`18.521374, 73.854507` via a real `PUT /branches/{id}`, distance to `MUMBAI_GEOTEST`
+resolves to the same 148.7 km/119 min the two purpose-made test branches already gave. 4
+new `BranchServiceImplTest` cases, `mvn test` 687 → 691. **Gap, not a decision**:
+`NominatimGeocodingService` itself still has no unit test — exercised only through real
+HTTP calls across three sessions now (0.19.0/0.19.1/0.19.2). Full detail in
+`CHANGELOG.md` 0.19.2.
+
+Previously current:
+
+`0.19.1` — **Address Distance frontend page**, same-day follow-up to 0.19.0 ("address to
+address menu?" → "keep going"). New `features/address-distance/` — one page, no separate
+list/resolve split: a two-branch-picker "Resolve" card (mirrors Rate Calculator's own
+picker shape, off `MasterDataService.branchDirectory()`) plus a table of previously
+resolved pairs with Refresh/Delete (`DialogService.confirm()`, not a bare `confirm()`).
+Branch-only, matching 0.19.0's own scope decision — no frontend for the backend's
+`/customer-addresses` path. Nav leaf `/distances`, `COMPANY_ADMIN`/`BRANCH_MANAGER`, no
+permission code (none exists server-side yet). **Live-testing this page immediately found
+a real backend bug** 0.19.0's compile-only verification had missed: resolving a pair after
+deleting it 409'd instead of computing a fresh row, because `uk_address_distance_pair`
+isn't scoped by `deleted` (deliberately, mirroring `branches`' own code/name uniqueness) —
+a plain insert after a soft delete collides with the still-there row. Fixed with a
+check-first pattern (`AddressDistanceRepository.countDeletedPair`/`restoreAndUpdate`, both
+native since `@SQLRestriction` hides deleted rows from HQL too) rather than catch-after-
+`save()`, since a failed JPA flush leaves the persistence context unsafe to keep using in
+the same transaction. `mvn test` 686 → 687, `ng build`/`tsc --noEmit` clean. **Verified
+live end to end**: backend restarted against real MySQL, two branches created with blank
+lat/long geocoded live via real Nominatim (both coordinates correct), their distance
+resolved via real OSRM (148.7 km / 119 min Pune↔Mumbai, matches reality), every endpoint
+exercised over raw HTTP, then the delete-then-resolve bug found through the actual browser
+UI and confirmed fixed the same way after restart. Also fixed along the way: a YAML bug in
+`application.yml`'s default `GEOCODING_USER_AGENT` (unquoted `:` inside parens, parsed as a
+nested mapping) that broke every boot, caught before any of the above — the backend
+wouldn't start until it was quoted. Side effect: `first.admin@gmail.com`'s password reset
+to `Password@1234` (was undocumented-in-context at the time) — `login.ts` quick-fill and
+`[[dev-login-credential]]` both updated. Full detail in `CHANGELOG.md` 0.19.1.
+
+Previously current:
+
+`0.19.0` — **Branch geocoding + Address Distance module**, first piece of a user-stated
+plan ("company level charges based on distance and freight factor"). Two parts, backend
+only, deliberately stopping short of any actual charge/pricing logic (a later, separate
+ask): (1) `BranchServiceImpl.create()` now geocodes a branch's latitude/longitude (columns
+existed since `V9`, unused until now) from its address fields when the administrator
+leaves both blank — new `GeocodingPort` seam (mirrors `FileStoragePort`'s shape, opposite
+failure stance: best-effort, never throws, a miss just leaves the branch as it would have
+been), `NominatimGeocodingService` default (free/keyless OSM), `NoopGeocodingService` when
+disabled. (2) New `com.courier.modules.distance` module: `V29` `address_distance` table
+(one row = resolved road distance + travel time between two addresses of the *same* kind —
+`address_type` `BRANCH`/`CUSTOMER`, `from_id`/`to_id` with no FK, same reasoning
+`branches.manager_id` uses), `AddressDistanceService` (cache-or-resolve/get/search/refresh/
+delete), `RoutingPort` seam (same shape as `GeocodingPort` but the *opposite* stance — an
+explicit distance request surfaces a lookup failure as 503, never a silent miss) backed by
+`OsrmRoutingService` (free/keyless OSRM demo server). **`CUSTOMER` reads
+`CustomerAddress`'s coordinates, not `Customer`'s** — `fromId`/`toId` for that type are
+`customer_addresses.id`; customer addresses are not geocoded on save (only branches are,
+per this session's scope), so a `CUSTOMER` pair only resolves once an address already
+carries lat/long by hand. 5 endpoints under `/api/v1/distances`, `isAuthenticated()`, no
+new permission codes. `app.geocoding.*`/`app.routing.*` both on by default (free/keyless,
+unlike S3/Razorpay there's no secret forcing an off switch) — both public services
+explicitly not for production volume, self-hosting is the documented upgrade path. `mvn
+test` 676 → 686 (9 new `AddressDistanceServiceTest` cases + `BranchServiceImplTest` updated
+for the new constructor dependency). **Not verified live** — no local MySQL session this
+task; `V29` unapplied, geocoding/routing unverified against the real network services,
+compile- and unit-test-verified only. Full detail in `CHANGELOG.md` 0.19.0.
+
+Previously current:
+
+`0.18.1` — **Booking auto-saves sender/receiver as Customer**, direct user request, same
+day as 0.18.0: "when i book shipment that time customer should be saved and for next
+shipment search then should be search and show for suggestion" — the second half of a
+two-part ask, the first half ("search by contact number and name then show suggested
+customer") turning out to already be fully built, uncommitted, in `shipment-create.ts`
+(300ms-debounced dropdown against `GET /customers?search=`, both parties, both fields —
+nothing to add there). New `CustomerService.findOrCreateForBooking(fullName, mobile)`:
+exact-mobile lookup (new `CustomerRepository.findByCompanyIdAndMobile`) or a bare
+`INDIVIDUAL` customer created via the existing `create()` (name split on first space into
+first/last), called twice from `ShipmentServiceImpl.create()` — sender and receiver — same
+transaction as the booking, no separate failure-tolerant carve-out. `Shipment` still
+carries no `customerId` FK; this only feeds Customer's own table so the next booking's
+search has something to find. Deliberately not wired into `update()` — editing a shipment's
+sender/receiver still doesn't touch Customer. `mvn test` 672 → 676. **Verified live twice**:
+first over raw HTTP on a temporary `:8082` instance, then — on direct follow-up request
+"test it live" — through the actual browser UI, restarting the user's own `:8081` on the
+new build (`:4200` `ng serve` untouched) and driving Shipment Booking as `latur@gmail.com`:
+typing an already-created mobile into the Consignor field surfaced it in the existing
+suggestion dropdown, and a full booking through the real **Book Shipment** button
+(`LATUR-000009`) produced an immediately-searchable new Customer, with the repeat sender
+mobile resolving to the same customer id as the API-side test — reuse-not-duplicate holds
+across both entry paths. Found live, not fixed (both pre-existing, unrelated to this
+change): multi-word full-name search doesn't match (`CustomerSpecifications`' per-column
+`LIKE`), and `ItemEntryGrid`'s default row visually shows a weight but an empty item name,
+which gets silently dropped and 422s on submit unless the name is typed. Full detail in
+`CHANGELOG.md` 0.18.1.
+
+Previously current:
+
+`0.18.0` — **Branch commission calculation on shipment booking**, direct user request across
+several turns: percentages ("80% branch on other amount, 10%/10% split on basic freight, use
+login branch's own config") → an Instant Commission toggle on Branch's Operations card →
+restructuring storage into 4 named columns (`totalCommission`/`commissionOnBasicFreight`/
+`branchCommissionOnOtherAmount`/`companyCommissionOnBasicFreight`) → surfacing all 4 in every
+report. `Branch`'s own charge percentages (0.17.8) had no calculation behind them until now.
+`shipment_charges` gains the 4-column breakdown (`V26` then `V28`), computed in
+`ShipmentServiceImpl.copyCharge` from the **booking branch's own** percentages on every
+booking/re-price. **`totalCommission` is all three lines summed** (fixed same day — user
+caught it was only two: "total commision should 90 for order 26080000010" — was 85; see
+`CHANGELOG.md` 0.18.0's same-day "Fixed" entry). `branches.instant_commission` (`V27`,
+default true): when on, a PREPAID booking's wallet credit (new `WalletService
+.creditCommission`, `COM` reason) uses **only the branch's own two lines**
+(`commissionOnBasicFreight + branchCommissionOnOtherAmount`) — deliberately *not*
+`totalCommission`, which also folds in the company's own cut and must never land in the
+branch's wallet (a bug caught and fixed in the same pass as the formula fix, before it could
+ship). Branch pays full freight at booking, earns its own commission back; when off, still
+computed/stored, just not auto-credited. COD/TO_PAY: stored, never auto-credited — an
+accepted, logged gap, same shape as other wallet seams. New `ShipmentService.chargesFor(ids)`
+batch method attaches the breakdown to every list/report row (`ShipmentSummaryResponse`/
+`ShipmentChargeResponse`). Frontend shows it on Shipment Details, Shipment Charges, Shipments
+list/search, Booking Report (table + CSV all three), Delivery Report (CSV), and the Branch
+form/view/summary card shows the Instant Commission toggle. `mvn test` 669 → 672, `ng build`/
+`tsc --noEmit` clean, `ng test` 124/125 (pre-existing unrelated gap, see 0.16.9). **Verified
+live end to end, twice the same day:** backend restarted against real MySQL, `V26`/`V27`/`V28`
+applied clean, a real PREPAID shipment booked at Latur branch (`LATUR-000007`/tracking
+`26080000010`, freight 50/otherCharges 100) — commission figures hand-verified against
+Latur's own percentages, wallet ledger confirmed `SBK` 189.00 debit → `COM` 85.00 credit
+chaining correctly, list/report endpoint confirmed carrying all 4 fields; then, after the
+formula fix, re-priced the same live order (`PUT /shipments/{id}`) and confirmed
+`totalCommission` now reads 90.00 (5+80+5) while the already-posted 85.00 wallet credit stays
+untouched, per the project's own "update never touches the wallet" rule. Full detail in
+`CHANGELOG.md` 0.18.0.
+
+Previously current:
+
+`0.17.9` — **POD upload to AWS S3**, direct user request ("POD upload while delivery
+use aws s3 for POD and other image video document upload"), narrowed to POD only
+(delivery Photo/Signature on the Delivery page) via an AskUserQuestion round — the
+generic `shipment-documents` URL-entry feature stays untouched. New `FileStoragePort`
+seam in `shipment/application/storage` + a new `shipment/infrastructure` package
+(`S3FileStorage`/`UnconfiguredFileStorage`/`FileStorageConfig`), mirroring
+`PaymentGatewayPort`'s exact shape — fails closed (422) when no bucket is configured,
+the same choice Razorpay makes for the payment gateway. New
+`ShipmentService.uploadPodFile` validates kind (`PHOTO`/`SIGNATURE`) and the original
+filename's extension against an allowlist, stores to
+`pod/<companyId>/<shipmentId>/<kind>-<uuid>.<ext>`, returns a URL that flows straight
+into `deliver()`'s existing `signatureUrl`/`photoUrl` fields — `deliver()` itself is
+unchanged. New endpoint `POST /shipment-movement/{shipmentId}/pod-upload` (multipart),
+same `WRITERS` role gate as `deliver()`, not the seeded-but-unused
+`SHIPMENT_UPLOAD`/`DELIVERY_UPLOAD` permission codes. Also created live via AWS CLI (not
+code): S3 bucket `courier-saas-pod-547268988887` (private, SSE-S3), and an IAM role
+scoped to `PutObject`/`GetObject` on `pod/*` only, attached to the existing EC2 dev
+instance as its first instance profile. `mvn test` 665 → 669, `ng build`/`tsc --noEmit`
+clean. **Verified live end to end**: local backend restarted with real S3 credentials,
+browser flow (`claude-in-chrome`) uploaded a real file for both Photo and Signature on
+an `OUT_FOR_DELIVERY` shipment, confirmed both objects landed in the bucket via
+`aws s3 ls`, then completed the delivery successfully. **Not yet verified on the EC2
+box itself** — the instance-role path is wired but unexercised there this session.
+Full detail in `CHANGELOG.md` 0.17.9.
+
+Previously current:
+
+`0.17.8` — **Branch-level charge percentages**, direct user request: `Branch` gains
+`gstPercentage` (default 18), `commissionOnOtherCharges` (company's commission on other
+charges, default 20), `commissionOnBasicFreight` (default 10), and
+`companyServiceChargePercentage` (default 10) — `V25`, all `DECIMAL(5,2)` 0–100,
+optional-with-default on `CreateBranchRequest`, required on `UpdateBranchRequest` (full
+replacement, same as every other editable field on that endpoint). Threaded through
+`CreateBranchCommand`/`UpdateBranchCommand`/`BranchResponse`/`BranchMapper`/audit
+snapshot. Frontend `BranchForm` gained a "Charges" card, prefilled with the defaults on
+create; along the way `UiInput` (shared) gained `type="number"` support (`min`/`max`/
+`step`), which it didn't have before — every prior numeric field in the app used a bare
+native `<input type=number>` instead. `mvn test` 665/665 (two test call sites fixed for
+the grown command records), `ng test` 124/125 (pre-existing unrelated nav gap, see
+0.16.9). **Not verified live** — no working local MySQL session this task; `V25` not yet
+applied against a real database. Full detail in `CHANGELOG.md` 0.17.8.
+
+Previously current:
+
+`0.17.7` — **Out For Delivery UX rework**, direct user request, same day as 0.17.5:
+Delivery User is now picked *first* (its own `app-select`, nothing else visible until
+it has a value), then a plain checkbox `<table>` of this branch's IN_SCAN shipments
+appears — replacing the old multi-select-shipments-then-pick-user `app-select` pair.
+Selection lives in a `Set<string>` signal (`selectedIds`, toggled by `toggleOne`
+/`toggleAll`), not a reactive form array — simpler to check/uncheck than juggling
+`FormArray` indices for a table row. Submit button renamed "Bulk Assign" → **"Generate
+DRS"**, disabled until at least one row is checked. 0.17.5's `printDrs()`/
+`printableShipments` untouched — only the selection UI upstream of `assign()` changed;
+`assign()` now reads `Array.from(this.selectedIds())` instead of the form's
+`shipmentIds` value. Verified live: table confirmed hidden pre-selection, checkbox +
+select-all worked, Generate DRS assigned and produced the same Print DRS button as
+0.17.5. `tsc --noEmit` clean on the file. Full detail in `CHANGELOG.md` 0.17.7.
+
+Previously current:
+
+`0.17.6` — **Other Charges on Shipment Booking**, direct user request: a manual numeric
+field in the Rate Charges section of Booking, on top of the Pricing Engine's own
+Freight/Fuel/Handling/ODA/Insurance/GST/Discount/Round Off lines. New migration `V24`
+(`shipment_charges.other_charges`), threaded through Create/UpdateShipmentRequest/Command,
+`ShipmentServiceImpl.copyCharge` (`netAmount = priced.netAmount() + otherCharges`), and
+the wallet-sufficiency check + `PrepaidBookingConfirmed` event so a PAID booking with
+Other Charges debits the correct total. Frontend: `ChargeSummary` gained an editable row
+(mirrors the existing `manualNetAmount` override pattern, except this one is real — sent
+to the server, not display-only); `ShipmentCreate` carries its own signal that survives a
+reprice; `ShipmentEdit` fetches the persisted charge row to hydrate the field (needed
+since `ShipmentResponse` doesn't carry it — skipping this would have silently zeroed it
+on every edit). `mvn test` 665/665, `ng build`/`tsc --noEmit` clean. **Not verified live**
+— no working local MySQL session this task; `V24` not yet applied against a real
+database. Full detail in `CHANGELOG.md` 0.17.6.
+
+Previously current:
+
+`0.17.5` — **Print DRS (Delivery Run Sheet)** on Out For Delivery, on direct user
+request ("Allocate order to delivery boy and allocated order list should be print").
+Same client-side pattern 0.17.4's Print THC set: `OutForDelivery.printDrs()` opens a
+new window, `document.write()`s a self-contained escaped HTML document, `win.print()`.
+No PDF service, no new backend endpoint — every field the sheet needs (tracking no.,
+receiver name/contact, payment mode, amount) is already on the list-row `Shipment` this
+page holds before `assign()` submits, so no extra fetch either. Button appears on the
+existing Result card only for shipments the bulk assign actually succeeded on (matched
+back by `shipmentNumber`, the same string `MovementOutcome.reference` carries — not the
+tracking number, despite the display column looking like one). Payment-mode label via
+`MasterDataService.options('payment-modes')`, branch label via `branchDirectory()`,
+same lookups THC already uses for vehicle/driver. Verified live: logged in as Pune
+Branch, received a real DISPATCHED shipment via In Scan to get a genuine `IN_SCAN` row,
+bulk-assigned it to "Pune User", confirmed "Print DRS" appeared, clicked it — no
+console errors, matches THC's own documented limitation (`window.print()` blocks CDP
+automation past that point, same as `confirm()`). `tsc --noEmit` clean on the file (only
+pre-existing `.spec.ts` test-runner-global noise elsewhere, unrelated). No backend
+changes — `assignOutForDelivery` (`SHIPMENT_MOVEMENT` module) already existed and does
+the actual allocation; this pass only adds the print action on top of it.
+
+`0.17.4` — **"Dispatch" renamed to "Trip Hire Challan (THC)"** + two real features, same
+session as 0.17.3, on direct user request. Rename: mechanical, same treatment as 0.17.3
+— `dispatch.ts` → `trip-hire-challan.ts`, component `Dispatch` → `TripHireChallan`,
+selector `app-dispatch` → `app-trip-hire-challan`, route `/movement/dispatch` →
+`/movement/trip-hire-challan`, nav title, breadcrumb, tour step, dashboard quick action
+(`QA.dispatch` label → `THC`), `ManifestCard`'s own worklist button (`Dispatch` → `THC`).
+Internal action names (`dispatch()`, `dispatching`, `DISPATCHED` status) intentionally
+untouched — same "action stays, page label changes" split 0.17.1 set for `OUT_SCAN`.
+**Print THC:** a plain browser print view — `window.open('', '_blank')` +
+`document.write()` a self-contained HTML string (manifest number, vehicle, driver,
+dispatched-at, LR table fetched fresh via `ManifestService.shipments`) + `win.print()`.
+No PDF service, no new backend endpoint; every interpolated field passed through a
+`.esc()` helper first since sender/receiver names are user-entered. Verified live: title
+`THC MFT-260812-8308` set on the new tab confirms the fetch + write ran before
+`print()` opened the native print dialog (which — like `confirm()` — blocks CDP
+automation; verification stopped at that point, same limitation, not a functional gap).
+**Remove shipment from Loading Sheet:** new backward edge `MANIFEST_CREATED` -> `BOOKED`
+in `ShipmentStatus` (the one backward edge in that graph) + `ShipmentService
+.detachFromManifest` (inverse of `attachToManifest`) + `ManifestService.removeShipment`
+(refuses an already-dispatched manifest) + `DELETE /api/v1/manifests/{id}/shipments
+/{shipmentId}` + new `AuditAction.MANIFEST_SHIPMENT_REMOVED`. Frontend: `ManifestCard`
+owns the mutation itself (new `showRemoveAction` input, `removed` output) rather than
+delegating to a parent, the same way it already owns fetching its own shipment list —
+wired true only from Loading Sheet (a manifest is always still `CREATED` there), not
+from THC or In Scan's reuse of the same card. **First attempt used a bare `confirm()`**
+— broke live-testing (blocks CDP the same way `print()` does) and was inconsistent with
+every other feature's `DialogService.confirm()`; fixed to match convention before this
+landed, not left as a known gap. Verified live end-to-end: created a manifest, removed
+its one shipment (weight/parcels dropped to 0, "No shipments on this manifest."),
+confirmed the shipment reverted to BOOKED (reappeared in Loading Sheet's own eligible-
+branch/booked-shipment list), re-added it, dispatched, printed. `mvn compile` and
+`ng build` both clean. Full detail in `CHANGELOG.md` 0.17.4.
+
+Previously current:
+
+`0.17.3` — **"Out Scan" renamed to "Loading Sheet"**, on direct user request, across
+every layer: frontend page (`out-scan.ts` → `loading-sheet.ts`, component `OutScan` →
+`LoadingSheet`, selector `app-out-scan` → `app-loading-sheet`), route
+(`/movement/out-scan` → `/movement/loading-sheet`), nav item title, breadcrumb, tour
+step (element/data-tour id, popover copy), dashboard quick action (`QA.outscan` →
+`QA.loadingSheet`), AI command router (kept `outscan`/`out scan` as legacy voice
+synonyms, added `loading sheet`), the `MANIFEST_CREATED` status display label ("Out
+Scan Created" → "Loading Sheet Created" — `ShipmentStatusBadge` frontend, mirrored in
+backend `ShipmentServiceImpl.TIMELINE_LABELS`), and every doc comment on both sides
+that named it. No DB/enum change — `OUT_SCAN`/`out-scan` as historical identifiers
+(applied `V20` migration filename, the dead `/shipment-movement/out-scan` endpoint
+reference in `ManifestController`'s javadoc) were left alone, since those name a past
+state, not the current UI. Found and fixed in passing, not part of the rename itself: two
+Swagger descriptions (`ShipmentController.getTimeline`, `TimelineStepResponse`) still
+listed `Out Scan` as its own arrow between `Manifest Created` and `Dispatched`, stale
+since V20 folded it away — removed the dangling step; `ShipmentMovementController`'s
+`@Tag` description likewise still listed five verbs for four remaining endpoints,
+trimmed. Verified: `mvn compile` clean, `ng build` clean, `ng test` on
+`navigation.config.spec.ts` — 11/12 pass, the one failure (`reports-dashboard` nav
+node missing) pre-existing and unrelated (Reports section is aspirational, no route
+behind it). Not otherwise live-verified this session.
+
+Previously current:
+
+`0.17.2` — **COD delivery debit seam**, closed on live user report: shipment
+`26080000004` (COD) delivered with nothing debited from its delivery branch. Root
+cause: `SubTransactionType.COD` existed in the wallet module since it shipped, but
+nothing ever constructed a transaction with it — `ManifestServiceImpl`/
+`ShipmentServiceImpl`'s delivery flow had zero wallet wiring, only the booking-time
+`PAID` debit (`ShipmentBookingWalletListener`) existed. Fixed by mirroring that exact
+seam on the delivery side: `WalletService.debitForCodDelivery(CodDeliveryDebitCommand)`
+(reason `COD`, reference `SHIPMENT`, `isAuthenticated()` not `COMPANY_ADMIN`-gated,
+same `resolveBranchForWrite` scoping) + `ShipmentEvent.CodCollectedAtDelivery`,
+published from `ShipmentServiceImpl.deliver()` when `paymentMode.isCollectAtDelivery()`
+(true for both `TO_PAY` and `COD` — the flag the payment-mode module already exposes,
+no new one added), amount = the shipment's persisted `ShipmentCharge.netAmount`, debited
+from the *delivery* branch, not booking. Handled AFTER_COMMIT/`REQUIRES_NEW` by a new
+`ShipmentDeliveryWalletListener`, same accepted-gap shape as the booking listener (a
+debit failure leaves the shipment DELIVERED, undebited, for manual reconciliation — not
+swept under "impossible"). `mvn test` 664 → 665: 1 new COD-event test, 1 new negative
+(PAID path publishes nothing), plus `deliverHappyPath` itself needed a
+`paymentModeService` stub it never had — latent because nothing in `deliver()` read
+that collaborator before this change. **Not verified live** — no working local MySQL
+credentials this session (root/no-password and courier/courier both refused); the fix
+is compile- and unit-test-verified only. Full detail in `CHANGELOG.md` 0.17.2 and
+`MEMORY/modules/branch-wallet.md` / `shipment-movement.md`.
+
+Previously current:
+
 `0.17.1` — Same session, immediately after 0.17.0: on direct user request, `OUT_SCAN`
 folded back into `MANIFEST_CREATED` — "manifest created as outscan created", one
 milestone not two. `V20` migration (folds the real `OUT_SCAN` rows 0.17.0's own live
@@ -158,7 +973,7 @@ Master Data's existing Route list), then Customer Management, then (earlier the 
 day) SUPER_ADMIN / Platform Console, Branch RBAC, and the
 `tenant_id` → `company_id` rename (all 2026-07-30)
 
-**Build status:** `mvn compile` clean · `mvn test` **650 pass of 650**.
+**Build status:** `mvn compile` clean · `mvn test` **665 pass of 665**.
 Frontend: `ng build` clean · `ng test` **118 pass of 118** (vitest via `@angular/build:unit-test`)
 
 **2026-07-30 (latest) — Shipment Booking, `V17`, new package

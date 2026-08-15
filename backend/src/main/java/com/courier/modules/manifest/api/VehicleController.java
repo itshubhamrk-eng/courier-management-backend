@@ -1,6 +1,7 @@
 package com.courier.modules.manifest.api;
 
 import com.courier.modules.manifest.api.dto.CreateVehicleRequest;
+import com.courier.modules.manifest.api.dto.UpdateVehicleRequest;
 import com.courier.modules.manifest.api.dto.VehicleResponse;
 import com.courier.modules.manifest.application.VehicleService;
 import com.courier.modules.manifest.domain.Vehicle;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,6 +45,16 @@ public class VehicleController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/vehicles/{id}")
                         .buildAndExpand(created.getId()).toUri())
                 .body(ApiResponse.success(mapper.toResponse(created), "Vehicle created"));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a vehicle", description = "Full replacement of the editable "
+            + "fields. `version` required; a stale value returns 409. Active/inactive has its "
+            + "own endpoints.")
+    public ApiResponse<VehicleResponse> update(@PathVariable UUID id,
+                                                @Valid @RequestBody UpdateVehicleRequest request) {
+        Vehicle updated = vehicleService.update(id, mapper.toCommand(request));
+        return ApiResponse.success(mapper.toResponse(updated), "Vehicle updated");
     }
 
     @GetMapping("/{id}")

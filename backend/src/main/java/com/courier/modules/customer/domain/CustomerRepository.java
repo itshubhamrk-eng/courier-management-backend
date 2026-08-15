@@ -23,6 +23,11 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>,
     @Query("select c from Customer c where c.id = :id and c.companyId = :companyId")
     Optional<Customer> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 
+    /** Exact match, not the {@code search} LIKE — used to find-or-create a customer by the
+     *  number typed at booking, so a repeat customer is reused rather than duplicated. */
+    @Query("select c from Customer c where c.companyId = :companyId and c.mobile = :mobile")
+    Optional<Customer> findByCompanyIdAndMobile(@Param("companyId") UUID companyId, @Param("mobile") String mobile);
+
     long countByCompanyId(UUID companyId);
 
     default boolean isCodeTaken(UUID companyId, String customerCode, UUID excludeId) {

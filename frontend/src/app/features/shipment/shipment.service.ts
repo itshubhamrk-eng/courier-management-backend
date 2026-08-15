@@ -5,7 +5,8 @@ import { PageQuery } from '@core/models/page.model';
 import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
-  PricingRequest, PricingResponse, TimelineStep
+  PricingRequest, PricingResponse, TimelineStep, ShipmentSearchRequest, ShipmentSummaryStats,
+  BranchCommissionSummary
 } from '@core/models/shipment.model';
 
 /**
@@ -21,6 +22,16 @@ export class ShipmentService {
 
   // ---- reads ------------------------------------------------------------------
   list(query: PageQuery) { return this.api.page<Shipment>(API.shipments, query); }
+  /** Unpaged aggregates for the Booking/Delivery Report summary row — same filters as
+   *  `list`, minus paging. */
+  summary(filters: ShipmentSearchRequest) {
+    return this.api.get<ShipmentSummaryStats>(`${API.shipments}/summary`, filters as Record<string, unknown>);
+  }
+  /** Branch-wise commission totals for the Commission Report's summary table — same filters as `list`. */
+  commissionSummary(filters: ShipmentSearchRequest) {
+    return this.api.get<BranchCommissionSummary[]>(
+      `${API.shipments}/commission-summary`, filters as Record<string, unknown>);
+  }
   get(id: string) { return this.api.get<ShipmentResponse>(`${API.shipments}/${id}`); }
   getByTrackingNumber(trackingNumber: string) {
     return this.api.get<ShipmentResponse>(`${API.shipments}/track/${trackingNumber}`);
@@ -42,6 +53,15 @@ export class ShipmentService {
   }
   addDocument(id: string, body: AddShipmentDocumentRequest) {
     return this.api.post<ShipmentDocument>(`${API.shipments}/${id}/documents`, body);
+  }
+
+  /** Uploads a shipment photo (JPEG/PNG/WEBP/HEIC) and records it against the shipment
+   *  immediately — unlike POD upload there is no separate confirm step, so the returned
+   *  URL is only for showing a fresh preview, not for feeding into another call. */
+  uploadImage(id: string, file: File) {
+    const body = new FormData();
+    body.append('file', file);
+    return this.api.post<{ url: string }>(`${API.shipments}/${id}/image-upload`, body);
   }
 
   // ---- pricing preview (Pricing Engine, not this module's own) -----------------

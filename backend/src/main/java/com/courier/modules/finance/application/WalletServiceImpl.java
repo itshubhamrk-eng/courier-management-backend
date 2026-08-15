@@ -1,8 +1,11 @@
 package com.courier.modules.finance.application;
 
 import com.courier.modules.finance.application.command.BookingDebitCommand;
+import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
+import com.courier.modules.finance.application.command.CommissionCreditCommand;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
+import com.courier.modules.finance.application.command.DrsChargeCreditCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
 import com.courier.modules.finance.application.event.WalletEvent;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
@@ -391,6 +394,70 @@ public class WalletServiceImpl implements WalletService {
         return entry;
     }
 
+    // ------------------------------------------------------------- COD delivery debit
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction debitForCodDelivery(CodDeliveryDebitCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.COD;
+        reason.requireSupports(TransactionType.DR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
+                null);
+
+        log.info("Wallet {} debited {} {} for COD delivery {} by {}", wallet.getWalletNumber(),
+                wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
+                currentActor());
+        auditService.record(AuditAction.WALLET_DEBITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletDebited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
+    // ------------------------------------------------------------- DRS charge credit
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction creditForDrsCharge(DrsChargeCreditCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.DRS;
+        reason.requireSupports(TransactionType.CR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
+                null);
+
+        log.info("Wallet {} credited {} {} DRS commission for shipment {} by {}", wallet.getWalletNumber(),
+                wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
+                currentActor());
+        auditService.record(AuditAction.WALLET_CREDITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletCredited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
     // -------------------------------------------------------------- booking debit
 
     @Override
@@ -417,6 +484,38 @@ public class WalletServiceImpl implements WalletService {
         auditService.record(AuditAction.WALLET_DEBITED, ENTITY, wallet.getId(),
                 ledgerDetails(wallet, entry));
         eventPublisher.publishEvent(new WalletEvent.WalletDebited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
+    // ---------------------------------------------------------- commission credit
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction creditCommission(CommissionCreditCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.COM;
+        reason.requireSupports(TransactionType.CR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
+                null);
+
+        log.info("Wallet {} credited {} {} commission for booking {} by {}", wallet.getWalletNumber(),
+                wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
+                currentActor());
+        auditService.record(AuditAction.WALLET_CREDITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletCredited(
                 wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
                 entry.getBalanceAfter(), Instant.now()));
 

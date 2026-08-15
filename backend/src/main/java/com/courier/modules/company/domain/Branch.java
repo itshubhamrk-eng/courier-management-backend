@@ -174,8 +174,44 @@ public class Branch extends CompanyOwnedEntity {
     @Builder.Default
     private boolean allowWallet = false;
 
+    /** When true, a PREPAID booking's branch commission is credited to this branch's
+     *  wallet the moment the booking debit settles; when false it is still computed and
+     *  stored on the shipment charge, just not auto-credited. Defaults to true. */
+    @Column(name = "instant_commission", nullable = false)
+    @Builder.Default
+    private boolean instantCommission = true;
+
     @Column(name = "remarks", length = 500)
     private String remarks;
+
+    // --- charge percentages --------------------------------------------------
+
+    /** GST percentage applied at this branch. Defaults to 18, editable on update. */
+    @Column(name = "gst_percentage", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal gstPercentage = new BigDecimal("18.00");
+
+    /** Company's commission percentage on other charges. Defaults to 20, editable. */
+    @Column(name = "commission_on_other_charges", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal commissionOnOtherCharges = new BigDecimal("20.00");
+
+    /** Commission percentage on basic freight. Defaults to 10, editable. */
+    @Column(name = "commission_on_basic_freight", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal commissionOnBasicFreight = new BigDecimal("10.00");
+
+    /** Company service charge percentage. Defaults to 10, editable. */
+    @Column(name = "company_service_charge_percentage", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal companyServiceChargePercentage = new BigDecimal("10.00");
+
+    /** DRS charge per item quantity, debited from this branch's wallet on delivery
+     *  ({@code drsCharge = drsChargePerQty * qty}). A fixed amount, not a percentage —
+     *  unlike the four fields above. Defaults to 2.00, editable. */
+    @Column(name = "drs_charge_per_qty", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal drsChargePerQty = new BigDecimal("2.00");
 
     // ---------------------------------------------------------------- behaviour
 
@@ -218,6 +254,13 @@ public class Branch extends CompanyOwnedEntity {
         }
         requireInRange(latitude, "Latitude", -90, 90);
         requireInRange(longitude, "Longitude", -180, 180);
+        requireInRange(gstPercentage, "GST percentage", 0, 100);
+        requireInRange(commissionOnOtherCharges, "Commission on other charges", 0, 100);
+        requireInRange(commissionOnBasicFreight, "Commission on basic freight", 0, 100);
+        requireInRange(companyServiceChargePercentage, "Company service charge percentage", 0, 100);
+        if (drsChargePerQty != null && drsChargePerQty.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessRuleException("DRS charge per qty cannot be negative.");
+        }
     }
 
     private static String normaliseWorkingDays(String csv) {

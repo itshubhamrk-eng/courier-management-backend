@@ -73,8 +73,10 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      # POD capture includes short delivery videos, wider than the plain-document
+      # ceiling every other upload in this project needs.
+      max-file-size: 25MB
+      max-request-size: 25MB
 
 server:
   port: ${SERVER_PORT:8080}
@@ -125,6 +127,37 @@ app:
       reject-common-passwords: true
       # Forced rotation, disabled by default: NIST SP 800-63B advises against it.
       max-age: 0s
+  storage:
+    s3:
+      # Off by default, same fail-closed shape as payment.razorpay below: a deployment
+      # without a bucket configured gets UnconfiguredFileStorage, which refuses every
+      # POD upload with a clear 422 instead of silently discarding the file.
+      enabled: ${AWS_S3_ENABLED:false}
+      bucket: ${AWS_S3_BUCKET:}
+      region: ${AWS_REGION:us-east-1}
+      # Credentials are never read from config here — the AWS SDK's default provider
+      # chain resolves them (env vars locally, the EC2 instance role in production).
+
+  geocoding:
+    # On by default: Nominatim (OpenStreetMap) is free and keyless, unlike S3/Razorpay
+    # below there is no secret forcing an off-by-default. A miss or a disabled provider
+    # just leaves a branch's latitude/longitude null — never blocks creating it.
+    enabled: ${GEOCODING_ENABLED:true}
+    base-url: ${GEOCODING_BASE_URL:https://nominatim.openstreetmap.org}
+    # Nominatim's usage policy requires a real identifying User-Agent on every request.
+    user-agent: "${GEOCODING_USER_AGENT:courier-management-app (contact: set GEOCODING_USER_AGENT)}"
+    connect-timeout: 3s
+    read-timeout: 5s
+
+  routing:
+    # On by default: OSRM's public demo server is free and keyless. It is rate-limited
+    # and not meant for production traffic — point base-url at a self-hosted OSRM
+    # instance before this app's volume grows past what the demo server tolerates.
+    enabled: ${ROUTING_ENABLED:true}
+    base-url: ${ROUTING_BASE_URL:https://router.project-osrm.org}
+    connect-timeout: 3s
+    read-timeout: 8s
+
   payment:
     razorpay:
       # Off by default and no default secret: a deployment without credentials refuses

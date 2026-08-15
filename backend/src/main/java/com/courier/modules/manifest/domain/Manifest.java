@@ -76,6 +76,13 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "dispatched_at")
     private Instant dispatchedAt;
 
+    /** Operator-entered departure time — distinct from {@code dispatchedAt} (the server
+     *  clock at the moment THC was created); this is when the vehicle actually leaves,
+     *  which the operator may back- or forward-date relative to that. Optional: falls
+     *  back to {@code dispatchedAt} wherever it is displayed. */
+    @Column(name = "departure_time")
+    private Instant departureTime;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -91,7 +98,7 @@ public class Manifest extends CompanyOwnedEntity {
      *         fixed at the moment it leaves, the same "point of no return" DISPATCH
      *         carries everywhere else in this project
      */
-    public void dispatch(UUID vehicleId, UUID driverUserId) {
+    public void dispatch(UUID vehicleId, UUID driverUserId, Instant departureTime) {
         if (isDispatched()) {
             throw new BusinessRuleException(
                     "Manifest %s has already been dispatched.".formatted(manifestNumber));
@@ -100,5 +107,6 @@ public class Manifest extends CompanyOwnedEntity {
         this.driverUserId = driverUserId;
         this.status = ManifestStatus.DISPATCHED;
         this.dispatchedAt = Instant.now();
+        this.departureTime = departureTime != null ? departureTime : this.dispatchedAt;
     }
 }

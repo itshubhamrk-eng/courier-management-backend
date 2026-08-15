@@ -9,8 +9,8 @@ type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<span class="badge" [attr.data-tone]="resolvedTone()">{{ label() || value() }}</span>`,
   styles: [`
-    .badge { display:inline-flex; align-items:center; height:22px; padding:0 10px;
-      border-radius:var(--r-pill); font:600 12px/1 var(--font-sans); text-transform:capitalize; }
+    .badge { display:inline-flex; align-items:center; height:24px; padding:0 11px;
+      border-radius:var(--r-pill); font:700 12px/1 var(--font-sans); text-transform:capitalize; }
     .badge[data-tone="success"] { background:var(--success-bg); color:var(--success); }
     .badge[data-tone="warning"] { background:var(--warning-bg); color:var(--warning); }
     .badge[data-tone="danger"]  { background:var(--danger-bg);  color:var(--danger); }

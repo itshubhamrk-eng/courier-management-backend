@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -36,11 +36,23 @@ export class TrackBox {
   private readonly router = inject(Router);
   private readonly shipmentService = inject(ShipmentService);
 
+  /** Prefilled from the AI assistant's `?q=` handoff (see `Track` page) — auto-runs the
+   *  search once, so "track SHP-000123" lands here already resolved instead of just
+   *  typed into the box. */
+  readonly initialQuery = input<string | null>(null);
+
   readonly searching = signal(false);
   readonly notFound = signal(false);
   readonly lastQuery = signal('');
 
   readonly searchControl = new FormControl('');
+
+  constructor() {
+    effect(() => {
+      const q = this.initialQuery();
+      if (q) { this.searchControl.setValue(q); this.track(); }
+    });
+  }
 
   track(): void {
     const raw = this.searchControl.value?.trim();

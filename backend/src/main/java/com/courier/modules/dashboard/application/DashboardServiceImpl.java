@@ -4,6 +4,7 @@ import com.courier.modules.dashboard.api.dto.DashboardStatisticsResponse;
 import com.courier.modules.dashboard.api.dto.DashboardSummaryResponse;
 import com.courier.modules.dashboard.api.dto.RecentShipmentResponse;
 import com.courier.modules.finance.application.WalletService;
+import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
@@ -38,12 +39,17 @@ public class DashboardServiceImpl implements DashboardService {
     private static final Set<ShipmentStatus> PENDING = EnumSet.of(
             ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST, ShipmentStatus.MANIFEST_CREATED);
 
+    /** Mirrors the Pending Delivery page: shipments arrived at (or dispatched for local
+     *  delivery from) the caller's own branch, still waiting to go out or be closed. */
+    private static final Set<ShipmentStatus> PENDING_DELIVERY = EnumSet.of(
+            ShipmentStatus.IN_SCAN, ShipmentStatus.OUT_FOR_DELIVERY);
+
     private final ShipmentRepository shipmentRepository;
     private final ShipmentChargeRepository shipmentChargeRepository;
     private final WalletService walletService;
 
     /**
-     * Deliberately not {@code @Transactional}: {@link #ownWalletBalance} calls into
+     * Deliberately not {@code @Transactional}: {@link #ownWallet} calls into
      * {@code WalletServiceImpl.getForBranch}, its own {@code @Transactional} proxy, which
      * marks a shared transaction rollback-only the moment it throws — before the catch
      * here ever runs. Wrapping this method would turn that caught, expected exception
@@ -63,22 +69,29 @@ public class DashboardServiceImpl implements DashboardService {
         BigDecimal totalRevenue = shipmentChargeRepository.sumNetAmount();
         BigDecimal todayCollection = shipmentChargeRepository.sumNetAmountForBookingDate(today);
 
+        Wallet ownWallet = ownWallet();
+        BigDecimal walletBalance = ownWallet == null ? null : ownWallet.getAvailableBalance();
+        // No own branch (company/platform admins) means no "Pending Delivery" tile is
+        // shown for them either — 0 is a safe, unused default, not a fabricated figure.
+        long pendingDelivery = ownWallet == null ? 0L
+                : shipmentRepository.countByDeliveryBranchIdAndStatusIn(ownWallet.getBranchId(), PENDING_DELIVERY);
+
         DashboardStatisticsResponse statistics = new DashboardStatisticsResponse(
                 todayShipments, delivered, inTransit, pending, totalRevenue,
-                todayShipments, todayCollection, inTransit, totalShipments, ownWalletBalance());
+                todayShipments, todayCollection, pendingDelivery, totalShipments, walletBalance);
 
         return new DashboardSummaryResponse(statistics, recentShipments());
     }
 
     /**
-     * The caller's own branch wallet balance, or null for a caller with no own branch
+     * The caller's own branch wallet, or null for a caller with no own branch
      * (company/platform admins) — {@code WalletService.getForBranch(null)} throws
      * {@link BusinessRuleException} for them, which the dashboard degrades rather than
      * surfaces, the same convention as every other omitted figure in this response.
      */
-    private BigDecimal ownWalletBalance() {
+    private Wallet ownWallet() {
         try {
-            return walletService.getForBranch(null).getAvailableBalance();
+            return walletService.getForBranch(null);
         } catch (BusinessRuleException e) {
             return null;
         }

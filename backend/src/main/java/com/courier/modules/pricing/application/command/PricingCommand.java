@@ -19,6 +19,12 @@ import java.util.UUID;
  *                              over {@code discountAmount} when both are supplied
  * @param discountAmount        optional flat discount, used when {@code discountPercentage}
  *                              is absent
+ * @param freightFactorOverride optional, only meaningful on the Freight Factor fallback
+ *                              path (see {@code PricingEngineImpl.priceByDistanceAndWeight}) —
+ *                              a caller-supplied factor to price with instead of the grid's
+ *                              own matched cell. Must be greater than or equal to the matched
+ *                              factor; a smaller value is refused, since this exists to let a
+ *                              desk raise a quote, never undercut the configured grid
  */
 public record PricingCommand(
         UUID bookingBranchId,
@@ -35,6 +41,7 @@ public record PricingCommand(
         BigDecimal declaredValue,
         LocalDate bookingDate,
         BigDecimal discountPercentage,
-        BigDecimal discountAmount
+        BigDecimal discountAmount,
+        BigDecimal freightFactorOverride
 ) {
 }

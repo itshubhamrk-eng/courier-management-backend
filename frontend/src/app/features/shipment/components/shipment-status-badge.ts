@@ -14,12 +14,13 @@ const TONE: Record<ShipmentStatus, 'success' | 'warning' | 'danger' | 'info' | '
   CANCELLED: 'danger'
 };
 
-/** Overrides the default word-split label — MANIFEST_CREATED doubles as "out scan
+/** Overrides the default word-split label — MANIFEST_CREATED doubles as "loading sheet
  *  created" (V20, on direct request: adding a shipment to a manifest already is the
- *  out-scan milestone, no separate scan step). Every other status keeps its plain
+ *  loading sheet milestone, no separate scan step). Every other status keeps its plain
  *  word-split label. */
 const LABEL: Partial<Record<ShipmentStatus, string>> = {
-  MANIFEST_CREATED: 'Out Scan Created'
+  MANIFEST_CREATED: 'Loading Sheet Created',
+  OUT_FOR_DELIVERY: 'DRS'
 };
 
 /** Shipment lifecycle pill — the full nine-state vocabulary. Shipment Booking only ever

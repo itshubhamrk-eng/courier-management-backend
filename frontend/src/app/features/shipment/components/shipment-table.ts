@@ -19,6 +19,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
   template: `
     <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
                emptyTitle="No shipments" emptyHint="Book your first shipment to get started."
+               emptyIllustration="package"
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-s>
         <td><span class="mono">{{ s.shipmentNumber }}</span></td>
@@ -32,6 +33,10 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td class="mono">{{ s.receiverContact }}</td>
         <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
         <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
+        <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
+        <td class="num">{{ s.branchCommissionOnOtherAmount != null ? ('₹' + (s.branchCommissionOnOtherAmount | number: '1.2-2')) : '—' }}</td>
+        <td class="num">{{ s.companyCommissionOnBasicFreight != null ? ('₹' + (s.companyCommissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
+        <td class="num">{{ s.totalCommission != null ? ('₹' + (s.totalCommission | number: '1.2-2')) : '—' }}</td>
         <td><app-shipment-status-badge [status]="s.status" /></td>
         <td class="col-actions" (click)="$event.stopPropagation()">
           <button class="kebab" [matMenuTriggerFor]="menu" aria-label="Actions"><mat-icon>more_vert</mat-icon></button>
@@ -83,6 +88,10 @@ export class ShipmentTable {
     { key: 'receiverContact', header: 'Receiver Contact' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', sortable: true, align: 'right' },
     { key: 'netAmount', header: 'Total Amount', align: 'right' },
+    { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },
+    { key: 'branchCommissionOnOtherAmount', header: 'Branch Commission on Other Amount', align: 'right' },
+    { key: 'companyCommissionOnBasicFreight', header: 'Company Commission on Basic Freight', align: 'right' },
+    { key: 'totalCommission', header: 'Total Commission', align: 'right' },
     { key: 'status', header: 'Status', sortable: true, width: '160px' },
     { key: 'actions', header: '', width: '56px', align: 'right' }
   ];

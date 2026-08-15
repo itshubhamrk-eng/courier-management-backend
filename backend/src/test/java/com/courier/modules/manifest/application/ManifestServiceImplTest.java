@@ -113,7 +113,7 @@ class ManifestServiceImplTest {
                 .thenReturn(Optional.of(manifest));
         when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID()))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("no shipment");
         verify(vehicleService, never()).getById(any());
@@ -128,10 +128,11 @@ class ManifestServiceImplTest {
                 .thenReturn(Optional.of(manifest));
         when(shipmentService.findManifestCreatedShipments(manifest.getId()))
                 .thenReturn(List.of(mock(Shipment.class)));
-        Vehicle inactive = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.INACTIVE).build();
+        Vehicle inactive = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.INACTIVE)
+                .active(false).build();
         when(vehicleService.getById(vehicleId)).thenReturn(inactive);
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), vehicleId, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), vehicleId, UUID.randomUUID(), null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("not active");
     }
@@ -149,11 +150,11 @@ class ManifestServiceImplTest {
         when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
                 .thenReturn(Optional.of(manifest));
         when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of(ready));
-        Vehicle active = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.ACTIVE).build();
+        Vehicle active = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.AVAILABLE).build();
         when(vehicleService.getById(vehicleId)).thenReturn(active);
         when(userService.getById(driverId)).thenReturn(mock(User.class));
 
-        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId);
+        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId, null);
 
         assertThat(dispatched.getStatus()).isEqualTo(ManifestStatus.DISPATCHED);
         assertThat(dispatched.getVehicleId()).isEqualTo(vehicleId);
@@ -169,7 +170,7 @@ class ManifestServiceImplTest {
         when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
                 .thenReturn(Optional.of(manifest));
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID()))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("already been dispatched");
         verify(shipmentService, never()).findManifestCreatedShipments(any());
