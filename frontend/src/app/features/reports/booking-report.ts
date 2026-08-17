@@ -52,6 +52,7 @@ import { ShipmentService } from '../shipment/shipment.service';
       </div>
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No bookings" emptyHint="Nothing matches this filter yet."
                  (sortChange)="onSort($event)" (rowClick)="view($event)">
         <ng-template #row let-s>

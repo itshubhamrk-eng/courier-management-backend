@@ -23,7 +23,7 @@ export type PlanAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'delete';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, UiTable, PlanStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No subscription plans" emptyHint="Create your first plan to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-r>
@@ -66,6 +66,7 @@ export type PlanAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'delete';
 })
 export class PlanTable {
   readonly rows = input<SubscriptionPlan[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<PlanPerms>();

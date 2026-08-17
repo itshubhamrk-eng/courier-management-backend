@@ -37,5 +37,10 @@ export const API = {
   globalMasters: '/global-masters',
   dashboard: '/dashboard/summary',
   distances: '/distances',
-  freightFactors: '/freight-factors'
+  freightFactors: '/freight-factors',
+  /** Ticket Support — lifecycle, conversation, categories, SLA rules. See MEMORY. */
+  supportTickets: '/support/tickets',
+  supportCategories: '/support/categories',
+  supportSlaRules: '/support/sla-rules',
+  notifications: '/notifications'
 } as const;

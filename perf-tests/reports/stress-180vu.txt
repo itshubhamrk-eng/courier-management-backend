@@ -1,0 +1,224 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: perf-tests/k6/scenario.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 180 max VUs, 1m0s max duration (incl. graceful stop):
+              * default: 180 looping VUs for 30s (gracefulStop: 30s)
+
+
+running (0m01.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [   2% ] 180 VUs  00.7s/30s
+
+running (0m02.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [   6% ] 180 VUs  01.7s/30s
+
+running (0m03.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [   9% ] 180 VUs  02.7s/30s
+
+running (0m04.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  12% ] 180 VUs  03.7s/30s
+
+running (0m05.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  16% ] 180 VUs  04.7s/30s
+
+running (0m06.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  19% ] 180 VUs  05.7s/30s
+
+running (0m07.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  22% ] 180 VUs  06.7s/30s
+
+running (0m08.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  26% ] 180 VUs  07.7s/30s
+
+running (0m09.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  29% ] 180 VUs  08.7s/30s
+
+running (0m10.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  32% ] 180 VUs  09.7s/30s
+
+running (0m11.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  36% ] 180 VUs  10.7s/30s
+
+running (0m12.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  39% ] 180 VUs  11.7s/30s
+
+running (0m13.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  42% ] 180 VUs  12.7s/30s
+
+running (0m14.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  46% ] 180 VUs  13.7s/30s
+
+running (0m15.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  49% ] 180 VUs  14.7s/30s
+
+running (0m16.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  52% ] 180 VUs  15.7s/30s
+
+running (0m17.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  56% ] 180 VUs  16.7s/30s
+
+running (0m18.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  59% ] 180 VUs  17.7s/30s
+
+running (0m19.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  62% ] 180 VUs  18.7s/30s
+
+running (0m20.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  66% ] 180 VUs  19.7s/30s
+
+running (0m21.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  69% ] 180 VUs  20.7s/30s
+
+running (0m22.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  72% ] 180 VUs  21.7s/30s
+
+running (0m23.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  76% ] 180 VUs  22.7s/30s
+
+running (0m24.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  79% ] 180 VUs  23.7s/30s
+
+running (0m25.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  82% ] 180 VUs  24.7s/30s
+
+running (0m26.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  86% ] 180 VUs  25.7s/30s
+
+running (0m27.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  89% ] 180 VUs  26.7s/30s
+
+running (0m28.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  92% ] 180 VUs  27.7s/30s
+
+running (0m29.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  96% ] 180 VUs  28.7s/30s
+
+running (0m30.0s), 180/180 VUs, 0 complete and 0 interrupted iterations
+default   [  99% ] 180 VUs  29.7s/30s
+time="2026-08-17T14:27:38+05:30" level=error msg="Error: login failed for op0035@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:38.678836Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"4f5b4b25-f664-4041-ab53-3a79e018f5ff\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:38+05:30" level=error msg="Error: login failed for op0038@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:38.682267Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"640a7529-4f9b-4e0b-aa46-feeabe01a919\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0023@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:39.067394Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"8f62155a-5236-47dd-a7f1-b324914b5f0e\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0042@t01.perf.local (401): {\"success\":false,\"message\":\"Authentication required\",\"errorCode\":\"UNAUTHENTICATED\",\"timestamp\":\"2026-08-17T08:57:39.066353Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"2c18608b-931e-4685-9ba7-6dfe48f7be49\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0043@t01.perf.local (401): {\"success\":false,\"message\":\"Authentication required\",\"errorCode\":\"UNAUTHENTICATED\",\"timestamp\":\"2026-08-17T08:57:39.068577Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"fd539f5e-f5a0-47ae-818c-dbc22c10b39c\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0039@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:39.068689Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"6b3fdcaf-c32f-431e-8dd3-544a95727833\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0016@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:39.070664Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"0dcf00f4-9a34-491f-b7a6-3f0c50dc6e15\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0010@t01.perf.local (401): {\"success\":false,\"message\":\"Authentication required\",\"errorCode\":\"UNAUTHENTICATED\",\"timestamp\":\"2026-08-17T08:57:39.071037Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"e21ec9d5-f906-4104-ba14-d1ed8b0e101d\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0020@t01.perf.local (401): {\"success\":false,\"message\":\"Authentication required\",\"errorCode\":\"UNAUTHENTICATED\",\"timestamp\":\"2026-08-17T08:57:39.070892Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"7c4c02bd-2ca9-4d44-9a0a-fead77dda1ed\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T14:27:39+05:30" level=error msg="Error: login failed for op0001@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:39.072648Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"70e5db78-b219-461b-804a-5405cd58a05c\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (0m31.0s), 170/180 VUs, 10 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+time="2026-08-17T14:27:40+05:30" level=error msg="Error: login failed for op0023@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:40.220321Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"773bf727-7ab8-4a5c-9b1b-73af8c04bf60\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (0m32.0s), 169/180 VUs, 11 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+time="2026-08-17T14:27:40+05:30" level=error msg="Error: login failed for op0020@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:40.581400Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"d88b3e9e-68ef-465e-a2d3-2d88bb40b835\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (0m33.0s), 168/180 VUs, 12 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+time="2026-08-17T14:27:41+05:30" level=error msg="Error: login failed for op0002@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:57:41.418625Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"00b3ea2b-dab4-4f95-bd5c-14f98ff8a8d0\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (0m34.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m35.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m36.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m37.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m38.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m39.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m40.0s), 167/180 VUs, 13 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m41.0s), 166/180 VUs, 14 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m42.0s), 156/180 VUs, 24 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+running (0m43.0s), 087/180 VUs, 93 complete and 0 interrupted iterations
+default ↓ [ 100% ] 180 VUs  30s
+
+
+  █ THRESHOLDS 
+
+    create_shipment_duration
+    ✓ 'p(95)<1000' p(95)=161.5043
+
+    dashboard_duration
+    ✗ 'p(95)<1000' p(95)=30284.3466
+
+    http_req_duration
+    ✗ 'p(95)<1000' p(95)=33.38s
+    ✗ 'p(99)<2000' p(99)=33.88s
+
+    http_req_failed
+    ✗ 'rate<0.01' rate=1.09%
+
+    login_duration
+    ✗ 'p(95)<1000' p(95)=34096.586
+
+    search_duration
+    ✓ 'p(95)<1000' p(95)=482.8385
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1183   27.38544/s
+    checks_succeeded...: 98.90% 1170 out of 1183
+    checks_failed......: 1.09%  13 out of 1183
+
+    ✗ login 200
+      ↳  92% — ✓ 168 / ✗ 13
+    ✓ dashboard 200
+    ✓ search 200
+    ✓ open shipment 200
+    ✓ track 200
+    ✓ create shipment 201/200
+    ✓ update shipment 200
+
+    CUSTOM
+    create_shipment_duration.......: avg=88.159904    min=6.543    med=96.373   max=176.543   p(90)=149.8104  p(95)=161.5043  
+    dashboard_duration.............: avg=5038.093635  min=1551.785 med=2827.816 max=32071.136 p(90)=3909.8552 p(95)=30284.3466
+    login_duration.................: avg=30828.073801 min=279.603  med=33233.87 max=34856.572 p(90)=33774.917 p(95)=34096.586 
+    search_duration................: avg=322.97588    min=16.155   med=385.412  max=884.821   p(90)=471.5256  p(95)=482.8385  
+
+    HTTP
+    http_req_duration..............: avg=5.47s        min=2.35ms   med=63.17ms  max=34.85s    p(90)=32.97s    p(95)=33.38s    
+      { expected_response:true }...: avg=5.19s        min=2.35ms   med=55.54ms  max=34.85s    p(90)=32.98s    p(95)=33.39s    
+    http_req_failed................: 1.09%  13 out of 1187
+    http_reqs......................: 1187   27.478036/s
+
+    EXECUTION
+    iteration_duration.............: avg=41.66s       min=30.02s   med=42.68s   max=42.9s     p(90)=42.86s    p(95)=42.88s    
+    iterations.....................: 180    4.166846/s
+    vus............................: 87     min=87         max=180
+    vus_max........................: 180    min=180        max=180
+
+    NETWORK
+    data_received..................: 4.8 MB 112 kB/s
+    data_sent......................: 934 kB 22 kB/s
+
+
+
+
+running (0m43.2s), 000/180 VUs, 180 complete and 0 interrupted iterations
+default ✓ [ 100% ] 180 VUs  30s
+time="2026-08-17T14:27:51+05:30" level=error msg="thresholds on metrics 'dashboard_duration, http_req_duration, http_req_failed, login_duration' have been crossed"

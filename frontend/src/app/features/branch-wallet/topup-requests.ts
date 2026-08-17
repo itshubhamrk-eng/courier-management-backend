@@ -14,6 +14,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { BranchWalletService } from './branch-wallet.service';
 
 const ADMINS = [AppRole.COMPANY_ADMIN];
@@ -33,7 +34,7 @@ const STATUS_OPTIONS: SelectOption[] = [
   selector: 'app-topup-requests',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, DatePipe, UiCard, UiLoader, UiButton, UiSelect],
+  imports: [ReactiveFormsModule, DatePipe, UiCard, UiLoader, UiButton, UiSelect, UiAutocomplete],
   template: `
     <div class="page">
       <header class="page__head">
@@ -46,7 +47,7 @@ const STATUS_OPTIONS: SelectOption[] = [
         <div class="filters">
           <app-select [control]="statusControl" label="Status" [options]="statusOptions" />
           @if (isAdmin()) {
-            <app-select [control]="branchControl" label="Branch" [options]="branchOptions()" placeholder="All branches" />
+            <app-autocomplete [control]="branchControl" label="Branch" [options]="branchOptions()" placeholder="All branches" />
           }
         </div>
       </app-card>
@@ -97,7 +98,7 @@ const STATUS_OPTIONS: SelectOption[] = [
   styles: [`
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; }
     .filters { display:flex; gap:16px; flex-wrap:wrap; }
-    .filters app-select { min-width:200px; }
+    .filters app-select, .filters app-autocomplete { min-width:200px; }
     .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
     .tbl__wrap { overflow-x:auto; border:1px solid var(--surface-border); border-radius:var(--r-field); }
     .tbl { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }

@@ -4,7 +4,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { UiCard } from '@shared/components/ui-card/ui-card';
-import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
 import { MasterDataService } from '@features/masters/master-data.service';
@@ -24,7 +25,7 @@ import { AddressDistanceService } from './address-distance.service';
   selector: 'app-address-distance',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, UiCard, UiSelect, UiButton],
+  imports: [DecimalPipe, ReactiveFormsModule, UiCard, UiAutocomplete, UiButton],
   template: `
     <div class="page">
       <header class="page__head">
@@ -37,8 +38,8 @@ import { AddressDistanceService } from './address-distance.service';
       <app-card title="Resolve a distance">
         <form [formGroup]="form" (ngSubmit)="resolve()" class="resolve">
           <div class="grid">
-            <app-select [control]="c('fromBranchId')" label="From Branch" [options]="branchOptions()" placeholder="Select a branch" />
-            <app-select [control]="c('toBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Select a branch" />
+            <app-autocomplete [control]="c('fromBranchId')" label="From Branch" [options]="branchOptions()" placeholder="Search branch…" />
+            <app-autocomplete [control]="c('toBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Search branch…" />
           </div>
           <div class="resolve__bar">
             <app-button type="submit" icon="social_distance" [loading]="busy()">Resolve</app-button>

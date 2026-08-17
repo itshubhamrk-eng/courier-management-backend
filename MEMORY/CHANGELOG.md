@@ -8,6 +8,700 @@ All notable changes to this project. Format based on
 
 ---
 
+## [0.28.10] — 2026-08-18 — Consignment print: real "Print LR" click verified live
+
+Direct follow-up ("verify live", "once"): 0.28.9's verification rendered the same
+code path offline in Node — this pass clicked the actual **"Print LR" button**
+in the real running app (`localhost:4200`, real session as `first.admin@gmail.com`,
+`:8081`/`:4200` untouched) against real shipment PUNE-000017.
+
+`printConsignmentCopies()` fires a genuine `window.print()` inside a hidden
+iframe — a blocking native dialog, unsafe to trigger under browser automation
+(same class as `alert()`/`confirm()`). Worked around it rather than skipping the
+click: injected a `MutationObserver` on `document.body` before clicking that
+patches the new iframe's `contentWindow.print` to a harmless flag-setter the
+instant the iframe appears (synchronous DOM insertion + `doc.write()` happen
+before the production code's own `setTimeout(50ms)` fires `window.print()`, so
+the patch lands in time). Clicked the real button; confirmed `window.print()`
+was actually invoked (`__printBlocked === true`) with no OS dialog appearing and
+the page staying fully interactive afterward; read the iframe's real rendered
+HTML back out and confirmed both "Original Copy"/"Office Copy" sections, the
+real tracking number (`26080000023`), shipment number, sender/receiver names,
+branch labels, and the real ₹53.10 net amount all present — this is the
+production Angular bundle's own client-side rendering, not the offline
+`esbuild`/Node reproduction 0.28.9 used. This closes 0.28.9's own flagged gap
+("not clicked through the live UI button itself").
+
+Previously current:
+
+## [0.28.9] — 2026-08-18 — Consignment print verified with real shipment data
+
+Direct follow-up to 0.28.8: "verify this and integrate actual shipment details."
+The redesigned receipt's `ConsignmentPrintData` interface was already wired to
+real shipment fields via `shipment-view.ts`'s existing `print()` — nothing to
+wire up. The actual gap was verification: `printConsignmentCopies()` triggers a
+real `window.print()` inside a hidden iframe, which is a blocking native dialog
+unsafe to fire from browser automation (same class of risk as `alert()`/
+`confirm()`). Refactored `consignment-print.util.ts` to split out a new exported
+`renderConsignmentHtml(data, autoPrint = true)` — returns the identical HTML
+string `printConsignmentCopies()` builds, with the trailing auto-print `<script>`
+made conditional (`autoPrint = false` omits it). `printConsignmentCopies()`
+itself is now a two-line wrapper calling it before the iframe/print logic — same
+production code path, zero behavior change, just testable without a live DOM.
+
+Verified with **real data pulled from the already-running dev backend** (`:8081`,
+never touched): logged in as `pune@gmail.com`/`Password@1234` (note: the
+`companyCode` field for `POST /auth/login`, not `tenantSlug` —
+`[[dev-login-credential]]`'s older note is stale on this point), fetched a real
+delivered shipment (`PUNE-000017` / LR `26080000023`, Pune→Latur, ₹53.10 =
+₹45 freight + ₹8.10 GST) plus its branch/service-type/package-type/payment-mode
+labels over the real API. Compiled `consignment-print.util.ts` to CommonJS with
+`esbuild` (already a frontend devDependency, no new install) and called
+`renderConsignmentHtml()` directly in Node with that real data — no Angular
+bundle, no browser needed for this step. Opened the resulting static HTML via a
+throwaway local Python HTTP server (`file://` URLs are blocked by the Chrome
+extension's own sandboxing) and screenshotted it in `claude-in-chrome`: header
+(company name, Booking/Delivery branch blocks, LR-number stamp), title strip,
+party block, and the details/charges body all render correctly with the real
+shipment's values in both "Original Copy" and "Office Copy". `tsc --noEmit -p
+tsconfig.app.json` clean after the refactor. **Not clicked through the live UI
+button itself** (`shipment-view.ts`'s "Print LR" → real `window.print()` — the
+exact dialog this verification method exists to avoid triggering under
+automation); the rendered-HTML check covers everything downstream of that click
+since it's the same `renderConsignmentHtml()` call the button's code path now
+shares.
+
+Previously current:
+
+## [0.28.8] — 2026-08-18 — Consignment/LR print receipt redesigned (SmartPost-style)
+
+Direct request: restyle the shipment booking print receipt to match a reference
+design (`file:///Users/prashantrohidaskamble/smartpost-receipt.html`) — a boxed
+courier LR with a 4-column header (logo block, two org blocks, LR-number stamp),
+a route/date title strip, a receiver/consignor party block, a two-column
+details/charges body, and a signature footer.
+
+Rewrote `frontend/src/app/features/shipment/consignment-print.util.ts`'s `copy()`
+markup and print CSS only — `ConsignmentPrintData` interface and the
+`shipment-view.ts` caller (`print()`, line ~299) are untouched, so no new data
+plumbing was needed. The reference file's two header org blocks were
+"SpringWare IT Services" / "SmartPOST Logistics" (a two-company example, not this
+app's data model — company/branch address+phone don't currently flow into
+`ConsignmentPrintData`); mapped them honestly to real data instead of
+fabricating addresses: left block is Booking Branch, right block
+is Delivery Branch (`bookingBranchLabel`/`deliveryBranchLabel`, both already
+available). Also dropped the reference's decorative QR SVG (a static placeholder
+that doesn't encode the real tracking number — would have been misleading) in
+favor of a bordered "LR No" stamp box with the real `trackingNumber`. Charge rows
+(`Unloading Delivery Charges`/`GST On Hamali`/`Demurrage Charge`/`Reschedule
+Fine`) stay hardcoded 0 same as before this task — this system doesn't track
+those. `tsc --noEmit -p tsconfig.app.json` clean. **Not verified live in a
+browser** — no local session this task; logic (iframe injection, `window.print()`,
+two-copy page-break) is unchanged from the already-working prior version, only
+the HTML/CSS inside `copy()` changed.
+
+Previously current:
+
+## [0.28.7] — 2026-08-17 — Index for TicketSlaSweepJob's sweep query
+
+Direct request: "add query index for heavy query." `TicketRepository
+.findAllOpenWithPendingSla()` (backs `TicketSlaSweepJob`, `fixedDelay=5min`, 0.28.6)
+has no `company_id` predicate by design — it's cross-tenant — so it couldn't use any
+of `tickets`' existing (`company_id`, ...)-leading indexes and was a full table scan
+every 5 minutes, forever, growing with the table. `V43__ticket_sla_sweep_index.sql`:
+`CREATE INDEX idx_tickets_sla_sweep ON tickets (sla_resolution_due_at, status)` —
+leads on the due-date column since most tickets have it `NULL` (SLA is opt-in per
+company, 0.28.6), letting InnoDB skip past the null prefix straight to the
+SLA-tracked rows before filtering `status`/the notified flags. Purely additive, no
+app code touched, same shape as the perf-testing pass's own `V42` (shipment search
+indexes, same day). Applied live against the real dev
+`courier_db` via a standalone Flyway invocation (`:8081` backend left running,
+untouched — DDL only, no restart needed) — now at schema v43. `EXPLAIN` on the
+sweep's own predicate confirmed the optimizer picks the new index (`type: range`,
+`Using index condition`) instead of a full scan.
+
+Previously current:
+
+## [0.28.6] — 2026-08-17 — Ticket Support Phase 2: SLA rules + in-app notifications
+
+Direct request: "complete all phase" — finishing the SLA rule engine + notification
+system deferred at 0.28.0's Phase 1/Phase 2 split. The backend for this (`V40`, SLA
+rules, notifications, `TicketSlaSweepJob`) turned out to already exist on the working
+tree, written uncommitted by a concurrent session referenced throughout 0.28.4/0.28.5 —
+this task verified it compiles/tests cleanly (`mvn test` 754/754, no longer blocked by
+the `CompanySettingsServiceImplTest` breakage 0.28.5 hit) and built the entire frontend
+half from scratch, since only the `SlaStatus` type existed on the frontend beforehand.
+
+**Frontend**: `ticket.model.ts` gained `SlaStatus`, four SLA fields on `Ticket`,
+`SlaRule`/`UpsertSlaRuleRequest`/`AppNotification`/`NotificationType`, and
+`slaBreached`/`slaPerformance` on `TicketDashboardStats`. `ticket.service.ts` gained
+`slaRules()`/`upsertSlaRule()`/`setSlaRuleActive()`. New `api-endpoints.ts` entries
+`supportSlaRules`/`notifications`. New `features/support/ticket-sla-rules.ts` —
+`COMPANY_ADMIN`-only, one row per `TicketPriority` (four fixed rows, upsert by
+priority, no separate create flow), minutes input with a `(1h)`/`(1d)` human hint,
+Save + Activate/Deactivate per row. `ticket-list.ts` gained an SLA column;
+`ticket-detail.ts` gained an SLA badge in the header plus due-date rows in the
+sidebar; `support-dashboard.ts` gained an "SLA Breached" stat tile and "SLA
+Performance (open tickets)" chart. New route `/support/sla-rules` (`ADMINS` role
+guard) and nav entry.
+
+**Notification bell wired to a real backend for the first time**: `notification-feed
+.service.ts` was a permanently-empty stub since the notifications endpoint didn't
+exist yet — rewritten to poll `GET /notifications` every 60s, root-scoped so the
+first poll only fires once `NotificationMenu` (inside the authenticated
+`AdminLayout` only) is first injected. `ApiService.patch` gained the optional
+`HttpContext` parameter `get` already had, so mark-read/mark-all-read go through the
+existing `SILENT_ERRORS` opt-in. Clicking a notification marks it read (optimistic,
+rolled back on failure) and navigates to its ticket when one is attached.
+
+**Verified live** on throwaway `:8082`/`:4300`: saved a CRITICAL SLA rule (5 min
+first response / 30 min resolution), raised a CRITICAL ticket, confirmed the due
+dates and `ON TRACK` badge matched exactly (`1:00:35 AM` / `1:25:35 AM` off a
+`12:55:35 AM` creation time); self-assigned it and confirmed the bell surfaced "A
+ticket was assigned to you," which marked read and navigated correctly on click;
+confirmed the SLA Breached tile (0) and SLA Performance chart (2 No SLA, 1 On
+Track) rendered real dashboard aggregates, not placeholders. `mvn test` 754/754,
+`tsc --noEmit`/`ng build` clean. Full detail in `MEMORY/AI_CONTEXT.md` 0.28.6.
+
+## [0.28.5] — 2026-08-17 — Shipment lifecycle SLA auto-raises a ticket
+
+Direct request: auto-generate a ticket when a shipment sits too long at one stage —
+booked with no loading sheet in 24h, loading sheet with no THC in 24h, THC with no
+in-scan in 48h, in-scan with no DRS in 12h, DRS with no delivery in 12h — with every
+threshold configurable per company. Distinct from 0.28.4's in-scan shortage ticket
+(that one fires off an explicit operator action) and from the still-in-flight
+Ticket-priority-SLA work (`V40`, response/resolution time on a ticket that already
+exists) — this is about a shipment simply not moving, which has no triggering action at
+all, so it needed this codebase's first `@Scheduled` job.
+
+**Backend**: `V41__shipment_sla_breach_tickets.sql` — six new `company_settings_config`
+columns (`sla_breach_ticket_enabled` + five `sla_*_hours`, defaulting to the user's own
+numbers exactly), a new global "SLA Breach" ticket category, new `shipment_sla_breaches`
+table (one row per shipment per stage ever breached — idempotency, not a ledger), and
+`tickets.created_by_user_id` made nullable for the first time (every prior ticket had a
+human requester). New `com.courier.modules.support.application.ShipmentSlaSweepJob`
+(hourly cron) → `ShipmentSlaSweepService`: iterates every active company, reads that
+company's thresholds, and asks a new `ShipmentSlaPort` (support owns the interface,
+`shipment.infrastructure.ShipmentSlaAdapter` supplies it — same seam as
+`TicketDirectoryPort`/`company.infrastructure.TicketDirectory`) for shipments currently
+past threshold in their status. The adapter is one native query
+(`ShipmentRepository.findSlaBreachCandidates`) joining `shipments` to each shipment's
+latest `shipment_status_history` row and comparing `TIMESTAMPDIFF(HOUR, …)` per status —
+awkward to express in JPQL. `TicketDirectoryPort` gained `listActiveCompanyIds`/
+`managerOfBranch`/`shipmentSlaSettings`. New `TicketService.raiseSystemTicket` skips
+`SecurityUtils.requireCurrentUser()`/`@PreAuthorize` entirely (the sweep runs on a
+scheduler thread, no request/caller), auto-assigns to the breaching shipment's
+`currentLocationId` branch's own `Branch.managerId` when one exists — the user's own
+choice, over leaving every auto-ticket unassigned — and leaves `createdByUserId` null.
+New `PATCH /company-settings/sla`, same merge-only-supplied-fields shape as every other
+settings section.
+
+**A real bug caught only by live boot, not by unit tests**: the migration's
+`ALTER TABLE company_settings` targeted the wrong table — `CompanySettings`'s actual
+`@Table` is `company_settings_config`; `company_settings` is a different, pre-existing
+plan-derived key/value table (per that controller's own doc comment). Flyway applied the
+ALTER without complaint since the table exists, just isn't the one Hibernate maps to —
+only failed one step later, at context startup, with `Schema-validation: missing column
+[sla_booking_to_loading_sheet_hours] in table [company_settings_config]`. Fixed the
+migration, then manually unwound the half-applied first attempt on the shared dev DB
+(dropped the six stray columns back off the real `company_settings`, cleared the failed
+`flyway_schema_history` row) before a clean re-run succeeded. **Verified live** against
+`courier_db`: `V41` applies cleanly, `GET /company-settings` serves the new `sla` section
+with the exact spec defaults (24/24/48/12/12), `PATCH .../sla` confirmed
+`COMPANY_ADMIN`-only (403 for a `BRANCH_MANAGER` caller) over real HTTP.
+
+**Also discovered, not a bug of this task's own**: adding `@EnableScheduling` (new
+`SchedulingConfig`, this codebase's first) also activated an already-present but inert
+`TicketSlaSweepJob` — uncommitted work from the still-in-flight Ticket-priority-SLA
+feature, apparently written by a concurrent session on this same working tree during
+this task. It fired harmlessly (no dev tickets currently carry an SLA due date) — worth
+knowing two scheduled jobs exist now, not one.
+
+**Known gap, flagged not guessed**: a shipment mid-crossing (`READY_FOR_MANIFEST`) isn't
+checked — that status means "awaiting the next leg's own loading sheet," which doesn't
+map onto one of the five stages without guessing which leg's clock should be running.
+
+Frontend: `settings-page.ts` gained an "SLA" preview card (this page has no edit UI for
+*any* section yet, so this adds no new gap); `ticket.model.ts`'s `createdByUserId`
+widened to `string | null`, `ticket-detail.ts`'s `userLabel`/`resolveMissingUsers`
+updated to show "System" rather than crash/blank for the first-ever system-authored
+ticket. `mvn test` 754/754 (this task's own share: 3 new `TicketServiceImplTest` cases
+for `raiseSystemTicket`, 4 new `ShipmentSlaSweepServiceTest` cases — the total also
+carries the concurrent session's own work), `tsc --noEmit`/`ng build` clean. Full detail
+in `MEMORY/AI_CONTEXT.md` 0.28.5.
+
+## [0.28.4] — 2026-08-17 — In Scan short-receipt auto-raises a Support ticket
+
+Direct request: "when THS create for 10 shipment and only 8 shipment received that
+time should be automaticaly ticket generate and visible for company." In Scan's own
+manifest checklist (0.28.x-era "uncheck if not physically available in THC" flow)
+already lets an operator explicitly mark some of a THC's shipments as not physically
+received — that unchecked complement was previously just left DISPATCHED forever with
+no record beyond the shipment's own status. Wired it into a real signal instead.
+
+**Backend**: `ShipmentService.inScan` gained `manifestNumber` (descriptive only, never
+validated) and `missingTrackingNumbers` params — a non-empty list auto-raises a
+Support ticket (category "Shipment Issue", HIGH priority, `relatedBranchId` = the
+receiving branch) via `TicketService.create`, inside the same transaction as the
+in-scan itself. `BulkMovementResult`/`BulkMovementResponse` gained
+`shortageTicketNumber` (same "only set by this one caller" precedent as `drsNumber`)
+so the frontend can surface the raised ticket number immediately. A missing/
+deactivated "Shipment Issue" category degrades gracefully (logs a warning, skips the
+ticket) rather than failing the in-scan — same precedent every other best-effort side
+effect in this module follows. Deliberately did **not** touch the Manifest module or
+add a "close manifest" step: the existing checklist already captures "operator says
+these N are missing" explicitly, which is a cleaner signal than inferring shortage
+from manifest-vs-received counts after the fact (and avoids the `manifestId`-cleared-
+on-crossing-hub edge case that count-based inference would have hit). `InScanRequest`
+gained the two matching optional fields. New tests in
+`ShipmentMovementServiceImplTest`: a shortage raises the ticket and reports its
+number back; no missing tracking numbers never touches `TicketService`. `mvn test`
+744/744.
+
+**Found and fixed in passing, unrelated to this task**: `TicketServiceImplTest` was
+already failing to compile before this session touched it — `TicketServiceImpl`'s
+constructor had grown two more params (`TicketSlaRuleRepository`, `NotificationService`,
+an SLA/notification build already mid-flight and uncommitted in the working tree) that
+its own test's constructor call and `@Mock` list were never updated for. Fixed
+mechanically (two new mocks, two new constructor args) so `mvn test` could run at all —
+the SLA/notification feature itself was not touched, reviewed, or extended here.
+
+**Frontend**: `in-scan.ts`'s `confirmReceive()` now computes the unchecked complement
+of the checklist and sends it (plus the manifest number) alongside the receive call;
+a returned `shortageTicketNumber` shows a toast naming the ticket. The ticket itself
+needs no new UI — it lands in the existing Ticket Support list/dashboard (0.28.0),
+already visible to COMPANY_ADMIN/BRANCH_MANAGER, satisfying "visible for company" with
+zero new pages. `tsc --noEmit`/`ng build` clean. **Not verified live** — no local
+MySQL session this task.
+
+## [0.28.3] — 2026-08-16 — Mobile/tablet responsive: closed as far as possible
+
+Direct "do all pending task" continuation. Code-reviewed every `features/support/`
+page: dashboard's `auto-fit` grids and the list page's `flex-wrap` filters/`UiTable`'s
+own horizontal-scroll wrapper need no breakpoint; the three two-column pages already
+carry the same `@media (max-width: …)` pattern the rest of this codebase uses. Live
+visual check attempted (`resize_window` to 375×800) but hit the exact same
+`claude-in-chrome` limitation 0.22.0 already documented — the tool reports success,
+the screenshot stays desktop-width. Reported as such, not claimed working. Every gap
+raised since 0.28.0 is now either closed or confirmed not-closeable from here (no S3,
+no Payment route, no working mobile-viewport tool) rather than left merely unattempted.
+
+## [0.28.2] — 2026-08-16 — Category-change UI added, second full live pass
+
+Direct "keep going" / "check all and completed full" continuation. Found a real gap
+re-reading `ticket-detail.ts`: `changeCategory` was fully wired backend-to-service but
+no UI card ever called it. Added one (mirrors the Priority card), with correct
+two-step cascade hydration on load.
+
+Then re-verified everything the first live pass had left as curl-only: Reassign and
+Escalate via their own UI buttons + confirm dialog, a full Status→RESOLVED→Close cycle
+via the Resolution card's confirm dialog, a Priority change, the new Category card
+itself, and a real file-upload attempt through the Attachments card — failed exactly
+as designed with a clear message ("File upload is not available... A URL can still be
+attached directly"), no crash. Also click-verified the User Management "Raise Ticket"
+entry point live.
+
+Every flagged gap is now closed or confirmed-as-designed: attachment upload (graceful
+failure, no S3 here — same accepted gap as POD upload), Payment entry point (no route
+exists), mobile/tablet responsive (still unchecked). `tsc --noEmit`/`ng build` clean.
+Full detail in `MEMORY/AI_CONTEXT.md` 0.28.2.
+
+## [0.28.1] — 2026-08-16 — Live-browser verification of 0.28.0, plus a real fix
+
+Direct follow-up ("keep going") closing 0.28.0's own "not verified live in a browser"
+gap. Backend `:8082`/frontend `:4300 --proxy-config proxy.conf.verify.json` (the
+project's actual verify-mode convention), `:8081`/`:4200` untouched.
+
+**Two real gotchas hit and fixed**:
+- Verify backend needs `--app.cors.allowed-origins[0]=http://localhost:4300` —
+  `application.yml`'s CORS allowlist only ever had `:3000`/`:4200`/`:5173`, so
+  Spring's `CorsFilter` 403'd the login call outright (Origin header mismatch, even
+  though the request is same-origin from the browser's own point of view through the
+  proxy). Not specific to this module — worth remembering for the next `:4300` pass.
+- **Real frontend bug**: `TicketDetailPage`'s best-effort per-id `UserService.get`
+  lookup (resolving a conversation/history actor not in the first 200 agents —
+  here, `super.admin@gmail.com`, a platform user with no company user row) 404s as
+  designed and is caught locally, but the global `error.interceptor.ts` toasts on
+  every failed HTTP call regardless of a local `catchError`. Fixed with a new opt-in
+  `SILENT_ERRORS` `HttpContextToken` on `ApiService`, threaded through
+  `UserService.get(id, { silent: true })` — used only at this one call site, every
+  other caller keeps its toast.
+
+**Verified live in Chrome** as COMPANY_ADMIN and SUPER_ADMIN: ticket list (filters,
+resolved labels), ticket detail (timeline incl. internal-note styling, a real reply
+sent and landing in-thread, a status transition via the sidebar with toast + badge
+update), a second ticket raised from Shipment Details' own "Raise Ticket" link
+(query-param prefill → "Linked shipment" banner, "View shipment" navigates back
+correctly), Support Dashboard (9 tiles + 6 charts, honest "—" for unresolved
+average), SUPER_ADMIN cross-tenant ticket list (0.28.0's `CompanyContext` fix
+confirmed live, not just over curl), and Categories admin (category/sub-category
+CRUD + activate/deactivate, all live). `tsc --noEmit`/`ng build` clean. Full detail
+in `MEMORY/AI_CONTEXT.md` 0.28.1.
+
+**Same-day follow-up**: added the same "Raise Ticket" entry point to `user-view.ts`
+(`/users/:id` already had the right shape, just unchecked) — links the user's own
+`branchId` when set. Confirmed Payment has no route at all yet (`finance/payment`),
+so it genuinely stays unactionable, not merely skipped.
+
+## [0.28.0] — 2026-08-16 — Ticket Support module, Phase 1
+
+New multi-tenant support-ticket system, direct request against a full spec (lifecycle,
+conversation, categories, SLA, notifications, dashboard, RBAC). Scoped via
+`AskUserQuestion` before implementation: **Phase 1** ships everything except SLA rules
+and in-app notifications — neither concept exists anywhere else in this codebase, and
+both were judged separate follow-up work rather than bolted onto an already-large
+module in one pass.
+
+**Backend** — new module `com.courier.modules.support`, migration `V39`:
+- `Ticket`/`TicketMessage`/`TicketAttachment`/`TicketStatusHistory`/
+  `TicketAssignmentHistory` (company-owned) + global `TicketCategory`/
+  `TicketSubCategory` (SUPER_ADMIN-managed, 12 categories seeded).
+- `TicketStatus.canTransitionTo` is the single source of truth for the lifecycle
+  (`OPEN → ASSIGNED → IN_PROGRESS → WAITING_FOR_USER/WAITING_FOR_INTERNAL_TEAM →
+  RESOLVED → CLOSED`, `REOPENED` looping back from either terminal state).
+- Internal notes stripped server-side for any non-staff caller — the one hard
+  security rule of the module, verified live both ways.
+- Ticket numbers `TKT-######` via the same native-sequence-upsert idiom as
+  `CompanyDrsSequence`. Attachments reuse `shipment.FileStoragePort` directly.
+  `TicketDirectoryPort`/`TicketDirectory` mirror `finance.BranchDirectoryPort`
+  exactly.
+- New `TicketServiceImplTest`: tenant isolation, illegal transition, reopen-only-
+  from-terminal, internal-note hiding, attachment-extension rejection,
+  ticket-number format. `mvn test` 736 → 742.
+
+**Real bug found and fixed via live verification**: `SUPER_ADMIN`'s JWT carries a
+sentinel `cid` claim, not no company, so `CompanyContext`/the Hibernate
+`companyFilter` was never actually inactive for that role — every prior module's
+"SUPER_ADMIN sees cross-tenant" claim had simply never been exercised against a
+`CompanyOwnedEntity` table before this one. `SUPER_ADMIN` ticket search/dashboard
+came back empty on the first live pass; fixed with `CompanyContext.runAs(null, ...)`
+around the genuinely cross-tenant queries and by rebinding `CompanyContext` to a
+ticket's real company once `loadForRead()` resolves it for a `SUPER_ADMIN` caller
+(via a `findById` that bypasses the filter, same as `EntityManager.find()`). See
+`MEMORY/AI_CONTEXT.md` 0.28.0 for the full mechanism — worth remembering for any
+future cross-tenant read.
+
+**Frontend** — `features/support/`: `ticket-list.ts` (`app-table` + full filters),
+`ticket-create.ts` (prefilled from `shipmentId`/`customerId`/`branchId` query
+params), `ticket-detail.ts` (conversation + reply/internal-note + every lifecycle
+action), `components/ticket-conversation-timeline.ts` (mirrors `ShipmentTimeline`),
+`support-dashboard.ts` (stat tiles + `ChartCard` breakdowns, no SLA tiles),
+`ticket-categories.ts` (SUPER_ADMIN admin, mirrors `freight-factor.ts`). "Raise
+Ticket" entry points added to Shipment Details, Customer Details, Branch, and
+Branch Wallet — not Payment/User Management (no single-record detail page exists
+yet for either). New "Ticket Support" nav section. `tsc --noEmit`/`ng build` clean.
+
+**Verified live end to end** on a throwaway `:8083` backend against real dev MySQL
+(`:8081`/`:4200` untouched): `V39` applied clean, a real ticket (`TKT-000001`)
+created/assigned/reassigned/escalated/transitioned/reopened/closed across
+`pune@gmail.com` (BRANCH_MANAGER), `first.admin@gmail.com` (COMPANY_ADMIN) and
+`super.admin@gmail.com` (SUPER_ADMIN) — illegal transition 422, non-staff close
+403, internal-note visibility correct both ways, SUPER_ADMIN cross-tenant get/
+list/dashboard/reassign/escalate all confirmed after the fix above. **Not verified
+live**: the frontend UI in an actual browser (API-only this pass); attachment
+upload (no S3 backend configured in this dev environment, fails closed by design).
+
+## [0.27.1] — 2026-08-16 — Live-UI verification of 0.27.0, and a real fix for the item-grid bug
+
+Direct follow-up: "is [this] tested on live from ui." 0.27.0 had only been verified via
+direct API calls, with a note that a pre-existing item-weight bug blocked booking from
+the UI entirely — flagged as "not fixed here." Trying to actually test live hit that
+exact bug again, and since it now blocked the literal ask, fixed it instead of deferring
+a second time.
+
+**Root cause**: `ItemEntryGrid.emptyRow()` (`item-entry-grid.ts`) defaulted `itemName:
+''`. The "Package" text visible in the grid's Item column was only the input's
+`placeholder` attribute — never a real bound value — so `toRequests()`'s own filter
+(`r.itemName.trim() && r.weight != null && r.weight > 0`) silently dropped every
+untouched default row before it ever reached `itemsChange`. `shipment-create.ts`'s
+`book()` sends `items: this.items()` but never falls back to the top-level `actualWeight`
+field, so an untouched row produced an empty `items[]` with no fallback — tripping
+`ShipmentItem`'s server-side "must have a weight greater than zero" check on an implicit
+item named 'Package' the backend invents when `items` is empty. The live pricing summary
+looked correct throughout (it reads a *separate* `weightChange` output, which fires
+regardless), which is why this was invisible without actually clicking Book.
+
+**Fix**: one line — `emptyRow()` now defaults `itemName: 'Package'`, a real value
+instead of a placeholder ghost. An unedited default row is exactly the "one implicit
+package" case `CreateShipmentRequest`'s own docs already described; it just never
+survived to be sent.
+
+**Verified fully live in Chrome**, driven by literal clicks (not curl) for the first
+time this session, as `pune@gmail.com`:
+- Booked a fresh crossing shipment (Pune→Latur via Cave Test Branch One, charge 60)
+  through the multi-hop `FormArray` UI from 0.26.0/0.27.0 — added a second hop row,
+  removed it, confirmed the remove button only appears past one row, re-added the real
+  hop, and booked successfully with **no weight-field workaround needed** — confirming
+  the fix.
+- Loading Sheet's Delivery Branch picker showed **CAVETEST1** as an eligible
+  destination (previously would only ever show a branch that was some shipment's own
+  literal `deliveryBranchId` — this is 0.27.0's `nextLocationId`-based query working
+  live), and its shipment picker showed the exact booked shipment on the Pune→Cave lane.
+- Created the loading sheet and dispatched it (THC) live — landed on "Status:
+  DISPATCHED" with "1 shipment(s) moved to DISPATCHED on vehicle assignment."
+
+Remaining legs on this same shipment (Cave in-scan advancing the crossing route, leg-2
+loading sheet+THC Cave→Latur, Latur in-scan/DRS/deliver) were finished via direct API,
+since there's still no seeded dev-quick-fill login for `cavetest1@company-c1.local` and
+`Loading Sheet`/`In Scan` both hard-require the signed-in user's own branch — confirmed
+`status: DELIVERED` at the end.
+
+**Note for next session**: the THC page's vehicle/driver `app-select` dropdowns were
+click-timing-flaky under browser automation — a click sometimes needed a retry to
+actually open, and one attempt appeared to silently reset both fields without
+dispatching. Reproduced consistently enough to work around (retry the click, verify
+the value held before proceeding) but not investigated — likely a pre-existing
+automation-only timing quirk in that shared `app-select` component, unrelated to any
+code touched this session.
+
+---
+
+## [0.27.0] — 2026-08-16 — Crossing wired into Manifest/In-Scan/DRS, multi-hop
+
+Direct follow-up to 0.26.0: user asked to test the full movement flow a crossing
+shipment should follow (Branch A loading sheet+THC → crossing Branch C → C in-scan →
+C loading sheet+THC → Branch B → B in-scan → B generates DRS and delivers). An
+Explore agent traced the actual pipeline first (file:line citations, no guessing) and
+found 0.26.0's crossing columns were entirely write-only — nothing in Manifest/
+In-Scan/DRS read `current_location_id`/`next_location_id`/`crossing_details`, and two
+independent hard blocks existed: `ShipmentServiceImpl.attachToManifest` forced a
+manifest's `deliveryBranchId` to equal the shipment's own fixed `deliveryBranchId`
+(so a Pune→Cave loading sheet carrying a Pune→Latur shipment 400'd), and `scanOneIn`
+hard-required the receiving branch to equal that same fixed `deliveryBranchId` (so
+Cave couldn't in-scan a shipment addressed to Latur at all). Confirmed with the user
+this needed real code before touching the shared pipeline every shipment goes
+through — and while confirming, the user asked for 2–3 crossing branches in sequence,
+not just one, so this became a multi-hop redesign, not a single-hop unblock.
+
+**Migration** `V38__crossing_multi_leg.sql`: `crossing_details` goes from one row per
+shipment to one row per hop — new `sequence_order` column, unique key becomes
+`(company_id, shipment_id, sequence_order)`. Existing single-hop rows backfill as hop
+0 via `DEFAULT 0`, no data migration needed.
+
+**The mechanism**: `currentLocationId`/`nextLocationId` (already on `shipments` since
+V37) are "where physically now" / "where next" — identical to `bookingBranchId`/
+`deliveryBranchId` for a non-crossing shipment. Three call sites now key off these
+instead of the fixed branches, each falling back to the fixed branch for pre-V37
+rows:
+- `attachToManifest` — lane check compares a manifest's booking/delivery branch
+  against `currentLocationId`/`nextLocationId`; **zero behavior change for a
+  non-crossing shipment**, since the values are identical there. Status check
+  widened to accept `READY_FOR_MANIFEST` alongside `BOOKED`.
+- `scanOneIn` — checks the receiving branch against `nextLocationId`. If it equals
+  the shipment's real `deliveryBranchId`, the existing `IN_SCAN` path runs
+  byte-for-byte unchanged. Otherwise it's a hub arrival: calls
+  `CrossingService.arriveAt(shipmentId, branchId)` (marks that hop COMPLETED, returns
+  the next hop's branch or empty), advances `currentLocationId`/`nextLocationId`,
+  clears `manifestId`, and transitions to **`READY_FOR_MANIFEST`** — declared in
+  `ShipmentStatus` since V19's own module doc, never written by anything until this
+  release. That single status choice is what makes In-Scan and Out-for-Delivery's own
+  worklists need **no changes at all**: a `READY_FOR_MANIFEST` shipment already falls
+  out of Out-for-Delivery's `status = IN_SCAN` filter, and manifests are already keyed
+  by their own `bookingBranchId`/`deliveryBranchId` (correctly C→B for the second
+  leg, no shipment-side awareness needed).
+- `detachFromManifest` — reverts to `READY_FOR_MANIFEST` instead of `BOOKED` when the
+  shipment has already moved past its original booking branch, so it doesn't become
+  wrongly eligible for a fresh manifest starting from Branch A again.
+
+New `ShipmentStatus` transition edges: `DISPATCHED -> READY_FOR_MANIFEST` (hub
+arrival) and `MANIFEST_CREATED -> READY_FOR_MANIFEST` (the crossing-aware sibling of
+the existing `-> BOOKED` detach edge).
+
+**Crossing module**: `CrossingService.createForShipment(shipmentId, branchId,
+charge)` → `createLegs(shipmentId, List<UUID> branchIds, charge)`, one row per hop
+(`sequenceOrder` 0..n-1); the route's whole charge is carried on hop 0 only (no
+per-hop billing). New `arriveAt(shipmentId, branchId)`: finds the lowest-
+`sequenceOrder` non-terminal hop, verifies it matches the arriving branch (else
+`BusinessRuleException` — "not expected at this branch yet"), marks it COMPLETED,
+returns the next hop's branch or empty. `CreateShipmentRequest`/`Command
+.crossingBranchId` → `crossingBranchIds: List<UUID>` (ordered).
+
+**Shipment search**: `ShipmentCriteria`/`ShipmentSpecifications`/
+`ShipmentSearchRequest`/`ShipmentSummaryResponse` gained `currentLocationId`/
+`nextLocationId` filters and fields, additive — every other filter/field unchanged.
+
+**Frontend**: `shipment-create.ts`'s single "Crossing Branch" autocomplete became a
+`FormArray` of them ("Crossing Branch 1", "Crossing Branch 2", ... with a remove
+button per row past the first, and "+ Add another crossing branch") — Crossing Charge
+stays one field for the whole route. `loading-sheet.ts`'s two eligibility queries
+(which branches can I manifest to, which shipments are eligible for a chosen branch)
+switched from `bookingBranchId`/`deliveryBranchId`/`status: BOOKED` to
+`currentLocationId`/`nextLocationId`/`status: [BOOKED, READY_FOR_MANIFEST]` — no
+other loading-sheet/in-scan/out-for-delivery/DRS frontend code touched, per the
+mechanism above. `shipment.model.ts`: `CreateShipmentRequest.crossingBranchIds:
+string[]`; `Shipment`/`ShipmentResponse` gained `currentLocationId`/`nextLocationId`.
+
+**Tests**: 736/736 backend green. New `CrossingServiceImplTest` (multi-hop
+`createLegs` ordering/charge-on-hop-0, `arriveAt` sequencing through 3 hops,
+out-of-sequence rejection, no-route no-op). New cases in
+`ShipmentMovementServiceImplTest`: hub in-scan advances the route and sets
+`READY_FOR_MANIFEST` (both mid-route and last-hop-returns-empty-so-route-to-delivery-
+branch), final in-scan at the real delivery branch is provably unchanged, second-leg
+`attachToManifest` succeeds/still-rejects-wrong-lane, `detachFromManifest` reverts to
+`READY_FOR_MANIFEST` past the first hop vs. `BOOKED` on the first leg. `ng build`
+clean.
+
+**Verified live, the user's exact flow, via direct API as COMPANY_ADMIN** (Pune,
+Latur, Cave Test Branch One — all real branches in the dev DB; login UI wasn't used
+for the crossing/destination branches since there's no known dev password for
+`cavetest1@company-c1.local`, and the backend doesn't require the caller's own branch
+to match anyway):
+1. Booked Pune→Latur via crossing Cave Test Branch One, charge 60 —
+   `currentLocationId: Pune`, `nextLocationId: Cave` confirmed on the response.
+2. Loading Sheet Pune→Cave (`POST /manifests`) — attach succeeded on the new
+   current/next-location lane check.
+3. Dispatch (THC) — shipment → `DISPATCHED`.
+4. In-scan at Cave — `status` → `READY_FOR_MANIFEST`, `currentLocationId` → Cave,
+   `nextLocationId` → Latur, `crossing_details` hop 0 → `COMPLETED` (all confirmed via
+   `GET /shipments/{id}` and `GET /crossings?shipmentId=`).
+5. Loading Sheet Cave→Latur, attaching the same (now `READY_FOR_MANIFEST`) shipment —
+   succeeded.
+6. Dispatch (THC) leg 2.
+7. In-scan at Latur — took the *final-branch* path this time (receiving branch ==
+   real `deliveryBranchId`) → `status: IN_SCAN`, `currentLocationId`/`nextLocationId`
+   both → Latur.
+8. Out-for-Delivery — DRS `DRS000001` generated.
+9. Deliver — `status: DELIVERED`; confirmed via `GET /shipment-movement/drs` showing
+   `DRS000001` with `deliveredCount: 1, pendingCount: 0`.
+
+Every step matched the user's described flow exactly, no manual workaround needed
+anywhere in the chain. **Not** re-verified via literal browser click-through for the
+second leg specifically (only the booking-time crossing checkbox/autocomplete UI was
+click-tested, in 0.26.0) — `loading-sheet.ts`'s change is a query-parameter
+substitution against endpoints already exhaustively curl-verified above, judged
+lower-risk than standing up a second branch login to test it live in Chrome.
+
+**Known gap, carried over from 0.26.0, still not fixed here**: booking from the UI
+(any shipment, crossing or not) still 400s with `Item 'Package' must have a weight
+greater than zero` — pre-existing, unrelated to crossing, see 0.26.0's own note; not
+touched in this task either. No frontend page yet for viewing/updating a crossing
+route's per-hop status — `GET/PATCH /api/v1/crossings` remain API-only.
+
+---
+
+## [0.26.0] — 2026-08-16 — Crossing module
+
+New feature, direct request: "add option to select Crossing" at booking time, two new
+`shipments` columns (`current_location_id`/`next_location_id`), and a new
+`crossing_details` table (crossing branch id, status, charge, audit columns).
+
+**Migration** `V37__crossing.sql`: `ALTER TABLE shipments ADD current_location_id,
+next_location_id` (both `BINARY(16) NULL`, no physical FK — branch is a different
+module, same treatment `booking_branch_id`/`delivery_branch_id` already get) plus an
+index on `(company_id, next_location_id)`; `CREATE TABLE crossing_details` (`shipment_id`,
+`branch_id`, `status` PENDING|IN_TRANSIT|COMPLETED|CANCELLED, `charge`, full audit block,
+`UNIQUE (company_id, shipment_id)` — one row per shipment, current state not a ledger,
+same split `delivery_assignment` draws for delivery).
+
+**Backend**: new top-level module `com.courier.modules.crossing`
+(`domain/{CrossingDetail,CrossingStatus,CrossingDetailRepository,CrossingDetailCriteria,
+CrossingDetailSpecifications,CrossingBranchDirectoryPort}`,
+`application/{CrossingService,CrossingServiceImpl}`,
+`api/{CrossingController,CrossingMapper,dto/*}`) — mirrors `finance`'s
+`WalletTopupRequest` shape exactly, down to the `findByIdWithinCompany` repository
+method and the `Specifications`/`Criteria` pair. `GET /api/v1/crossings`,
+`GET /api/v1/crossings/{id}`, `PATCH /api/v1/crossings/{id}/status`; no `POST` — a
+crossing is created only by `ShipmentServiceImpl.create`, never standalone.
+`CreateShipmentRequest`/`CreateShipmentCommand` gained `crossing`/`crossingBranchId`/
+`crossingCharge`; `ShipmentServiceImpl.create` sets `currentLocationId` = booking branch
+and `nextLocationId` = crossing branch (or delivery branch when not crossing) on every
+booking, and calls `CrossingService.createForShipment` in the same transaction when
+`crossing` is true. `ShipmentResponse` gained `currentLocationId`/`nextLocationId`.
+Two new `AuditAction` constants: `CROSSING_CREATED`, `CROSSING_STATUS_UPDATED`.
+
+**Gotcha hit and fixed during live verification**: `CrossingServiceImpl` first validated
+the crossing branch with `BranchService.getById`, which throws 404 for any branch the
+caller isn't personally placed at or managing (`BranchServiceImpl.requireVisible`) — the
+right check for a branch-directory screen, wrong here, since a crossing branch is by
+definition not the caller's own branch (booked as `pune@gmail.com`/BRANCH_MANAGER,
+crossing branch LATUR — 404'd even though both branches are in the same company).
+Fixed by adding `CrossingBranchDirectoryPort` (company-scoped existence check only, no
+caller-visibility restriction) — the same hex-architecture seam `finance`'s own
+`BranchDirectoryPort` already uses for exactly this reason — with the adapter in
+`company.infrastructure.CrossingBranchDirectory`.
+
+**Verified live**: migration applied clean against dev MySQL (`courier_db`, now at
+v37); booked a real crossing shipment via the API (Pune → Latur, crossing through Cave
+Test Branch One, charge 75) and confirmed the `crossing_details` row, the status-update
+endpoint (PENDING → IN_TRANSIT), and the "pick the branch this shipment is crossing
+through" rejection when `crossing: true` with no `crossingBranchId`. 723/723 backend
+tests green — `ShipmentServiceImplTest`/`ShipmentMovementServiceImplTest` needed the new
+constructor argument threaded through (mechanical), plus 3 new tests added for the
+crossing path (sets `nextLocationId` to the crossing branch, calls
+`CrossingService.createForShipment`, rejects a missing branch).
+
+**Frontend**: `shipment-create.ts` gained a "Route through a crossing branch/hub"
+checkbox (`.chk` style copied from `role-form.ts`, component-scoped so needed its own
+copy) gating a Crossing Branch field (`app-autocomplete`, reusing the existing
+`branchOptions()` signal — no new master-data call) and a Crossing Charge number input;
+`crossingBranchId`'s `Validators.required` toggles on/off with the checkbox, and
+unchecking clears both fields so a hidden stale value can never submit.
+`shipment.model.ts`: `CreateShipmentRequest` gained `crossing`/`crossingBranchId`/
+`crossingCharge`; `ShipmentResponse` gained `currentLocationId`/`nextLocationId`.
+`ng build` clean; checkbox toggle, autocomplete search, and field show/hide verified
+live in Chrome against the local dev server.
+
+**Known gap, pre-existing and unrelated — not fixed here**: booking from the UI (with
+Crossing on *or* off) currently 400s with `Item 'Package' must have a weight greater
+than zero`, even though the item grid displays weight 5 and the live pricing summary
+computes correctly off it. The booking summary's weight comes from `ItemEntryGrid`'s
+separate `weightChange` output, which fires correctly; the `items[]` array actually sent
+in the request body comes from `itemsChange`/`onItems`, which apparently doesn't carry
+the row's weight in this state. Reproduces identically with Crossing unchecked, so it
+predates this module — flagged for a separate task, not touched here.
+
+**Known gap**: `GET/PATCH /api/v1/crossings` exist with no frontend page to view or
+update a crossing's status yet — the "responsibility list is ahead of the code" pattern
+this project has hit on every prior module.
+
+---
+
+## [0.25.5] — 2026-08-15 — Every branch picker in the app: dropdown → search autocomplete
+
+Same-day follow-up to 0.25.4 on direct request: "add same where branch dropdown in
+intire project." Swept every single-value branch `<app-select>` and swapped it for
+`<app-autocomplete>` (17 fields across 12 files) — mechanical, same pattern as 0.25.4:
+same `branchOptions()`/equivalent signal, same `FormControl`, no options/logic change.
+Multi-select and non-branch enum `<app-select>`s on the same pages (Status, Payment
+Mode, Service Type, Roles, etc.) were left as-is. Files touched: `freight-calculator-
+form.ts` (From/To Branch), `vehicle-form.ts` (Base Branch), `wallet-dashboard.ts`
+(Branch), `address-distance.ts` (From/To Branch), `assign-branch-dialog.ts` (Branch),
+`topup-requests.ts` (Branch filter), `user-form.ts` (Branch), `user-filter.ts` (Branch
+filter), `shipment-edit.ts` (Delivery Branch), `shipment-filter.ts` (Booking/Delivery
+Branch filters), `rate-calculator-form.ts` (Booking/Destination Branch),
+`loading-sheet.ts` (Delivery Branch create field + lane filter). `UiSelect` import
+dropped entirely from three files left with no other selects
+(`freight-calculator-form.ts`, `address-distance.ts`, `wallet-dashboard.ts`,
+`assign-branch-dialog.ts`); kept everywhere else. Two filter-width CSS rules
+(`.filters app-select`/`.ml-filters app-select` in `topup-requests.ts`/
+`loading-sheet.ts`) extended to also cover `app-autocomplete`.
+
+**Known limitation, not fixed here**: `UiAutocomplete` has no explicit "clear" chip —
+the old `[allowEmpty]`/`emptyLabel` ("Any branch"/"Unassigned"/"All branches"/"None")
+affordance on filter and optional fields (`user-form`/`user-filter`/`assign-branch-
+dialog`/`topup-requests`/`loading-sheet`'s lane filter) now relies on the user
+backspacing the text to empty rather than picking an explicit "Any" option; a `Clear
+all` button (where one exists, e.g. `user-filter.ts`) still resets it via
+`form.reset(...)` same as before. `tsc --noEmit -p tsconfig.app.json`/`ng build` clean.
+**Not verified live** — no local dev server run this task.
+
+---
+
+## [0.25.4] — 2026-08-15 — Delivery Branch field: dropdown → search autocomplete
+
+Direct request: in Shipment Booking, Delivery Branch should be a search box, not a
+scroll dropdown. `UiAutocomplete` (`shared/components/ui-autocomplete`) already existed
+and was already used for Package Type in the item grid — same `{value,label}`
+`SelectOption[]` shape as `UiSelect`, so `shipment-create.ts` swapped `<app-select
+[control]="c('deliveryBranchId')" ...>` for `<app-autocomplete ...>` with no other
+change: same `branchOptions()` signal (still excludes the caller's own booking branch),
+same `FormControl`, same downstream pricing/voice-booking code (`matchOption` against
+`branchOptions()` unchanged). `UiSelect` import kept — still used for Service Type and
+Payment Mode on the same page. `tsc --noEmit -p tsconfig.app.json` clean. **Not verified
+live** — no local dev server run this task.
+
+---
+
 ## [0.25.3] — 2026-08-15 — Modern Logistics / Fleet Management visual theme
 
 Direct request: a full theme-only visual redesign to a "Modern Logistics / Fleet

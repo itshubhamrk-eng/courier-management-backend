@@ -151,7 +151,22 @@ class AuthServiceTest {
         assertThat(result.user().getId()).isEqualTo(userId);
         assertThat(result.tokens().accessToken()).isEqualTo("access");
         assertThat(result.tokens().refreshToken()).isEqualTo("refresh");
-        verify(loginAttemptService).recordSuccess(eq(user), any(), eq("10.0.0.1"), eq("JUnit"));
+        verify(loginAttemptService).recordSuccess(eq(userId), any(), eq("10.0.0.1"), eq("JUnit"));
+    }
+
+    @Test
+    @DisplayName("a race on the login-bookkeeping update never turns an already-successful login into a failure")
+    void loginSurvivesBookkeepingRace() {
+        // Found running a k6 load test with more virtual users than distinct accounts:
+        // two VUs logging into the same account within the same millisecond raced on
+        // User's own optimistic lock (last-login timestamp / failed-attempt reset).
+        stubSuccessfulAuthentication();
+        org.mockito.Mockito.doThrow(new org.springframework.dao.OptimisticLockingFailureException("boom"))
+                .when(loginAttemptService).recordSuccess(eq(userId), any(), eq("10.0.0.1"), eq("JUnit"));
+
+        AuthService.AuthResult result = authService.login(command("correct-password", false));
+
+        assertThat(result.tokens().accessToken()).isEqualTo("access");
     }
 
     @Test
@@ -218,7 +233,7 @@ class AuthServiceTest {
         catchUnauthorized(() -> authService.login(command("wrong", false)));
 
         ArgumentCaptor<LoginFailureReason> reason = ArgumentCaptor.forClass(LoginFailureReason.class);
-        verify(loginAttemptService).recordFailure(any(), eq(user), anyString(),
+        verify(loginAttemptService).recordFailure(any(), eq(userId), anyString(),
                 reason.capture(), anyString(), anyString());
         assertThat(reason.getValue()).isEqualTo(LoginFailureReason.BAD_PASSWORD);
     }

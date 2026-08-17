@@ -51,6 +51,7 @@ const VIEWERS = [AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANA
       </header>
 
       <app-transaction-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [currency]="cur()"
+        [startIndex]="page().page * page().size"
                              (sortChange)="onSort($event)" (receipt)="receipt($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />

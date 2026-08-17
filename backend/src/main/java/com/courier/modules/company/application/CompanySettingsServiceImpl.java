@@ -71,6 +71,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         applyGeneral(settings, command);
         applyShipment(settings, command);
         applyFinance(settings, command);
+        applySla(settings, command);
         applyNotification(settings, command);
         applySecurity(settings, command);
         applyBranding(settings, command);
@@ -98,6 +99,13 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
     @PreAuthorize(WRITERS)
     public CompanySettings patchFinance(CompanySettingsCommand command) {
         return patch("finance", command, s -> applyFinance(s, command));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public CompanySettings patchSla(CompanySettingsCommand command) {
+        return patch("sla", command, s -> applySla(s, command));
     }
 
     @Override
@@ -222,6 +230,15 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.codEnabled(), s::setCodEnabled);
         set(c.onlinePaymentEnabled(), s::setOnlinePaymentEnabled);
         set(c.autoInvoiceGeneration(), s::setAutoInvoiceGeneration);
+    }
+
+    private void applySla(CompanySettings s, CompanySettingsCommand c) {
+        set(c.slaBreachTicketEnabled(), s::setSlaBreachTicketEnabled);
+        set(c.slaBookingToLoadingSheetHours(), s::setSlaBookingToLoadingSheetHours);
+        set(c.slaLoadingSheetToThcHours(), s::setSlaLoadingSheetToThcHours);
+        set(c.slaThcToInscanHours(), s::setSlaThcToInscanHours);
+        set(c.slaInscanToDrsHours(), s::setSlaInscanToDrsHours);
+        set(c.slaDrsToDeliveryHours(), s::setSlaDrsToDeliveryHours);
     }
 
     private void applyNotification(CompanySettings s, CompanySettingsCommand c) {

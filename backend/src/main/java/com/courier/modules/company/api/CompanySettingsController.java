@@ -85,6 +85,17 @@ public class CompanySettingsController {
                 "Finance settings updated");
     }
 
+    @PatchMapping("/sla")
+    @Operation(summary = "Update shipment lifecycle SLA settings",
+            description = "Hours a shipment may sit in one status before an auto-ticket is "
+                    + "raised (ShipmentSlaSweepJob, hourly).")
+    public ApiResponse<CompanySettingsResponse> sla(
+            @Valid @RequestBody CompanySettingsRequest request) {
+        return ApiResponse.success(
+                mapper.toResponse(service.patchSla(mapper.toCommand(request))),
+                "SLA settings updated");
+    }
+
     @PatchMapping("/security")
     @Operation(summary = "Update security settings",
             description = "Stored per company. Note: auth does not yet read these — they "

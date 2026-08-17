@@ -11,6 +11,7 @@ import com.courier.shared.security.JwtProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Multi-company Courier SaaS backend.
@@ -18,6 +19,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * <p>Read {@code MEMORY/AI_CONTEXT.md} before changing anything here.
  */
 @SpringBootApplication
+@EnableScheduling
 @EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, AuthProperties.class,
         RazorpayProperties.class, PricingProperties.class, S3Properties.class,
         GeocodingProperties.class, RoutingProperties.class})

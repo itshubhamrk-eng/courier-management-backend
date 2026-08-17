@@ -267,17 +267,30 @@ export class InScan implements OnInit {
 
   /** Only the checked trackingNumbers go into the bulk `inScan` call — an unchecked
    *  shipment (short-received, not physically on the vehicle) is simply left out, not
-   *  removed from the manifest itself. */
+   *  removed from the manifest itself. The unchecked complement goes along as
+   *  `missingTrackingNumbers` so the backend can auto-raise a Support ticket for the
+   *  company the instant a THC comes up short — the operator's own explicit answer,
+   *  not a guess. */
   protected confirmReceive(): void {
-    const trackingNumbers = [...this.selectedTrackingNumbers()];
+    const selected = this.selectedTrackingNumbers();
+    const trackingNumbers = [...selected];
     if (!this.myBranchId || !trackingNumbers.length) return;
+    const missingTrackingNumbers = this.receivingManifestShipments()
+      .map((s) => s.trackingNumber)
+      .filter((t) => !selected.has(t));
+    const manifestNumber = this.receivingManifest()?.manifestNumber ?? null;
     this.scanning.set(true);
-    this.movementService.inScan({ receivingBranchId: this.myBranchId, trackingNumbers }).subscribe({
+    this.movementService.inScan({
+      receivingBranchId: this.myBranchId, trackingNumbers, manifestNumber, missingTrackingNumbers
+    }).subscribe({
       next: (r) => {
         this.scanning.set(false);
         this.outcomes.set(r.results);
         if (r.failureCount) this.notify.error(`${r.failureCount} of ${r.results.length} failed to receive.`);
         else this.notify.success(`${r.successCount} shipment(s) received.`);
+        if (r.shortageTicketNumber) {
+          this.notify.error(`${missingTrackingNumbers.length} shipment(s) not received — ticket ${r.shortageTicketNumber} raised for the company.`);
+        }
         this.cancelReceive();
         if (r.successCount) this.loadPendingManifests();
       },

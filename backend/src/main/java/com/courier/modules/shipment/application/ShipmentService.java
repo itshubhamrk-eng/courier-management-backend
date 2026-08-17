@@ -212,8 +212,18 @@ public interface ShipmentService {
      * {@code receivingBranchId} — the brief's own "Receiving Branch must match Delivery
      * Branch" rule. Per-item result, same "bulk operation reports per-row" shape
      * {@code BranchService.assignUsers} already uses.
+     *
+     * @param manifestNumber          purely descriptive — only used in a shortage ticket's
+     *                                subject/description, never validated or looked up
+     * @param missingTrackingNumbers  the operator's own explicit "not physically on this
+     *                                THC" checklist answer (In Scan's unchecked rows) —
+     *                                when non-empty, auto-raises a Support ticket (category
+     *                                "Shipment Issue", HIGH priority) against the company so
+     *                                a short receipt is never silently lost. Null/empty
+     *                                raises nothing, same behaviour as before this existed.
      */
-    BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers);
+    BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers, String manifestNumber,
+                              List<String> missingTrackingNumbers);
 
     /**
      * Assigns a delivery user to every shipment id, each of which must be {@code IN_SCAN}.
@@ -297,10 +307,16 @@ public interface ShipmentService {
     }
 
     /** {@code drsNumber} is only ever set by {@link #assignOutForDelivery} — null for
-     *  every other bulk movement (e.g. {@link #inScan}). */
-    record BulkMovementResult(List<MovementOutcome> results, String drsNumber) {
+     *  every other bulk movement (e.g. {@link #inScan}). {@code shortageTicketNumber} is
+     *  only ever set by {@link #inScan}, and only when it was called with a non-empty
+     *  {@code missingTrackingNumbers} — null otherwise. */
+    record BulkMovementResult(List<MovementOutcome> results, String drsNumber, String shortageTicketNumber) {
         public BulkMovementResult(List<MovementOutcome> results) {
-            this(results, null);
+            this(results, null, null);
+        }
+
+        public BulkMovementResult(List<MovementOutcome> results, String drsNumber) {
+            this(results, drsNumber, null);
         }
 
         public long successCount() {

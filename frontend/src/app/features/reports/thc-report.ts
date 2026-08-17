@@ -44,6 +44,7 @@ import { Lookup } from '@features/users/user.service';
       </div>
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No THCs" emptyHint="No manifest has been dispatched yet."
                  (rowClick)="view($event)">
         <ng-template #row let-m>
@@ -64,10 +65,11 @@ import { Lookup } from '@features/users/user.service';
   `,
   styles: [`
     .page__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
-    .stats { display:flex; gap:24px; flex-wrap:wrap; margin-bottom:16px; }
-    .stat { display:flex; flex-direction:column; gap:2px; }
+    .stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .stat { display:flex; flex-direction:column; gap:4px; padding:12px 18px; min-width:150px;
+      background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); }
     .stat__l { font:500 12px var(--font-sans); color:var(--content-muted); }
-    .stat__v { font:700 18px var(--font-sans); color:var(--content-fg); }
+    .stat__v { font:700 20px var(--font-sans); color:var(--content-fg); }
     .num { text-align:right; }
     .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
   `]

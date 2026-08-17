@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UserSearchRequest, UserStatus } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
@@ -18,12 +19,12 @@ const LOCKED: SelectOption[] = [{ value: 'true', label: 'Locked only' }, { value
   selector: 'app-user-filter',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiInput, UiSelect, UiButton],
+  imports: [ReactiveFormsModule, UiInput, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="apply()" class="uf">
       <app-select [control]="c('status')" label="Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
       <app-select [control]="c('locked')" label="Lock state" [options]="lockedOptions" [allowEmpty]="true" emptyLabel="Any" />
-      <app-select [control]="c('branchId')" label="Branch" [options]="branchOptions()" [allowEmpty]="true" emptyLabel="Any branch" />
+      <app-autocomplete [control]="c('branchId')" label="Branch" [options]="branchOptions()" placeholder="Any branch" />
       <app-select [control]="c('hubId')" label="Hub" [options]="hubOptions()" [allowEmpty]="true" emptyLabel="Any hub" />
       <app-select [control]="c('roleCode')" label="Role" [options]="roleOptions()" [allowEmpty]="true" emptyLabel="Any role" />
       <app-input [control]="c('department')" label="Department" placeholder="Operations" />

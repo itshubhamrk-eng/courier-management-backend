@@ -51,6 +51,12 @@ export interface Shipment {
   bookingDate: string;
   bookingBranchId: string;
   deliveryBranchId: string;
+  /** Where the shipment physically is right now — same as `bookingBranchId` unless it has
+   *  moved past a crossing hop. */
+  currentLocationId?: string | null;
+  /** The shipment's next stop — a crossing hub, or `deliveryBranchId` once every hop is
+   *  done. */
+  nextLocationId?: string | null;
   manifestId?: string | null;
   paymentModeId: string;
   senderName: string;
@@ -82,6 +88,8 @@ export interface ShipmentResponse {
   bookingBranchId: string;
   deliveryBranchId: string;
   manifestId?: string | null;
+  currentLocationId?: string | null;
+  nextLocationId?: string | null;
   pickupPincode: string;
   deliveryPincode: string;
   senderName: string;
@@ -215,6 +223,14 @@ export interface ShipmentFields {
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
 export interface CreateShipmentRequest extends ShipmentFields {
   bookingBranchId: string;
+  /** Route this shipment through one or more intermediate branches/hubs, in order,
+   *  instead of straight to the delivery branch. When true, crossingBranchIds must carry
+   *  at least one branch. */
+  crossing?: boolean | null;
+  /** The intermediate branches/hubs, in the order the shipment passes through them. */
+  crossingBranchIds?: string[] | null;
+  /** The whole route's crossing charge — not per hop. */
+  crossingCharge?: number | null;
 }
 
 /** Body of PUT /shipments/{id} — mirrors backend `UpdateShipmentRequest`. `bookingBranchId`
@@ -456,12 +472,15 @@ export interface MovementOutcome {
 }
 
 /** Mirrors backend `BulkMovementResponse` — In Scan/Out For Delivery both return this.
- *  `drsNumber` is only ever set on Out For Delivery's response — null for In Scan. */
+ *  `drsNumber` is only ever set on Out For Delivery's response — null for In Scan.
+ *  `shortageTicketNumber` is only ever set on In Scan's response, and only when it was
+ *  called with a non-empty `missingTrackingNumbers` — null otherwise. */
 export interface BulkMovementResult {
   results: MovementOutcome[];
   successCount: number;
   failureCount: number;
   drsNumber: string | null;
+  shortageTicketNumber: string | null;
 }
 
 /** Body of POST /shipment-movement/dispatch. */
@@ -483,10 +502,14 @@ export interface DispatchManifestResponse {
   shipmentCount: number;
 }
 
-/** Body of POST /shipment-movement/in-scan. */
+/** Body of POST /shipment-movement/in-scan. `manifestNumber` is descriptive only (a
+ *  shortage ticket's subject/description); a non-empty `missingTrackingNumbers`
+ *  auto-raises that ticket. */
 export interface InScanRequest {
   receivingBranchId: string;
   trackingNumbers: string[];
+  manifestNumber?: string | null;
+  missingTrackingNumbers?: string[];
 }
 
 /** Body of POST /shipment-movement/out-for-delivery. */

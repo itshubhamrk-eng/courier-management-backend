@@ -37,6 +37,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
         <header class="bv__banner app-card">
           <app-branch-summary-card [branch]="branch()!" [managerName]="managerName()" />
           <div class="bv__actions">
+            <app-button variant="stroked" icon="support_agent" (pressed)="raiseTicket()">Raise Ticket</app-button>
             @if (can().update) { <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button> }
             @if (hasMenu()) {
               <button class="kebab" [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
@@ -190,6 +191,8 @@ export class BranchView implements OnInit {
   time(t?: string | null): string { return t ? t.slice(0, 5) : '—'; }
 
   edit(): void { this.router.navigate(['/branches', this.id, 'edit']); }
+
+  raiseTicket(): void { this.router.navigate(['/support/tickets/new'], { queryParams: { branchId: this.id } }); }
 
   lifecycle(op: 'activate'): void {
     this.service[op](this.id).subscribe({

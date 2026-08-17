@@ -60,6 +60,7 @@ class LoginAttemptServiceTest {
                 .build();
         user.setId(UUID.randomUUID());
         user.setCompanyId(companyId);
+        when(userRepository.findById(user.getId())).thenReturn(java.util.Optional.of(user));
     }
 
     @Test
@@ -98,7 +99,7 @@ class LoginAttemptServiceTest {
     @Test
     @DisplayName("a bad password advances the lock counter")
     void badPasswordIncrementsCounter() {
-        service.recordFailure(companyId, user, "ops@acme.test",
+        service.recordFailure(companyId, user.getId(), "ops@acme.test",
                 LoginFailureReason.BAD_PASSWORD, "10.0.0.1", "JUnit");
 
         assertThat(user.getFailedAttempts()).isEqualTo(1);
@@ -109,7 +110,7 @@ class LoginAttemptServiceTest {
     @DisplayName("the account locks and is audited at the threshold")
     void locksAtThreshold() {
         for (int i = 0; i < properties.getLockoutThreshold(); i++) {
-            service.recordFailure(companyId, user, "ops@acme.test",
+            service.recordFailure(companyId, user.getId(), "ops@acme.test",
                     LoginFailureReason.BAD_PASSWORD, "10.0.0.1", "JUnit");
         }
 
@@ -137,7 +138,7 @@ class LoginAttemptServiceTest {
     void lockedReasonDoesNotDoubleCount() {
         // Otherwise a locked account would keep extending its own lock on every
         // attempt, turning a 15-minute lock into an indefinite one.
-        service.recordFailure(companyId, user, "ops@acme.test",
+        service.recordFailure(companyId, user.getId(), "ops@acme.test",
                 LoginFailureReason.ACCOUNT_LOCKED, "10.0.0.1", "JUnit");
 
         assertThat(user.getFailedAttempts()).isZero();
@@ -149,7 +150,7 @@ class LoginAttemptServiceTest {
         user.setFailedAttempts(3);
         UUID sessionId = UUID.randomUUID();
 
-        service.recordSuccess(user, sessionId, "10.0.0.1", "JUnit");
+        service.recordSuccess(user.getId(), sessionId, "10.0.0.1", "JUnit");
 
         assertThat(user.getFailedAttempts()).isZero();
         assertThat(user.getLastLoginAt()).isNotNull();
@@ -167,7 +168,7 @@ class LoginAttemptServiceTest {
     void lapsedLockAuditedAsUnlock() {
         user.setLockedUntil(Instant.now().minusSeconds(60));   // lapsed
 
-        service.recordSuccess(user, UUID.randomUUID(), "10.0.0.1", "JUnit");
+        service.recordSuccess(user.getId(), UUID.randomUUID(), "10.0.0.1", "JUnit");
 
         verify(auditService).record(eq(AuditAction.ACCOUNT_UNLOCKED), eq("User"), eq(user.getId()), anyMap());
     }

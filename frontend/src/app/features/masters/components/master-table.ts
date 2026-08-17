@@ -32,7 +32,7 @@ export type MasterAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'delete
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiTable, StatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="tableColumns()" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="tableColumns()" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                [emptyTitle]="'No ' + def().plural.toLowerCase()"
                [emptyHint]="emptyHint()"
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
@@ -99,6 +99,7 @@ export type MasterAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'delete
 export class MasterTable {
   readonly def = input.required<MasterDefinition>();
   readonly rows = input<MasterRecord[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<MasterPerms>();

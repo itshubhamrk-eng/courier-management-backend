@@ -54,16 +54,16 @@ export interface DashboardLayout {
 
 // --- reusable tiles -------------------------------------------------------
 const T = {
-  todayShipments: { key: 'todayShipments', label: "Today's Shipments", icon: 'local_shipping', tone: 'brand' },
-  delivered:      { key: 'delivered', label: 'Delivered', icon: 'task_alt', tone: 'success' },
-  inTransit:      { key: 'inTransit', label: 'In Transit', icon: 'moving', tone: 'info' },
-  pending:        { key: 'pending', label: 'Pending', icon: 'pending_actions', tone: 'warning' },
+  todayShipments: { key: 'todayShipments', label: "This Month's Shipments", icon: 'local_shipping', tone: 'brand' },
+  delivered:      { key: 'delivered', label: 'Delivered This Month', icon: 'task_alt', tone: 'success' },
+  inTransit:      { key: 'inTransit', label: 'In Transit This Month', icon: 'moving', tone: 'info' },
+  pending:        { key: 'pending', label: 'Pending This Month', icon: 'pending_actions', tone: 'warning' },
   revenue:        { key: 'totalRevenue', label: 'Total Revenue', icon: 'payments', tone: 'success', prefix: '₹' },
   activeBranches: { key: 'activeBranches', label: 'Active Branches', icon: 'store', tone: 'brand' },
   // activeHubs: { key: 'activeHubs', label: 'Active Hubs', icon: 'hub', tone: 'info' }, // hub module not built yet
   wallet:         { key: 'walletBalance', label: 'Wallet Balance', icon: 'account_balance_wallet', tone: 'brand', prefix: '₹' },
-  todayBookings:  { key: 'todayBookings', label: "Today's Bookings", icon: 'add_box', tone: 'info' },
-  todayCollection:{ key: 'todayCollection', label: "Today's Collection", icon: 'savings', tone: 'success', prefix: '₹' },
+  todayBookings:  { key: 'todayBookings', label: "This Month's Bookings", icon: 'add_box', tone: 'info' },
+  todayCollection:{ key: 'todayCollection', label: "This Month's Collection", icon: 'savings', tone: 'success', prefix: '₹' },
   pendingDelivery:{ key: 'pendingDelivery', label: 'Pending Delivery', icon: 'local_shipping', tone: 'warning' },
   toReceive:      { key: 'toReceive', label: 'To Receive', icon: 'call_received', tone: 'brand' },
   toDispatch:     { key: 'toDispatch', label: 'Dispatch Queue', icon: 'send', tone: 'info' },

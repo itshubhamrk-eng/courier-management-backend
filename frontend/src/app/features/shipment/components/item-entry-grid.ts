@@ -22,8 +22,13 @@ const VOLUMETRIC_DIVISOR = 5000;
 const DEFAULT_WEIGHT_KG = 5;
 
 function emptyRow(): ItemRow {
-  return { itemName: '', quantity: 1, weight: DEFAULT_WEIGHT_KG, lengthCm: null, widthCm: null, heightCm: null,
-    declaredValue: null, fragile: false, dangerousGoods: false };
+  // itemName defaults to a real value, not '' — toRequests() below filters out any row
+  // with a blank name (it can't book a nameless package), and an unedited default row
+  // is exactly the "one implicit package" case CreateShipmentRequest's own docs describe.
+  // An empty string here silently dropped every never-touched default row from the
+  // request instead.
+  return { itemName: 'Package', quantity: 1, weight: DEFAULT_WEIGHT_KG, lengthCm: null, widthCm: null,
+    heightCm: null, declaredValue: null, fragile: false, dangerousGoods: false };
 }
 
 /**

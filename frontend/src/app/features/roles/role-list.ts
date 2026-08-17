@@ -42,6 +42,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
       </header>
 
       <app-role-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                       (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />

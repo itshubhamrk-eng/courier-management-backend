@@ -20,7 +20,12 @@ spring:
       pool-name: courier-pool
       maximum-pool-size: ${DB_POOL_SIZE:20}
       minimum-idle: 5
-      connection-timeout: 30000
+      # Was 30000: during a full MySQL outage every request blocked this long
+      # waiting for a pooled connection before failing, instead of failing fast
+      # (perf-tests/ISSUES.md ISSUE-007). 5s still gives a real query plenty of
+      # margin under normal load, but turns an outage into a quick 503 instead
+      # of a 30s hang.
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:5000}
       idle-timeout: 600000
       max-lifetime: 1800000
       # Shorter than MySQL's wait_timeout so the pool discards a connection

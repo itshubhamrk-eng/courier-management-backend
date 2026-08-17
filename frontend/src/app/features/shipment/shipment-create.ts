@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, merge, of, switchMap } from 'rxjs';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
@@ -72,9 +72,32 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
             <div class="grid3">
               <label class="fld"><span class="fld__l">Booking Date</span>
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
-              <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Select the delivery branch" />
+              <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search delivery branch…" />
               <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
             </div>
+            <div class="spacer"></div>
+            <label class="chk">
+              <input type="checkbox" [formControl]="c('crossing')" />
+              <span>Route through a crossing branch/hub</span>
+            </label>
+            @if (c('crossing').value) {
+              <div class="crossing-hops">
+                @for (ctrl of crossingBranchArray.controls; track $index) {
+                  <div class="crossing-hop">
+                    <app-autocomplete [control]="asControl(ctrl)" [label]="'Crossing Branch ' + ($index + 1)" [options]="crossingBranchOptions()" placeholder="Search crossing branch…" />
+                    @if (crossingBranchArray.length > 1) {
+                      <button type="button" class="crossing-hop__remove" (click)="removeCrossingBranch($index)" aria-label="Remove this hop">✕</button>
+                    }
+                  </div>
+                }
+                <app-button variant="stroked" (pressed)="addCrossingBranch()">+ Add another crossing branch</app-button>
+              </div>
+              <div class="spacer"></div>
+              <div class="grid3">
+                <label class="fld"><span class="fld__l">Crossing Charge</span>
+                  <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('crossingCharge')" /></label>
+              </div>
+            }
           </app-card>
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
@@ -291,6 +314,14 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
     .party--sender .party__title { color:var(--info); }
     .party--receiver .party__title { color:var(--brand-600); }
     .fld { display:flex; flex-direction:column; gap:4px; }
+    .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
+    .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
+    .crossing-hops { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+    .crossing-hop { display:flex; align-items:flex-end; gap:8px; }
+    .crossing-hop app-autocomplete { flex:1; }
+    .crossing-hop__remove { flex-shrink:0; height:38px; width:38px; border:1px solid var(--surface-border);
+      border-radius:var(--r-field); background:var(--surface); color:var(--content-muted); cursor:pointer; }
+    .crossing-hop__remove:hover { color:var(--danger, #e11d48); border-color:currentColor; }
     .party__lookup { position:relative; }
     .lookup__list { position:absolute; top:100%; left:0; right:0; z-index:20; margin-top:2px; max-height:220px; overflow-y:auto;
       background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); box-shadow:0 4px 14px rgba(0,0,0,.12);
@@ -431,8 +462,40 @@ export class ShipmentCreate implements OnInit {
     bookingDate: [today()],
     numberOfPackages: [1],
     declaredValue: [null as number | null],
-    remarks: ['']
+    remarks: [''],
+    crossing: [false],
+    crossingBranchIds: this.fb.array<FormControl<string | null>>([]),
+    crossingCharge: [null as number | null]
   });
+
+  protected get crossingBranchArray(): FormArray<FormControl<string | null>> {
+    return this.form.get('crossingBranchIds') as FormArray<FormControl<string | null>>;
+  }
+
+  /** `app-autocomplete` wants a plain `FormControl` — a `FormArray` element is typed as
+   *  `AbstractControl` in the template's `@for`, so this narrows it back. */
+  protected asControl(ctrl: AbstractControl): FormControl<string | null> {
+    return ctrl as FormControl<string | null>;
+  }
+
+  protected addCrossingBranch(): void {
+    this.crossingBranchArray.push(this.fb.control(null as string | null, Validators.required));
+  }
+
+  protected removeCrossingBranch(index: number): void {
+    this.crossingBranchArray.removeAt(index);
+  }
+
+  private readonly deliveryBranchIdValue = toSignal(this.form.get('deliveryBranchId')!.valueChanges, {
+    initialValue: this.form.get('deliveryBranchId')!.value
+  });
+
+  /** Crossing Branch picker options — excludes the caller's own branch (already out of
+   *  `branchOptions`) and whichever branch is currently picked as Delivery Branch, so a
+   *  crossing hop can't equal either endpoint of the shipment. */
+  protected readonly crossingBranchOptions = computed(() =>
+    this.branchOptions().filter((opt) => opt.value !== this.deliveryBranchIdValue())
+  );
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
@@ -458,6 +521,16 @@ export class ShipmentCreate implements OnInit {
         const branch = list.find((b) => b.id === id);
         if (branch?.postalCode) this.form.get('deliveryPincode')?.setValue(branch.postalCode);
       });
+    });
+    // At least one Crossing Branch is required only while Crossing is checked —
+    // unchecking clears every picked hop, so a hidden stale value never submits.
+    this.form.get('crossing')?.valueChanges.subscribe((on) => {
+      if (on) {
+        if (this.crossingBranchArray.length === 0) this.addCrossingBranch();
+      } else {
+        this.crossingBranchArray.clear();
+        this.form.get('crossingCharge')?.setValue(null);
+      }
     });
     this.masters.options('service-types').subscribe((o) => {
       this.serviceTypeOptions.set(o);
@@ -744,7 +817,10 @@ export class ShipmentCreate implements OnInit {
       bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
       remarks: v.remarks || null, otherCharges: this.otherCharges() || null,
-      freightFactorOverride: this.freightFactorOverride(), items: this.items()
+      freightFactorOverride: this.freightFactorOverride(), items: this.items(),
+      crossing: v.crossing || null,
+      crossingBranchIds: v.crossing ? (v.crossingBranchIds as (string | null)[]).filter((id): id is string => !!id) : null,
+      crossingCharge: v.crossingCharge || null
     };
 
     this.submitting.set(true);

@@ -84,8 +84,23 @@ public class AuthService {
      * <p>Ordering is deliberate: the company is validated and bound <em>before</em>
      * any user lookup, so the Hibernate company filter is active and a user in
      * another company is not merely rejected but invisible.
+     *
+     * <p><b>Deliberately not {@code @Transactional}</b> — every DB-writing step this
+     * method calls already manages its own transaction independently
+     * ({@code sessionService.openSession}, {@code tokenIssuer.issueForNewSession},
+     * {@code loginAttemptService.recordSuccess}/{@code recordFailure}, the last two
+     * {@code REQUIRES_NEW} specifically), so a blanket transaction here was never
+     * load-bearing for atomicity — it only ever held one Hikari connection open for
+     * this whole method's duration, including the {@code authenticationManager
+     * .authenticate(...)} call below, which does BCrypt(12) password verification: a
+     * deliberately CPU-expensive step (see {@code SecurityConfig}), not a DB one.
+     * Found running a k6 load test: at ~60+ concurrent logins that connection-hold
+     * time (not real DB load) exhausted the whole pool and collapsed every endpoint
+     * sharing it, not just login — see {@code perf-tests/ISSUES.md} ISSUE-005 for the
+     * full evidence (100 VUs went from ~100% request failure to 0% purely from a
+     * larger pool, before this fix even existed — this closes the actual root cause
+     * rather than just buying more headroom against it).
      */
-    @Transactional
     public AuthResult login(LoginCommand command) {
         String email = User.normaliseEmail(command.email());
         UUID companyId = resolveCompany(command, email);
@@ -122,7 +137,7 @@ public class AuthService {
             // Look the user up only to advance the lock counter. The response is
             // identical whether or not this finds anything.
             User candidate = userRepository.findByEmail(email).orElse(null);
-            loginAttemptService.recordFailure(companyId, candidate, email,
+            loginAttemptService.recordFailure(companyId, candidate == null ? null : candidate.getId(), email,
                     candidate == null ? LoginFailureReason.UNKNOWN_USER : LoginFailureReason.BAD_PASSWORD,
                     command.ipAddress(), command.userAgent());
             throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
@@ -134,7 +149,7 @@ public class AuthService {
         // disclosed to someone who does not already hold the credentials.
         if (!user.isEmailVerified()) {
             emailVerificationService.reissueIfDue(user);
-            loginAttemptService.recordFailure(companyId, user, email,
+            loginAttemptService.recordFailure(companyId, user.getId(), email,
                     LoginFailureReason.EMAIL_NOT_VERIFIED, command.ipAddress(), command.userAgent());
             throw new ForbiddenException(ErrorCode.EMAIL_NOT_VERIFIED,
                     "Verify your email address to sign in. We have sent you a new link.");
@@ -150,7 +165,23 @@ public class AuthService {
         TokenIssuer.TokenPair tokens = tokenIssuer.issueForNewSession(
                 user, session, refreshTtl, command.ipAddress(), command.userAgent());
 
-        loginAttemptService.recordSuccess(user, session.getId(), command.ipAddress(), command.userAgent());
+        // Best-effort bookkeeping (last-login timestamp, failed-attempt reset, audit
+        // trail) — never lets a race on the User row's own optimistic lock turn an
+        // already-successful login (credentials verified, session and tokens already
+        // issued above) into a 409 the client never asked for. Found running a k6 load
+        // test with more virtual users than distinct accounts, so two VUs legitimately
+        // logged into the same account within the same millisecond — a real client can
+        // hit this too (e.g. two browser tabs signing in at once).
+        try {
+            loginAttemptService.recordSuccess(user.getId(), session.getId(), command.ipAddress(), command.userAgent());
+        } catch (org.springframework.dao.ConcurrencyFailureException e) {
+            // Covers both an optimistic-lock version mismatch and a genuine InnoDB
+            // deadlock/lock-wait timeout on the users row — both are real outcomes of
+            // two concurrent logins to the same account (found running a k6 load
+            // test), not just the optimistic case.
+            log.warn("Login bookkeeping lost a race for user {} (concurrent login to the same account) "
+                    + "— the login itself still succeeded", user.getId());
+        }
 
         log.info("User {} signed in to company {} (session {}, rememberMe={})",
                 user.getId(), companyId, session.getId(), command.rememberMe());
@@ -299,7 +330,7 @@ public class AuthService {
                     .ifPresent(token -> sessionService
                             .findActive(token.getSessionId(), principal.userId())
                             .ifPresent(session -> sessionService.revokeSession(
-                                    session, "UserSession", RefreshToken.RevokeReason.LOGOUT)));
+                                    session.getId(), "UserSession", RefreshToken.RevokeReason.LOGOUT)));
         }
 
         auditService.record(AuditAction.LOGOUT, "User", principal.userId(),

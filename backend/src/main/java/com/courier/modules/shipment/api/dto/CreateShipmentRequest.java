@@ -55,6 +55,15 @@ public record CreateShipmentRequest(
         @Schema(description = "Required only when items is empty") BigDecimal actualWeight,
         BigDecimal length,
         BigDecimal width,
-        BigDecimal height
+        BigDecimal height,
+        @Schema(description = "Route this shipment through one or more intermediate "
+                + "branches/hubs, in order, instead of straight to the delivery branch. "
+                + "When true, crossingBranchIds must carry at least one branch.")
+        Boolean crossing,
+        @Schema(description = "Required when crossing is true — the intermediate "
+                + "branches/hubs, in the order the shipment passes through them")
+        List<UUID> crossingBranchIds,
+        @Schema(description = "The whole route's crossing charge — not per hop")
+        @DecimalMin(value = "0") BigDecimal crossingCharge
 ) {
 }

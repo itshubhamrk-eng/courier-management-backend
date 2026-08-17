@@ -23,7 +23,7 @@ export type UserAction =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiTable, UserStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No users" emptyHint="Create your first user to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-u>
@@ -85,6 +85,7 @@ export type UserAction =
 })
 export class UserTable {
   readonly rows = input<AppUser[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<UserPerms>();

@@ -112,7 +112,7 @@ public class ManifestController {
                     + "manifest picker both read this.")
     public ApiResponse<List<ShipmentSummaryResponse>> shipments(@PathVariable UUID id) {
         manifestService.getById(id); // 404s a foreign/unknown manifest before listing anything
-        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, id, null, null, null, null, null);
+        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, id, null, null, null, null, null);
         Page<Shipment> page = shipmentService.search(criteria, Pageable.unpaged());
         List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
         Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);

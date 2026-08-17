@@ -28,6 +28,9 @@ const COMPANY_ROLES = [
 ];
 /** The branch's money desk, alongside whoever runs the branch. */
 const ACCOUNTS_DESK = [...FINANCE, AppRole.BRANCH_MANAGER, AppRole.ACCOUNTS];
+/** Ticket Support: every company role raises/reads tickets, plus SUPER_ADMIN's own
+ * cross-tenant view — the one nav section every signed-in role sees something of. */
+const SUPPORT_READERS = [...COMPANY_ROLES, AppRole.SUPER_ADMIN];
 /** Every branch role reads what it books, moves or is asked about. */
 const SHIPMENT_READERS = [...MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 /** Every branch staff role reads its own reports. */
@@ -187,6 +190,20 @@ export const NAVIGATION: NavNode[] = [
       { id: 'settlement', title: 'Settlement (Soon)', icon: 'paid', route: '/finance/settlement', permission: 'SETTLEMENT_VIEW', roles: FINANCE },
       { id: 'payment', title: 'Payment (Soon)', icon: 'credit_card', route: '/finance/payment', permission: 'PAYMENT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
       { id: 'invoice', title: 'Invoice (Soon)', icon: 'description', route: '/finance/invoice', permission: 'INVOICE_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] }
+    ]
+  },
+
+  {
+    id: 'support', title: 'Ticket Support', icon: 'support_agent', order: 6.5,
+    children: [
+      { id: 'support-tickets', title: 'Tickets', icon: 'confirmation_number', route: '/support/tickets', roles: SUPPORT_READERS },
+      { id: 'support-new-ticket', title: 'Raise Ticket', icon: 'add_box', route: '/support/tickets/new', roles: SUPPORT_READERS },
+      // Company-wide view, not branch-scoped — COMPANY_ADMIN and SUPER_ADMIN only.
+      { id: 'support-dashboard', title: 'Support Dashboard', icon: 'dashboard', route: '/support/dashboard', roles: ADMINS },
+      // Global category catalogue — SUPER_ADMIN only, same tier as Subscription Plans.
+      { id: 'support-categories', title: 'Categories', icon: 'category', route: '/support/categories', roles: PLATFORM },
+      // Per-priority first-response/resolution targets — company-scoped, COMPANY_ADMIN's own call.
+      { id: 'support-sla-rules', title: 'SLA Rules', icon: 'schedule', route: '/support/sla-rules', roles: ADMINS }
     ]
   },
 

@@ -1,0 +1,80 @@
+# =============================================================================
+# Local performance/load-test profile.
+#
+# NOT for production. Widens actuator (threaddump/heapdump/env), turns on Hibernate
+# statistics and full metrics percentiles so a load-test run can be correlated with
+# JVM/DB internals afterward. Points at the same courier_db as dev on purpose (see
+# MEMORY: perf fixtures live alongside dev fixtures in this project) — run the perf
+# data generator (see com.courier.perftest.PerfDataGeneratorRunner, profile
+# "perfgen") separately before load-testing.
+#
+# Boot with:
+#   SPRING_PROFILES_ACTIVE=test DB_PASSWORD=... JWT_SECRET=... \
+#     mvn spring-boot:run -pl backend
+# On the throwaway port this project always uses for verification (8082), so the
+# real dev backend (8081) is never touched:
+#   ... SERVER_PORT=8082 mvn spring-boot:run -pl backend
+# =============================================================================
+
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        # Powers Statistics via /actuator/metrics/hibernate.* — the source for
+        # Phase 9's N+1 / query-count evidence, not just wall-clock timing.
+        generate_statistics: true
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 200
+  flyway:
+    enabled: true
+  datasource:
+    hikari:
+      # Load-test concurrency needs headroom beyond the dev default (20); still
+      # overridable with DB_POOL_SIZE so a run can be repeated at different pool
+      # sizes to find the saturation point (Phase 6/9).
+      maximum-pool-size: ${DB_POOL_SIZE:60}
+      minimum-idle: 10
+
+logging:
+  level:
+    com.courier: INFO
+    # Hibernate statistics summary (query count, cache hit ratio) once per session.
+    org.hibernate.stat: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # threaddump/heapdump/env/loggers are never exposed outside this profile —
+        # deliberately not added to application.yml's own default list.
+        include: health,info,metrics,prometheus,threaddump,heapdump,env,loggers
+  endpoint:
+    health:
+      show-details: always
+    heapdump:
+      enabled: true
+    threaddump:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+        hikaricp:
+          connections: true
+      percentiles:
+        http:
+          server:
+            requests: 0.5,0.95,0.99
+  health:
+    redis:
+      enabled: true
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:4300

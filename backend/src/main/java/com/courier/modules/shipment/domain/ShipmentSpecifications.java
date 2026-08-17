@@ -33,6 +33,12 @@ public final class ShipmentSpecifications {
             if (safe.deliveryBranchId() != null) {
                 predicates.add(cb.equal(root.get("deliveryBranchId"), safe.deliveryBranchId()));
             }
+            if (safe.currentLocationId() != null) {
+                predicates.add(cb.equal(root.get("currentLocationId"), safe.currentLocationId()));
+            }
+            if (safe.nextLocationId() != null) {
+                predicates.add(cb.equal(root.get("nextLocationId"), safe.nextLocationId()));
+            }
             if (safe.manifestId() != null) {
                 predicates.add(cb.equal(root.get("manifestId"), safe.manifestId()));
             }

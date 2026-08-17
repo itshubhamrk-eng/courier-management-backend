@@ -71,17 +71,26 @@ public class LoginAttemptService {
      * <p>{@code REQUIRES_NEW} so the record survives the rollback of the failed
      * login transaction — otherwise every failed attempt would erase its own
      * evidence, and the throttle would never trigger.
+     *
+     * <p>Takes a {@code userId}, not a {@code User} — re-fetches its own copy in
+     * this (new) persistence context rather than mutating one the caller may have
+     * loaded in {@code AuthService.login}'s own, still-active transaction. Found via
+     * a k6 load test hammering {@link #recordSuccess}'s identical shape: mutating a
+     * caller-owned entity from inside a {@code REQUIRES_NEW} transaction makes the
+     * caller's own persistence context see it as dirty too, so it gets flushed a
+     * <em>second</em> time at the caller's own commit — racing this transaction's
+     * already-committed update of the exact same row.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(UUID companyId,
-                              User user,
+                              UUID userId,
                               String attemptedEmail,
                               LoginFailureReason reason,
                               String ipAddress,
                               String userAgent) {
 
         loginHistoryRepository.save(LoginHistory.builder()
-                .userId(user != null ? user.getId() : null)
+                .userId(userId)
                 .attemptedEmail(attemptedEmail)
                 .success(false)
                 .failureReason(reason)
@@ -90,32 +99,46 @@ public class LoginAttemptService {
                 .occurredAt(Instant.now())
                 .build());
 
-        if (user != null && reason == LoginFailureReason.BAD_PASSWORD) {
-            boolean wasLocked = user.isTemporarilyLocked();
-            user.registerFailedAttempt(properties.getLockoutThreshold(), properties.getLockoutDuration());
-            userRepository.save(user);
+        if (userId != null && reason == LoginFailureReason.BAD_PASSWORD) {
+            userRepository.findById(userId).ifPresent(user -> {
+                boolean wasLocked = user.isTemporarilyLocked();
+                user.registerFailedAttempt(properties.getLockoutThreshold(), properties.getLockoutDuration());
+                userRepository.save(user);
 
-            if (!wasLocked && user.isTemporarilyLocked()) {
-                log.warn("Account {} locked until {} after {} failed attempts",
-                        user.getId(), user.getLockedUntil(), user.getFailedAttempts());
-                auditService.record(AuditAction.ACCOUNT_LOCKED, "User", user.getId(),
-                        Map.of("failedAttempts", user.getFailedAttempts(),
-                                "lockedUntil", String.valueOf(user.getLockedUntil()),
-                                "ipAddress", String.valueOf(ipAddress)));
-            }
+                if (!wasLocked && user.isTemporarilyLocked()) {
+                    log.warn("Account {} locked until {} after {} failed attempts",
+                            user.getId(), user.getLockedUntil(), user.getFailedAttempts());
+                    auditService.record(AuditAction.ACCOUNT_LOCKED, "User", user.getId(),
+                            Map.of("failedAttempts", user.getFailedAttempts(),
+                                    "lockedUntil", String.valueOf(user.getLockedUntil()),
+                                    "ipAddress", String.valueOf(ipAddress)));
+                }
+            });
         }
 
         Map<String, Object> details = new HashMap<>();
         details.put("reason", reason.name());
         details.put("email", attemptedEmail);
         details.put("ipAddress", ipAddress);
-        auditService.record(AuditAction.LOGIN_FAILURE, "User",
-                user != null ? user.getId() : null, details, false);
+        auditService.record(AuditAction.LOGIN_FAILURE, "User", userId, details, false);
     }
 
-    /** Records the successful attempt and clears the failure counters. */
-    @Transactional
-    public void recordSuccess(User user, UUID sessionId, String ipAddress, String userAgent) {
+    /**
+     * Records the successful attempt and clears the failure counters.
+     *
+     * <p>{@code REQUIRES_NEW} (not just {@code @Transactional}) so this flushes and
+     * commits <em>before</em> returning to {@code AuthService.login} — that method is
+     * itself {@code @Transactional}, and without an isolated commit here a lost
+     * optimistic-lock race (or a genuine InnoDB deadlock — two concurrent logins to
+     * the same account both updating {@code last_login_at}/{@code failed_attempts})
+     * would only surface at {@code login}'s own outer commit, too late for its own
+     * try/catch around this call to do anything about it. Takes a {@code userId},
+     * not a {@code User}, for the same caller-owned-entity reason {@link
+     * #recordFailure} does.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSuccess(UUID userId, UUID sessionId, String ipAddress, String userAgent) {
+        User user = userRepository.findById(userId).orElseThrow();
         boolean wasLocked = user.getLockedUntil() != null;
 
         user.registerSuccessfulLogin(ipAddress);

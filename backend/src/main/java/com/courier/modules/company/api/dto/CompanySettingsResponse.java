@@ -22,6 +22,7 @@ public record CompanySettingsResponse(
         General general,
         Shipment shipment,
         Finance finance,
+        Sla sla,
         Notification notification,
         Security security,
         Branding branding,
@@ -50,6 +51,12 @@ public record CompanySettingsResponse(
     public record Finance(BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,
                           boolean walletEnabled, boolean codEnabled, boolean onlinePaymentEnabled,
                           boolean autoInvoiceGeneration) {
+    }
+
+    @Schema(name = "SlaSettings", description = "Shipment lifecycle SLA hours; breach auto-raises a ticket")
+    public record Sla(boolean slaBreachTicketEnabled, int slaBookingToLoadingSheetHours,
+                      int slaLoadingSheetToThcHours, int slaThcToInscanHours,
+                      int slaInscanToDrsHours, int slaDrsToDeliveryHours) {
     }
 
     @Schema(name = "NotificationSettings")

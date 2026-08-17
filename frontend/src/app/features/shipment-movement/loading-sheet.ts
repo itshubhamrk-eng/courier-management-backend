@@ -9,6 +9,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '@features/shipment/shipment.service';
 import { Manifest, Shipment } from '@core/models/shipment.model';
@@ -31,7 +32,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
   selector: 'app-loading-sheet',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiSelect, ManifestCard, WarehouseIllustration],
+  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiSelect, UiAutocomplete, ManifestCard, WarehouseIllustration],
   template: `
     <div class="page">
       <header class="page__head" data-tour="loading-sheet-head">
@@ -45,7 +46,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
 
       <app-card title="Create Loading Sheet" subtitle="Group booked shipments travelling this branch pair.">
         <form [formGroup]="createForm" (ngSubmit)="createManifest()" class="df">
-          <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Select branch" />
+          <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search branch…" />
           @if (!loadingBranches() && !branchOptions().length) {
             <p class="empty">No branch has a BOOKED shipment from your branch right now.</p>
           }
@@ -85,7 +86,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
       <div class="ml-head">
         <h2 class="text-h2 section-title">Open Manifests</h2>
         <div class="ml-filters">
-          <app-select [control]="filterBranchControl" [options]="allBranchOptions()" placeholder="All lanes" />
+          <app-autocomplete [control]="filterBranchControl" [options]="allBranchOptions()" placeholder="All lanes" />
           <app-select [control]="sortControl" [options]="sortOptions" />
         </div>
       </div>
@@ -107,7 +108,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; }
     .ml-head { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
     .ml-filters { display:flex; gap:10px; min-width:220px; }
-    .ml-filters app-select { min-width:170px; }
+    .ml-filters app-select, .ml-filters app-autocomplete { min-width:170px; }
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
     .section-title { margin:8px 0 0; }
@@ -195,22 +196,30 @@ export class LoadingSheet implements OnInit {
   }
 
   /**
-   * Delivery Branch only ever lists branches that actually have a BOOKED shipment
-   * waiting on this lane right now — never the signed-in user's own (booking) branch,
-   * and never a branch whose bookings have already all been manifested (nothing left
-   * to pick). Derived from the BOOKED shipments themselves, not the full branch
-   * directory — a branch with zero eligible bookings simply doesn't appear.
+   * Delivery Branch lists branches this branch actually has a shipment ready to hand off
+   * to right now — never the signed-in user's own (current) branch, and never a branch
+   * whose eligible shipments have already all been manifested. Matched on `currentLocationId`
+   * (where a shipment physically is, not necessarily where it was booked — a shipment past
+   * its first crossing hop sits at a hub, not its booking branch) and `status` BOOKED or
+   * READY_FOR_MANIFEST (the crossing-hub equivalent of BOOKED, see
+   * `ShipmentStatus.READY_FOR_MANIFEST`). Options are the shipments' own `nextLocationId`
+   * (their immediate next stop — a further crossing hub, or the real delivery branch once
+   * every hop is done), falling back to `deliveryBranchId` for a pre-crossing shipment with
+   * no `nextLocationId` written. Derived from the shipments themselves, not the full branch
+   * directory — a branch with nothing eligible simply doesn't appear.
    */
   private loadEligibleDeliveryBranches(): void {
     if (!this.myBranchId) { this.loadingBranches.set(false); return; }
     this.loadingBranches.set(true);
     this.shipmentService.list({
-      page: 0, size: 200, bookingBranchId: this.myBranchId, status: 'BOOKED'
+      page: 0, size: 200, currentLocationId: this.myBranchId,
+      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
     }).subscribe({
       next: (p) => {
         const names = this.branchNames();
         const eligible = new Set(
-          p.content.map((s) => s.deliveryBranchId).filter((id) => id !== this.myBranchId));
+          p.content.map((s) => s.nextLocationId ?? s.deliveryBranchId)
+            .filter((id) => id !== this.myBranchId));
         const options = [...eligible]
           .map((id) => ({ value: id, label: names.get(id) ?? id }))
           .sort((a, b) => a.label.localeCompare(b.label));
@@ -236,8 +245,12 @@ export class LoadingSheet implements OnInit {
     this.bookedShipments.set([]);
     this.createForm.get('shipmentIds')!.setValue([]);
     if (!deliveryBranchId || !this.myBranchId) return;
+    // Same current/next-location matching as loadEligibleDeliveryBranches — the shipment
+    // picker for a chosen destination must use the identical criteria that produced it as
+    // an option, or a crossing shipment picked as "eligible" here would vanish from the list.
     this.shipmentService.list({
-      page: 0, size: 100, bookingBranchId: this.myBranchId, deliveryBranchId, status: 'BOOKED'
+      page: 0, size: 100, currentLocationId: this.myBranchId, nextLocationId: deliveryBranchId,
+      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
     }).subscribe({
       next: (p) => this.bookedShipments.set(p.content),
       error: () => this.bookedShipments.set([])

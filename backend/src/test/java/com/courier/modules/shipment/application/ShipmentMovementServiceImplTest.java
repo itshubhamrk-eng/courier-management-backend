@@ -75,6 +75,8 @@ class ShipmentMovementServiceImplTest {
     private static final UUID CALLER = UUID.randomUUID();
     private static final UUID BOOKING_BRANCH = UUID.randomUUID();
     private static final UUID DELIVERY_BRANCH = UUID.randomUUID();
+    private static final UUID CROSSING_BRANCH = UUID.randomUUID();
+    private static final UUID SECOND_CROSSING_BRANCH = UUID.randomUUID();
     private static final UUID MANIFEST = UUID.randomUUID();
 
     @Mock private ShipmentRepository shipmentRepository;
@@ -96,6 +98,9 @@ class ShipmentMovementServiceImplTest {
     @Mock private UserService userService;
     @Mock private BranchService branchService;
     @Mock private com.courier.modules.customer.application.CustomerService customerService;
+    @Mock private com.courier.modules.crossing.application.CrossingService crossingService;
+    @Mock private com.courier.modules.support.application.TicketService ticketService;
+    @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
@@ -110,8 +115,8 @@ class ShipmentMovementServiceImplTest {
                 branchShipmentSequenceRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
-                userService, branchService, customerService, auditService, eventPublisher, fileStoragePort,
-                shipmentAssetRepository);
+                userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
+                auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
@@ -167,6 +172,68 @@ class ShipmentMovementServiceImplTest {
         assertThat(result.getManifestId()).isEqualTo(MANIFEST);
     }
 
+    @Test
+    @DisplayName("attachToManifest accepts a READY_FOR_MANIFEST shipment for its second leg, "
+            + "matched on current/next location rather than its fixed booking/delivery branch")
+    void attachAcceptsSecondLegAfterCrossingHop() {
+        Shipment shipment = shipment(ShipmentStatus.READY_FOR_MANIFEST);
+        shipment.setCurrentLocationId(CROSSING_BRANCH);
+        shipment.setNextLocationId(DELIVERY_BRANCH);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, CROSSING_BRANCH, DELIVERY_BRANCH);
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
+    }
+
+    @Test
+    @DisplayName("attachToManifest still refuses a second-leg shipment on the wrong lane")
+    void attachRefusesSecondLegWrongLane() {
+        Shipment shipment = shipment(ShipmentStatus.READY_FOR_MANIFEST);
+        shipment.setCurrentLocationId(CROSSING_BRANCH);
+        shipment.setNextLocationId(DELIVERY_BRANCH);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        assertThatThrownBy(() -> service.attachToManifest(
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("different lane");
+    }
+
+    @Test
+    @DisplayName("detachFromManifest reverts a shipment past its first crossing hop to "
+            + "READY_FOR_MANIFEST, not BOOKED")
+    void detachRevertsToReadyForManifestPastFirstHop() {
+        Shipment shipment = shipment(ShipmentStatus.MANIFEST_CREATED);
+        shipment.setCurrentLocationId(CROSSING_BRANCH);
+        shipment.setNextLocationId(DELIVERY_BRANCH);
+        shipment.setManifestId(MANIFEST);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        Shipment result = service.detachFromManifest(shipment.getId(), MANIFEST);
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
+        assertThat(result.getManifestId()).isNull();
+    }
+
+    @Test
+    @DisplayName("detachFromManifest still reverts a first-leg shipment to BOOKED")
+    void detachRevertsToBookedOnFirstLeg() {
+        Shipment shipment = shipment(ShipmentStatus.MANIFEST_CREATED);
+        shipment.setCurrentLocationId(BOOKING_BRANCH);
+        shipment.setNextLocationId(DELIVERY_BRANCH);
+        shipment.setManifestId(MANIFEST);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        Shipment result = service.detachFromManifest(shipment.getId(), MANIFEST);
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
+    }
+
     // -------------------------------------------------------------------- inScan
 
     @Test
@@ -176,7 +243,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()));
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
 
         assertThat(result.failureCount()).isEqualTo(1);
     }
@@ -188,7 +255,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(UUID.randomUUID(), List.of(shipment.getTrackingNumber()));
+        var result = service.inScan(UUID.randomUUID(), List.of(shipment.getTrackingNumber()), null, null);
 
         assertThat(result.failureCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.DISPATCHED);
@@ -201,10 +268,82 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()));
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+    }
+
+    @Test
+    @DisplayName("inScan at a crossing hub (not the final delivery branch) moves the shipment "
+            + "to READY_FOR_MANIFEST, not IN_SCAN, and advances nextLocationId")
+    void inScanAtCrossingHubAdvancesRoute() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        shipment.setCurrentLocationId(BOOKING_BRANCH);
+        shipment.setNextLocationId(CROSSING_BRANCH);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(crossingService.arriveAt(shipment.getId(), CROSSING_BRANCH))
+                .thenReturn(Optional.of(SECOND_CROSSING_BRANCH));
+
+        var result = service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
+        assertThat(shipment.getCurrentLocationId()).isEqualTo(CROSSING_BRANCH);
+        assertThat(shipment.getNextLocationId()).isEqualTo(SECOND_CROSSING_BRANCH);
+    }
+
+    @Test
+    @DisplayName("inScan auto-raises a shortage ticket when the operator names shipments that were "
+            + "not physically received, and reports the ticket number back")
+    void inScanRaisesShortageTicketForMissing() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(ticketCategoryService.listCategories()).thenReturn(List.of(
+                com.courier.modules.support.domain.TicketCategory.builder().name("Shipment Issue").active(true).build()));
+        com.courier.modules.support.domain.Ticket ticket =
+                com.courier.modules.support.domain.Ticket.builder().ticketNumber("TKT-000042").build();
+        when(ticketService.create(any())).thenReturn(ticket);
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), "MFT-000001",
+                List.of("AWB-MISSING-1", "AWB-MISSING-2"));
+
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.shortageTicketNumber()).isEqualTo("TKT-000042");
+        verify(ticketService).create(any());
+    }
+
+    @Test
+    @DisplayName("inScan never touches the ticket service when nothing is reported missing")
+    void inScanWithoutShortageRaisesNoTicket() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, List.of());
+
+        assertThat(result.shortageTicketNumber()).isNull();
+        verify(ticketService, never()).create(any());
+        assertThat(shipment.getManifestId()).isNull();
+    }
+
+    @Test
+    @DisplayName("inScan at the last crossing hub routes nextLocationId straight to the "
+            + "delivery branch once CrossingService reports no further hop")
+    void inScanAtLastCrossingHopRoutesToDeliveryBranch() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        shipment.setCurrentLocationId(BOOKING_BRANCH);
+        shipment.setNextLocationId(CROSSING_BRANCH);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(crossingService.arriveAt(shipment.getId(), CROSSING_BRANCH)).thenReturn(Optional.empty());
+
+        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
+        assertThat(shipment.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
     }
 
     // -------------------------------------------------------------------- assignOutForDelivery

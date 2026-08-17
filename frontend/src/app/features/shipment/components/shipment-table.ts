@@ -17,7 +17,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, UiTable, ShipmentStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No shipments" emptyHint="Book your first shipment to get started."
                emptyIllustration="package"
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
@@ -65,6 +65,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
 })
 export class ShipmentTable {
   readonly rows = input<Shipment[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<ShipmentPerms>();

@@ -55,6 +55,7 @@ import { ShipmentService } from '../shipment/shipment.service';
       <section class="block">
         <h2 class="text-h3">Shipment-wise Breakdown</h2>
         <app-table [columns]="detailColumns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                   [startIndex]="page().page * page().size"
                    emptyTitle="No shipments" emptyHint="Nothing matches this filter yet."
                    (sortChange)="onSort($event)" (rowClick)="view($event)">
           <ng-template #row let-s>

@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { NotificationFeedService } from '@core/services/notification-feed.service';
+import { AppNotification, NotificationFeedService } from '@core/services/notification-feed.service';
 
 /** Header bell + dropdown feed. Shows an unread badge and an empty state until data lands. */
 @Component({
@@ -34,7 +35,7 @@ import { NotificationFeedService } from '@core/services/notification-feed.servic
       } @else {
         <div class="nm__list">
           @for (n of feed.items(); track n.id) {
-            <button class="nm__item" [class.nm__item--unread]="!n.read">
+            <button class="nm__item" [class.nm__item--unread]="!n.read" (click)="open(n)">
               <mat-icon class="nm__item-icon" [attr.data-level]="n.level ?? 'info'">{{ n.icon }}</mat-icon>
               <span class="nm__item-body">
                 <span class="nm__item-title">{{ n.title }}</span>
@@ -73,4 +74,10 @@ import { NotificationFeedService } from '@core/services/notification-feed.servic
 })
 export class NotificationMenu {
   protected readonly feed = inject(NotificationFeedService);
+  private readonly router = inject(Router);
+
+  open(n: AppNotification): void {
+    this.feed.markRead(n.id);
+    if (n.ticketId) this.router.navigate(['/support/tickets', n.ticketId]);
+  }
 }

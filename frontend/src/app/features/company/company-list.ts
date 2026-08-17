@@ -25,6 +25,7 @@ import { CompanyService } from './company.service';
         </div>
       </header>
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No companies" (sortChange)="onSort($event)" (rowClick)="open($event)">
         <ng-template #row let-c>
           <td><div class="cs">{{ c.companyName }}</div><div class="text-caption">{{ c.companyCode }}</div></td>

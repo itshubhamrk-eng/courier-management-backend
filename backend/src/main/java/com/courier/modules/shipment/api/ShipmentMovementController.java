@@ -68,7 +68,8 @@ public class ShipmentMovementController {
         // The shipments themselves are already DISPATCHED by the time this call returns —
         // count them by that status rather than MANIFEST_CREATED, which none of them are anymore.
         ShipmentCriteria dispatchedOnThisManifest = new ShipmentCriteria(
-                Set.of(ShipmentStatus.DISPATCHED), null, null, manifest.getId(), null, null, null, null, null);
+                Set.of(ShipmentStatus.DISPATCHED), null, null, null, null, manifest.getId(),
+                null, null, null, null, null);
         int dispatchedCount = (int) shipmentService.search(dispatchedOnThisManifest, Pageable.unpaged())
                 .getTotalElements();
         return ApiResponse.success(new DispatchManifestResponse(
@@ -80,9 +81,11 @@ public class ShipmentMovementController {
     @PostMapping("/in-scan")
     @Operation(summary = "Receive shipments at the delivery branch",
             description = "Each tracking number must be DISPATCHED and its delivery branch must "
-                    + "match the receiving branch. Bulk: per-item outcome.")
+                    + "match the receiving branch. Bulk: per-item outcome. A non-empty "
+                    + "missingTrackingNumbers auto-raises a Support ticket for the shortfall.")
     public ApiResponse<BulkMovementResponse> inScan(@Valid @RequestBody InScanRequest request) {
-        var result = shipmentService.inScan(request.receivingBranchId(), request.trackingNumbers());
+        var result = shipmentService.inScan(request.receivingBranchId(), request.trackingNumbers(),
+                request.manifestNumber(), request.missingTrackingNumbers());
         return ApiResponse.success(shipmentMapper.toResponse(result));
     }
 

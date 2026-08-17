@@ -44,6 +44,7 @@ const ASSIGNERS = [AppRole.COMPANY_ADMIN];
       </header>
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No permissions" emptyHint="Adjust your filters or search."
                  (sortChange)="onSort($event)" (rowClick)="view($event)" idKey="id">
         <ng-template #row let-p>

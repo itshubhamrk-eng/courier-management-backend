@@ -32,10 +32,22 @@ import java.util.Set;
  * `OUT_SCAN` rows (real ones exist from live verification of the two-step version) back
  * into {@code MANIFEST_CREATED}, the same fold-back-on-rename pattern V19 set.
  *
- * <p>{@link #MANIFEST_CREATED} -&gt; {@link #BOOKED} is the one backward edge in this
- * graph: removing a shipment from a still-{@code CREATED} manifest (see
+ * <p>{@link #MANIFEST_CREATED} -&gt; {@link #BOOKED} was originally the one backward edge in
+ * this graph: removing a shipment from a still-{@code CREATED} manifest (see
  * {@code ManifestService.removeShipment}) reverts it to {@code BOOKED} so a future
  * manifest can pick it up, rather than leaving it stranded off every worklist.
+ * {@link #MANIFEST_CREATED} -&gt; {@link #READY_FOR_MANIFEST} is the crossing-aware sibling
+ * of that same edge: removing a shipment that has already advanced past its first crossing
+ * hop reverts it to {@code READY_FOR_MANIFEST} instead, since {@code BOOKED} would wrongly
+ * make it eligible for a fresh manifest starting from its original booking branch again.
+ *
+ * <p><b>Crossing (V37/V38):</b> {@link #DISPATCHED} -&gt; {@link #READY_FOR_MANIFEST} is a
+ * second exit from {@code DISPATCHED}, alongside the existing {@link #IN_SCAN} one — taken
+ * only when the branch performing the in-scan is an intermediate crossing hub, not the
+ * shipment's own {@code deliveryBranchId} (see {@code ShipmentServiceImpl.scanOneIn}).
+ * That is what finally gives {@link #READY_FOR_MANIFEST} a writer: a shipment received at
+ * a hub is ready for its next leg's manifest, exactly what the status name already said
+ * before anything wrote it.
  */
 public enum ShipmentStatus {
 
@@ -52,8 +64,8 @@ public enum ShipmentStatus {
     private static final Map<ShipmentStatus, Set<ShipmentStatus>> TRANSITIONS = Map.ofEntries(
             Map.entry(BOOKED, EnumSet.of(READY_FOR_MANIFEST, MANIFEST_CREATED, CANCELLED)),
             Map.entry(READY_FOR_MANIFEST, EnumSet.of(MANIFEST_CREATED, CANCELLED)),
-            Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED, BOOKED)),
-            Map.entry(DISPATCHED, EnumSet.of(IN_SCAN)),
+            Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED, BOOKED, READY_FOR_MANIFEST)),
+            Map.entry(DISPATCHED, EnumSet.of(IN_SCAN, READY_FOR_MANIFEST)),
             Map.entry(IN_SCAN, EnumSet.of(OUT_FOR_DELIVERY, RETURNED)),
             Map.entry(OUT_FOR_DELIVERY, EnumSet.of(DELIVERED, RETURNED)),
             Map.entry(DELIVERED, EnumSet.noneOf(ShipmentStatus.class)),

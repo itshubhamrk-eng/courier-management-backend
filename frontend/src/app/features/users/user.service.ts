@@ -1,7 +1,8 @@
+import { HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { ApiService } from '@core/services/api.service';
+import { ApiService, SILENT_ERRORS } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import {
   AppUser, UserProfile, CreateUserRequest, UpdateUserRequest
@@ -24,7 +25,12 @@ export class UserService {
 
   // ---- reads ----------------------------------------------------------------
   list(query: PageQuery) { return this.api.page<AppUser>(API.users, query); }
-  get(id: string) { return this.api.get<UserProfile>(`${API.users}/${id}`); }
+  /** `silent: true` for a best-effort lookup where a miss (e.g. a platform-tier actor,
+   *  not a company user) is expected and handled by the caller — no error toast. */
+  get(id: string, opts?: { silent?: boolean }) {
+    const context = opts?.silent ? new HttpContext().set(SILENT_ERRORS, true) : undefined;
+    return this.api.get<UserProfile>(`${API.users}/${id}`, undefined, context);
+  }
 
   // ---- writes ---------------------------------------------------------------
   create(body: CreateUserRequest) { return this.api.post<UserProfile>(API.users, body); }

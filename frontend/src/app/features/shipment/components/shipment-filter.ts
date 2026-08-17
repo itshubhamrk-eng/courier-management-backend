@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentSearchRequest, ShipmentStatus } from '@core/models/shipment.model';
@@ -19,15 +20,15 @@ const STATUSES: SelectOption[] = ([
   selector: 'app-shipment-filter',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiSelect, UiButton],
+  imports: [ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="apply()" class="cf">
       <app-select [control]="c('status')" label="Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
       @if (!lockBookingBranch()) {
-        <app-select [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+        <app-autocomplete [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" placeholder="Any branch" />
       }
       @if (!lockDeliveryBranch()) {
-        <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" [allowEmpty]="true" placeholder="Any branch" />
+        <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Any branch" />
       }
 
       <label class="fld"><span class="fld__l">{{ mode() === 'delivery' ? 'Delivered From' : 'Booked From' }}</span>

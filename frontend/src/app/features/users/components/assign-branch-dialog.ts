@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { NotificationService } from '@core/services/notification.service';
 import { UserProfile } from '@core/models/user.model';
@@ -19,12 +20,12 @@ export interface AssignBranchData {
   selector: 'app-assign-branch-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatDialogModule, UiSelect, UiButton],
+  imports: [MatDialogModule, UiAutocomplete, UiButton],
   template: `
     <div class="pd">
       <h2 class="text-h2">Assign branch</h2>
       <p class="text-caption">{{ data.displayName }} — a user belongs to at most one branch.</p>
-      <app-select [control]="picker" label="Branch" [options]="options()" [allowEmpty]="true" emptyLabel="Unassigned" />
+      <app-autocomplete [control]="picker" label="Branch" [options]="options()" placeholder="Search branch, or leave blank to unassign…" />
       <div class="pd__actions">
         <app-button variant="stroked" (pressed)="ref.close(null)">Cancel</app-button>
         <app-button icon="save" [loading]="busy()" (pressed)="save()">Save</app-button>

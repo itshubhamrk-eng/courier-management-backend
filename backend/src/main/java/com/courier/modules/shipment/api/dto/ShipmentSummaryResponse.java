@@ -19,7 +19,8 @@ import java.util.UUID;
 @Schema(name = "ShipmentSummaryResponse", description = "Shipment list row")
 public record ShipmentSummaryResponse(
         UUID id, String shipmentNumber, String trackingNumber, LocalDate bookingDate,
-        UUID bookingBranchId, UUID deliveryBranchId, UUID manifestId, UUID paymentModeId,
+        UUID bookingBranchId, UUID deliveryBranchId, UUID currentLocationId, UUID nextLocationId,
+        UUID manifestId, UUID paymentModeId,
         String senderName, String senderContact, String receiverName, String receiverContact,
         BigDecimal chargeableWeight, BigDecimal netAmount,
         BigDecimal totalCommission, BigDecimal commissionOnBasicFreight,

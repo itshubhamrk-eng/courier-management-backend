@@ -46,7 +46,8 @@ public class ShipmentMapper {
                 r.serviceTypeId(), r.packageTypeId(), r.paymentModeId(),
                 r.shipmentType(), r.bookingDate(), r.declaredValue(), r.numberOfPackages(),
                 r.remarks(), r.otherCharges(), r.freightFactorOverride(), toItemCommands(r.items()),
-                r.actualWeight(), r.length(), r.width(), r.height());
+                r.actualWeight(), r.length(), r.width(), r.height(),
+                r.crossing(), r.crossingBranchIds(), r.crossingCharge());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {
@@ -73,6 +74,7 @@ public class ShipmentMapper {
     public ShipmentCriteria toCriteria(ShipmentSearchRequest r) {
         ShipmentSearchRequest safe = r == null ? ShipmentSearchRequest.empty() : r;
         return new ShipmentCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(),
+                safe.currentLocationId(), safe.nextLocationId(),
                 safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
                 safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.search());
     }
@@ -91,6 +93,7 @@ public class ShipmentMapper {
         return new ShipmentResponse(
                 s.getId(), s.getCompanyId(), s.getShipmentNumber(), s.getTrackingNumber(),
                 s.getBookingDate(), s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(),
+                s.getCurrentLocationId(), s.getNextLocationId(),
                 s.getPickupPincode(), s.getDeliveryPincode(),
                 s.getSenderName(), s.getSenderAddress(), s.getSenderContact(),
                 s.getReceiverName(), s.getReceiverAddress(), s.getReceiverContact(),
@@ -131,7 +134,8 @@ public class ShipmentMapper {
                                              Instant deliveredAt) {
         return new ShipmentSummaryResponse(
                 s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getBookingDate(),
-                s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(), s.getPaymentModeId(),
+                s.getBookingBranchId(), s.getDeliveryBranchId(), s.getCurrentLocationId(), s.getNextLocationId(),
+                s.getManifestId(), s.getPaymentModeId(),
                 s.getSenderName(), s.getSenderContact(), s.getReceiverName(), s.getReceiverContact(),
                 s.getChargeableWeight(), netAmount,
                 charge == null ? null : charge.getTotalCommission(),
@@ -176,7 +180,7 @@ public class ShipmentMapper {
                         o.reference(), o.success(), o.message()))
                 .toList();
         return new com.courier.modules.shipment.api.dto.BulkMovementResponse(
-                results, r.successCount(), r.failureCount(), r.drsNumber());
+                results, r.successCount(), r.failureCount(), r.drsNumber(), r.shortageTicketNumber());
     }
 
     public com.courier.modules.shipment.api.dto.TimelineStepResponse toResponse(ShipmentService.TimelineStep s) {

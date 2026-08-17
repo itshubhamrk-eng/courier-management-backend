@@ -25,6 +25,7 @@ import { HubService } from './hub.service';
         <div class="page__actions"><app-search placeholder="Search hubs…" (changed)="onSearch($event)" /><app-button icon="add">New Hub</app-button></div>
       </header>
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No hubs yet" emptyHint="Hub management arrives in the next release." (sortChange)="onSort($event)" idKey="id">
         <ng-template #row let-h>
           <td><div class="cs">{{ h['hubName'] }}</div><div class="text-caption">{{ h['hubCode'] }}</div></td>

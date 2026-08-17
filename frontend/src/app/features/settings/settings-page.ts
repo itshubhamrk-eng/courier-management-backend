@@ -54,6 +54,7 @@ export class SettingsPage implements OnInit {
     { key: 'general', title: 'General', icon: 'business', desc: 'Identity, contact and regional defaults.' },
     { key: 'shipment', title: 'Shipment', icon: 'local_shipping', desc: 'AWB prefixes, units and booking rules.' },
     { key: 'finance', title: 'Finance', icon: 'payments', desc: 'GST, invoicing, wallet and COD.' },
+    { key: 'sla', title: 'SLA', icon: 'schedule', desc: 'Hours before a stuck shipment auto-raises a ticket.' },
     { key: 'notification', title: 'Notification', icon: 'notifications', desc: 'SMS, email, WhatsApp and push.' },
     { key: 'security', title: 'Security', icon: 'shield', desc: 'Password policy, sessions and OTP.' },
     { key: 'branding', title: 'Branding', icon: 'palette', desc: 'Logo, colours and theme.' }

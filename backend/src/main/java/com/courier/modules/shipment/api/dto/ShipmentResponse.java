@@ -19,6 +19,7 @@ public record ShipmentResponse(
         String shipmentNumber, String trackingNumber,
         LocalDate bookingDate,
         UUID bookingBranchId, UUID deliveryBranchId, UUID manifestId,
+        UUID currentLocationId, UUID nextLocationId,
         String pickupPincode, String deliveryPincode,
         String senderName, String senderAddress, String senderContact,
         String receiverName, String receiverAddress, String receiverContact,

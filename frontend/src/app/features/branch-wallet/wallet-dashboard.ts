@@ -14,7 +14,8 @@ import { BranchService } from '@features/branch/branch.service';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
-import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { BalanceCard } from './components/balance-card';
 import { WalletStatusBadge } from './components/wallet-status-badge';
 import { TransactionTable } from './components/transaction-table';
@@ -45,7 +46,7 @@ const ADMINS = [AppRole.COMPANY_ADMIN];
   selector: 'app-wallet-dashboard',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiSelect, BalanceCard, WalletStatusBadge, TransactionTable],
+  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiAutocomplete, BalanceCard, WalletStatusBadge, TransactionTable],
   template: `
     <div class="page">
       <header class="page__head">
@@ -54,8 +55,8 @@ const ADMINS = [AppRole.COMPANY_ADMIN];
 
       @if (isAdmin()) {
         <app-card>
-          <app-select [control]="branchControl" label="Branch" [options]="branchOptions()"
-                      placeholder="Select a branch to view its wallet" />
+          <app-autocomplete [control]="branchControl" label="Branch" [options]="branchOptions()"
+                      placeholder="Search branch to view its wallet…" />
         </app-card>
       }
 
@@ -76,6 +77,7 @@ const ADMINS = [AppRole.COMPANY_ADMIN];
             </div>
           </div>
           <div class="wd__actions">
+            <app-button variant="stroked" icon="support_agent" (pressed)="raiseTicket()">Raise Ticket</app-button>
             @if (can().recharge) { <app-button icon="add_card" (pressed)="recharge()">Recharge</app-button> }
             @if (can().requestTopup) { <app-button icon="send" (pressed)="requestTopup()">Request Top-up</app-button> }
             @if (can().credit) { <app-button variant="stroked" icon="add" (pressed)="credit()">Credit</app-button> }
@@ -223,6 +225,10 @@ export class WalletDashboard implements OnInit {
   }
 
   allTransactions(): void { this.router.navigate(['/finance/branch-wallet/transactions'], { queryParams: this.queryParams() }); }
+
+  raiseTicket(): void {
+    this.router.navigate(['/support/tickets/new'], { queryParams: { branchId: this.summary()!.branchId } });
+  }
 
   recharge(): void {
     const s = this.summary()!;

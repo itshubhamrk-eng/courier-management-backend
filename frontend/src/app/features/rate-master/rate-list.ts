@@ -49,6 +49,7 @@ const LIFECYCLE = [AppRole.COMPANY_ADMIN];
       </header>
 
       <app-rate-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                       [routeNames]="routeNames()" [serviceTypeNames]="serviceTypeNames()"
                       [packageTypeNames]="packageTypeNames()" [paymentModeNames]="paymentModeNames()"
                       (sortChange)="onSort($event)" (action)="onAction($event)" />

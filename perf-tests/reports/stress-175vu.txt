@@ -1,0 +1,189 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: perf-tests/k6/scenario.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 175 max VUs, 1m0s max duration (incl. graceful stop):
+              * default: 175 looping VUs for 30s (gracefulStop: 30s)
+
+
+running (0m01.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [   2% ] 175 VUs  00.7s/30s
+
+running (0m02.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [   6% ] 175 VUs  01.7s/30s
+
+running (0m03.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [   9% ] 175 VUs  02.7s/30s
+
+running (0m04.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  12% ] 175 VUs  03.7s/30s
+
+running (0m05.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  16% ] 175 VUs  04.7s/30s
+
+running (0m06.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  19% ] 175 VUs  05.7s/30s
+
+running (0m07.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  22% ] 175 VUs  06.7s/30s
+
+running (0m08.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  26% ] 175 VUs  07.7s/30s
+
+running (0m09.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  29% ] 175 VUs  08.7s/30s
+
+running (0m10.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  32% ] 175 VUs  09.7s/30s
+
+running (0m11.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  36% ] 175 VUs  10.7s/30s
+
+running (0m12.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  39% ] 175 VUs  11.7s/30s
+
+running (0m13.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  42% ] 175 VUs  12.7s/30s
+
+running (0m14.0s), 175/175 VUs, 0 complete and 0 interrupted iterations
+default   [  46% ] 175 VUs  13.7s/30s
+
+running (0m15.0s), 175/175 VUs, 1 complete and 0 interrupted iterations
+default   [  49% ] 175 VUs  14.7s/30s
+
+running (0m16.0s), 175/175 VUs, 16 complete and 0 interrupted iterations
+default   [  52% ] 175 VUs  15.7s/30s
+
+running (0m17.0s), 175/175 VUs, 86 complete and 0 interrupted iterations
+default   [  56% ] 175 VUs  16.7s/30s
+
+running (0m18.0s), 175/175 VUs, 175 complete and 0 interrupted iterations
+default   [  59% ] 175 VUs  17.7s/30s
+
+running (0m19.0s), 175/175 VUs, 175 complete and 0 interrupted iterations
+default   [  62% ] 175 VUs  18.7s/30s
+
+running (0m20.0s), 175/175 VUs, 175 complete and 0 interrupted iterations
+default   [  66% ] 175 VUs  19.7s/30s
+
+running (0m21.0s), 175/175 VUs, 175 complete and 0 interrupted iterations
+default   [  69% ] 175 VUs  20.7s/30s
+
+running (0m22.0s), 175/175 VUs, 175 complete and 0 interrupted iterations
+default   [  72% ] 175 VUs  21.7s/30s
+
+running (0m23.0s), 175/175 VUs, 176 complete and 0 interrupted iterations
+default   [  76% ] 175 VUs  22.7s/30s
+
+running (0m24.0s), 175/175 VUs, 191 complete and 0 interrupted iterations
+default   [  79% ] 175 VUs  23.7s/30s
+
+running (0m25.0s), 175/175 VUs, 195 complete and 0 interrupted iterations
+default   [  82% ] 175 VUs  24.7s/30s
+
+running (0m26.0s), 175/175 VUs, 262 complete and 0 interrupted iterations
+default   [  86% ] 175 VUs  25.7s/30s
+
+running (0m27.0s), 175/175 VUs, 350 complete and 0 interrupted iterations
+default   [  89% ] 175 VUs  26.7s/30s
+
+running (0m28.0s), 175/175 VUs, 350 complete and 0 interrupted iterations
+default   [  92% ] 175 VUs  27.7s/30s
+
+running (0m29.0s), 175/175 VUs, 350 complete and 0 interrupted iterations
+default   [  96% ] 175 VUs  28.7s/30s
+
+running (0m30.0s), 175/175 VUs, 351 complete and 0 interrupted iterations
+default   [  99% ] 175 VUs  29.7s/30s
+
+running (0m31.0s), 163/175 VUs, 366 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+running (0m32.0s), 156/175 VUs, 373 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+running (0m33.0s), 138/175 VUs, 391 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+running (0m34.0s), 086/175 VUs, 443 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+running (0m35.0s), 004/175 VUs, 525 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+running (0m36.0s), 003/175 VUs, 526 complete and 0 interrupted iterations
+default ↓ [ 100% ] 175 VUs  30s
+
+
+  █ THRESHOLDS 
+
+    create_shipment_duration
+    ✓ 'p(95)<1000' p(95)=256.0976
+
+    dashboard_duration
+    ✗ 'p(95)<1000' p(95)=3534.873
+
+    http_req_duration
+    ✗ 'p(95)<1000' p(95)=4.94s
+    ✗ 'p(99)<2000' p(99)=7.83s
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+    login_duration
+    ✗ 'p(95)<1000' p(95)=8224.83175
+
+    search_duration
+    ✓ 'p(95)<1000' p(95)=643.4946
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 3350    91.698602/s
+    checks_succeeded...: 100.00% 3350 out of 3350
+    checks_failed......: 0.00%   0 out of 3350
+
+    ✓ login 200
+    ✓ dashboard 200
+    ✓ search 200
+    ✓ open shipment 200
+    ✓ track 200
+    ✓ create shipment 201/200
+    ✓ update shipment 200
+
+    CUSTOM
+    create_shipment_duration.......: avg=99.255762   min=6.675   med=65.913   max=382.089  p(90)=220.4118 p(95)=256.0976  
+    dashboard_duration.............: avg=2106.944841 min=48.172  med=2092.245 max=6611.739 p(90)=2978.688 p(95)=3534.873  
+    login_duration.................: avg=7042.15025  min=279.303 med=7397.427 max=9164.527 p(90)=8042.325 p(95)=8224.83175
+    search_duration................: avg=329.765917  min=14.874  med=345.187  max=1255.523 p(90)=542.0406 p(95)=643.4946  
+
+    HTTP
+    http_req_duration..............: avg=799.39ms    min=2.46ms  med=86.52ms  max=9.16s    p(90)=2.38s    p(95)=4.94s     
+      { expected_response:true }...: avg=799.39ms    min=2.46ms  med=86.52ms  max=9.16s    p(90)=2.38s    p(95)=4.94s     
+    http_req_failed................: 0.00%  0 out of 3354
+    http_reqs......................: 3354   91.808093/s
+
+    EXECUTION
+    iteration_duration.............: avg=11.07s      min=6.18s   med=8.94s    max=17.07s   p(90)=16.99s   p(95)=17.03s    
+    iterations.....................: 529    14.480167/s
+    vus............................: 3      min=3         max=175
+    vus_max........................: 175    min=175       max=175
+
+    NETWORK
+    data_received..................: 15 MB  401 kB/s
+    data_sent......................: 2.9 MB 78 kB/s
+
+
+
+
+running (0m36.5s), 000/175 VUs, 529 complete and 0 interrupted iterations
+default ✓ [ 100% ] 175 VUs  30s
+time="2026-08-17T14:26:17+05:30" level=error msg="thresholds on metrics 'dashboard_duration, http_req_duration, login_duration' have been crossed"

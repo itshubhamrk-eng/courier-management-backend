@@ -20,6 +20,12 @@ import java.util.UUID;
  * @param length           optional, used only when {@code items} is empty
  * @param width            optional, used only when {@code items} is empty
  * @param height           optional, used only when {@code items} is empty
+ * @param crossing          routes this shipment through {@code crossingBranchIds} in order,
+ *                          instead of straight to the delivery branch
+ * @param crossingBranchIds required, at least one branch, when {@code crossing} is true —
+ *                          the intermediate hubs in the order the shipment passes through them
+ * @param crossingCharge    the whole route's crossing charge (not per hop); defaults to
+ *                          zero when {@code crossing} is true and this is null
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
@@ -46,6 +52,9 @@ public record CreateShipmentCommand(
         BigDecimal actualWeight,
         BigDecimal length,
         BigDecimal width,
-        BigDecimal height
+        BigDecimal height,
+        Boolean crossing,
+        List<UUID> crossingBranchIds,
+        BigDecimal crossingCharge
 ) {
 }

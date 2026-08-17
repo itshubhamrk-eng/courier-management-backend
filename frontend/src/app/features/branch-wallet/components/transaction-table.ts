@@ -18,7 +18,7 @@ import { WalletTransaction, formatMoney, prettyToken } from '@core/models/wallet
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, MatIconModule, UiTable, StatusBadge, TransactionTypeBadge],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No transactions" emptyHint="Recharge or a manual credit will appear here."
                (sortChange)="sortChange.emit($event)">
       <ng-template #row let-t>
@@ -61,6 +61,7 @@ import { WalletTransaction, formatMoney, prettyToken } from '@core/models/wallet
 })
 export class TransactionTable {
   readonly rows = input<WalletTransaction[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   /** Wallet currency, so amounts format consistently even though a txn carries no currency. */

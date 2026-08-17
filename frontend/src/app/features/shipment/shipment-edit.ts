@@ -6,6 +6,7 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
@@ -28,7 +29,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
   selector: 'app-shipment-edit',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiSelect, UiButton, UiCard, UiLoader, ItemEntryGrid],
+  imports: [ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton, UiCard, UiLoader, ItemEntryGrid],
   template: `
     <div class="page">
       <header class="page__head">
@@ -44,7 +45,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
           <app-card title="Booking Branch">
             <div class="grid2">
               <div class="stat"><span class="stat__l">Booking Branch</span><span class="stat__v">{{ branchLabel(shipment()!.bookingBranchId) }}</span><span class="stat__h">Immutable once booked</span></div>
-              <app-select [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="deliveryBranchOptions()" placeholder="Select the delivery branch" />
+              <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="deliveryBranchOptions()" placeholder="Search delivery branch…" />
               <label class="fld"><span class="fld__l">From Pincode</span>
                 <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" /></label>
               <label class="fld"><span class="fld__l">To Pincode</span>

@@ -8,6 +8,10 @@ import java.util.UUID;
 
 public record InScanRequest(
         @NotNull UUID receivingBranchId,
-        @NotEmpty List<String> trackingNumbers
+        @NotEmpty List<String> trackingNumbers,
+        /** Descriptive only — see {@code ShipmentService.inScan}'s own doc. */
+        String manifestNumber,
+        /** Non-empty raises an automatic shortage ticket. See {@code ShipmentService.inScan}. */
+        List<String> missingTrackingNumbers
 ) {
 }

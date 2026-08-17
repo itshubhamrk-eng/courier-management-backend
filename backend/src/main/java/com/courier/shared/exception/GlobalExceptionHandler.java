@@ -4,8 +4,8 @@ import com.courier.shared.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -144,10 +144,20 @@ public class GlobalExceptionHandler {
                 "The operation conflicts with existing data", request, null);
     }
 
-    @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException ex,
-                                                                  HttpServletRequest request) {
-        log.warn("Optimistic lock conflict at {} {}", request.getMethod(), request.getRequestURI());
+    /**
+     * Covers both flavors of "two requests fought over the same row and one lost":
+     * {@code OptimisticLockingFailureException} (a {@code @Version} mismatch) and
+     * {@code PessimisticLockingFailureException}/{@code CannotAcquireLockException}
+     * (a real InnoDB deadlock or lock-wait timeout) — both are
+     * {@link ConcurrencyFailureException}. Before this was narrowed to only the
+     * optimistic case, a genuine deadlock fell through to the generic 500 handler
+     * instead of the same retryable 409 (found running a k6 load test: concurrent
+     * logins to the same account deadlocking on the users row update).
+     */
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrencyFailure(ConcurrencyFailureException ex,
+                                                                       HttpServletRequest request) {
+        log.warn("Concurrency conflict at {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(ErrorCode.CONCURRENT_MODIFICATION,
                 "This record was modified by someone else. Reload and try again.", request, null);
     }

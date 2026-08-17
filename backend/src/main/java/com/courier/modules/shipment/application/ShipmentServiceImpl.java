@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.application;
 
+import com.courier.modules.crossing.application.CrossingService;
 import com.courier.modules.customer.application.CustomerService;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.domain.Wallet;
@@ -51,6 +52,12 @@ import com.courier.modules.shipment.domain.ShipmentStatusHistory;
 import com.courier.modules.shipment.domain.ShipmentSummaryStats;
 import com.courier.modules.shipment.domain.ShipmentStatusHistoryRepository;
 import com.courier.modules.shipment.domain.ShipmentType;
+import com.courier.modules.support.application.TicketCategoryService;
+import com.courier.modules.support.application.TicketService;
+import com.courier.modules.support.application.command.CreateTicketCommand;
+import com.courier.modules.support.domain.Ticket;
+import com.courier.modules.support.domain.TicketCategory;
+import com.courier.modules.support.domain.TicketPriority;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
@@ -144,6 +151,9 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final com.courier.modules.company.application.UserService userService;
     private final com.courier.modules.company.application.BranchService branchService;
     private final CustomerService customerService;
+    private final CrossingService crossingService;
+    private final TicketService ticketService;
+    private final TicketCategoryService ticketCategoryService;
 
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
@@ -164,6 +174,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         requireWithinPackageTypeCeiling(command.packageTypeId(), weight.actualWeight());
 
         LocalDate bookingDate = command.bookingDate() == null ? LocalDate.now() : command.bookingDate();
+
+        boolean crossing = Boolean.TRUE.equals(command.crossing());
+        if (crossing && (command.crossingBranchIds() == null || command.crossingBranchIds().isEmpty())) {
+            throw new BusinessRuleException(
+                    "Pick at least one branch this shipment is crossing through, or turn Crossing off.");
+        }
+        UUID firstCrossingBranch = crossing ? command.crossingBranchIds().get(0) : null;
 
         com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
 
@@ -188,6 +205,8 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .bookingDate(bookingDate)
                 .bookingBranchId(command.bookingBranchId())
                 .deliveryBranchId(command.deliveryBranchId())
+                .currentLocationId(command.bookingBranchId())
+                .nextLocationId(crossing ? firstCrossingBranch : command.deliveryBranchId())
                 .pickupPincode(command.pickupPincode())
                 .deliveryPincode(command.deliveryPincode())
                 .senderName(command.senderName())
@@ -221,6 +240,10 @@ public class ShipmentServiceImpl implements ShipmentService {
         persistItems(saved, companyId, items);
         persistCharges(saved, companyId, priced, otherCharges, bookingBranch);
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
+
+        if (crossing) {
+            crossingService.createLegs(saved.getId(), command.crossingBranchIds(), command.crossingCharge());
+        }
 
         log.info("Shipment {} ({}) booked in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
@@ -573,13 +596,22 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
 
-        if (shipment.getStatus() != ShipmentStatus.BOOKED) {
-            throw new BusinessRuleException("Shipment %s is %s — only BOOKED shipments can be "
+        if (shipment.getStatus() != ShipmentStatus.BOOKED && shipment.getStatus() != ShipmentStatus.READY_FOR_MANIFEST) {
+            throw new BusinessRuleException("Shipment %s is %s — only BOOKED or READY_FOR_MANIFEST shipments can be "
                     .formatted(shipment.getShipmentNumber(), shipment.getStatus())
                     + "added to a manifest.");
         }
-        if (!Objects.equals(shipment.getBookingBranchId(), expectedBookingBranchId)
-                || !Objects.equals(shipment.getDeliveryBranchId(), expectedDeliveryBranchId)) {
+        // Compared against where the shipment actually is / is headed next, not its fixed
+        // booking/delivery branch — the same value for a single-leg shipment (current ==
+        // booking, next == delivery), but different once a crossing shipment has advanced
+        // past its first hop (see ShipmentServiceImpl.scanOneIn). Pre-V37 rows fall back to
+        // the fixed branches, since they never got current/nextLocationId written.
+        UUID actualPosition = shipment.getCurrentLocationId() != null
+                ? shipment.getCurrentLocationId() : shipment.getBookingBranchId();
+        UUID actualNextStop = shipment.getNextLocationId() != null
+                ? shipment.getNextLocationId() : shipment.getDeliveryBranchId();
+        if (!Objects.equals(actualPosition, expectedBookingBranchId)
+                || !Objects.equals(actualNextStop, expectedDeliveryBranchId)) {
             throw new BusinessRuleException(
                     "Shipment %s travels a different lane than this manifest.".formatted(
                             shipment.getShipmentNumber()));
@@ -608,10 +640,18 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
 
         ShipmentStatus previous = shipment.getStatus();
+        // A shipment still sitting at its own booking branch reverts to BOOKED, same as
+        // ever. One that has already advanced past a crossing hop (its current location is
+        // no longer where it was booked) reverts to READY_FOR_MANIFEST instead, so it stays
+        // eligible for a future leg from wherever it physically is — not BOOKED, which would
+        // let it be re-attached to a manifest starting from its original booking branch.
+        boolean atOriginalBookingBranch = shipment.getCurrentLocationId() == null
+                || Objects.equals(shipment.getCurrentLocationId(), shipment.getBookingBranchId());
+        ShipmentStatus revertTo = atOriginalBookingBranch ? ShipmentStatus.BOOKED : ShipmentStatus.READY_FOR_MANIFEST;
         shipment.setManifestId(null);
-        shipment.transitionTo(ShipmentStatus.BOOKED);
+        shipment.transitionTo(revertTo);
         Shipment saved = shipmentRepository.save(shipment);
-        appendHistory(saved, companyId, previous, ShipmentStatus.BOOKED, "Removed from manifest");
+        appendHistory(saved, companyId, previous, revertTo, "Removed from manifest");
         return saved;
     }
 
@@ -620,7 +660,8 @@ public class ShipmentServiceImpl implements ShipmentService {
     @PreAuthorize(READERS)
     public List<Shipment> findManifestCreatedShipments(UUID manifestId) {
         ShipmentCriteria criteria = new ShipmentCriteria(
-                java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, manifestId, null, null, null, null, null);
+                java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, null, null, manifestId,
+                null, null, null, null, null);
         return shipmentRepository.findAll(ShipmentSpecifications.matching(criteria));
     }
 
@@ -679,13 +720,48 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     @PreAuthorize(WRITERS)
-    public BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers) {
+    public BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers, String manifestNumber,
+                                      List<String> missingTrackingNumbers) {
         UUID companyId = requireCompany();
         List<MovementOutcome> outcomes = new ArrayList<>();
         for (String trackingNumber : trackingNumbers) {
             outcomes.add(scanOneIn(companyId, receivingBranchId, trackingNumber));
         }
-        return new BulkMovementResult(outcomes);
+        String shortageTicketNumber = (missingTrackingNumbers == null || missingTrackingNumbers.isEmpty())
+                ? null
+                : raiseShortageTicket(receivingBranchId, manifestNumber, missingTrackingNumbers);
+        return new BulkMovementResult(outcomes, null, shortageTicketNumber);
+    }
+
+    /**
+     * The operator's own explicit "not physically on this THC" checklist answer — see
+     * {@link ShipmentService#inScan}'s own doc. Never blocks or rolls back the in-scan
+     * itself: a missing "Shipment Issue" category (SUPER_ADMIN deactivated/renamed it) just
+     * skips the ticket with a warning, same graceful-degradation precedent every other
+     * best-effort side effect in this module follows.
+     */
+    private String raiseShortageTicket(UUID receivingBranchId, String manifestNumber,
+                                        List<String> missingTrackingNumbers) {
+        Optional<TicketCategory> category = ticketCategoryService.listCategories().stream()
+                .filter(TicketCategory::isActive)
+                .filter(c -> "Shipment Issue".equalsIgnoreCase(c.getName()))
+                .findFirst();
+        if (category.isEmpty()) {
+            log.warn("No 'Shipment Issue' ticket category found — skipping auto-raised shortage ticket "
+                    + "for {} short-received shipment(s) at branch {}", missingTrackingNumbers.size(), receivingBranchId);
+            return null;
+        }
+        String manifestRef = (manifestNumber == null || manifestNumber.isBlank()) ? "" : " (" + manifestNumber + ")";
+        String subject = "%d shipment(s) short-received%s".formatted(missingTrackingNumbers.size(), manifestRef);
+        String description = ("The following %d shipment(s) were left unchecked as \"not physically available\" "
+                + "during In Scan%s and are still showing DISPATCHED: %s.")
+                .formatted(missingTrackingNumbers.size(), manifestRef, String.join(", ", missingTrackingNumbers));
+        Ticket ticket = ticketService.create(new CreateTicketCommand(
+                subject, description, category.get().getId(), null, TicketPriority.HIGH,
+                null, null, receivingBranchId, null));
+        log.info("Auto-raised ticket {} ({}) for {} short-received shipment(s) at branch {}",
+                ticket.getTicketNumber(), ticket.getId(), missingTrackingNumbers.size(), receivingBranchId);
+        return ticket.getTicketNumber();
     }
 
     private MovementOutcome scanOneIn(UUID companyId, UUID receivingBranchId, String trackingNumber) {
@@ -698,18 +774,45 @@ public class ShipmentServiceImpl implements ShipmentService {
             return new MovementOutcome(trackingNumber, false,
                     "Cannot be received — currently " + shipment.getStatus() + ".");
         }
-        if (!Objects.equals(shipment.getDeliveryBranchId(), receivingBranchId)) {
+        // A shipment's next stop is its crossing hop when it has one still ahead, otherwise
+        // its own delivery branch — the same value for a non-crossing shipment either way
+        // (pre-V37 rows fall back to deliveryBranchId, since they never got nextLocationId
+        // written).
+        UUID expectedNextStop = shipment.getNextLocationId() != null
+                ? shipment.getNextLocationId() : shipment.getDeliveryBranchId();
+        if (!Objects.equals(expectedNextStop, receivingBranchId)) {
             return new MovementOutcome(trackingNumber, false,
-                    "Receiving branch does not match this shipment's delivery branch.");
+                    "Receiving branch does not match this shipment's next stop.");
         }
 
+        boolean finalDestination = Objects.equals(shipment.getDeliveryBranchId(), receivingBranchId);
         ShipmentStatus previous = shipment.getStatus();
-        shipment.transitionTo(ShipmentStatus.IN_SCAN);
+        shipment.setCurrentLocationId(receivingBranchId);
+
+        if (finalDestination) {
+            shipment.transitionTo(ShipmentStatus.IN_SCAN);
+            Shipment saved = shipmentRepository.save(shipment);
+            appendHistory(saved, companyId, previous, ShipmentStatus.IN_SCAN, "In scan",
+                    receivingBranchId, saved.getManifestId(), null);
+            auditService.record(AuditAction.SHIPMENT_IN_SCANNED, ENTITY, saved.getId(),
+                    Map.of("shipmentNumber", saved.getShipmentNumber()));
+            return new MovementOutcome(trackingNumber, true, null);
+        }
+
+        // Received at an intermediate crossing hub, not the final branch: this hop of the
+        // route is done, and the shipment is ready for its next leg's manifest — not
+        // IN_SCAN, which this codebase's out-for-delivery worklist would otherwise treat as
+        // "arrived, ready to go out for delivery" at the wrong branch.
+        UUID nextHop = crossingService.arriveAt(shipment.getId(), receivingBranchId)
+                .orElse(shipment.getDeliveryBranchId());
+        shipment.setNextLocationId(nextHop);
+        shipment.setManifestId(null);
+        shipment.transitionTo(ShipmentStatus.READY_FOR_MANIFEST);
         Shipment saved = shipmentRepository.save(shipment);
-        appendHistory(saved, companyId, previous, ShipmentStatus.IN_SCAN, "In scan",
-                receivingBranchId, saved.getManifestId(), null);
+        appendHistory(saved, companyId, previous, ShipmentStatus.READY_FOR_MANIFEST,
+                "In scan at crossing hub, ready for next leg", receivingBranchId, null, null);
         auditService.record(AuditAction.SHIPMENT_IN_SCANNED, ENTITY, saved.getId(),
-                Map.of("shipmentNumber", saved.getShipmentNumber()));
+                Map.of("shipmentNumber", saved.getShipmentNumber(), "crossingHub", true));
         return new MovementOutcome(trackingNumber, true, null);
     }
 

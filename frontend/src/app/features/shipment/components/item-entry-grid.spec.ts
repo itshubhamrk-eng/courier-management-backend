@@ -31,11 +31,17 @@ describe('ItemEntryGrid — weight preview', () => {
     fixture.detectChanges();
   });
 
-  it('a blank starting row previews the default weight but emits no items', () => {
+  it('an untouched starting row previews the default weight and is itself a real item', () => {
     // DEFAULT_WEIGHT_KG (5) prefills every new row so the preview isn't a misleading
-    // zero; it only becomes a real item once itemName is filled in.
+    // zero, and itemName defaults to 'Package' (a real value, not just a placeholder) so
+    // an untouched row is exactly the "one implicit package" a single-item booking is —
+    // it must survive to the emitted item list unedited, or nothing ever gets booked.
     expect(weight).toEqual({ actual: 5, volumetric: 0, chargeable: 5 });
-    expect(items).toEqual([]);
+    expect(items).toEqual([{
+      itemName: 'Package', quantity: 1, weight: 5,
+      lengthCm: null, widthCm: null, heightCm: null,
+      declaredValue: null, fragile: false, dangerousGoods: false
+    }]);
   });
 
   it('actual weight sums weight × quantity across every row', () => {
@@ -63,9 +69,21 @@ describe('ItemEntryGrid — weight preview', () => {
     expect(weight.chargeable).toBeCloseTo(5, 3);
   });
 
-  it('a second added row without a name/weight is dropped from the emitted item list', () => {
+  it('a row explicitly cleared to a blank name is dropped from the emitted item list', () => {
+    // A freshly added row is NOT blank by default (see the test above) — this covers a
+    // user deliberately clearing a row's name, e.g. mid-edit before typing a new one.
     internals.patch(0, { itemName: 'Box', quantity: 1, weight: 2 });
     internals.add();
+    internals.patch(1, { itemName: '' });
+    fixture.detectChanges();
+
+    expect(items.length).toBe(1);
+  });
+
+  it('a row with weight cleared to null is dropped from the emitted item list', () => {
+    internals.patch(0, { itemName: 'Box', quantity: 1, weight: 2 });
+    internals.add();
+    internals.patch(1, { weight: null });
     fixture.detectChanges();
 
     expect(items.length).toBe(1);

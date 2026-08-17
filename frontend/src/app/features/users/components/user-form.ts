@@ -3,6 +3,7 @@ import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } 
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { CreateUserRequest, UpdateUserRequest, UserProfile } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
@@ -27,7 +28,7 @@ const GENDERS: SelectOption[] = [
   selector: 'app-user-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton],
+  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="uform">
       <app-card title="Basic Information" subtitle="Identity and name.">
@@ -87,8 +88,8 @@ const GENDERS: SelectOption[] = [
 
       <app-card title="Assignment" subtitle="Placement within the company.">
         <div class="grid">
-          <app-select [control]="c('branchId')" label="Branch" [options]="branchOptions()"
-                      [allowEmpty]="true" emptyLabel="Unassigned" placeholder="Select a branch" />
+          <app-autocomplete [control]="c('branchId')" label="Branch" [options]="branchOptions()"
+                      placeholder="Search branch, or leave blank to unassign…" />
           <app-select [control]="c('hubId')" label="Hub" [options]="hubOptions()"
                       [allowEmpty]="true" emptyLabel="Unassigned" placeholder="Select a hub" />
           @if (isCreate()) {

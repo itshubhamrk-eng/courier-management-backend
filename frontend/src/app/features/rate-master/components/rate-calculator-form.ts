@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { RateCalculationResponse } from '@core/models/rate.model';
@@ -19,12 +20,12 @@ import { RateService } from '../rate.service';
   selector: 'app-rate-calculator-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, UiSelect, UiButton],
+  imports: [DecimalPipe, ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="calculate()" class="calc">
       <div class="grid">
-        <app-select [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" placeholder="Select a booking branch" />
-        <app-select [control]="c('deliveryBranchId')" label="Destination Branch" [options]="branchOptions()" placeholder="Select a destination branch" />
+        <app-autocomplete [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" placeholder="Search booking branch…" />
+        <app-autocomplete [control]="c('deliveryBranchId')" label="Destination Branch" [options]="branchOptions()" placeholder="Search destination branch…" />
         <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
         <app-select [control]="c('packageTypeId')" label="Package Type" [options]="packageTypeOptions()" placeholder="Select a package type" />
         <app-select [control]="c('paymentModeId')" label="Payment Mode" [options]="paymentModeOptions()" placeholder="Select a payment mode" />

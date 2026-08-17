@@ -1,10 +1,17 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpContextToken, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { environment } from '@env/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { Page, PageQuery } from '../models/page.model';
+
+/**
+ * Opt-in per-request marker: the error interceptor still rethrows (so a caller's own
+ * `catchError` runs), it just skips the global toast. For best-effort lookups where a
+ * miss is an expected, silently-handled case — not a real error the user needs to see.
+ */
+export const SILENT_ERRORS = new HttpContextToken<boolean>(() => false);
 
 /**
  * The single HTTP seam. Every feature service goes through here, so the ApiResponse
@@ -16,9 +23,9 @@ export class ApiService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiBaseUrl;
 
-  get<T>(path: string, query?: Record<string, unknown>): Observable<T> {
+  get<T>(path: string, query?: Record<string, unknown>, context?: HttpContext): Observable<T> {
     return this.http
-      .get<ApiResponse<T>>(this.base + path, { params: toParams(query) })
+      .get<ApiResponse<T>>(this.base + path, { params: toParams(query), context })
       .pipe(map((r) => r.data));
   }
 
@@ -37,8 +44,8 @@ export class ApiService {
     return this.http.put<ApiResponse<T>>(this.base + path, body).pipe(map((r) => r.data));
   }
 
-  patch<T>(path: string, body: unknown): Observable<T> {
-    return this.http.patch<ApiResponse<T>>(this.base + path, body).pipe(map((r) => r.data));
+  patch<T>(path: string, body: unknown, context?: HttpContext): Observable<T> {
+    return this.http.patch<ApiResponse<T>>(this.base + path, body, { context }).pipe(map((r) => r.data));
   }
 
   delete<T>(path: string): Observable<T> {

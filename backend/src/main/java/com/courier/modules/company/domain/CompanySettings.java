@@ -169,6 +169,36 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private boolean autoInvoiceGeneration = false;
 
+    // === SLA (shipment lifecycle) ===========================================
+    // Hours a shipment may sit in one status before the sweep (ShipmentSlaSweepJob)
+    // raises an auto-ticket. Each field is the outbound leg of the status named,
+    // e.g. slaBookingToLoadingSheetHours is how long a BOOKED shipment may go
+    // without a loading sheet (MANIFEST_CREATED).
+
+    @Column(name = "sla_breach_ticket_enabled", nullable = false)
+    @Builder.Default
+    private boolean slaBreachTicketEnabled = true;
+
+    @Column(name = "sla_booking_to_loading_sheet_hours", nullable = false)
+    @Builder.Default
+    private int slaBookingToLoadingSheetHours = 24;
+
+    @Column(name = "sla_loading_sheet_to_thc_hours", nullable = false)
+    @Builder.Default
+    private int slaLoadingSheetToThcHours = 24;
+
+    @Column(name = "sla_thc_to_inscan_hours", nullable = false)
+    @Builder.Default
+    private int slaThcToInscanHours = 48;
+
+    @Column(name = "sla_inscan_to_drs_hours", nullable = false)
+    @Builder.Default
+    private int slaInscanToDrsHours = 12;
+
+    @Column(name = "sla_drs_to_delivery_hours", nullable = false)
+    @Builder.Default
+    private int slaDrsToDeliveryHours = 12;
+
     // === Notification =======================================================
 
     @Column(name = "sms_enabled", nullable = false)

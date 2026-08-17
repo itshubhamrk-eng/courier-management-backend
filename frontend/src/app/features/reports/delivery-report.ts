@@ -60,6 +60,7 @@ const DEFAULT_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELI
       </div>
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+                 [startIndex]="page().page * page().size"
                  emptyTitle="No deliveries" emptyHint="Nothing matches this filter yet."
                  (sortChange)="onSort($event)" (rowClick)="view($event)">
         <ng-template #row let-s>

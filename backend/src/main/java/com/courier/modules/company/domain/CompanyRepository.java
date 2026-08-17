@@ -95,6 +95,10 @@ public interface CompanyRepository extends JpaRepository<Company, UUID>,
     /** How many companies still point at a plan — used before a plan may be deleted. */
     long countBySubscriptionPlanId(UUID subscriptionPlanId);
 
+    /** Every company still operating — {@code ShipmentSlaSweepJob} iterates this. */
+    @Query("select c.companyId from Company c where c.active = true")
+    java.util.List<UUID> findAllActiveCompanyIds();
+
     /**
      * Companies per lifecycle state, for the platform dashboard.
      *

@@ -70,6 +70,15 @@ public record CompanySettingsRequest(
         Boolean onlinePaymentEnabled,
         Boolean autoInvoiceGeneration,
 
+        // --- SLA (shipment lifecycle) — hours a shipment may sit in one status
+        // before an auto-ticket is raised; capped at 720h (30 days)
+        Boolean slaBreachTicketEnabled,
+        @Min(1) @Max(720) Integer slaBookingToLoadingSheetHours,
+        @Min(1) @Max(720) Integer slaLoadingSheetToThcHours,
+        @Min(1) @Max(720) Integer slaThcToInscanHours,
+        @Min(1) @Max(720) Integer slaInscanToDrsHours,
+        @Min(1) @Max(720) Integer slaDrsToDeliveryHours,
+
         // --- notification
         Boolean smsEnabled,
         Boolean emailEnabled,

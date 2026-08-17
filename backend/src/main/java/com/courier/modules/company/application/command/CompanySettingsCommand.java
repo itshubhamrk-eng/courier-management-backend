@@ -25,6 +25,10 @@ public record CompanySettingsCommand(
         Boolean walletEnabled, Boolean codEnabled, Boolean onlinePaymentEnabled,
         Boolean autoInvoiceGeneration,
 
+        Boolean slaBreachTicketEnabled, Integer slaBookingToLoadingSheetHours,
+        Integer slaLoadingSheetToThcHours, Integer slaThcToInscanHours,
+        Integer slaInscanToDrsHours, Integer slaDrsToDeliveryHours,
+
         Boolean smsEnabled, Boolean emailEnabled, Boolean whatsappEnabled,
         Boolean pushNotificationEnabled,
 

@@ -65,6 +65,7 @@ import {
         </header>
 
         <app-master-table [def]="d" [rows]="page().content" [loading]="loading()" [sort]="sort()"
+          [startIndex]="page().page * page().size"
                           [perms]="tablePerms()" (sortChange)="onSort($event)" (action)="onAction($event)" />
 
         <app-pagination [page]="page()" (pageChange)="onPage($event)" />

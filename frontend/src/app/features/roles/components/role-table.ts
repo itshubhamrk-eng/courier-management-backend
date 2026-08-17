@@ -23,7 +23,7 @@ export type RoleAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'clone' |
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiTable, RoleStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No roles" emptyHint="Create your first role to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-r>
@@ -75,6 +75,7 @@ export type RoleAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'clone' |
 })
 export class RoleTable {
   readonly rows = input<CompanyRole[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<RolePerms>();

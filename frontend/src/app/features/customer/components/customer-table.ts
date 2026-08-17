@@ -17,7 +17,7 @@ export type CustomerAction = 'view' | 'edit' | 'activate' | 'deactivate';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiTable, CustomerStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No customers" emptyHint="Register your first customer to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-c>
@@ -56,6 +56,7 @@ export type CustomerAction = 'view' | 'edit' | 'activate' | 'deactivate';
 })
 export class CustomerTable {
   readonly rows = input<Customer[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<CustomerPerms>();

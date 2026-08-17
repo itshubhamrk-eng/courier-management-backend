@@ -1,0 +1,405 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: perf-tests/k6/scenario.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 60 max VUs, 1m15s max duration (incl. graceful stop):
+              * default: 60 looping VUs for 45s (gracefulStop: 30s)
+
+
+running (0m01.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [   2% ] 60 VUs  00.7s/45s
+
+running (0m02.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [   4% ] 60 VUs  01.7s/45s
+
+running (0m03.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [   6% ] 60 VUs  02.7s/45s
+
+running (0m04.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [   8% ] 60 VUs  03.7s/45s
+
+running (0m05.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  10% ] 60 VUs  04.7s/45s
+
+running (0m06.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  13% ] 60 VUs  05.7s/45s
+
+running (0m07.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  15% ] 60 VUs  06.7s/45s
+
+running (0m08.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  17% ] 60 VUs  07.7s/45s
+
+running (0m09.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  19% ] 60 VUs  08.7s/45s
+
+running (0m10.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  22% ] 60 VUs  09.7s/45s
+
+running (0m11.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  24% ] 60 VUs  10.7s/45s
+
+running (0m12.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  26% ] 60 VUs  11.7s/45s
+
+running (0m13.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  28% ] 60 VUs  12.7s/45s
+
+running (0m14.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  30% ] 60 VUs  13.7s/45s
+
+running (0m15.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  33% ] 60 VUs  14.7s/45s
+
+running (0m16.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  35% ] 60 VUs  15.7s/45s
+
+running (0m17.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  37% ] 60 VUs  16.7s/45s
+
+running (0m18.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  39% ] 60 VUs  17.7s/45s
+
+running (0m19.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  42% ] 60 VUs  18.7s/45s
+
+running (0m20.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  44% ] 60 VUs  19.7s/45s
+
+running (0m21.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  46% ] 60 VUs  20.7s/45s
+
+running (0m22.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  48% ] 60 VUs  21.7s/45s
+
+running (0m23.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  50% ] 60 VUs  22.7s/45s
+
+running (0m24.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  53% ] 60 VUs  23.7s/45s
+
+running (0m25.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  55% ] 60 VUs  24.7s/45s
+
+running (0m26.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  57% ] 60 VUs  25.7s/45s
+
+running (0m27.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  59% ] 60 VUs  26.7s/45s
+
+running (0m28.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  62% ] 60 VUs  27.7s/45s
+
+running (0m29.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  64% ] 60 VUs  28.7s/45s
+
+running (0m30.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  66% ] 60 VUs  29.7s/45s
+
+running (0m31.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  68% ] 60 VUs  30.7s/45s
+
+running (0m32.0s), 60/60 VUs, 0 complete and 0 interrupted iterations
+default   [  70% ] 60 VUs  31.7s/45s
+time="2026-08-17T13:41:13+05:30" level=error msg="Error: login failed for op0022@t01.perf.local (500): {\"success\":false,\"message\":\"An unexpected error occurred\",\"errorCode\":\"INTERNAL_ERROR\",\"timestamp\":\"2026-08-17T08:11:13.977771Z\",\"path\":\"/api/v1/auth/login\",\"requestId\":\"1de66711-3ec0-4101-8461-2d8aa076060c\"}\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (0m33.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  73% ] 60 VUs  32.7s/45s
+
+running (0m34.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  75% ] 60 VUs  33.7s/45s
+
+running (0m35.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  77% ] 60 VUs  34.7s/45s
+
+running (0m36.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  79% ] 60 VUs  35.7s/45s
+
+running (0m37.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  82% ] 60 VUs  36.7s/45s
+
+running (0m38.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  84% ] 60 VUs  37.7s/45s
+
+running (0m39.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  86% ] 60 VUs  38.7s/45s
+
+running (0m40.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  88% ] 60 VUs  39.7s/45s
+
+running (0m41.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  90% ] 60 VUs  40.7s/45s
+
+running (0m42.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  93% ] 60 VUs  41.7s/45s
+
+running (0m43.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  95% ] 60 VUs  42.7s/45s
+
+running (0m44.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  97% ] 60 VUs  43.7s/45s
+
+running (0m45.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default   [  99% ] 60 VUs  44.7s/45s
+
+running (0m46.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m47.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m48.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m49.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m50.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m51.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m52.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m53.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m54.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m55.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m56.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m57.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m58.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (0m59.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m00.0s), 60/60 VUs, 1 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0017@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0001@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0040@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0010@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0011@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0009@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0003@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0031@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0029@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0013@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0044@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0016@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0014@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0037@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0026@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0007@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0015@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0038@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0002@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0030@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0004@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0018@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0039@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0009@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0020@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0041@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0011@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0006@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0027@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0021@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0007@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0015@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0012@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0005@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0032@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0012@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0005@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0043@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0016@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0002@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0019@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0008@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0004@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0025@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0006@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0028@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0035@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0001@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0033@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0008@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0013@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0010@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0023@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0042@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0003@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=warning msg="Request Failed" error="Post \"http://localhost:8082/api/v1/auth/login\": request timeout"
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0024@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0014@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0034@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+time="2026-08-17T13:41:42+05:30" level=error msg="Error: login failed for op0036@t01.perf.local (0): null\n\tat loginAs (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:103:15(53))\n\tat default (file:///Users/prashantrohidaskamble/Desktop/courier-management/perf-tests/k6/scenario.js:149:28(9))\n" executor=constant-vus hint="script exception" scenario=default source=stacktrace
+
+running (1m01.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m02.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m03.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m04.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m05.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m06.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m07.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+running (1m08.0s), 01/60 VUs, 60 complete and 0 interrupted iterations
+default ↓ [ 100% ] 60 VUs  45s
+
+
+  █ THRESHOLDS 
+
+    create_shipment_duration
+    ✓ 'p(95)<1000' p(95)=33.479
+
+    dashboard_duration
+    ✓ 'p(95)<1000' p(95)=76.653
+
+    http_req_duration
+    ✗ 'p(95)<1000' p(95)=1m0s
+    ✗ 'p(99)<2000' p(99)=1m0s
+
+    http_req_failed
+    ✗ 'rate<0.01' rate=83.33%
+
+    login_duration
+    ✗ 'p(95)<1000' p(95)=60002.54975
+
+    search_duration
+    ✓ 'p(95)<1000' p(95)=88.729
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 68     0.994545/s
+    checks_succeeded...: 11.76% 8 out of 68
+    checks_failed......: 88.23% 60 out of 68
+
+    ✗ login 200
+      ↳  3% — ✓ 2 / ✗ 60
+    ✓ dashboard 200
+    ✓ search 200
+    ✓ open shipment 200
+    ✓ track 200
+    ✓ create shipment 201/200
+    ✓ update shipment 200
+
+    CUSTOM
+    create_shipment_duration.......: avg=33.479       min=33.479 med=33.479     max=33.479    p(90)=33.479     p(95)=33.479     
+    dashboard_duration.............: avg=76.653       min=76.653 med=76.653     max=76.653    p(90)=76.653     p(95)=76.653     
+    login_duration.................: avg=58099.884258 min=264.19 med=60001.7595 max=60003.123 p(90)=60002.4322 p(95)=60002.54975
+    search_duration................: avg=88.729       min=88.729 med=88.729     max=88.729    p(90)=88.729     p(95)=88.729     
+
+    HTTP
+    http_req_duration..............: avg=50.03s       min=1.84ms med=1m0s       max=1m0s      p(90)=1m0s       p(95)=1m0s       
+      { expected_response:true }...: avg=2.55s        min=1.84ms med=22.28ms    max=30.09s    p(90)=246.64ms   p(95)=13.68s     
+    http_req_failed................: 83.33% 60 out of 72
+    http_reqs......................: 72     1.053048/s
+
+    EXECUTION
+    iteration_duration.............: avg=59.15s       min=31.73s med=1m0s       max=1m0s      p(90)=1m0s       p(95)=1m0s       
+    iterations.....................: 61     0.892165/s
+    vus............................: 1      min=1        max=60
+    vus_max........................: 60     min=60       max=60
+
+    NETWORK
+    data_received..................: 40 kB  584 B/s
+    data_sent......................: 22 kB  318 B/s
+
+
+
+
+running (1m08.4s), 00/60 VUs, 61 complete and 0 interrupted iterations
+default ✓ [ 100% ] 60 VUs  45s
+time="2026-08-17T13:41:50+05:30" level=error msg="thresholds on metrics 'http_req_duration, http_req_failed, login_duration' have been crossed"

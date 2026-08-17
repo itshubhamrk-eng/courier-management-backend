@@ -46,6 +46,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
       </header>
 
       <app-branch-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                         [managerNames]="managerNames()" (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />

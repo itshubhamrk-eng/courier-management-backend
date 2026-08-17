@@ -20,7 +20,7 @@ export type RateAction = 'view' | 'edit' | 'activate' | 'deactivate';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, UiTable, RateStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No rates" emptyHint="Create your first rate card to start pricing shipments."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-r>
@@ -62,6 +62,7 @@ export type RateAction = 'view' | 'edit' | 'activate' | 'deactivate';
 })
 export class RateTable {
   readonly rows = input<Rate[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<RatePerms>();

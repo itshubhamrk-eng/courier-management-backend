@@ -69,21 +69,17 @@ function amountInWords(amount: number): string {
 
 function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' | 'Office Copy'): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
+  const total = d.charges.netAmount + d.otherCharges;
   const detailRows: Array<[string, string]> = [
     ['From', d.bookingBranchLabel],
     ['To', d.deliveryBranchLabel],
     ['Type', `${d.serviceTypeLabel} - ${d.paymentModeLabel}`],
     ['No Of Parcel / Weight', `${d.numberOfPackages} / ${weight}`],
-    ['Parcel Received', '—'],
-    ['Delivery Date', d.expectedDeliveryDate ?? '—'],
     ['Booking Date', d.bookingDate],
+    ['Delivery Date', d.expectedDeliveryDate ?? '—'],
     ['Booking LR No', d.trackingNumber],
-    ['Goods contain', d.packageTypeLabel],
-    ['Special Instruction', d.remarks ?? '—'],
-    ['Consignee GST Number', '—'],
-    ['Delivery Type', '—']
+    ['Goods contain', d.packageTypeLabel]
   ];
-  const total = d.charges.netAmount + d.otherCharges;
   const chargeRows: Array<[string, number]> = [
     ['Booking Side Total', total],
     ['Unloading Delivery Charges', 0],
@@ -94,43 +90,170 @@ function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' 
 
   return `
     <section class="copy">
-      <header class="head">
-        <h1>${esc(d.companyName)}</h1>
-        <span class="badge">${label}</span>
-      </header>
-      <div class="banner">
-        <span>${esc(d.bookingBranchLabel)} to ${esc(d.deliveryBranchLabel)} (${esc(d.bookingDate)})</span>
-        <strong>${esc(d.trackingNumber)}</strong>
+     <div class="receipt-inner">
+
+      <!-- HEADER -->
+      <div class="head">
+        <div class="brand">
+          <div class="logo">
+            <div class="word">${esc(d.companyName)}</div>
+            <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
+              <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <div class="tag">Courier &amp; Logistics</div>
+          </div>
+        </div>
+        <div class="co">
+          <h2>${esc(d.bookingBranchLabel)}</h2>
+          <p>Booking Branch</p>
+        </div>
+        <div class="co">
+          <h2>${esc(d.deliveryBranchLabel)}</h2>
+          <p>Delivery Branch</p>
+        </div>
+        <div class="lrbox">
+          <span class="lrbox-label">LR No</span>
+          <span class="lrbox-no">${esc(d.trackingNumber)}</span>
+        </div>
       </div>
-      <table class="strip">
+
+      <!-- TITLE STRIP -->
+      <div class="title">
+        <div class="route">
+          ${esc(d.bookingBranchLabel)} to ${esc(d.deliveryBranchLabel)}<br>
+          (${esc(d.bookingDate)})
+        </div>
+        <div class="stamp">
+          <div class="copy-label">${label}</div>
+          <div class="ship-no">${esc(d.shipmentNumber)}</div>
+        </div>
+      </div>
+
+      <!-- PARTY BLOCK -->
+      <table class="party">
         <tr>
-          <td class="k">Receiver Name:</td><td class="v">${esc(d.receiverName)}</td>
-          <td class="k">Receiver Mobile:</td><td class="v">${esc(d.receiverContact)}</td>
-          <td class="tax" rowspan="2">Tax Invoice: Consignment Note</td>
+          <td class="lbl">Receiver Name :&nbsp; ${esc(d.receiverName)}</td>
+          <td class="lbl">Receiver Mobile :&nbsp;&nbsp; ${esc(d.receiverContact)}</td>
+          <td rowspan="2" class="tax">Tax Invoice : Consignment Note</td>
         </tr>
         <tr>
-          <td class="k">Consignor Name:</td><td class="v">${esc(d.senderName)}</td>
-          <td class="k">Consignor Mobile:</td><td class="v">${esc(d.senderContact)}</td>
+          <td class="lbl">Consignor Name :&nbsp; ${esc(d.senderName)}</td>
+          <td class="lbl">Consignor Mobile :&nbsp; ${esc(d.senderContact)}</td>
         </tr>
       </table>
-      <div class="grid">
-        <table class="kv">${detailRows.map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}</td></tr>`).join('')}</table>
-        <table class="kv charges">
-          <tr><td class="k head-row">Description</td><td class="v head-row">Amount(Rs.)</td></tr>
-          ${chargeRows.map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${v.toFixed(2)}</td></tr>`).join('')}
-          <tr class="total"><td class="k">Total Receivable</td><td class="v">${total.toFixed(2)}</td></tr>
-          <tr class="words"><td colspan="2">${esc(amountInWords(total))}</td></tr>
-        </table>
+
+      <!-- MAIN BODY -->
+      <div class="body">
+        <div class="left">
+          <table class="details">
+            ${detailRows.map(([k, v]) => `<tr><td class="lbl">${esc(k)} :</td><td>${esc(v)}</td></tr>`).join('')}
+          </table>
+          <table class="small">
+            <tr><td colspan="2">Special Instruction :&nbsp; ${esc(d.remarks ?? '—')}</td></tr>
+            <tr><td colspan="2">Consignee GST Number :&nbsp; —</td></tr>
+            <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
+          </table>
+        </div>
+        <div class="right">
+          <table class="charges">
+            <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
+            ${chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('')}
+            <tr class="total"><td>Total Receivable</td><td>${total.toFixed(2)}</td></tr>
+          </table>
+          <div class="zero">${esc(amountInWords(total))}</div>
+          <div class="note">
+            Note : Terms And Conditions Applied<br>
+            All articles are received in good condition
+          </div>
+        </div>
       </div>
-      <div class="note">
-        Note: Terms And Conditions Applied. All articles are received in good condition.
+
+      <!-- FOOTER -->
+      <div class="footer">
+        <div class="gen">* This is a computer-generated receipt, printed ${esc(new Date().toLocaleString('en-IN'))}. No signature or stamp is required.</div>
+        <div class="sign">
+          <span>Representative Signature</span>
+          <span>Customer Signature</span>
+        </div>
       </div>
-      <div class="sign">
-        <span>Representative Signature</span>
-        <span>Customer Signature</span>
-      </div>
-      <div class="foot">* This is a computer-generated receipt, printed ${esc(new Date().toLocaleString('en-IN'))}. No signature or stamp is required.</div>
+
+     </div>
     </section>`;
+}
+
+/**
+ * Builds the full printable document (both copies) as a plain HTML string — pulled out of
+ * `printConsignmentCopies` so it can be rendered and inspected (e.g. for a visual check
+ * against real booking data) without touching the DOM or triggering `window.print()`.
+ */
+export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = true): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.shipmentNumber)}</title>
+<style>
+  :root{ --ink:#000; --line:#000; --orange:#f7941d; --muted:#333; }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;color:var(--ink);background:#e9e9e9}
+
+  .copy{width:1100px;max-width:100%;margin:0 auto;background:#fff;border:3px solid var(--line);padding:10px;page-break-after:always}
+  .copy:last-child{page-break-after:auto}
+  .receipt-inner{border:2px solid var(--line)}
+
+  /* header */
+  .head{display:grid;grid-template-columns:220px 1fr 1fr 180px;border-bottom:2px solid var(--line)}
+  .head > div{padding:10px 12px}
+  .head .brand{display:flex;align-items:center;justify-content:center}
+  .logo{line-height:1;text-align:center}
+  .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
+  .logo .swoosh{display:block;margin:2px auto 0}
+  .logo .tag{font-size:10px;color:var(--orange);font-weight:600;margin-top:2px}
+  .co{font-size:13px;line-height:1.3;border-left:2px solid var(--line)}
+  .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
+  .co p{margin:0;color:var(--muted);text-align:center}
+  .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .lrbox-label{font-size:11px;font-weight:700;color:var(--muted)}
+  .lrbox-no{font-size:18px;font-weight:800}
+
+  /* title strip */
+  .title{display:grid;grid-template-columns:1fr auto;align-items:start;gap:16px;padding:8px 14px 10px;border-bottom:2px solid var(--line)}
+  .title .route{font-size:20px;font-weight:700;line-height:1.25}
+  .title .stamp{text-align:right;line-height:1.25}
+  .title .copy-label{font-size:16px;font-weight:700}
+  .title .ship-no{font-size:16px;font-weight:700}
+
+  /* shared table look */
+  table{width:100%;border-collapse:collapse}
+  td,th{border:1px solid var(--line);padding:5px 8px;font-size:12px;vertical-align:middle}
+  .lbl{font-weight:700;white-space:nowrap}
+
+  .party{border-top:0}
+  .party td{height:26px}
+  .party td.tax{width:26%;font-weight:700;text-align:center;vertical-align:middle}
+
+  /* body grid */
+  .body{display:grid;grid-template-columns:1fr 1fr}
+  .body .right{border-left:0}
+  .details td:first-child{width:42%}
+  .charges td:last-child{text-align:right;width:32%}
+  .charges .total td{font-size:15px;font-weight:700}
+  .zero{border:1px solid var(--line);border-top:0;text-align:right;padding:6px 8px;font-size:14px;font-weight:700}
+  .note{border:1px solid var(--line);border-top:0;padding:8px;font-size:11px;font-weight:700;line-height:1.5}
+  .small td{font-size:11px;padding:3px 8px}
+
+  /* footer */
+  .footer{padding:6px 10px 10px;font-size:11px;line-height:1.4}
+  .footer .gen{font-weight:700}
+  .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:20px}
+
+  @media print{
+    body{background:#fff}
+    .copy{border:2px solid #000;width:100%;padding:6px}
+    @page{size:A4 landscape;margin:8mm}
+  }
+</style></head><body>
+  ${copy(data, 'Original Copy')}
+  ${copy(data, 'Office Copy')}
+  ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 50);</script>' : ''}
+</body></html>`;
 }
 
 /**
@@ -141,38 +264,7 @@ function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' 
  * browsers don't fire it for iframe-hosted print jobs).
  */
 export function printConsignmentCopies(data: ConsignmentPrintData): void {
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.shipmentNumber)}</title>
-<style>
-  *{box-sizing:border-box} body{font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;margin:0}
-  .copy{padding:20px;page-break-after:always;border:1px solid #0f172a}
-  .copy:last-child{page-break-after:auto}
-  .head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #0f172a;padding:0 0 8px;margin-bottom:0}
-  .head h1{margin:0;font-size:18px}
-  .badge{font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border:1px solid #0f172a;border-radius:999px}
-  .banner{display:flex;align-items:center;justify-content:space-between;border:1px solid #0f172a;border-top:none;padding:6px 8px;font-weight:700;font-size:13px}
-  table.strip{width:100%;border-collapse:collapse;border:1px solid #0f172a;border-top:none}
-  table.strip td{padding:5px 8px;border-bottom:1px solid #0f172a;font-size:12px}
-  table.strip td.k{color:#475569;white-space:nowrap;width:1%}
-  table.strip td.v{font-weight:600;padding-right:16px}
-  table.strip td.tax{font-weight:700;text-align:center;vertical-align:middle;border-left:1px solid #0f172a;width:22%}
-  .grid{display:grid;grid-template-columns:1.3fr 1fr;border:1px solid #0f172a;border-top:none}
-  table.kv{width:100%;border-collapse:collapse}
-  table.kv:first-child{border-right:1px solid #0f172a}
-  table.kv td{padding:5px 8px;border-bottom:1px solid #0f172a;font-size:12px}
-  table.kv td.k{color:#475569;width:56%} table.kv td.v{font-weight:600;text-align:right}
-  table.charges td.head-row{font-weight:700;background:#f1f5f9;text-align:left}
-  table.charges td.head-row.v{text-align:right}
-  table.charges tr.total td{border-top:2px solid #0f172a;font-weight:800;font-size:14px}
-  table.charges tr.words td{border-bottom:none;font-weight:700;text-align:right;font-size:11px}
-  .note{border:1px solid #0f172a;border-top:none;padding:6px 8px;font-size:11px;font-weight:600}
-  .sign{display:flex;justify-content:space-between;padding:24px 8px 4px;font-size:12px;font-weight:700}
-  .foot{font-size:10px;color:#94a3b8;text-align:center;margin-top:6px}
-  @media print{.copy{padding:14px}}
-</style></head><body>
-  ${copy(data, 'Original Copy')}
-  ${copy(data, 'Office Copy')}
-  <script>window.onload = () => setTimeout(() => window.print(), 50);</script>
-</body></html>`;
+  const html = renderConsignmentHtml(data);
 
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';

@@ -56,6 +56,7 @@ const BRANCH_STAFFING = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
       </header>
 
       <app-user-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                       [branchNames]="branchNames()" [hubNames]="hubNames()"
                       (sortChange)="onSort($event)" (action)="onAction($event)" />
 

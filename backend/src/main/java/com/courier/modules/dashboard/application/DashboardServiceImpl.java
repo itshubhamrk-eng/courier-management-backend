@@ -10,7 +10,10 @@ import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
 import com.courier.modules.shipment.domain.ShipmentRepository;
 import com.courier.modules.shipment.domain.ShipmentStatus;
+import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.security.AuthenticatedUser;
+import com.courier.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -25,9 +28,17 @@ import java.util.stream.Collectors;
 
 /**
  * Backs the operational dashboard's summary card. Every figure is a real aggregate over
- * {@code Shipment}/{@code ShipmentCharge} — company-scoped by the standard Hibernate
- * filter, so a platform-level caller (no company bound) sees the cross-company total the
- * same way every other company-owned repository behaves for that caller.
+ * {@code Shipment}/{@code ShipmentCharge}.
+ *
+ * <p><b>Company scoping is explicit, not left to the implicit Hibernate filter</b> —
+ * every query below takes the caller's company id (or {@code null} for a genuinely
+ * cross-tenant {@code SUPER_ADMIN} read) as an argument. This method used to rely
+ * solely on {@code CompanyFilterAspect} auto-enabling the filter per repository call,
+ * which silently did not apply here (root cause not fully isolated — plausibly this
+ * method's own deliberate non-{@code @Transactional} shape, see below, putting each
+ * repository call on its own short-lived session): any authenticated company user
+ * could read every tenant's shipment counts/revenue. Fixed 2026-08-17 — see
+ * {@code perf-tests/ISSUES.md} ISSUE-001 in the repo root for the full writeup.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,33 +65,83 @@ public class DashboardServiceImpl implements DashboardService {
      * marks a shared transaction rollback-only the moment it throws — before the catch
      * here ever runs. Wrapping this method would turn that caught, expected exception
      * into an {@code UnexpectedRollbackException} on commit. Each repository call below
-     * already runs in its own implicit transaction (Spring Data's default), which is all
-     * a set of independent point-in-time counts needs.
+     * already runs in its own implicit transaction (Spring Data's default) — which is
+     * exactly why every one of them takes an explicit company id rather than trusting a
+     * per-session Hibernate filter to have been enabled on whichever short-lived session
+     * that particular call happens to run on (ISSUE-001).
      */
     @Override
     public DashboardSummaryResponse summary() {
-        LocalDate today = LocalDate.now();
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        boolean crossTenant = caller.isSuperAdmin();
+        // A SUPER_ADMIN's own JWT still carries a (sentinel) company id — CompanyContext
+        // is never actually empty for that role — so scope is null (genuinely
+        // cross-tenant) only via the explicit isSuperAdmin() check, never inferred from
+        // "no company bound".
+        UUID scope = crossTenant ? null : CompanyContext.requireCompanyId();
 
-        long todayShipments = shipmentRepository.countByBookingDate(today);
-        long delivered = shipmentRepository.countByStatus(ShipmentStatus.DELIVERED);
-        long inTransit = shipmentRepository.countByStatusIn(IN_TRANSIT);
-        long pending = shipmentRepository.countByStatusIn(PENDING);
-        long totalShipments = shipmentRepository.count();
-        BigDecimal totalRevenue = shipmentChargeRepository.sumNetAmount();
-        BigDecimal todayCollection = shipmentChargeRepository.sumNetAmountForBookingDate(today);
+        LocalDate today = LocalDate.now();
+        // "Today's Shipments" / Delivered / In Transit / Pending / Collection are all
+        // month-to-date, not literally today — first-of-month through today, inclusive.
+        LocalDate monthStart = today.withDayOfMonth(1);
+        long todayShipments;
+        long delivered;
+        long inTransit;
+        long pending;
+        long totalShipments;
+        BigDecimal totalRevenue;
+        BigDecimal todayCollection;
+        List<Shipment> recent;
+
+        if (crossTenant) {
+            // runAs(null, ...) is this platform's own sanctioned way to disable the
+            // Hibernate companyFilter for a deliberately cross-company read — the same
+            // pattern TicketServiceImpl.dashboard uses for the identical SUPER_ADMIN case.
+            todayShipments = CompanyContext.runAs(null,
+                    () -> shipmentRepository.countByBookingDateBetween(monthStart, today));
+            delivered = CompanyContext.runAs(null, () -> shipmentRepository.countByStatusAndBookingDateBetween(
+                    ShipmentStatus.DELIVERED, monthStart, today));
+            inTransit = CompanyContext.runAs(null,
+                    () -> shipmentRepository.countByStatusInAndBookingDateBetween(IN_TRANSIT, monthStart, today));
+            pending = CompanyContext.runAs(null,
+                    () -> shipmentRepository.countByStatusInAndBookingDateBetween(PENDING, monthStart, today));
+            totalShipments = CompanyContext.<Long>runAs(null, () -> shipmentRepository.count());
+            totalRevenue = CompanyContext.<BigDecimal>runAs(null, () -> shipmentChargeRepository.sumNetAmount());
+            todayCollection = CompanyContext.<BigDecimal>runAs(null,
+                    () -> shipmentChargeRepository.sumNetAmountForBookingDateBetween(monthStart, today));
+            recent = CompanyContext.<List<Shipment>>runAs(null,
+                    () -> shipmentRepository.findTop5ByOrderByCreatedAtDesc());
+        } else {
+            todayShipments = shipmentRepository.countByCompanyIdAndBookingDateBetween(scope, monthStart, today);
+            delivered = shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
+                    scope, ShipmentStatus.DELIVERED, monthStart, today);
+            inTransit = shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
+                    scope, IN_TRANSIT, monthStart, today);
+            pending = shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
+                    scope, PENDING, monthStart, today);
+            totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
+            todayCollection = shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
+                    scope, monthStart, today);
+            recent = shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(scope);
+        }
 
         Wallet ownWallet = ownWallet();
         BigDecimal walletBalance = ownWallet == null ? null : ownWallet.getAvailableBalance();
         // No own branch (company/platform admins) means no "Pending Delivery" tile is
         // shown for them either — 0 is a safe, unused default, not a fabricated figure.
+        // A caller with an own branch is by construction never the cross-tenant
+        // SUPER_ADMIN case (that role has no branch), so `scope` is always their real
+        // company here.
         long pendingDelivery = ownWallet == null ? 0L
-                : shipmentRepository.countByDeliveryBranchIdAndStatusIn(ownWallet.getBranchId(), PENDING_DELIVERY);
+                : shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
+                        scope, ownWallet.getBranchId(), PENDING_DELIVERY);
 
         DashboardStatisticsResponse statistics = new DashboardStatisticsResponse(
                 todayShipments, delivered, inTransit, pending, totalRevenue,
                 todayShipments, todayCollection, pendingDelivery, totalShipments, walletBalance);
 
-        return new DashboardSummaryResponse(statistics, recentShipments());
+        return new DashboardSummaryResponse(statistics, recentShipments(recent));
     }
 
     /**
@@ -97,8 +158,7 @@ public class DashboardServiceImpl implements DashboardService {
         }
     }
 
-    private List<RecentShipmentResponse> recentShipments() {
-        List<Shipment> recent = shipmentRepository.findTop5ByOrderByCreatedAtDesc();
+    private List<RecentShipmentResponse> recentShipments(List<Shipment> recent) {
         List<UUID> ids = recent.stream().map(Shipment::getId).toList();
         Map<UUID, BigDecimal> amountByShipmentId = shipmentChargeRepository.findByShipmentIdIn(ids).stream()
                 .collect(Collectors.toMap(ShipmentCharge::getShipmentId, ShipmentCharge::getNetAmount));

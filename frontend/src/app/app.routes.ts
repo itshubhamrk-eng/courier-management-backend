@@ -50,6 +50,15 @@ const MASTERS_READERS = ADMINS;
 // Delete stays COMPANY_ADMIN-only; UserServiceImpl never grants it to BRANCH_MANAGER.
 const USER_READERS = [...ADMINS, AppRole.BRANCH_MANAGER];
 const USER_WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
+// Ticket Support (Phase 1): every company role raises/reads tickets, plus SUPER_ADMIN's
+// own cross-tenant view. Categories are the global catalogue — SUPER_ADMIN only, mirrors
+// TicketCategoryServiceImpl's own gate.
+const SUPPORT_READERS = [
+  AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB_MANAGER,
+  AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS, AppRole.FINANCE_USER,
+  AppRole.CUSTOMER_SERVICE, AppRole.VIEWER
+];
+const SUPPORT_ADMIN = [AppRole.SUPER_ADMIN];
 
 /**
  * Lazy, guarded routes. The admin shell wraps every authenticated feature; each feature
@@ -390,6 +399,32 @@ export const routes: Routes = [
       {
         path: 'finance/branch-wallet/topup-requests', title: 'Top-up Requests', canActivate: [roleGuard], data: { roles: WALLET_VIEWERS },
         loadComponent: () => import('@features/branch-wallet/topup-requests').then((m) => m.TopupRequests)
+      },
+      // Ticket Support (Phase 1). 'new' before ':id' so the literal segment is not
+      // swallowed by the parameter, same convention every other module here uses.
+      {
+        path: 'support/tickets', title: 'Tickets', canActivate: [roleGuard], data: { roles: SUPPORT_READERS },
+        loadComponent: () => import('@features/support/ticket-list').then((m) => m.TicketList)
+      },
+      {
+        path: 'support/tickets/new', title: 'Raise Ticket', canActivate: [roleGuard], data: { roles: SUPPORT_READERS },
+        loadComponent: () => import('@features/support/ticket-create').then((m) => m.TicketCreate)
+      },
+      {
+        path: 'support/tickets/:id', title: 'Ticket', canActivate: [roleGuard], data: { roles: SUPPORT_READERS },
+        loadComponent: () => import('@features/support/ticket-detail').then((m) => m.TicketDetailPage)
+      },
+      {
+        path: 'support/dashboard', title: 'Support Dashboard', canActivate: [roleGuard], data: { roles: ADMINS },
+        loadComponent: () => import('@features/support/support-dashboard').then((m) => m.SupportDashboard)
+      },
+      {
+        path: 'support/categories', title: 'Ticket Categories', canActivate: [roleGuard], data: { roles: SUPPORT_ADMIN },
+        loadComponent: () => import('@features/support/ticket-categories').then((m) => m.TicketCategories)
+      },
+      {
+        path: 'support/sla-rules', title: 'SLA Rules', canActivate: [roleGuard], data: { roles: ADMINS },
+        loadComponent: () => import('@features/support/ticket-sla-rules').then((m) => m.TicketSlaRules)
       },
       {
         path: 'users', title: 'Users', canActivate: [roleGuard], data: { roles: USER_READERS },

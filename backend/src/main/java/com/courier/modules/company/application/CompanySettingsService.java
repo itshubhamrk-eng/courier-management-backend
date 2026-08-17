@@ -27,6 +27,8 @@ public interface CompanySettingsService {
 
     CompanySettings patchFinance(CompanySettingsCommand command);
 
+    CompanySettings patchSla(CompanySettingsCommand command);
+
     CompanySettings patchSecurity(CompanySettingsCommand command);
 
     CompanySettings patchNotification(CompanySettingsCommand command);

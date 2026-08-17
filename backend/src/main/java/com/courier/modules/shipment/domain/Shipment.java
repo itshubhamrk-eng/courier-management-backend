@@ -95,6 +95,22 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "manifest_id", columnDefinition = "BINARY(16)")
     private UUID manifestId;
 
+    /**
+     * Where this shipment physically is right now — the booking branch at booking time,
+     * updated by later movement steps. No physical FK: branch is a different module.
+     */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "current_location_id", columnDefinition = "BINARY(16)")
+    private UUID currentLocationId;
+
+    /**
+     * Where this shipment is headed next — the crossing branch when one was picked at
+     * booking time, otherwise the delivery branch directly. No physical FK.
+     */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "next_location_id", columnDefinition = "BINARY(16)")
+    private UUID nextLocationId;
+
     @Column(name = "pickup_pincode", nullable = false, length = 10)
     private String pickupPincode;
 

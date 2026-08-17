@@ -42,6 +42,8 @@ export class PermissionService {
     const roles = req.roles ?? [];
     const perms = req.permissions ?? [];
     if (roles.length === 0 && perms.length === 0) return true;
-    return this.hasAnyRole(roles) || this.hasAnyPermission(perms);
+    const roleOk = roles.length > 0 && this.hasAnyRole(roles);
+    const permOk = perms.length > 0 && this.hasAnyPermission(perms);
+    return roleOk || permOk;
   }
 }

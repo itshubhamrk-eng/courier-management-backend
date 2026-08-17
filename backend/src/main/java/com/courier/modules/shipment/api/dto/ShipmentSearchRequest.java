@@ -14,6 +14,14 @@ public record ShipmentSearchRequest(
         Set<ShipmentStatus> status,
         UUID bookingBranchId,
         UUID deliveryBranchId,
+        @Schema(description = "Where the shipment physically is right now — for a crossing "
+                + "hub's own \"what can I manifest from here\" query, use this instead of "
+                + "bookingBranchId")
+        UUID currentLocationId,
+        @Schema(description = "The shipment's next stop (a crossing hub, or the delivery "
+                + "branch once every hop is done) — use this instead of deliveryBranchId "
+                + "for the same reason")
+        UUID nextLocationId,
         UUID manifestId,
         LocalDate bookingDateFrom,
         LocalDate bookingDateTo,
@@ -25,6 +33,6 @@ public record ShipmentSearchRequest(
         String search
 ) {
     public static ShipmentSearchRequest empty() {
-        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null);
+        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null);
     }
 }

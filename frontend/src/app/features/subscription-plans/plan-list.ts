@@ -43,6 +43,7 @@ const WRITERS = [AppRole.SUPER_ADMIN];
       </header>
 
       <app-plan-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                       (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />

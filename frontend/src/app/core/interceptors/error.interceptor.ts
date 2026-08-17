@@ -5,7 +5,7 @@ import { EMPTY, catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session.service';
-import { ApiService } from '../services/api.service';
+import { ApiService, SILENT_ERRORS } from '../services/api.service';
 import { NotificationService } from '../services/notification.service';
 import { API } from '../config/api-endpoints';
 import { LoginResponse } from '../models/auth.model';
@@ -43,9 +43,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         );
       }
 
+      const silent = req.context.get(SILENT_ERRORS);
+
       if (err.status === 401 && !isAuthCall) {
         auth.clearSession();
         router.navigate(['/session-expired']);
+      } else if (silent) {
+        // Expected-to-sometimes-fail lookup (e.g. resolving a user id that may belong
+        // to another tenant/platform tier) — the caller's own catchError handles it.
       } else if (err.status === 403) {
         notify.error('You do not have permission to perform this action.');
       } else if (err.status >= 500) {

@@ -24,7 +24,7 @@ export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [UiTable, BranchStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()"
+    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No branches" emptyHint="Create your first branch to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-b>
@@ -74,6 +74,7 @@ export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign
 })
 export class BranchTable {
   readonly rows = input<Branch[]>([]);
+  readonly startIndex = input(0);
   readonly loading = input(false);
   readonly sort = input<SortState | null>(null);
   readonly perms = input.required<BranchPerms>();

@@ -3,6 +3,7 @@ import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } 
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import {
   CreateVehicleRequest, FuelType, UpdateVehicleRequest, Vehicle, VehicleStatus, VehicleType
@@ -26,7 +27,7 @@ const STATUS_OPTIONS: SelectOption[] = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'I
   selector: 'app-vehicle-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton],
+  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="vform">
       <app-card title="Basic Information" subtitle="Identity and classification.">
@@ -36,7 +37,7 @@ const STATUS_OPTIONS: SelectOption[] = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'I
           <app-input [control]="c('make')" label="Make" placeholder="Tata" />
           <app-input [control]="c('model')" label="Model" placeholder="407" />
           <app-select [control]="c('fuelType')" label="Fuel Type" [options]="FUEL_TYPE_OPTIONS" [allowEmpty]="true" emptyLabel="Not set" />
-          <app-select [control]="c('branchId')" label="Base Branch" [options]="branchOptions()" [allowEmpty]="true" emptyLabel="None" />
+          <app-autocomplete [control]="c('branchId')" label="Base Branch" [options]="branchOptions()" placeholder="Search branch…" />
         </div>
       </app-card>
 

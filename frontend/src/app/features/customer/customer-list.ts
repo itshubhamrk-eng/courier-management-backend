@@ -43,6 +43,7 @@ const LIFECYCLE = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
       </header>
 
       <app-customer-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+        [startIndex]="page().page * page().size"
                           (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />

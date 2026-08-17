@@ -19,6 +19,9 @@ public class CompanySettingsMapper {
                 r.autoGenerateBarcode(), r.allowDuplicateReferenceNumber(), r.autoAssignTrackingNumber(),
                 r.gstPercentage(), r.invoicePrefix(), r.creditLimit(), r.walletEnabled(),
                 r.codEnabled(), r.onlinePaymentEnabled(), r.autoInvoiceGeneration(),
+                r.slaBreachTicketEnabled(), r.slaBookingToLoadingSheetHours(),
+                r.slaLoadingSheetToThcHours(), r.slaThcToInscanHours(),
+                r.slaInscanToDrsHours(), r.slaDrsToDeliveryHours(),
                 r.smsEnabled(), r.emailEnabled(), r.whatsappEnabled(), r.pushNotificationEnabled(),
                 r.passwordPolicy(), r.sessionTimeoutMinutes(), r.maxLoginAttempts(),
                 r.lockDurationMinutes(), r.otpExpiryMinutes(),
@@ -44,6 +47,10 @@ public class CompanySettingsMapper {
                         s.getGstPercentage(), s.getInvoicePrefix(), s.getCreditLimit(),
                         s.isWalletEnabled(), s.isCodEnabled(), s.isOnlinePaymentEnabled(),
                         s.isAutoInvoiceGeneration()),
+                new CompanySettingsResponse.Sla(
+                        s.isSlaBreachTicketEnabled(), s.getSlaBookingToLoadingSheetHours(),
+                        s.getSlaLoadingSheetToThcHours(), s.getSlaThcToInscanHours(),
+                        s.getSlaInscanToDrsHours(), s.getSlaDrsToDeliveryHours()),
                 new CompanySettingsResponse.Notification(
                         s.isSmsEnabled(), s.isEmailEnabled(), s.isWhatsappEnabled(),
                         s.isPushNotificationEnabled()),

@@ -81,6 +81,7 @@ class ShipmentServiceImplTest {
     private static final UUID CALLER = UUID.randomUUID();
     private static final UUID BOOKING_BRANCH = UUID.randomUUID();
     private static final UUID DELIVERY_BRANCH = UUID.randomUUID();
+    private static final UUID CROSSING_BRANCH = UUID.randomUUID();
     private static final UUID SERVICE_TYPE = UUID.randomUUID();
     private static final UUID PACKAGE_TYPE = UUID.randomUUID();
     private static final UUID PAYMENT_MODE = UUID.randomUUID();
@@ -99,6 +100,9 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.company.application.UserService userService;
     @Mock private com.courier.modules.company.application.BranchService branchService;
     @Mock private com.courier.modules.customer.application.CustomerService customerService;
+    @Mock private com.courier.modules.crossing.application.CrossingService crossingService;
+    @Mock private com.courier.modules.support.application.TicketService ticketService;
+    @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
     @Mock private PaymentModeService paymentModeService;
@@ -120,8 +124,8 @@ class ShipmentServiceImplTest {
                 branchShipmentSequenceRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
-                userService, branchService, customerService, auditService, eventPublisher, fileStoragePort,
-                shipmentAssetRepository);
+                userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
+                auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -167,6 +171,8 @@ class ShipmentServiceImplTest {
         assertThat(created.getReceiverName()).isEqualTo("Rahul Verma");
         assertThat(created.getPickupPincode()).isEqualTo(PICKUP_PINCODE);
         assertThat(created.getDeliveryPincode()).isEqualTo(DELIVERY_PINCODE);
+        assertThat(created.getCurrentLocationId()).isEqualTo(BOOKING_BRANCH);
+        assertThat(created.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
 
         verify(itemRepository).save(any());
         verify(chargeRepository).save(any());
@@ -175,6 +181,32 @@ class ShipmentServiceImplTest {
         verify(eventPublisher, never()).publishEvent(any());
         verify(customerService).findOrCreateForBooking("Asha Shah", "9876543210");
         verify(customerService).findOrCreateForBooking("Rahul Verma", "9876500000");
+        verify(crossingService, never()).createLegs(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a crossing booking sets nextLocationId to the crossing branch (not the "
+            + "delivery branch) and creates a CrossingDetail for it")
+    void crossingBookingCreatesCrossingDetail() {
+        Shipment created = service.create(
+                command("Asha Shah", "221B Baker Street, Pune", "9876543210", true, CROSSING_BRANCH));
+
+        assertThat(created.getCurrentLocationId()).isEqualTo(BOOKING_BRANCH);
+        assertThat(created.getNextLocationId()).isEqualTo(CROSSING_BRANCH);
+
+        verify(crossingService).createLegs(created.getId(), List.of(CROSSING_BRANCH), null);
+    }
+
+    @Test
+    @DisplayName("crossing without a crossing branch is refused before anything is persisted")
+    void crossingWithoutBranchRejected() {
+        assertThatThrownBy(() -> service.create(
+                command("Asha Shah", "221B Baker Street, Pune", "9876543210", true, null)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("crossing");
+
+        verify(shipmentRepository, never()).save(any());
+        verify(crossingService, never()).createLegs(any(), any(), any());
     }
 
     @Test
@@ -331,7 +363,7 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(withoutPincode))
                 .isInstanceOf(BusinessRuleException.class)
@@ -480,7 +512,7 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static UpdateShipmentCommand updateCommand(Long expectedVersion) {
@@ -493,6 +525,20 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null);
+    }
+
+    private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact,
+                                                   boolean crossing, java.util.UUID crossingBranchId) {
+        return new CreateShipmentCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, PICKUP_PINCODE, DELIVERY_PINCODE,
+                senderName, senderAddress, senderContact,
+                "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
+                SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
+                List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
+                        null, null, null, null, false, false)),
+                null, null, null, null, crossing,
+                crossingBranchId == null ? null : List.of(crossingBranchId), null);
     }
 
     private static Shipment existingShipment(ShipmentStatus status) {

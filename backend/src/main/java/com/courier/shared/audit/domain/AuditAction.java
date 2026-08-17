@@ -166,12 +166,40 @@ public enum AuditAction {
     SHIPMENT_DELIVERED,
     SHIPMENT_POD_UPLOADED,
 
+    // --- crossing (V37): a shipment's transit through an intermediate branch/hub
+    CROSSING_CREATED,
+    CROSSING_STATUS_UPDATED,
+
     // --- subscription plans (Phase 2, SUPER_ADMIN only)
     SUBSCRIPTION_PLAN_CREATED,
     SUBSCRIPTION_PLAN_UPDATED,
     SUBSCRIPTION_PLAN_ACTIVATED,
     SUBSCRIPTION_PLAN_DEACTIVATED,
     SUBSCRIPTION_PLAN_DELETED,
+
+    // --- ticket support (V39, Phase 1): full lifecycle, conversation, categories.
+    // TICKET_MESSAGE_ADDED covers both public replies and internal notes; whether a
+    // given entry was internal is on the row itself, so no separate constant is needed
+    // for it, same reasoning MASTER_DATA_* gives for not exploding per-catalogue.
+    TICKET_CREATED,
+    TICKET_ASSIGNED,
+    TICKET_REASSIGNED,
+    TICKET_ESCALATED,
+    TICKET_STATUS_CHANGED,
+    TICKET_PRIORITY_CHANGED,
+    TICKET_CATEGORY_CHANGED,
+    TICKET_MESSAGE_ADDED,
+    TICKET_ATTACHMENT_UPLOADED,
+    TICKET_REOPENED,
+    TICKET_CLOSED,
+    TICKET_CATEGORY_CREATED,
+    TICKET_CATEGORY_UPDATED,
+    TICKET_SUB_CATEGORY_CREATED,
+    TICKET_SUB_CATEGORY_UPDATED,
+
+    // --- ticket support Phase 2 (V40): SLA rules, company-configured
+    TICKET_SLA_RULE_CREATED,
+    TICKET_SLA_RULE_UPDATED,
 
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,

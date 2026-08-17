@@ -53,6 +53,7 @@ const BRANCH_STAFFING = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
             </div>
           </div>
           <div class="uv__actions">
+            <app-button variant="stroked" icon="support_agent" (pressed)="raiseTicket()">Raise Ticket</app-button>
             @if (can().update) { <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button> }
             @if (hasMenu()) {
               <button class="kebab" [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
@@ -219,6 +220,11 @@ export class UserView implements OnInit {
   managerName(): string { const id = this.user()?.reportingManagerId; return id ? (this.managers().find((m) => m.id === id)?.label ?? '—') : '—'; }
 
   edit(): void { this.router.navigate(['/users', this.id, 'edit']); }
+
+  raiseTicket(): void {
+    const branchId = this.user()?.branchId ?? undefined;
+    this.router.navigate(['/support/tickets/new'], { queryParams: branchId ? { branchId } : {} });
+  }
 
   lifecycle(op: 'activate' | 'unlock'): void {
     this.service[op](this.id).subscribe({ next: () => { this.notify.success(`User ${op}d.`); this.reload(); }, error: () => this.notify.error(`Could not ${op} the user.`) });

@@ -50,6 +50,9 @@ const TIMELINE_ICONS: Record<string, string> = {
         <div class="sv__actions">
           <a class="sv__link" [routerLink]="['/shipments', id, 'history']"><mat-icon>history</mat-icon> History</a>
           <a class="sv__link" [routerLink]="['/shipments', id, 'documents']"><mat-icon>description</mat-icon> Documents</a>
+          <a class="sv__link" [routerLink]="['/support/tickets/new']"
+             [queryParams]="{ shipmentId: id, branchId: shipment()!.bookingBranchId }">
+            <mat-icon>support_agent</mat-icon> Raise Ticket</a>
           <span class="sv__spacer"></span>
           @if (charge(); as c) {
             <app-button variant="stroked" icon="print" (pressed)="print(c)">Print LR</app-button>

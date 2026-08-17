@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
@@ -25,12 +26,12 @@ import { FreightFactorService } from '../freight-factor.service';
   selector: 'app-freight-calculator-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, UiSelect, UiInput, UiButton],
+  imports: [DecimalPipe, ReactiveFormsModule, UiAutocomplete, UiInput, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="calculate()" class="calc">
       <div class="grid grid--3">
-        <app-select [control]="c('fromBranchId')" label="From Branch" [options]="branchOptions()" placeholder="Select a branch" />
-        <app-select [control]="c('toBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Select a branch" />
+        <app-autocomplete [control]="c('fromBranchId')" label="From Branch" [options]="branchOptions()" placeholder="Search branch…" />
+        <app-autocomplete [control]="c('toBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Search branch…" />
         <app-input [control]="c('weight')" label="Weight (kg)" type="number" [min]="0" [step]="0.001" placeholder="4.000" />
       </div>
       <div class="grid grid--3">
