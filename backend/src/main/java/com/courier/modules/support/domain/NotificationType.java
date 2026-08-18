@@ -15,5 +15,13 @@ public enum NotificationType {
     TICKET_CLOSED,
     TICKET_REOPENED,
     SLA_APPROACHING,
-    SLA_BREACHED
+    SLA_BREACHED,
+
+    // --- follow-up management (V44), reusing this same in-app feed rather than
+    // building a second notification architecture — see FollowUpServiceImpl/
+    // FollowUpSweepJob.
+    FOLLOWUP_ASSIGNED,
+    FOLLOWUP_DUE_TODAY,
+    FOLLOWUP_OVERDUE,
+    FOLLOWUP_URGENT
 }

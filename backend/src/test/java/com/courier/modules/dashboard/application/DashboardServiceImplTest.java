@@ -1,9 +1,17 @@
 package com.courier.modules.dashboard.application;
 
+import com.courier.modules.dashboard.api.dto.DashboardSummaryResponse;
+import com.courier.modules.dashboard.domain.DashboardBranchDirectoryPort;
 import com.courier.modules.finance.application.WalletService;
+import com.courier.modules.finance.domain.Wallet;
+import com.courier.modules.finance.domain.WalletRepository;
+import com.courier.modules.finance.domain.WalletTransactionRepository;
+import com.courier.modules.manifest.domain.ManifestRepository;
+import com.courier.modules.manifest.domain.ManifestStatus;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
 import com.courier.modules.shipment.domain.ShipmentRepository;
 import com.courier.modules.shipment.domain.ShipmentStatus;
+import com.courier.modules.shipment.domain.ShipmentStatusHistoryRepository;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.security.AuthenticatedUser;
@@ -17,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -24,8 +33,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,13 +61,20 @@ class DashboardServiceImplTest {
 
     @Mock private ShipmentRepository shipmentRepository;
     @Mock private ShipmentChargeRepository shipmentChargeRepository;
+    @Mock private ShipmentStatusHistoryRepository shipmentStatusHistoryRepository;
+    @Mock private WalletTransactionRepository walletTransactionRepository;
     @Mock private WalletService walletService;
+    @Mock private ManifestRepository manifestRepository;
+    @Mock private WalletRepository walletRepository;
+    @Mock private DashboardBranchDirectoryPort branchDirectory;
 
     private DashboardServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new DashboardServiceImpl(shipmentRepository, shipmentChargeRepository, walletService);
+        service = new DashboardServiceImpl(shipmentRepository, shipmentChargeRepository,
+                shipmentStatusHistoryRepository, walletTransactionRepository, walletService,
+                manifestRepository, walletRepository, branchDirectory);
         // Every caller in these tests has no own branch (company/platform admins) —
         // the same degrade-rather-than-throw path DashboardServiceImpl.ownWallet()
         // already documents.
@@ -86,14 +105,64 @@ class DashboardServiceImplTest {
         when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(BigDecimal.ONE);
         when(shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
+        when(shipmentStatusHistoryRepository.findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
+                COMPANY, ShipmentStatus.DELIVERED)).thenReturn(List.of());
+        when(walletTransactionRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
 
-        service.summary();
+        // Company Overview — computed because this caller (COMPANY_ADMIN) has no own
+        // branch, see DashboardServiceImpl.ownWallet().
+        when(shipmentRepository.countByCompanyIdAndStatusIn(eq(COMPANY), any(Collection.class))).thenReturn(5L);
+        when(manifestRepository.countByCompanyIdAndStatus(COMPANY, ManifestStatus.CREATED)).thenReturn(6L);
+        when(shipmentRepository.countByCompanyIdAndStatusNotInAndBookingDateBefore(
+                eq(COMPANY), any(Collection.class), any(LocalDate.class))).thenReturn(7L);
+        when(walletRepository.sumAvailableBalanceByCompanyId(COMPANY)).thenReturn(new BigDecimal("500"));
+        when(walletRepository.countByCompanyIdAndAvailableBalanceLessThan(COMPANY, new BigDecimal("1000")))
+                .thenReturn(2L);
+        when(shipmentRepository.findTopRoutesByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class), any(Pageable.class))).thenReturn(List.of());
+        when(shipmentRepository.findTopCustomersByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class), any(Pageable.class))).thenReturn(List.of());
+        when(branchDirectory.findBranches(any(Collection.class), eq(COMPANY))).thenReturn(Map.of());
+
+        // Charts — one real day of activity, the rest of the 14-day window zero-filled.
+        LocalDate today = LocalDate.now();
+        when(shipmentRepository.countDailyByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyCount(today, 9L)));
+        when(shipmentRepository.dailyDeliveryPerformanceByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), eq(ShipmentStatus.DELIVERED), any(Collection.class), any(Collection.class),
+                any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyPerf(today, 3L, 2L, 1L)));
+        when(shipmentChargeRepository.dailyRevenueByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyRevenue(today, new BigDecimal("42"))));
+
+        DashboardSummaryResponse response = service.summary();
+
+        assertThat(response.companyOverview()).isNotNull();
+        assertThat(response.companyOverview().pipeline()).hasSize(7);
+        assertThat(response.companyOverview().manifestsAwaitingDispatch()).isEqualTo(6L);
+        assertThat(response.companyOverview().totalWalletBalance()).isEqualByComparingTo("500");
+        assertThat(response.companyOverview().lowBalanceBranches()).isEqualTo(2L);
+
+        assertThat(response.charts()).isNotNull();
+        assertThat(response.charts().shipmentTrend()).hasSize(1);
+        assertThat(response.charts().shipmentTrend().get(0).points()).hasSize(14);
+        assertThat(response.charts().shipmentTrend().get(0).points().get(13).value()).isEqualByComparingTo("9");
+        assertThat(response.charts().shipmentTrend().get(0).points().get(0).value()).isEqualByComparingTo("0");
+        assertThat(response.charts().deliveryPerformance()).hasSize(3);
+        assertThat(response.charts().revenueTrend().get(0).points().get(13).value()).isEqualByComparingTo("42");
 
         verify(shipmentRepository).countByCompanyId(COMPANY);
-        verify(shipmentRepository).countByCompanyIdAndStatusAndBookingDateBetween(
+        // Called twice: once for the "Delivered This Month" stat tile, once more as the
+        // pipeline's own DELIVERED stage (companyOverview()).
+        verify(shipmentRepository, org.mockito.Mockito.times(2)).countByCompanyIdAndStatusAndBookingDateBetween(
                 eq(COMPANY), eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class));
         verify(shipmentRepository).findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY);
         verify(shipmentChargeRepository).sumNetAmountByCompanyId(COMPANY);
+        verify(shipmentStatusHistoryRepository).findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
+                COMPANY, ShipmentStatus.DELIVERED);
+        verify(walletTransactionRepository).findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY);
 
         // The whole point of ISSUE-001: none of the unscoped/cross-tenant methods may
         // ever be reached for a company-bound caller.
@@ -106,6 +175,8 @@ class DashboardServiceImplTest {
         verify(shipmentRepository, never()).findTop5ByOrderByCreatedAtDesc();
         verify(shipmentChargeRepository, never()).sumNetAmount();
         verify(shipmentChargeRepository, never()).sumNetAmountForBookingDateBetween(any(), any());
+        verify(shipmentStatusHistoryRepository, never()).findTop5ByStatusOrderByChangedAtDesc(any());
+        verify(walletTransactionRepository, never()).findTop5ByOrderByCreatedAtDesc();
     }
 
     @Test
@@ -128,14 +199,40 @@ class DashboardServiceImplTest {
         when(shipmentChargeRepository.sumNetAmountForBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(BigDecimal.ONE);
         when(shipmentRepository.findTop5ByOrderByCreatedAtDesc()).thenReturn(List.of());
+        when(shipmentStatusHistoryRepository.findTop5ByStatusOrderByChangedAtDesc(ShipmentStatus.DELIVERED))
+                .thenReturn(List.of());
+        when(walletTransactionRepository.findTop5ByOrderByCreatedAtDesc()).thenReturn(List.of());
 
-        service.summary();
+        LocalDate today = LocalDate.now();
+        when(shipmentRepository.countDailyByBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyCount(today, 15L)));
+        when(shipmentChargeRepository.dailyRevenueByBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyRevenue(today, new BigDecimal("99"))));
+
+        DashboardSummaryResponse response = service.summary();
+
+        // Genuinely cross-tenant (no single company) — no companyOverview, and none of
+        // its company-scoped repository calls are ever reached.
+        assertThat(response.companyOverview()).isNull();
+        assertThat(response.charts().shipmentTrend().get(0).points().get(13).value()).isEqualByComparingTo("15");
+        // No profile shows Delivery Performance cross-tenant — the query never runs.
+        assertThat(response.charts().deliveryPerformance()).isEmpty();
+        verify(shipmentRepository, never()).dailyDeliveryPerformanceByCompanyIdAndBookingDateBetween(
+                any(), any(), any(), any(), any(), any());
+        verify(manifestRepository, never()).countByCompanyIdAndStatus(any(), any());
+        verify(walletRepository, never()).sumAvailableBalanceByCompanyId(any());
+        verify(walletRepository, never()).countByCompanyIdAndAvailableBalanceLessThan(any(), any());
+        verify(shipmentRepository, never()).countByCompanyIdAndStatusIn(any(), any());
+        verify(shipmentRepository, never())
+                .countByCompanyIdAndStatusNotInAndBookingDateBefore(any(), any(), any());
 
         verify(shipmentRepository).count();
         verify(shipmentRepository).countByStatusAndBookingDateBetween(
                 eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class));
         verify(shipmentRepository).findTop5ByOrderByCreatedAtDesc();
         verify(shipmentChargeRepository).sumNetAmount();
+        verify(shipmentStatusHistoryRepository).findTop5ByStatusOrderByChangedAtDesc(ShipmentStatus.DELIVERED);
+        verify(walletTransactionRepository).findTop5ByOrderByCreatedAtDesc();
 
         verify(shipmentRepository, never()).countByStatus(any());
         verify(shipmentRepository, never()).countByStatusIn(any());
@@ -148,6 +245,88 @@ class DashboardServiceImplTest {
         verify(shipmentRepository, never()).findTop5ByCompanyIdOrderByCreatedAtDesc(any());
         verify(shipmentChargeRepository, never()).sumNetAmountByCompanyId(any());
         verify(shipmentChargeRepository, never()).sumNetAmountByCompanyIdAndBookingDateBetween(any(), any(), any());
+        verify(shipmentStatusHistoryRepository, never()).findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(any(), any());
+        verify(walletTransactionRepository, never()).findTop5ByCompanyIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("BRANCH_MANAGER: gets branchOverview scoped to their own branch, never companyOverview")
+    void branchManagerGetsBranchOverviewScopedToOwnBranch() {
+        UUID branch = UUID.randomUUID();
+        CompanyContext.setCompanyId(COMPANY);
+        signedIn(Roles.BRANCH_MANAGER);
+
+        Wallet ownWallet = Wallet.builder().branchId(branch).availableBalance(new BigDecimal("250")).build();
+        org.mockito.Mockito.reset(walletService);
+        when(walletService.getForBranch(null)).thenReturn(ownWallet);
+
+        when(shipmentRepository.countByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
+                eq(COMPANY), any(ShipmentStatus.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(2L);
+        when(shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
+                eq(COMPANY), any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(3L);
+        when(shipmentRepository.countByCompanyId(COMPANY)).thenReturn(4L);
+        when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
+        when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
+                eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(BigDecimal.ONE);
+        when(shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
+        when(shipmentStatusHistoryRepository.findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
+                COMPANY, ShipmentStatus.DELIVERED)).thenReturn(List.of());
+        when(walletTransactionRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
+        when(shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
+                eq(COMPANY), eq(branch), any(Collection.class))).thenReturn(9L);
+
+        // Branch Overview — computed because this caller has an own branch wallet.
+        when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(ShipmentStatus.class), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(5L);
+        when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusIn(
+                eq(COMPANY), eq(branch), any(Collection.class))).thenReturn(6L);
+        when(manifestRepository.countByCompanyIdAndBookingBranchIdAndStatus(
+                COMPANY, branch, ManifestStatus.CREATED)).thenReturn(7L);
+        when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
+                eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class))).thenReturn(8L);
+
+        DashboardSummaryResponse response = service.summary();
+
+        assertThat(response.companyOverview()).isNull();
+        assertThat(response.branchOverview()).isNotNull();
+        assertThat(response.branchOverview().pipeline()).hasSize(7);
+        assertThat(response.branchOverview().readyForManifest()).isEqualTo(6L);
+        assertThat(response.branchOverview().manifestsAwaitingDispatch()).isEqualTo(7L);
+        assertThat(response.branchOverview().pendingDelivery()).isEqualTo(9L);
+        assertThat(response.branchOverview().delayedShipments()).isEqualTo(8L);
+
+        // Never the company-wide Company Overview repository calls for a branch-scoped caller.
+        verify(manifestRepository, never()).countByCompanyIdAndStatus(any(), any());
+        verify(walletRepository, never()).sumAvailableBalanceByCompanyId(any());
+        verify(shipmentRepository, never()).findTopRoutesByCompanyIdAndBookingDateBetween(
+                any(), any(), any(), any());
+    }
+
+    private static ShipmentRepository.DailyCountRow dailyCount(LocalDate day, long count) {
+        return new ShipmentRepository.DailyCountRow() {
+            @Override public LocalDate getDay() { return day; }
+            @Override public long getCount() { return count; }
+        };
+    }
+
+    private static ShipmentRepository.DailyDeliveryPerformanceRow dailyPerf(
+            LocalDate day, long delivered, long inTransit, long pending) {
+        return new ShipmentRepository.DailyDeliveryPerformanceRow() {
+            @Override public LocalDate getDay() { return day; }
+            @Override public long getDelivered() { return delivered; }
+            @Override public long getInTransit() { return inTransit; }
+            @Override public long getPending() { return pending; }
+        };
+    }
+
+    private static ShipmentChargeRepository.DailyRevenueRow dailyRevenue(LocalDate day, BigDecimal revenue) {
+        return new ShipmentChargeRepository.DailyRevenueRow() {
+            @Override public LocalDate getDay() { return day; }
+            @Override public BigDecimal getRevenue() { return revenue; }
+        };
     }
 
     private void signedIn(String role) {

@@ -215,7 +215,9 @@ export interface UpsertSlaRuleRequest {
 export type NotificationType =
   | 'TICKET_ASSIGNED' | 'TICKET_REASSIGNED' | 'TICKET_ESCALATED' | 'NEW_REPLY'
   | 'INTERNAL_UPDATE' | 'STATUS_CHANGED' | 'PRIORITY_CHANGED' | 'TICKET_RESOLVED'
-  | 'TICKET_CLOSED' | 'TICKET_REOPENED' | 'SLA_APPROACHING' | 'SLA_BREACHED';
+  | 'TICKET_CLOSED' | 'TICKET_REOPENED' | 'SLA_APPROACHING' | 'SLA_BREACHED'
+  // Follow-up Management (V44) — reuses this same in-app feed.
+  | 'FOLLOWUP_ASSIGNED' | 'FOLLOWUP_DUE_TODAY' | 'FOLLOWUP_OVERDUE' | 'FOLLOWUP_URGENT';
 
 /** Mirrors backend NotificationResponse. */
 export interface AppNotification {
@@ -226,6 +228,7 @@ export interface AppNotification {
   title: string;
   message: string;
   ticketId?: string | null;
+  followUpId?: string | null;
   read: boolean;
   createdAt: string;
 }

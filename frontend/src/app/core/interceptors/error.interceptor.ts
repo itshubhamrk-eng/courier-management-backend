@@ -45,7 +45,15 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
       const silent = req.context.get(SILENT_ERRORS);
 
-      if (err.status === 401 && !isAuthCall) {
+      // An impersonation session carries no refresh token by design (it hard-expires,
+      // see TokenService.beginImpersonation) — so its 401 never reaches the refresh
+      // branch above. Falling back to the stashed real session beats dumping a
+      // SUPER_ADMIN on the generic /session-expired page mid-navigation.
+      if (err.status === 401 && !isAuthCall && tokens.isImpersonating) {
+        auth.exitImpersonation();
+        notify.error('Your impersonation session expired. Returned to your own session.');
+        router.navigate(['/dashboard']);
+      } else if (err.status === 401 && !isAuthCall) {
         auth.clearSession();
         router.navigate(['/session-expired']);
       } else if (silent) {

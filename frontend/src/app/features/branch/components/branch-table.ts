@@ -6,9 +6,9 @@ import { BranchStatusBadge } from './branch-status-badge';
 import { Branch } from '@core/models/branch.model';
 
 /** Which row actions the caller may see. Drives the kebab menu; the list computes it. */
-export interface BranchPerms { update: boolean; delete: boolean; }
+export interface BranchPerms { update: boolean; delete: boolean; impersonate: boolean; }
 
-export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign-manager' | 'delete';
+export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign-manager' | 'delete' | 'login-as';
 
 /**
  * Branch directory table. Columns follow the backend list projection
@@ -43,6 +43,9 @@ export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign
           <button class="kebab" [matMenuTriggerFor]="menu" aria-label="Actions"><mat-icon>more_vert</mat-icon></button>
           <mat-menu #menu="matMenu">
             <button mat-menu-item (click)="act('view', b)"><mat-icon>visibility</mat-icon><span>View</span></button>
+            @if (perms().impersonate && b.status === 'ACTIVE') {
+              <button mat-menu-item (click)="act('login-as', b)"><mat-icon>admin_panel_settings</mat-icon><span>Login as Branch</span></button>
+            }
             @if (perms().update) {
               <button mat-menu-item (click)="act('edit', b)"><mat-icon>edit</mat-icon><span>Edit</span></button>
               <button mat-menu-item (click)="act('assign-manager', b)"><mat-icon>person_pin</mat-icon><span>Assign Manager</span></button>

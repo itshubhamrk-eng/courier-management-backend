@@ -41,4 +41,33 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
     BigDecimal sumNetAmountByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
                                                             @Param("start") LocalDate start,
                                                             @Param("end") LocalDate end);
+
+    /** Backs the "Revenue Trend" chart for a company-bound caller — one row per day that
+     *  had at least one charge; days with none simply don't appear (DashboardServiceImpl
+     *  fills the gaps with zero). Theta-join (comma, not a mapped association) against
+     *  {@code Shipment} for its {@code bookingDate} — same "no ORM association between
+     *  these two entities" reasoning {@link #sumNetAmountForBookingDateBetween} already
+     *  documents, just grouped instead of summed to one total. */
+    @Query("select s.bookingDate as day, coalesce(sum(c.netAmount), 0) as revenue "
+            + "from ShipmentCharge c, Shipment s "
+            + "where c.shipmentId = s.id and c.companyId = :companyId and s.companyId = :companyId "
+            + "and s.bookingDate between :start and :end group by s.bookingDate")
+    List<DailyRevenueRow> dailyRevenueByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
+                                                                        @Param("start") LocalDate start,
+                                                                        @Param("end") LocalDate end);
+
+    /** Cross-tenant sibling of {@link #dailyRevenueByCompanyIdAndBookingDateBetween} — only
+     *  safe from inside {@code CompanyContext.runAs(null, ...)}, same convention as every
+     *  other unscoped method in this repository. */
+    @Query("select s.bookingDate as day, coalesce(sum(c.netAmount), 0) as revenue "
+            + "from ShipmentCharge c, Shipment s "
+            + "where c.shipmentId = s.id and s.bookingDate between :start and :end group by s.bookingDate")
+    List<DailyRevenueRow> dailyRevenueByBookingDateBetween(@Param("start") LocalDate start,
+                                                            @Param("end") LocalDate end);
+
+    /** Projection for both daily-revenue trend queries above. */
+    interface DailyRevenueRow {
+        LocalDate getDay();
+        BigDecimal getRevenue();
+    }
 }

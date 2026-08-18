@@ -55,4 +55,12 @@ public interface WalletRepository extends JpaRepository<Wallet, UUID>,
                                                  @Param("companyId") UUID companyId);
 
     long countByCompanyId(UUID companyId);
+
+    /** Backs the Company Overview "Total Wallet Balance" tile — spendable balance summed
+     *  across every branch wallet in the company. */
+    @Query("select coalesce(sum(w.availableBalance), 0) from Wallet w where w.companyId = :companyId")
+    java.math.BigDecimal sumAvailableBalanceByCompanyId(@Param("companyId") UUID companyId);
+
+    /** Backs the Company Overview "Low Wallet Balance" action-required tile. */
+    long countByCompanyIdAndAvailableBalanceLessThan(UUID companyId, java.math.BigDecimal threshold);
 }

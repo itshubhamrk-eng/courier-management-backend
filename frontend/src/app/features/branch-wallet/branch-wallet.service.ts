@@ -29,6 +29,11 @@ export class BranchWalletService {
   summary(branchId?: string | null) {
     return this.api.get<WalletSummary>(`${this.base}/summary`, branchId ? { branchId } : undefined);
   }
+  /** One `summary` row per active branch of the company — `COMPANY_ADMIN`/`FINANCE_USER`
+   *  only. Powers the Finance Report's company-wide table. */
+  companySummary() {
+    return this.api.get<WalletSummary[]>(`${this.base}/company-summary`);
+  }
   /** The ledger: paged, sorted, filtered, searchable. Array/enum filters (transactionType,
    *  subTransactionType, paymentStatus) travel through PageQuery's index signature the same
    *  way every other filtered list in this app does — cast to `string` by the caller,

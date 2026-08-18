@@ -15,4 +15,11 @@ public interface ManifestRepository extends JpaRepository<Manifest, UUID>,
     Optional<Manifest> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 
     boolean existsByCompanyIdAndManifestNumber(UUID companyId, String manifestNumber);
+
+    /** Backs the Company Overview "Manifests Awaiting Dispatch" action-required tile. */
+    long countByCompanyIdAndStatus(UUID companyId, ManifestStatus status);
+
+    /** Backs the Branch Overview "Manifests Awaiting Dispatch" tile: manifests originating
+     *  from the caller's own branch specifically, not the whole company. */
+    long countByCompanyIdAndBookingBranchIdAndStatus(UUID companyId, UUID bookingBranchId, ManifestStatus status);
 }

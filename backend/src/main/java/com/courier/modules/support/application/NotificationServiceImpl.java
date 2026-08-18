@@ -47,6 +47,28 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    @Transactional
+    public void notifyFollowUp(UUID recipientUserId, NotificationType type, String title, String message,
+                                UUID followUpId) {
+        try {
+            if (recipientUserId == null) {
+                return;
+            }
+            repository.save(Notification.builder()
+                    .recipientUserId(recipientUserId)
+                    .type(type)
+                    .title(title)
+                    .message(message)
+                    .followUpId(followUpId)
+                    .read(false)
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to write notification (type={}, recipient={}, followUp={})",
+                    type, recipientUserId, followUpId, e);
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Page<Notification> list(Pageable pageable) {
         return repository.findByRecipient(requireCompany(), SecurityUtils.requireCurrentUser().userId(), pageable);

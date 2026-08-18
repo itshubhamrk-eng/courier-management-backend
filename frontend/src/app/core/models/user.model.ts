@@ -133,4 +133,6 @@ export interface CurrentUser {
   hubId?: string | null;
   companyName?: string | null;
   companyLogo?: string | null;
+  /** Set only while a SUPER_ADMIN is impersonating this company's admin — see AuthService.impersonateCompany. */
+  impersonatedBy?: { userId?: string; email: string } | null;
 }

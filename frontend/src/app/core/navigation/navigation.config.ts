@@ -31,6 +31,9 @@ const ACCOUNTS_DESK = [...FINANCE, AppRole.BRANCH_MANAGER, AppRole.ACCOUNTS];
 /** Ticket Support: every company role raises/reads tickets, plus SUPER_ADMIN's own
  * cross-tenant view — the one nav section every signed-in role sees something of. */
 const SUPPORT_READERS = [...COMPANY_ROLES, AppRole.SUPER_ADMIN];
+/** Follow-up Management: branch operational tasks — every company role, no SUPER_ADMIN
+ * (unlike Ticket Support, a follow-up has no cross-tenant view at all). */
+const FOLLOW_UP_READERS = COMPANY_ROLES;
 /** Every branch role reads what it books, moves or is asked about. */
 const SHIPMENT_READERS = [...MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 /** Every branch staff role reads its own reports. */
@@ -194,6 +197,14 @@ export const NAVIGATION: NavNode[] = [
   },
 
   {
+    id: 'follow-up', title: 'Follow-ups', icon: 'event_repeat', order: 6.4,
+    children: [
+      { id: 'follow-up-list', title: 'Follow-ups', icon: 'checklist', route: '/follow-ups', roles: FOLLOW_UP_READERS },
+      { id: 'follow-up-new', title: 'Create Follow-up', icon: 'add_box', route: '/follow-ups/new', roles: FOLLOW_UP_READERS }
+    ]
+  },
+
+  {
     id: 'support', title: 'Ticket Support', icon: 'support_agent', order: 6.5,
     children: [
       { id: 'support-tickets', title: 'Tickets', icon: 'confirmation_number', route: '/support/tickets', roles: SUPPORT_READERS },
@@ -215,9 +226,11 @@ export const NAVIGATION: NavNode[] = [
       { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
       { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
       { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'branch-reports', title: 'Branch Reports', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_VIEW', roles: BRANCH_REPORT_READERS },
       // Branch responsibility #11 — every branch staff role reads reports on the work it did.
-      { id: 'finance-reports', title: 'Finance Reports (Soon)', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
-      { id: 'branch-reports', title: 'Branch Reports (Soon)', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_VIEW', roles: BRANCH_REPORT_READERS }
+      { id: 'finance-reports', title: 'Finance Reports', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
+      { id: 'customer-report', title: 'Customer Report', icon: 'groups', route: '/reports/customers', permission: 'REPORT_VIEW', roles: COMPANY_ROLES.filter((r) => r !== AppRole.BRANCH_MANAGER) },
+      { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS }
     ]
   },
 

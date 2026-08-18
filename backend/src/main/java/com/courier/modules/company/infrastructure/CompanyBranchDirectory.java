@@ -2,6 +2,7 @@ package com.courier.modules.company.infrastructure;
 
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchRepository;
+import com.courier.modules.company.domain.BranchStatus;
 import com.courier.modules.company.domain.CompanyUserRepository;
 import com.courier.modules.company.domain.User;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,6 +66,16 @@ public class CompanyBranchDirectory implements BranchDirectoryPort {
         return branchRepository.findFirstByCompanyIdAndManagerId(companyId, userId,
                         PageRequest.of(0, 1))
                 .stream().findFirst().map(Branch::getId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BranchRef> listBranches(UUID companyId) {
+        if (companyId == null) {
+            return List.of();
+        }
+        return branchRepository.findAllByCompanyIdAndStatusOrderByBranchCodeAsc(companyId, BranchStatus.ACTIVE)
+                .stream().map(this::toRef).toList();
     }
 
     private BranchRef toRef(Branch branch) {

@@ -8,7 +8,9 @@ export const API = {
     me: '/auth/me',
     changePassword: '/auth/change-password',
     forgotPassword: '/auth/forgot-password',
-    resetPassword: '/auth/reset-password'
+    resetPassword: '/auth/reset-password',
+    impersonate: (companyId: string) => `/auth/impersonate/${companyId}`,
+    impersonateBranch: (branchId: string) => `/auth/impersonate/branch/${branchId}`
   },
   companies: '/companies',
   users: '/users',
@@ -42,5 +44,7 @@ export const API = {
   supportTickets: '/support/tickets',
   supportCategories: '/support/categories',
   supportSlaRules: '/support/sla-rules',
-  notifications: '/notifications'
+  notifications: '/notifications',
+  /** Follow-up Management — branch operational tasks. See MEMORY/modules/follow-up.md. */
+  followUps: '/follow-ups'
 } as const;

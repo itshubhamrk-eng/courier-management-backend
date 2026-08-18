@@ -28,9 +28,13 @@ public class DashboardController {
 
     @GetMapping("/summary")
     @Operation(summary = "Operational dashboard summary",
-            description = "Shipment-derived counts, revenue and recent shipments for the "
+            description = "Shipment-derived counts, revenue, recent shipments and a merged "
+                    + "recent-activity feed (bookings/deliveries/wallet moves) for the "
                     + "caller's company. Branch/hub/company counts are not included here — "
-                    + "the frontend already derives those from the live list endpoints.")
+                    + "the frontend already derives those from the live list endpoints. A "
+                    + "caller with no own branch (COMPANY_ADMIN) additionally receives "
+                    + "companyOverview: the shipment pipeline, action-required backlog "
+                    + "counts, company-wide wallet total and top routes/customers.")
     public ApiResponse<DashboardSummaryResponse> summary() {
         return ApiResponse.success(service.summary());
     }

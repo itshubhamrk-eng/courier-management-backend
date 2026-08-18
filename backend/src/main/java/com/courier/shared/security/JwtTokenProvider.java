@@ -68,6 +68,16 @@ public class JwtTokenProvider {
      */
     private static final String CLAIM_COMPANY_NAME = "cnm";
     private static final String CLAIM_COMPANY_LOGO = "clogo";
+    /**
+     * Impersonation marker, set only on the short-lived token
+     * {@link #generateImpersonationAccessToken} mints for a SUPER_ADMIN "login as
+     * company" session. Never trusted for authorisation — {@code roles}/{@code cid}
+     * still carry the real grant — this is display/audit-trail only, so a client can
+     * render "you are impersonating X" without a second round trip.
+     */
+    private static final String CLAIM_IMPERSONATION = "imp";
+    private static final String CLAIM_IMPERSONATOR_ID = "impBy";
+    private static final String CLAIM_IMPERSONATOR_EMAIL = "impByEmail";
 
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
@@ -144,6 +154,48 @@ public class JwtTokenProvider {
                 .issuer(properties.getIssuer())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(properties.getAccessTokenTtl())))
+                .claims(claims)
+                .signWith(signingKey, Jwts.SIG.HS256)
+                .compact();
+    }
+
+    /**
+     * Mints a short-lived access token for a SUPER_ADMIN "login as company" session —
+     * same shape as a normal access token (so every existing {@code @PreAuthorize}/role
+     * check just works), plus an impersonation marker and the real actor's identity.
+     *
+     * <p>Deliberately has no refresh-token counterpart: the caller decides how long the
+     * session lives via {@code ttl}, and it hard-expires rather than being silently
+     * extendable. See {@code AuthService#impersonateCompany}.
+     *
+     * @param impersonatorId    the SUPER_ADMIN's own user id — never trusted for
+     *                          authorisation, audit/display only
+     * @param impersonatorEmail the SUPER_ADMIN's own email, same reason
+     * @param ttl               how long this session lives; independent of the normal
+     *                          {@code app.jwt.access-token-ttl}
+     */
+    public String generateImpersonationAccessToken(UUID userId, UUID companyId, String email, Set<String> roles,
+                                                     UUID branchId, UUID hubId, String companyName, String companyLogo,
+                                                     UUID impersonatorId, String impersonatorEmail, Duration ttl) {
+        Instant now = Instant.now();
+        var claims = new java.util.HashMap<String, Object>(Map.of(
+                CLAIM_COMPANY_ID, companyId != null ? companyId.toString() : "",
+                CLAIM_EMAIL, email,
+                CLAIM_ROLES, List.copyOf(roles),
+                CLAIM_TYPE, TYPE_ACCESS,
+                CLAIM_IMPERSONATION, true,
+                CLAIM_IMPERSONATOR_ID, impersonatorId.toString(),
+                CLAIM_IMPERSONATOR_EMAIL, impersonatorEmail));
+        if (branchId != null) claims.put(CLAIM_BRANCH_ID, branchId.toString());
+        if (hubId != null) claims.put(CLAIM_HUB_ID, hubId.toString());
+        if (companyName != null && !companyName.isBlank()) claims.put(CLAIM_COMPANY_NAME, companyName);
+        if (companyLogo != null && !companyLogo.isBlank()) claims.put(CLAIM_COMPANY_LOGO, companyLogo);
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(userId.toString())
+                .issuer(properties.getIssuer())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(ttl)))
                 .claims(claims)
                 .signWith(signingKey, Jwts.SIG.HS256)
                 .compact();

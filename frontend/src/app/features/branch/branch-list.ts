@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
+import { AuthService } from '@core/auth/auth.service';
 import { AppRole } from '@core/models/role.model';
 import { Branch, BranchSearchRequest } from '@core/models/branch.model';
 import { Page, PageQuery, emptyPage } from '@core/models/page.model';
@@ -69,6 +70,7 @@ export class BranchList implements OnInit {
   private readonly router = inject(Router);
   private readonly confirm = inject(DialogService);
   private readonly dialog = inject(MatDialog);
+  private readonly auth = inject(AuthService);
 
   readonly loading = signal(true);
   readonly exporting = signal(false);
@@ -87,9 +89,15 @@ export class BranchList implements OnInit {
   readonly can = computed(() => ({
     create: this.perms.canAccess({ roles: WRITERS, permissions: ['BRANCH_CREATE'] }),
     update: this.perms.canAccess({ roles: UPDATERS, permissions: ['BRANCH_UPDATE'] }),
-    delete: this.perms.canAccess({ roles: WRITERS, permissions: ['BRANCH_DELETE'] })
+    delete: this.perms.canAccess({ roles: WRITERS, permissions: ['BRANCH_DELETE'] }),
+    // COMPANY_ADMIN only — same actor the backend's @PreAuthorize on
+    // AuthService#impersonateBranch requires, mirroring the SUPER_ADMIN-only
+    // "Login as" gate on the Companies list.
+    impersonate: this.auth.roles().includes(AppRole.COMPANY_ADMIN)
   }));
-  readonly tablePerms = computed<BranchPerms>(() => ({ update: this.can().update, delete: this.can().delete }));
+  readonly tablePerms = computed<BranchPerms>(() => ({
+    update: this.can().update, delete: this.can().delete, impersonate: this.can().impersonate
+  }));
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Organization' }, { label: 'Branches' }]);
@@ -131,7 +139,23 @@ export class BranchList implements OnInit {
       case 'deactivate': return this.confirmDeactivate(branch);
       case 'assign-manager': return this.assignManager(branch);
       case 'delete': return this.deleteBranch(branch);
+      case 'login-as': return this.impersonateBranch(branch);
     }
+  }
+
+  /** No password step-up (unlike "Login as company") — see AuthService#impersonateBranch. */
+  private impersonateBranch(branch: Branch): void {
+    this.confirm.confirm({
+      title: 'Login as branch',
+      message: `You'll be signed in as "${branch.branchName}"'s own branch manager. Your current session is kept and you can exit back to it any time.`,
+      confirmLabel: 'Login as'
+    }).subscribe((ok) => {
+      if (!ok) return;
+      this.auth.impersonateBranch(branch.id).subscribe({
+        next: () => { this.notify.success(`Signed in as ${branch.branchName}'s manager.`); this.router.navigate(['/dashboard']); },
+        error: (e) => this.notify.error(e?.error?.message ?? 'Could not start the impersonation session.')
+      });
+    });
   }
 
   private lifecycle(branch: Branch, op: 'activate' | 'deactivate'): void {

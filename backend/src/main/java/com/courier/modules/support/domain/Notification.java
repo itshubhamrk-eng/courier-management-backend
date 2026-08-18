@@ -57,6 +57,12 @@ public class Notification extends CompanyOwnedEntity {
     @Column(name = "ticket_id", columnDefinition = "BINARY(16)", updatable = false)
     private UUID ticketId;
 
+    /** Mutually exclusive with {@link #ticketId} — set for a Follow-up Management
+     *  notification (V44), reusing this same table/feed rather than a second one. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "follow_up_id", columnDefinition = "BINARY(16)", updatable = false)
+    private UUID followUpId;
+
     @Column(name = "is_read", nullable = false)
     private boolean read;
 }

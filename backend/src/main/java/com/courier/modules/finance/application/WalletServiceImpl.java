@@ -84,6 +84,11 @@ public class WalletServiceImpl implements WalletService {
     private static final String COMPANY_ADMIN_ONLY = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     private static final String AUTHENTICATED = "isAuthenticated()";
 
+    /** Company-wide financial reach — restricted to the two roles the Finance Report's
+     *  nav entry itself is gated on, not every company user with wallet read access. */
+    private static final String FINANCE_READERS = "hasAnyRole('" + Roles.COMPANY_ADMIN
+            + "', '" + com.courier.modules.company.domain.DefaultRoleCatalog.FINANCE_USER + "')";
+
     /**
      * Moving a company's money is a company's own act.
      *
@@ -166,6 +171,22 @@ public class WalletServiceImpl implements WalletService {
     public WalletSummary summarise(UUID branchId) {
         UUID companyId = requireCompany();
         UUID resolved = resolveBranchForRead(branchId, companyId);
+        return summariseResolved(resolved, companyId);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(FINANCE_READERS)
+    public List<WalletSummary> companySummary() {
+        UUID companyId = requireCompany();
+        return branchDirectory.listBranches(companyId).stream()
+                .map(b -> summariseResolved(b.branchId(), companyId))
+                .toList();
+    }
+
+    /** Shared by {@link #summarise} and {@link #companySummary} — one branch's wallet
+     *  summary, given an already-resolved/authorised branch id. */
+    private WalletSummary summariseResolved(UUID resolved, UUID companyId) {
         Wallet wallet = getOrCreateForBranch(resolved);
 
         Instant startOfDay = LocalDate.now(ZoneOffset.UTC).atStartOfDay(ZoneOffset.UTC).toInstant();

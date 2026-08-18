@@ -64,6 +64,27 @@ public final class TimeOrderedUuid {
                 .array();
     }
 
+    /**
+     * Reverse of {@link #toBytes}: turns a {@code BINARY(16)} column's raw bytes back
+     * into a {@code UUID}.
+     *
+     * <p>Needed when a native query projects an id/FK column into an interface
+     * projection — Spring Data has no {@code Converter<byte[], UUID>} registered, so a
+     * projection method declared to return {@code UUID} throws {@code
+     * UnsupportedOperationException} at read time instead of converting. Project the
+     * column as {@code byte[]} and convert with this method explicitly.
+     *
+     * @return null when {@code bytes} is null, so it can be applied straight to a
+     *         nullable projected column
+     */
+    public static UUID fromBytes(byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        return new UUID(buffer.getLong(), buffer.getLong());
+    }
+
     private static long nextSequence(long timestamp) {
         long last = LAST_TIMESTAMP.get();
         if (timestamp > last && LAST_TIMESTAMP.compareAndSet(last, timestamp)) {

@@ -1,5 +1,6 @@
 package com.courier.modules.finance.domain;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,4 +34,8 @@ public interface BranchDirectoryPort {
 
     /** The branch that names this user as its manager, if any. */
     Optional<UUID> branchManagedBy(UUID userId, UUID companyId);
+
+    /** Every active branch of this company — the Finance Report's company-wide statement
+     *  iterates this to build one row per branch. */
+    List<BranchRef> listBranches(UUID companyId);
 }

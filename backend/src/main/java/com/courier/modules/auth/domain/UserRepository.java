@@ -76,4 +76,37 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** Whether an address is taken anywhere on the platform, not merely in one company. */
     @Query("select count(u) > 0 from User u where u.email = :email")
     boolean existsByEmailAcrossCompanies(@Param("email") String email);
+
+    /**
+     * A company's own users holding {@code role}, oldest first — used only by SUPER_ADMIN
+     * impersonation, which needs a real user to act as rather than minting a token for
+     * nobody. Every company is provisioned with exactly one {@code COMPANY_ADMIN}
+     * ({@code UserProvisioningServiceImpl#provisionAdmin}), but this tolerates zero (an
+     * admin later deactivated) or more than one without failing — the caller decides.
+     *
+     * <p>Callers must bind {@code CompanyContext} to {@code companyId} first, same as
+     * every other method here — the explicit predicate is belt and braces, not a
+     * substitute for the Hibernate filter.
+     */
+    @Query("select u from User u join u.roles r where u.companyId = :companyId and r = :role "
+            + "and u.status = :status order by u.createdAt asc")
+    List<User> findByCompanyIdAndRoleAndStatus(@Param("companyId") UUID companyId,
+                                               @Param("role") Role role,
+                                               @Param("status") UserStatus status);
+
+    /**
+     * A branch's own users holding {@code role}, oldest first — used only by COMPANY_ADMIN
+     * "login as branch" impersonation, the same shape as {@link #findByCompanyIdAndRoleAndStatus}
+     * with an extra branch predicate. Tolerates zero (no manager assigned yet) or more than one
+     * without failing — the caller decides.
+     *
+     * <p>Callers must bind {@code CompanyContext} to {@code companyId} first, same as every
+     * other method here.
+     */
+    @Query("select u from User u join u.roles r where u.companyId = :companyId and u.branchId = :branchId "
+            + "and r = :role and u.status = :status order by u.createdAt asc")
+    List<User> findByCompanyIdAndBranchIdAndRoleAndStatus(@Param("companyId") UUID companyId,
+                                                          @Param("branchId") UUID branchId,
+                                                          @Param("role") Role role,
+                                                          @Param("status") UserStatus status);
 }

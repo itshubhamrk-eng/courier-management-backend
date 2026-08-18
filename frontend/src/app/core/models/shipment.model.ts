@@ -275,6 +275,19 @@ export interface BranchCommissionSummary {
   totalCommission: number;
 }
 
+/** One row of GET /shipments/branch-performance — the Branch Performance Report's
+ *  per-branch summary table. Mirrors backend `BranchPerformanceSummaryResponse`. */
+export interface BranchPerformanceSummary {
+  bookingBranchId: string;
+  shipmentCount: number;
+  deliveredCount: number;
+  inTransitCount: number;
+  returnedCount: number;
+  cancelledCount: number;
+  totalChargeableWeight: number;
+  totalNetAmount: number;
+}
+
 /** Body of POST /shipments/{id}/documents — mirrors backend `AddShipmentDocumentRequest`. */
 export interface AddShipmentDocumentRequest {
   documentType: ShipmentDocumentType;

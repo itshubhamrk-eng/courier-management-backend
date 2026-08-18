@@ -1,5 +1,6 @@
 package com.courier.modules.auth.application;
 
+import com.courier.modules.auth.application.port.BranchDirectoryPort;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
 import com.courier.modules.auth.domain.LoginFailureReason;
 import com.courier.modules.auth.domain.RefreshToken;
@@ -8,6 +9,7 @@ import com.courier.modules.auth.domain.Role;
 import com.courier.modules.auth.domain.User;
 import com.courier.modules.auth.domain.UserRepository;
 import com.courier.modules.auth.domain.UserSession;
+import com.courier.modules.auth.domain.UserStatus;
 import com.courier.modules.auth.infrastructure.security.AuthUserDetails;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
@@ -22,6 +24,7 @@ import com.courier.shared.company.CompanyContext;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.CredentialsExpiredException;
@@ -29,6 +32,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +65,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final CompanyDirectoryPort companyDirectory;
+    private final BranchDirectoryPort branchDirectory;
     private final SessionService sessionService;
     private final TokenIssuer tokenIssuer;
     private final LoginAttemptService loginAttemptService;
@@ -69,6 +74,13 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthProperties properties;
     private final AuditService auditService;
+    private final PasswordEncoder passwordEncoder;
+
+    /**
+     * Deliberately short — this is an impersonation session, not a normal login, and
+     * carries no refresh token to extend it. See {@link #impersonateCompany}.
+     */
+    private static final Duration IMPERSONATION_TTL = Duration.ofMinutes(15);
 
     @PostConstruct
     void validateConfiguration() {
@@ -245,6 +257,146 @@ public class AuthService {
             throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
         return matches.get(0).getCompanyId();
+    }
+
+    // ------------------------------------------------------------ impersonate
+
+    /**
+     * Opens a short-lived, company-scoped session on behalf of a SUPER_ADMIN — "login
+     * as company" without knowing (or resetting) any of that company's passwords.
+     *
+     * <p>Three deliberate design choices, each pinned down by a direct product
+     * decision rather than assumed:
+     * <ol>
+     *   <li><b>Step-up auth.</b> The caller is already authenticated as SUPER_ADMIN,
+     *       but this re-verifies their own current password anyway — defence in depth
+     *       against a hijacked or left-open SUPER_ADMIN session being used to reach
+     *       into every company on the platform.</li>
+     *   <li><b>Acts as the company's real {@code COMPANY_ADMIN}</b>, not a synthetic
+     *       token still tagged as the super admin — so anything done while
+     *       impersonating (e.g. "created by") resolves to a real user in that
+     *       company's own table, not a dangling cross-company id.</li>
+     *   <li><b>No refresh token.</b> {@link #IMPERSONATION_TTL} hard-caps the session;
+     *       the frontend must fall back to the super admin's own stashed session (or
+     *       force a fresh impersonation) once it expires, rather than silently
+     *       extending a company-impersonating session for hours.</li>
+     * </ol>
+     *
+     * <p>Every call is audited ({@link AuditAction#COMPANY_IMPERSONATED}) with both
+     * identities — the acting super admin and the company user assumed.
+     */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public ImpersonationResult impersonateCompany(UUID targetCompanyId, String password, String ipAddress) {
+        AuthenticatedUser principal = SecurityUtils.requireCurrentUser();
+
+        User superAdmin = userRepository.findByIdWithinCompany(principal.userId(), principal.companyId())
+                .orElseThrow(() -> new UnauthorizedException(
+                        ErrorCode.INVALID_CREDENTIALS, "Session is no longer valid"));
+
+        // Same email+IP throttle login uses — bounds repeated step-up guesses without
+        // touching the super admin's own account-lock counters (a mistyped confirmation
+        // must not be able to lock the super admin out of their own account).
+        loginAttemptService.assertNotThrottled(superAdmin.getEmail(), ipAddress);
+
+        if (!passwordEncoder.matches(password, superAdmin.getPasswordHash())) {
+            throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Incorrect password");
+        }
+
+        CompanyDirectoryPort.CompanyRef company = companyDirectory.findById(targetCompanyId)
+                .filter(CompanyDirectoryPort.CompanyRef::active)
+                .orElseThrow(() -> new ResourceNotFoundException("Company", targetCompanyId));
+
+        List<User> admins = CompanyContext.runAs(targetCompanyId, () ->
+                userRepository.findByCompanyIdAndRoleAndStatus(targetCompanyId, Role.COMPANY_ADMIN, UserStatus.ACTIVE));
+
+        if (admins.isEmpty()) {
+            throw new ResourceNotFoundException("This company has no active admin user to impersonate");
+        }
+        User target = admins.get(0);
+
+        String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
+                target.getId(), targetCompanyId, target.getEmail(), target.roleNames(),
+                target.getBranchId(), target.getHubId(), company.name(), company.logo(),
+                superAdmin.getId(), superAdmin.getEmail(), IMPERSONATION_TTL);
+
+        auditService.record(AuditAction.COMPANY_IMPERSONATED, "Company", targetCompanyId,
+                Map.of("impersonatorId", superAdmin.getId().toString(),
+                        "impersonatorEmail", superAdmin.getEmail(),
+                        "impersonatedUserId", target.getId().toString(),
+                        "impersonatedUserEmail", target.getEmail(),
+                        "ipAddress", String.valueOf(ipAddress)));
+
+        log.warn("SUPER_ADMIN {} ({}) started impersonating company {} ({}) as {} ({})",
+                superAdmin.getId(), superAdmin.getEmail(), targetCompanyId, company.name(),
+                target.getId(), target.getEmail());
+
+        return new ImpersonationResult(target, company, accessToken, IMPERSONATION_TTL, superAdmin);
+    }
+
+    /** Outcome of {@link #impersonateCompany} or {@link #impersonateBranch}. */
+    public record ImpersonationResult(User impersonatedUser,
+                                      CompanyDirectoryPort.CompanyRef company,
+                                      String accessToken,
+                                      Duration accessTokenTtl,
+                                      User impersonator) {
+    }
+
+    /**
+     * Opens a short-lived, branch-scoped session on behalf of a COMPANY_ADMIN — "login as
+     * branch" without knowing (or resetting) that branch manager's password.
+     *
+     * <p>Deliberately <b>no step-up password re-entry</b>, unlike {@link #impersonateCompany}:
+     * the caller is already the company's own admin acting inside their own company (no
+     * cross-tenant reach), and this is the product's own explicit call for this feature.
+     * Every other safeguard from company impersonation still applies unchanged — a real
+     * {@code BRANCH_MANAGER} of that branch is assumed (never a synthetic still-admin
+     * token), the session issues no refresh token so it hard-expires at
+     * {@link #IMPERSONATION_TTL}, and every call is audited
+     * ({@link AuditAction#BRANCH_IMPERSONATED}) with both identities.
+     */
+    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @Transactional
+    public ImpersonationResult impersonateBranch(UUID targetBranchId, String ipAddress) {
+        AuthenticatedUser principal = SecurityUtils.requireCurrentUser();
+
+        User companyAdmin = userRepository.findByIdWithinCompany(principal.userId(), principal.companyId())
+                .orElseThrow(() -> new UnauthorizedException(
+                        ErrorCode.INVALID_CREDENTIALS, "Session is no longer valid"));
+
+        BranchDirectoryPort.BranchRef branch = branchDirectory.findById(targetBranchId, principal.companyId())
+                .filter(BranchDirectoryPort.BranchRef::active)
+                .orElseThrow(() -> new ResourceNotFoundException("Branch", targetBranchId));
+
+        List<User> managers = userRepository.findByCompanyIdAndBranchIdAndRoleAndStatus(
+                principal.companyId(), targetBranchId, Role.BRANCH_MANAGER, UserStatus.ACTIVE);
+
+        if (managers.isEmpty()) {
+            throw new ResourceNotFoundException("This branch has no active manager to log in as");
+        }
+        User target = managers.get(0);
+
+        CompanyDirectoryPort.CompanyRef company = companyBrand(principal.companyId());
+
+        String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
+                target.getId(), principal.companyId(), target.getEmail(), target.roleNames(),
+                target.getBranchId(), target.getHubId(),
+                company != null ? company.name() : null, company != null ? company.logo() : null,
+                companyAdmin.getId(), companyAdmin.getEmail(), IMPERSONATION_TTL);
+
+        auditService.record(AuditAction.BRANCH_IMPERSONATED, "Branch", targetBranchId,
+                Map.of("impersonatorId", companyAdmin.getId().toString(),
+                        "impersonatorEmail", companyAdmin.getEmail(),
+                        "impersonatedUserId", target.getId().toString(),
+                        "impersonatedUserEmail", target.getEmail(),
+                        "branchName", branch.name(),
+                        "ipAddress", String.valueOf(ipAddress)));
+
+        log.warn("COMPANY_ADMIN {} ({}) started impersonating branch {} ({}) as {} ({})",
+                companyAdmin.getId(), companyAdmin.getEmail(), targetBranchId, branch.name(),
+                target.getId(), target.getEmail());
+
+        return new ImpersonationResult(target, company, accessToken, IMPERSONATION_TTL, companyAdmin);
     }
 
     // ----------------------------------------------------------------- refresh

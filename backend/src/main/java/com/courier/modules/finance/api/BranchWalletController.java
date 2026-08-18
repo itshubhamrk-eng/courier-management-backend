@@ -97,6 +97,16 @@ public class BranchWalletController {
         return ApiResponse.success(mapper.toResponse(service.summarise(branchId)));
     }
 
+    @GetMapping("/company-summary")
+    @Operation(summary = "Wallet summary for every branch",
+            description = "`COMPANY_ADMIN`/`FINANCE_USER` only — one `summary` row per "
+                    + "active branch of the caller's company, the same figures "
+                    + "`GET /branch-wallet/summary` returns for one branch. Powers the "
+                    + "Finance Report's company-wide table.")
+    public ApiResponse<List<WalletSummaryResponse>> companySummary() {
+        return ApiResponse.success(service.companySummary().stream().map(mapper::toResponse).toList());
+    }
+
     @GetMapping("/transactions")
     @Operation(summary = "Transaction history",
             description = """

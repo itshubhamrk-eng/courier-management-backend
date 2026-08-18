@@ -39,6 +39,7 @@ const ADDRESS_DELETERS = [AppRole.COMPANY_ADMIN];
           <app-customer-summary-card [customer]="customer()!" />
           <div class="cv__actions">
             <app-button variant="stroked" icon="support_agent" (pressed)="raiseTicket()">Raise Ticket</app-button>
+            <app-button variant="stroked" icon="event_repeat" (pressed)="createFollowUp()">Create Follow-up</app-button>
             @if (can().update) { <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button> }
             @if (can().lifecycle) {
               <button class="kebab" [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
@@ -155,6 +156,7 @@ export class CustomerView implements OnInit {
   edit(): void { this.router.navigate(['/customers', this.id, 'edit']); }
 
   raiseTicket(): void { this.router.navigate(['/support/tickets/new'], { queryParams: { customerId: this.id } }); }
+  createFollowUp(): void { this.router.navigate(['/follow-ups/new'], { queryParams: { customerId: this.id } }); }
 
   lifecycle(op: 'activate'): void {
     this.service[op](this.id).subscribe({

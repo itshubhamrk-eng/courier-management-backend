@@ -33,6 +33,7 @@ import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.DeliveryAssignmentRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignmentStatus;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
+import com.courier.modules.shipment.domain.BranchPerformanceSummary;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
@@ -415,6 +416,35 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private static BigDecimal sum(List<ShipmentCharge> charges, java.util.function.Function<ShipmentCharge, BigDecimal> field) {
         return charges.stream().map(field).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<BranchPerformanceSummary> branchPerformance(ShipmentCriteria criteria) {
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
+        Map<UUID, BigDecimal> netAmounts = netAmountsFor(matches.stream().map(Shipment::getId).toList());
+        return matches.stream()
+                .collect(Collectors.groupingBy(Shipment::getBookingBranchId))
+                .entrySet().stream()
+                .map(e -> {
+                    List<Shipment> branchShipments = e.getValue();
+                    Map<ShipmentStatus, Long> statusCounts = branchShipments.stream()
+                            .collect(Collectors.groupingBy(Shipment::getStatus, Collectors.counting()));
+                    long delivered = statusCounts.getOrDefault(ShipmentStatus.DELIVERED, 0L);
+                    long returned = statusCounts.getOrDefault(ShipmentStatus.RETURNED, 0L);
+                    long cancelled = statusCounts.getOrDefault(ShipmentStatus.CANCELLED, 0L);
+                    long total = branchShipments.size();
+                    BigDecimal weight = branchShipments.stream().map(Shipment::getChargeableWeight)
+                            .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal amount = branchShipments.stream()
+                            .map(s -> netAmounts.get(s.getId()))
+                            .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return new BranchPerformanceSummary(e.getKey(), total, delivered,
+                            total - delivered - returned - cancelled, returned, cancelled, weight, amount);
+                })
+                .sorted(Comparator.comparing(BranchPerformanceSummary::shipmentCount).reversed())
+                .toList();
     }
 
     /** Shared by {@link #search} and {@link #summaryStats} — see the class-level note on

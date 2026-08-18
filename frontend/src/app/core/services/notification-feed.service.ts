@@ -12,6 +12,7 @@ export interface AppNotification {
   message: string;
   icon: string;
   ticketId?: string | null;
+  followUpId?: string | null;
   /** ISO timestamp. */
   createdAt: string;
   read: boolean;
@@ -30,7 +31,11 @@ const ICON_BY_TYPE: Record<NotificationType, string> = {
   TICKET_CLOSED: 'task_alt',
   TICKET_REOPENED: 'restart_alt',
   SLA_APPROACHING: 'schedule',
-  SLA_BREACHED: 'report_problem'
+  SLA_BREACHED: 'report_problem',
+  FOLLOWUP_ASSIGNED: 'assignment_ind',
+  FOLLOWUP_DUE_TODAY: 'today',
+  FOLLOWUP_OVERDUE: 'warning',
+  FOLLOWUP_URGENT: 'priority_high'
 };
 
 const LEVEL_BY_TYPE: Record<NotificationType, 'info' | 'success' | 'warning' | 'error'> = {
@@ -45,12 +50,16 @@ const LEVEL_BY_TYPE: Record<NotificationType, 'info' | 'success' | 'warning' | '
   TICKET_CLOSED: 'success',
   TICKET_REOPENED: 'warning',
   SLA_APPROACHING: 'warning',
-  SLA_BREACHED: 'error'
+  SLA_BREACHED: 'error',
+  FOLLOWUP_ASSIGNED: 'info',
+  FOLLOWUP_DUE_TODAY: 'warning',
+  FOLLOWUP_OVERDUE: 'error',
+  FOLLOWUP_URGENT: 'warning'
 };
 
 function toFeedItem(n: TicketNotification): AppNotification {
   return {
-    id: n.id, title: n.title, message: n.message, ticketId: n.ticketId,
+    id: n.id, title: n.title, message: n.message, ticketId: n.ticketId, followUpId: n.followUpId,
     createdAt: n.createdAt, read: n.read, icon: ICON_BY_TYPE[n.type], level: LEVEL_BY_TYPE[n.type]
   };
 }

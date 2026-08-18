@@ -34,7 +34,7 @@ public class NotificationController {
 
     private static NotificationResponse toResponse(Notification n) {
         return new NotificationResponse(n.getId(), n.getType(), n.getTitle(), n.getMessage(),
-                n.getTicketId(), n.isRead(), n.getCreatedAt());
+                n.getTicketId(), n.getFollowUpId(), n.isRead(), n.getCreatedAt());
     }
 
     @GetMapping

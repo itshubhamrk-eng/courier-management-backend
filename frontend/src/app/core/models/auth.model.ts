@@ -31,6 +31,25 @@ export interface LoginResponse {
 
 export interface RefreshRequest { refreshToken: string; }
 
+/** POST /auth/impersonate/{companyId} — step-up confirmation (SUPER_ADMIN only). */
+export interface ImpersonateRequest { password: string; }
+
+/** No refresh token — this session hard-expires rather than being silently extendable. */
+export interface ImpersonationResponse {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+  userId: string;
+  companyId: string;
+  email: string;
+  displayName: string;
+  roles: string[];
+  companyName?: string | null;
+  companyLogo?: string | null;
+  impersonatorId: string;
+  impersonatorEmail: string;
+}
+
 /** POST /auth/forgot-password — always 200 to avoid account enumeration. */
 export interface ForgotPasswordRequest { companyId: string; email: string; }
 
@@ -53,6 +72,11 @@ export interface JwtClaims {
   /** Company brand — display only, carried so a hard reload doesn't lose it (same reason as bid/hid). */
   cnm?: string;
   clogo?: string;
+  /** Set only on a SUPER_ADMIN "login as company" token — display/audit only, never
+   *  trusted for authorisation (roles/cid still carry the real grant). */
+  imp?: boolean;
+  impBy?: string;
+  impByEmail?: string;
   typ: string;
   exp: number;
   iat: number;

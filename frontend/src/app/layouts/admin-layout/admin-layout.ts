@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, afterNextRender, inject, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 import { NavigationService } from '@core/navigation/navigation.service';
 import { TourService } from '@core/services/tour.service';
+import { AuthService } from '@core/auth/auth.service';
 import { Sidebar } from './components/sidebar';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
@@ -17,12 +19,20 @@ import { Footer } from './components/footer';
   selector: 'app-admin-layout',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Sidebar, Header, Footer],
+  imports: [RouterOutlet, Sidebar, Header, Footer, MatIconModule],
   template: `
     <div class="shell">
       <app-sidebar [mobileOpen]="drawerOpen()" (navigate)="closeDrawer()" />
       @if (drawerOpen()) { <div class="shell__backdrop" (click)="closeDrawer()"></div> }
       <div class="shell__main">
+        @if (auth.isImpersonating()) {
+          <div class="imp-banner">
+            <mat-icon>admin_panel_settings</mat-icon>
+            <span>Impersonating <strong>{{ auth.companyName() }}</strong> as {{ auth.displayName() }}
+              — opened by {{ auth.impersonatedBy()!.email }}</span>
+            <button type="button" class="imp-banner__exit" (click)="exitImpersonation()">Exit</button>
+          </div>
+        }
         <app-header (toggleSidebar)="toggle()" />
         <main class="shell__content app-scroll"><router-outlet /></main>
         <app-footer />
@@ -34,6 +44,13 @@ import { Footer } from './components/footer';
     .shell__main { flex:1; display:flex; flex-direction:column; min-width:0; }
     .shell__content { flex:1; overflow:auto; padding:24px 32px 32px; background:var(--surface-muted); }
     .shell__backdrop { position:fixed; inset:0; z-index:50; background:rgba(15,23,42,.5); backdrop-filter:blur(1px); }
+    .imp-banner { display:flex; align-items:center; gap:10px; padding:8px 20px; font:600 13px var(--font-sans);
+      background:var(--warning-bg, #fff7ed); color:var(--warning, #b45309); }
+    .imp-banner mat-icon { font-size:18px; width:18px; height:18px; }
+    .imp-banner span { flex:1; }
+    .imp-banner__exit { font:700 12px var(--font-sans); color:inherit; background:rgba(0,0,0,.08);
+      border:none; border-radius:var(--r-field); padding:4px 12px; cursor:pointer; }
+    .imp-banner__exit:hover { background:rgba(0,0,0,.15); }
     @media (max-width: 1024px) { .shell__content { padding:20px 20px 24px; } }
     @media (max-width: 640px) { .shell__content { padding:14px 14px 20px; } }
   `]
@@ -42,6 +59,8 @@ export class AdminLayout {
   private readonly destroyRef = inject(DestroyRef);
   private readonly nav = inject(NavigationService);
   private readonly tour = inject(TourService);
+  private readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
 
   /** Mobile/tablet: drawer visible. Desktop collapse lives in NavigationService (persisted). */
   readonly drawerOpen = signal(false);
@@ -67,4 +86,13 @@ export class AdminLayout {
     else this.nav.toggleCollapsed();
   }
   closeDrawer(): void { this.drawerOpen.set(false); }
+
+  exitImpersonation(): void {
+    this.auth.exitImpersonation();
+    // Back to wherever the restored real session actually has a landing page: a
+    // SUPER_ADMIN returns to the company list it launched impersonation from, a
+    // COMPANY_ADMIN (no access to /companies) returns to its own dashboard.
+    const target = this.auth.roles().includes('SUPER_ADMIN') ? '/companies' : '/dashboard';
+    this.router.navigate([target]);
+  }
 }

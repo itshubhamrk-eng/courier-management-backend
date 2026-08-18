@@ -5,7 +5,7 @@ import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { API } from '../config/api-endpoints';
 import {
-  ForgotPasswordRequest, LoginRequest, LoginResponse, ResetPasswordRequest
+  ForgotPasswordRequest, ImpersonationResponse, LoginRequest, LoginResponse, ResetPasswordRequest
 } from '../models/auth.model';
 import { CurrentUser } from '../models/user.model';
 import { decodeJwt } from '../utils/jwt.util';
@@ -30,6 +30,9 @@ export class AuthService {
   readonly companyId = computed(() => this._user()?.companyId ?? null);
   readonly companyName = computed(() => this._user()?.companyName ?? null);
   readonly companyLogo = computed(() => this._user()?.companyLogo ?? null);
+  /** The SUPER_ADMIN who opened this session, while impersonating; null otherwise. */
+  readonly impersonatedBy = computed(() => this._user()?.impersonatedBy ?? null);
+  readonly isImpersonating = computed(() => this.impersonatedBy() !== null);
 
   login(request: LoginRequest): Observable<LoginResponse> {
     return this.api.post<LoginResponse>(API.auth.login, request).pipe(
@@ -62,6 +65,45 @@ export class AuthService {
     this.tokens.clear();
     this.session.end();
     this._user.set(null);
+  }
+
+  /**
+   * SUPER_ADMIN only: opens a short-lived (15 minute), company-scoped session acting
+   * as that company's own COMPANY_ADMIN. The real session is stashed, not discarded —
+   * see {@link exitImpersonation}.
+   */
+  impersonateCompany(companyId: string, password: string): Observable<ImpersonationResponse> {
+    return this.api.post<ImpersonationResponse>(API.auth.impersonate(companyId), { password }).pipe(
+      tap((res) => {
+        this.tokens.beginImpersonation(res.accessToken);
+        this.session.syncExpiry();
+        this._user.set(this.hydrate());
+      })
+    );
+  }
+
+  /**
+   * COMPANY_ADMIN only: opens a short-lived (15 minute), branch-scoped session acting
+   * as that branch's own BRANCH_MANAGER — no password needed, unlike
+   * {@link impersonateCompany}, since the caller is already the company's own admin
+   * acting inside their own company. The real session is stashed, not discarded —
+   * see {@link exitImpersonation}.
+   */
+  impersonateBranch(branchId: string): Observable<ImpersonationResponse> {
+    return this.api.post<ImpersonationResponse>(API.auth.impersonateBranch(branchId), {}).pipe(
+      tap((res) => {
+        this.tokens.beginImpersonation(res.accessToken);
+        this.session.syncExpiry();
+        this._user.set(this.hydrate());
+      })
+    );
+  }
+
+  /** Restores the real (pre-impersonation) session. A no-op if not impersonating. */
+  exitImpersonation(): void {
+    if (!this.tokens.restoreStash()) return;
+    this.session.syncExpiry();
+    this._user.set(this.hydrate());
   }
 
   hasAnyRole(roles: string[]): boolean {
@@ -101,7 +143,8 @@ export class AuthService {
       userId: c.sub, companyId: c.cid ?? c.tid ?? null, email: c.email,
       displayName: c.email, roles: c.roles ?? [], permissions: c.permissions ?? [],
       branchId: c.bid ?? null, hubId: c.hid ?? null,
-      companyName: c.cnm ?? null, companyLogo: c.clogo ?? null
+      companyName: c.cnm ?? null, companyLogo: c.clogo ?? null,
+      impersonatedBy: c.imp && c.impByEmail ? { userId: c.impBy, email: c.impByEmail } : null
     };
   }
 }

@@ -3,6 +3,8 @@ package com.courier.modules.auth.api;
 import com.courier.modules.auth.api.dto.ChangePasswordRequest;
 import com.courier.modules.auth.api.dto.CurrentUserResponse;
 import com.courier.modules.auth.api.dto.ForgotPasswordRequest;
+import com.courier.modules.auth.api.dto.ImpersonateRequest;
+import com.courier.modules.auth.api.dto.ImpersonationResponse;
 import com.courier.modules.auth.api.dto.LoginRequest;
 import com.courier.modules.auth.api.dto.LoginResponse;
 import com.courier.modules.auth.api.dto.LogoutRequest;
@@ -24,10 +26,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 /**
  * Authentication endpoints.
@@ -97,6 +102,46 @@ public class AuthController {
                 request.refreshToken(), clientIp(httpRequest), httpRequest.getHeader(HttpHeaders.USER_AGENT));
 
         return ApiResponse.success(LoginResponse.from(result), "Tokens refreshed");
+    }
+
+    @PostMapping("/impersonate/{companyId}")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Login as company (SUPER_ADMIN only)",
+            description = """
+                    Opens a short-lived (15 minute), company-scoped session acting as
+                    that company's own COMPANY_ADMIN — no password of theirs is needed
+                    or touched. Requires re-entering the SUPER_ADMIN's own current
+                    password as step-up confirmation. Issues no refresh token: the
+                    session hard-expires rather than being silently extendable, and
+                    every call is audited.
+                    """)
+    public ApiResponse<ImpersonationResponse> impersonate(@PathVariable UUID companyId,
+                                                           @Valid @RequestBody ImpersonateRequest request,
+                                                           HttpServletRequest httpRequest) {
+
+        AuthService.ImpersonationResult result =
+                authService.impersonateCompany(companyId, request.password(), clientIp(httpRequest));
+
+        return ApiResponse.success(ImpersonationResponse.from(result), "Impersonation session started");
+    }
+
+    @PostMapping("/impersonate/branch/{branchId}")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Login as branch (COMPANY_ADMIN only)",
+            description = """
+                    Opens a short-lived (15 minute), branch-scoped session acting as
+                    that branch's own BRANCH_MANAGER — no password required, since the
+                    caller is already an authenticated COMPANY_ADMIN of the same
+                    company. Issues no refresh token: the session hard-expires rather
+                    than being silently extendable, and every call is audited.
+                    """)
+    public ApiResponse<ImpersonationResponse> impersonateBranch(@PathVariable UUID branchId,
+                                                                 HttpServletRequest httpRequest) {
+
+        AuthService.ImpersonationResult result =
+                authService.impersonateBranch(branchId, clientIp(httpRequest));
+
+        return ApiResponse.success(ImpersonationResponse.from(result), "Impersonation session started");
     }
 
     @PostMapping("/logout")

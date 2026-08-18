@@ -14,4 +14,15 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
             + "and h.companyId = :companyId order by h.changedAt asc")
     List<ShipmentStatusHistory> findAllByShipmentIdWithinCompany(@Param("shipmentId") UUID shipmentId,
                                                                  @Param("companyId") UUID companyId);
+
+    // -------------------------------------------------------------- dashboard: recent activity
+    // Same explicit-companyId discipline as ShipmentRepository (see its own javadoc and
+    // DashboardServiceImpl.summary() — ISSUE-001): summary() is deliberately not
+    // @Transactional, so an implicit Hibernate companyFilter can't be relied on here either.
+
+    /** Unfiltered on purpose — only safe inside a CompanyContext.runAs(null, ...) block. */
+    List<ShipmentStatusHistory> findTop5ByStatusOrderByChangedAtDesc(ShipmentStatus status);
+
+    List<ShipmentStatusHistory> findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
+            UUID companyId, ShipmentStatus status);
 }

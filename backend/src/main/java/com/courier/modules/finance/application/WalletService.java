@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -46,6 +47,11 @@ public interface WalletService {
 
     /** Balances plus the derived figures a dashboard shows. */
     WalletSummary summarise(UUID branchId);
+
+    /** One summary per branch of the caller's company — the Finance Report's company-wide
+     *  table. `COMPANY_ADMIN`/`FINANCE_USER` only, since every other wallet read is scoped
+     *  to a single branch. */
+    List<WalletSummary> companySummary();
 
     /** The statement, paged and filtered. Criteria are pinned to the resolved wallet. */
     Page<WalletTransaction> searchTransactions(UUID branchId, WalletTransactionCriteria criteria,

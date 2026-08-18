@@ -1,5 +1,6 @@
 package com.courier.modules.auth.application;
 
+import com.courier.modules.auth.application.port.BranchDirectoryPort;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
 import com.courier.modules.auth.domain.LoginFailureReason;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
@@ -14,6 +15,7 @@ import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ForbiddenException;
 import com.courier.shared.exception.UnauthorizedException;
+import com.courier.shared.security.AuthenticatedUser;
 import com.courier.shared.security.JwtTokenProvider;
 import com.courier.shared.company.CompanyContext;
 import org.junit.jupiter.api.AfterEach;
@@ -33,12 +35,14 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +71,7 @@ class AuthServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private CompanyDirectoryPort companyDirectory;
+    @Mock private BranchDirectoryPort branchDirectory;
     @Mock private SessionService sessionService;
     @Mock private TokenIssuer tokenIssuer;
     @Mock private LoginAttemptService loginAttemptService;
@@ -74,6 +79,7 @@ class AuthServiceTest {
     @Mock private TokenRevocationService tokenRevocationService;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private AuditService auditService;
+    @Mock private PasswordEncoder passwordEncoder;
 
     private AuthProperties properties;
     private AuthService authService;
@@ -86,9 +92,9 @@ class AuthServiceTest {
     void setUp() {
         properties = new AuthProperties();
         authService = new AuthService(
-                authenticationManager, userRepository, refreshTokenRepository, companyDirectory,
+                authenticationManager, userRepository, refreshTokenRepository, companyDirectory, branchDirectory,
                 sessionService, tokenIssuer, loginAttemptService, emailVerificationService,
-                tokenRevocationService, jwtTokenProvider, properties, auditService);
+                tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder);
 
         companyId = UUID.randomUUID();
         userId = UUID.randomUUID();
@@ -112,6 +118,7 @@ class AuthServiceTest {
     @AfterEach
     void tearDown() {
         CompanyContext.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private AuthService.LoginCommand command(String password, boolean rememberMe) {
@@ -400,6 +407,229 @@ class AuthServiceTest {
                 .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN);
 
         verify(tokenIssuer, never()).rotate(anyString(), any(), any());
+    }
+
+    // ------------------------------------------------------------ impersonate
+
+    private static final UUID PLATFORM_COMPANY = UUID.randomUUID();
+
+    private User superAdmin(UUID id) {
+        User u = User.builder()
+                .email("super@platform.test")
+                .passwordHash("$2a$12$super-hash")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.SUPER_ADMIN))
+                .emailVerified(true)
+                .build();
+        u.setId(id);
+        u.setCompanyId(PLATFORM_COMPANY);
+        return u;
+    }
+
+    private void signedInAsSuperAdmin(UUID id) {
+        AuthenticatedUser principal = new AuthenticatedUser(
+                id, PLATFORM_COMPANY, "super@platform.test", Set.of("SUPER_ADMIN"), "jti");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
+    }
+
+    @Test
+    @DisplayName("impersonation mints a token acting as the company's real COMPANY_ADMIN, not the super admin")
+    void impersonateSucceeds() {
+        UUID superAdminId = UUID.randomUUID();
+        User admin = superAdmin(superAdminId);
+        signedInAsSuperAdmin(superAdminId);
+        when(userRepository.findByIdWithinCompany(superAdminId, PLATFORM_COMPANY)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("correct-password", admin.getPasswordHash())).thenReturn(true);
+
+        UUID targetCompanyId = UUID.randomUUID();
+        when(companyDirectory.findById(targetCompanyId))
+                .thenReturn(Optional.of(new CompanyDirectoryPort.CompanyRef(
+                        targetCompanyId, "TARGET", true, "Target Co", null)));
+
+        User companyAdmin = User.builder()
+                .email("admin@target.test")
+                .passwordHash("$2a$12$irrelevant")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.COMPANY_ADMIN))
+                .emailVerified(true)
+                .build();
+        UUID companyAdminId = UUID.randomUUID();
+        companyAdmin.setId(companyAdminId);
+        companyAdmin.setCompanyId(targetCompanyId);
+        when(userRepository.findByCompanyIdAndRoleAndStatus(targetCompanyId, Role.COMPANY_ADMIN, UserStatus.ACTIVE))
+                .thenReturn(List.of(companyAdmin));
+
+        when(jwtTokenProvider.generateImpersonationAccessToken(
+                eq(companyAdminId), eq(targetCompanyId), eq("admin@target.test"), anySet(),
+                any(), any(), eq("Target Co"), any(), eq(superAdminId), eq("super@platform.test"), any()))
+                .thenReturn("impersonation-jwt");
+
+        AuthService.ImpersonationResult result =
+                authService.impersonateCompany(targetCompanyId, "correct-password", "10.0.0.1");
+
+        assertThat(result.accessToken()).isEqualTo("impersonation-jwt");
+        assertThat(result.impersonatedUser().getId()).isEqualTo(companyAdminId);
+        assertThat(result.impersonator().getId()).isEqualTo(superAdminId);
+        assertThat(CompanyContext.getCompanyId()).isEmpty(); // runAs restores the prior (unbound) context
+        verify(auditService).record(eq(com.courier.shared.audit.domain.AuditAction.COMPANY_IMPERSONATED),
+                eq("Company"), eq(targetCompanyId), any());
+    }
+
+    @Test
+    @DisplayName("impersonation refuses a wrong step-up password without touching the target company")
+    void impersonateRejectsWrongPassword() {
+        UUID superAdminId = UUID.randomUUID();
+        User admin = superAdmin(superAdminId);
+        signedInAsSuperAdmin(superAdminId);
+        when(userRepository.findByIdWithinCompany(superAdminId, PLATFORM_COMPANY)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("wrong-password", admin.getPasswordHash())).thenReturn(false);
+
+        UUID targetCompanyId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> authService.impersonateCompany(targetCompanyId, "wrong-password", "10.0.0.1"))
+                .isInstanceOf(UnauthorizedException.class)
+                .extracting(e -> ((UnauthorizedException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+
+        verify(companyDirectory, never()).findById(any());
+        verify(jwtTokenProvider, never()).generateImpersonationAccessToken(
+                any(), any(), any(), anySet(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("impersonation refuses a company with no active admin user rather than minting a token for nobody")
+    void impersonateRejectsCompanyWithNoAdmin() {
+        UUID superAdminId = UUID.randomUUID();
+        User admin = superAdmin(superAdminId);
+        signedInAsSuperAdmin(superAdminId);
+        when(userRepository.findByIdWithinCompany(superAdminId, PLATFORM_COMPANY)).thenReturn(Optional.of(admin));
+        when(passwordEncoder.matches("correct-password", admin.getPasswordHash())).thenReturn(true);
+
+        UUID targetCompanyId = UUID.randomUUID();
+        when(companyDirectory.findById(targetCompanyId))
+                .thenReturn(Optional.of(new CompanyDirectoryPort.CompanyRef(
+                        targetCompanyId, "TARGET", true, "Target Co", null)));
+        when(userRepository.findByCompanyIdAndRoleAndStatus(targetCompanyId, Role.COMPANY_ADMIN, UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> authService.impersonateCompany(targetCompanyId, "correct-password", "10.0.0.1"))
+                .isInstanceOf(com.courier.shared.exception.ResourceNotFoundException.class);
+    }
+
+    // ------------------------------------------------------------ impersonate branch
+
+    private void signedInAsCompanyAdmin(UUID id, UUID companyId) {
+        AuthenticatedUser principal = new AuthenticatedUser(
+                id, companyId, "admin@acme.test", Set.of("COMPANY_ADMIN"), "jti");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
+    }
+
+    @Test
+    @DisplayName("branch impersonation mints a token acting as the branch's real BRANCH_MANAGER, no password needed")
+    void impersonateBranchSucceeds() {
+        UUID companyAdminId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        User admin = User.builder()
+                .email("admin@acme.test")
+                .passwordHash("$2a$12$admin-hash")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.COMPANY_ADMIN))
+                .emailVerified(true)
+                .build();
+        admin.setId(companyAdminId);
+        admin.setCompanyId(companyId);
+        signedInAsCompanyAdmin(companyAdminId, companyId);
+        when(userRepository.findByIdWithinCompany(companyAdminId, companyId)).thenReturn(Optional.of(admin));
+        when(companyDirectory.findById(companyId))
+                .thenReturn(Optional.of(new CompanyDirectoryPort.CompanyRef(companyId, "ACME", true, "Acme Co", null)));
+
+        UUID targetBranchId = UUID.randomUUID();
+        when(branchDirectory.findById(targetBranchId, companyId))
+                .thenReturn(Optional.of(new BranchDirectoryPort.BranchRef(targetBranchId, "PUNE", "Pune Branch", true)));
+
+        User branchManager = User.builder()
+                .email("manager@acme.test")
+                .passwordHash("$2a$12$irrelevant")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.BRANCH_MANAGER))
+                .emailVerified(true)
+                .build();
+        UUID managerId = UUID.randomUUID();
+        branchManager.setId(managerId);
+        branchManager.setCompanyId(companyId);
+        when(userRepository.findByCompanyIdAndBranchIdAndRoleAndStatus(
+                companyId, targetBranchId, Role.BRANCH_MANAGER, UserStatus.ACTIVE))
+                .thenReturn(List.of(branchManager));
+
+        when(jwtTokenProvider.generateImpersonationAccessToken(
+                eq(managerId), eq(companyId), eq("manager@acme.test"), anySet(),
+                any(), any(), eq("Acme Co"), any(), eq(companyAdminId), eq("admin@acme.test"), any()))
+                .thenReturn("impersonation-jwt");
+
+        AuthService.ImpersonationResult result = authService.impersonateBranch(targetBranchId, "10.0.0.1");
+
+        assertThat(result.accessToken()).isEqualTo("impersonation-jwt");
+        assertThat(result.impersonatedUser().getId()).isEqualTo(managerId);
+        assertThat(result.impersonator().getId()).isEqualTo(companyAdminId);
+        verify(auditService).record(eq(com.courier.shared.audit.domain.AuditAction.BRANCH_IMPERSONATED),
+                eq("Branch"), eq(targetBranchId), any());
+    }
+
+    @Test
+    @DisplayName("branch impersonation refuses an unknown or foreign branch")
+    void impersonateBranchRejectsUnknownBranch() {
+        UUID companyAdminId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        User admin = User.builder()
+                .email("admin@acme.test")
+                .passwordHash("$2a$12$admin-hash")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.COMPANY_ADMIN))
+                .emailVerified(true)
+                .build();
+        admin.setId(companyAdminId);
+        admin.setCompanyId(companyId);
+        signedInAsCompanyAdmin(companyAdminId, companyId);
+        when(userRepository.findByIdWithinCompany(companyAdminId, companyId)).thenReturn(Optional.of(admin));
+
+        UUID targetBranchId = UUID.randomUUID();
+        when(branchDirectory.findById(targetBranchId, companyId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.impersonateBranch(targetBranchId, "10.0.0.1"))
+                .isInstanceOf(com.courier.shared.exception.ResourceNotFoundException.class);
+
+        verify(jwtTokenProvider, never()).generateImpersonationAccessToken(
+                any(), any(), any(), anySet(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("branch impersonation refuses a branch with no active manager rather than minting a token for nobody")
+    void impersonateBranchRejectsBranchWithNoManager() {
+        UUID companyAdminId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        User admin = User.builder()
+                .email("admin@acme.test")
+                .passwordHash("$2a$12$admin-hash")
+                .status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.COMPANY_ADMIN))
+                .emailVerified(true)
+                .build();
+        admin.setId(companyAdminId);
+        admin.setCompanyId(companyId);
+        signedInAsCompanyAdmin(companyAdminId, companyId);
+        when(userRepository.findByIdWithinCompany(companyAdminId, companyId)).thenReturn(Optional.of(admin));
+
+        UUID targetBranchId = UUID.randomUUID();
+        when(branchDirectory.findById(targetBranchId, companyId))
+                .thenReturn(Optional.of(new BranchDirectoryPort.BranchRef(targetBranchId, "PUNE", "Pune Branch", true)));
+        when(userRepository.findByCompanyIdAndBranchIdAndRoleAndStatus(
+                companyId, targetBranchId, Role.BRANCH_MANAGER, UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> authService.impersonateBranch(targetBranchId, "10.0.0.1"))
+                .isInstanceOf(com.courier.shared.exception.ResourceNotFoundException.class);
     }
 
     private UnauthorizedException catchUnauthorized(Runnable action) {

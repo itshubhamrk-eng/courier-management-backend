@@ -2,6 +2,7 @@ package com.courier.modules.shipment.api;
 
 import com.courier.modules.shipment.api.dto.AddShipmentDocumentRequest;
 import com.courier.modules.shipment.api.dto.BranchCommissionSummaryResponse;
+import com.courier.modules.shipment.api.dto.BranchPerformanceSummaryResponse;
 import com.courier.modules.shipment.api.dto.CreateShipmentRequest;
 import com.courier.modules.shipment.api.dto.ShipmentChargeResponse;
 import com.courier.modules.shipment.api.dto.ShipmentDocumentResponse;
@@ -18,6 +19,7 @@ import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.ShipmentItemCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
+import com.courier.modules.shipment.domain.BranchPerformanceSummary;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
@@ -128,6 +130,12 @@ public class ShipmentMapper {
         return new BranchCommissionSummaryResponse(s.bookingBranchId(), s.shipmentCount(), s.totalNetAmount(),
                 s.commissionOnBasicFreight(), s.branchCommissionOnOtherAmount(),
                 s.companyCommissionOnBasicFreight(), s.totalCommission());
+    }
+
+    public BranchPerformanceSummaryResponse toBranchPerformance(BranchPerformanceSummary s) {
+        return new BranchPerformanceSummaryResponse(s.bookingBranchId(), s.shipmentCount(), s.deliveredCount(),
+                s.inTransitCount(), s.returnedCount(), s.cancelledCount(),
+                s.totalChargeableWeight(), s.totalNetAmount());
     }
 
     public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,

@@ -25,6 +25,10 @@ public enum AuditAction {
     EMAIL_VERIFICATION_SENT,
     EMAIL_VERIFIED,
     SESSION_REVOKED,
+    /** SUPER_ADMIN opened a "login as company" session. See {@code AuthService#impersonateCompany}. */
+    COMPANY_IMPERSONATED,
+    /** COMPANY_ADMIN opened a "login as branch" session. See {@code AuthService#impersonateBranch}. */
+    BRANCH_IMPERSONATED,
     USER_CREATED,
     ROLE_GRANTED,
     ROLE_REVOKED,
@@ -200,6 +204,15 @@ public enum AuditAction {
     // --- ticket support Phase 2 (V40): SLA rules, company-configured
     TICKET_SLA_RULE_CREATED,
     TICKET_SLA_RULE_UPDATED,
+
+    // --- follow-up management (V44): branch operational task tracking, separate from
+    // Ticket Support — see MEMORY/modules/follow-up.md for why the two aren't merged.
+    FOLLOWUP_CREATED,
+    FOLLOWUP_UPDATED,
+    FOLLOWUP_ASSIGNED,
+    FOLLOWUP_STATUS_CHANGED,
+    FOLLOWUP_RESCHEDULED,
+    FOLLOWUP_NOTE_ADDED,
 
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,

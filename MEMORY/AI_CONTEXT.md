@@ -7,6 +7,225 @@
 
 ## Current Version
 
+`0.29.2` — **Four new reports: Finance, Branch Performance, Customer, Shipment
+Exception**, direct request ("create important reports"), scoped via
+`AskUserQuestion` to exactly these four. Two were already promised in
+`navigation.config.ts` — "Finance Reports (Soon)" and "Branch Reports (Soon)" had
+sat unbuilt since the Reports section was first created. Every report reuses
+existing search/aggregate endpoints wherever one already answered the question
+(same "unpaged aggregate, single call" shape Booking/Commission Report use), adding
+only the minimal backend an existing endpoint genuinely couldn't answer — no DB
+migration.
+
+**Backend**: new `GET /shipments/branch-performance` (`ShipmentService
+.branchPerformance`, mirrors `commissionSummary`'s in-memory grouping-by-branch
+shape, adds a group-by-status pass for delivered/in-transit/returned/cancelled
+counts) and new `GET /branch-wallet/company-summary` (`WalletService
+.companySummary`, the first cross-branch wallet read — every other `WalletService`
+method resolves to exactly one branch. `summarise`'s body factored into
+`summariseResolved(branchId, companyId)`, looped over a new
+`BranchDirectoryPort.listBranches(companyId)` backed by the already-existing
+`BranchRepository.findAllByCompanyIdAndStatusOrderByBranchCodeAsc`. Restricted to
+`COMPANY_ADMIN`/`FINANCE_USER`, the same two roles the nav item was already gated
+on). Customer Report and Shipment Exception Report needed **no backend change** —
+`GET /customers` and `GET /shipments?status=RETURNED,CANCELLED` already answer
+them; deliberately did not fabricate an SLA-breach join (Ticket Support already
+surfaces those as tickets).
+
+**Frontend**: four new `features/reports/` pages in the existing five reports' own
+shape. `FinanceReport`/`BranchReport` branch on `AuthService.user()?.branchId` —
+branch-scoped sees their own branch via existing endpoints, company-wide sees the
+two new aggregates across every branch. New nav entries `customer-report`/
+`exception-report`; "(Soon)" dropped from `finance-reports`/`branch-reports`.
+
+**Verified live** on throwaway `:8082`/`:4300` (`:8100`/`:4200` untouched — the real
+dev backend now runs on port `8100`, not `8081`; `[[local-dev-environment]]`
+corrected) as `first.admin@gmail.com` (COMPANY_ADMIN) and `pune@gmail.com`
+(BRANCH_MANAGER): all four pages render real, cross-consistent data (Branch
+Performance's per-branch commission figure matched Finance Report's own branch row
+exactly), CSV export confirmed, nav confirmed "(Soon)"-free, branch-scoped role
+correctly denied `/reports/finance` (not in the gated role set) and correctly
+branch-locked on `/reports/branches`. No console errors. `mvn test` 786/786,
+`tsc --noEmit`/`ng build` clean. No new unit tests added for the two aggregate
+methods, matching `commissionSummary`/`summaryStats`'s own existing precedent of
+verify-live-only. Full detail in `CHANGELOG.md` 0.29.2.
+
+Previously current:
+
+`0.29.1` — **"Login as branch" (COMPANY_ADMIN spoof login, no password)**, direct
+request: "add login option for branch same as super admin login to company, now add
+functionality as company admin login to branch and do not ask for password."
+Deliberately reused 0.28.11's SUPER_ADMIN "login as company" mechanism end to end —
+same JWT (`JwtTokenProvider#generateImpersonationAccessToken`, already generic),
+same frontend stash/exit/banner infra (`TokenService`/`AuthService.isImpersonating`/
+`AdminLayout`'s banner), same 15-minute hard cap, no refresh token. One deliberate
+divergence, per the user's own instruction: **no step-up password re-entry** — the
+caller is already the company's own admin acting inside their own company, not a
+platform role reaching into a foreign tenant.
+
+**Backend**: new `AuthService.impersonateBranch` (`@PreAuthorize("hasRole
+('COMPANY_ADMIN')")`) resolves the branch via a new `auth.application.port
+.BranchDirectoryPort` (implemented by new `company.infrastructure
+.AuthBranchDirectory`, distinct from Finance's own `BranchDirectoryPort`), finds
+that branch's real `BRANCH_MANAGER` (new `UserRepository
+.findByCompanyIdAndBranchIdAndRoleAndStatus`), mints the token acting as that real
+user, audits new `AuditAction.BRANCH_IMPERSONATED`. New `POST /auth/impersonate/
+branch/{branchId}`, no request body. **`SecurityConfig` gotcha caught pre-ship**:
+the existing `/api/v1/auth/impersonate/**` → `SUPER_ADMIN`-only outer gate would
+have covered this new path too (first-match wins) — added a more specific
+`/api/v1/auth/impersonate/branch/**` → `COMPANY_ADMIN` rule ahead of it. `mvn test`
+782 → 785 (3 new cases).
+
+**Frontend**: `AuthService.impersonateBranch(branchId)` (no password param). Branch
+list gained a "Login as Branch" row action (`BranchPerms.impersonate`,
+`COMPANY_ADMIN`-only, `ACTIVE` branches only), a plain confirm dialog standing in
+for the missing password step-up. **Found and fixed in passing**:
+`AdminLayout.exitImpersonation()` unconditionally navigated to `/companies` on Exit
+(correct for SUPER_ADMIN, would misroute a COMPANY_ADMIN who has no access to that
+route) — now branches on the restored session's own role. `tsc --noEmit`/`ng build`
+clean.
+
+**Verified live end to end** on throwaway `:8082`/`:4300` (`:8081`/`:4200`
+untouched) as `first.admin@gmail.com` (COMPANY_ADMIN): Branches list → "Login as
+Branch" → confirm (no password) → banner + toast + nav genuinely switched to the
+branch-scoped operations menu (a real role switch, not a label) → Exit correctly
+restored the COMPANY_ADMIN session at `/dashboard`. Confirmed a real
+`BRANCH_IMPERSONATED` row in `audit_logs`. Full backend suite green throughout.
+Full detail in `CHANGELOG.md` 0.29.1.
+
+Previously current:
+
+`0.29.0` — **Follow-up Management module, COMPLETE end-to-end.** Direct full-spec
+request: "Build a Follow-up module for Branch users to track operational tasks
+requiring manual action," linkable to Shipment/Customer/Delivery/Payment/Exception/
+General, company- and branch-isolated. Asked via `AskUserQuestion` before writing
+anything whether to fold this into Ticket Support (the closest existing shape) or
+build separately — user chose separate, since a follow-up's due-date/reschedule
+semantics and mandatory branch ownership are a different domain from a ticket's SLA/
+conversation/escalation and risked corrupting Ticket's own SLA-bucket math.
+
+**Backend**: new `com.courier.modules.followup` (`V44__follow_up.sql`) — `follow_up`
+(branch_id mandatory, unlike Ticket's optional relatedBranchId) + one combined
+`follow_up_history` timeline table (creation/status/reschedule/assignment/notes, not
+Ticket's two separate history tables). `FollowUpStatus` OPEN→IN_PROGRESS/RESCHEDULED
+→COMPLETED/CANCELLED, RESCHEDULED reachable only via its own dedicated endpoint,
+COMPLETED/CANCELLED terminal ("cannot be edited except through history").
+`FollowUpServiceImpl` mirrors `TicketServiceImpl`'s hand-rolled scoping but with
+**no SUPER_ADMIN cross-tenant view** — purely company/branch data. Branch isolation
+(`resolveBranchForWrite`) and "assignee must belong to the branch"
+(`requireAssigneeInBranch`) are both enforced server-side, not just UI-hidden.
+Overdue is computed live at read/dashboard time, never stored. **Notifications reuse
+Ticket Support's existing infrastructure rather than duplicating it** (explicit spec
+instruction) — `Notification` gained a nullable `follow_up_id` alongside `ticket_id`,
+`NotificationService.notifyFollowUp(...)`, four new `NotificationType` constants.
+New `FollowUpSweepJob` (`@Scheduled`, this codebase's third scheduled job) fires
+OVERDUE/DUE_TODAY once each via idempotency flags; URGENT fires on assignment.
+Dashboard integration is a **separate self-contained endpoint**
+(`GET /follow-ups/dashboard`), not folded into `DashboardSummaryResponse` — zero
+changes to `DashboardServiceImpl`. RBAC is role-based, same posture as every module
+since Ticket Support (the "authorise on permissions" capstone is still not built).
+`mvn test` 761 → 782 (21 new `FollowUpServiceImplTest` cases: CRUD, branch-scoped
+create/foreign-branch refusal, assignee-branch validation, stale-version conflict,
+illegal/RESCHEDULED-via-status-refused transitions, COMPLETED stamping, reschedule
+due-date swap, cross-branch assign refusal, assignment notification, notes, history,
+branch/company isolation, assignee-sees-across-branches exception, dashboard bucket
+counts).
+
+**Frontend**: `features/follow-up/` — list (filters hydrate from query params so the
+dashboard widget's tiles deep-link), create (shipmentId/customerId/branchId query
+params, same convention as `ticket-create.ts`), edit (full PUT, 409-reload-on-stale
+-version), detail (Assignment/Status/Reschedule cards, all hidden once terminal),
+history timeline (copies `TicketConversationTimeline`'s markup). New
+`FollowUpWidget` (four clickable Overdue/Urgent/Due Today/Upcoming tiles) mounted on
+the Operations Dashboard next to Track Shipment. Cross-page "Create Follow-up" links
+added to Shipment Details and Customer Details, next to their existing "Raise
+Ticket" links. New nav section "Follow-ups" (order 6.4). `tsc --noEmit -p
+tsconfig.app.json` and `ng build` both clean.
+
+**Not verified live** — no MySQL boot or browser check performed this session;
+verification stopped at the compile/build/unit-test bar. No frontend `.spec.ts`
+files added, matching Ticket Support's own precedent (it has none either despite
+`[[frontend-test-runner]]` existing since 2026-07-28). Full detail in `CHANGELOG.md`
+0.29.0 and `MEMORY/modules/follow-up.md`.
+
+Previously current:
+
+`0.28.12` — **Dashboard Recent Activity: real backend feed**, direct bug report
+("Recent Activity ... dashboard not working"). Root cause: the frontend
+(`activity-timeline.ts`/`dashboard.service.ts`/`dashboard.model.ts`) has been
+fully wired for `recentActivity` since the initial commit; the backend never
+implemented it, so `raw.recentActivity ?? []` always resolved to `[]` — not a
+tenant-scoping bug, not OnPush, not a regression, just a missing endpoint field.
+New `DashboardActivityResponse` DTO on `DashboardSummaryResponse`;
+`DashboardServiceImpl.recentActivity()` merges BOOKING (existing `recent`
+shipments + charge join), DELIVERY (new
+`ShipmentStatusHistoryRepository.findTop5By(CompanyIdAnd)StatusOrderByChangedAtDesc`
+on `DELIVERED`), and WALLET (new
+`WalletTransactionRepository.findTop5By(CompanyId)OrderByCreatedAtDesc`, signed
+amount) into one 8-row, time-sorted feed — same explicit-companyId /
+`CompanyContext.runAs(null, ...)` cross-tenant discipline as every other query
+in this method (ISSUE-001). No `SYSTEM`-kind source exists anywhere in the
+codebase — omitted, not fabricated. `mvn test` 761/761 (`DashboardServiceImplTest`
+extended with 2 new mocks, preserving its own scoped-vs-cross-tenant regression
+coverage), `tsc --noEmit` clean, **zero frontend changes needed**. **Verified
+live** on a throwaway `:8082` (rebuilt jar; real `:8081`/`:4200` untouched) as
+`pune@gmail.com` (BRANCH_MANAGER) against real dev MySQL — 8 real, correctly
+time-sorted, correctly-signed activity rows returned (booking, delivery, branch
+commission, DRS commission, freight debit for shipments PUNE-000017/000016).
+**Not verified live**: the `SUPER_ADMIN` cross-tenant branch (didn't know
+`super.admin@gmail.com`'s dev password at the time) — covered by the existing
+unit test's cross-tenant assertions instead. Found (not touched) the 0.28.11
+impersonation feature already uncommitted and mid-flight in this same working
+tree from a concurrent session — including a stale `:8082`/`:4300` pair left
+over from its own live-verification pass, killed and cleanly restarted for this
+task's own verification. Full detail in `CHANGELOG.md` 0.28.12.
+
+Previously current:
+
+`0.28.11` — **SUPER_ADMIN "Login as Company" (spoof login)**, direct request. Scoped
+via `AskUserQuestion` first since this is a real security decision — the codebase
+already had a *deliberately restricted* impersonation mechanism
+(`CompanyResolutionFilter.resolveForPlatformAdmin`, `X-Company-ID`, `PLATFORM_ADMIN`
+only, comment explicitly warns against widening it) that this feature does not
+reuse. User's choices (all "recommended"): mint a real new JWT (not the header
+trick), act as the company's real `COMPANY_ADMIN` (not a synthetic
+still-super-admin token), plus audit log + banner/exit + 15-min hard cap + step-up
+password re-entry.
+
+**Backend**: `JwtTokenProvider.generateImpersonationAccessToken` — access-only
+(no refresh, hard-expires), carries the real target admin's identity plus
+display/audit-only `imp`/`impBy`/`impByEmail` claims. New
+`AuthService.impersonateCompany` (`@PreAuthorize("hasRole('SUPER_ADMIN')")`):
+step-up password check (throttled, deliberately not wired into account-lock),
+`CompanyContext.runAs` to find the target company's real `COMPANY_ADMIN`
+(`UserRepository.findByCompanyIdAndRoleAndStatus`, new), mints the token, audits
+`AuditAction.COMPANY_IMPERSONATED`. New `POST /auth/impersonate/{companyId}`.
+**Real bug avoided**: `CompanyDirectoryPort.findById` actually queries by
+`company_id`, not the `companies.id` PK (confirmed against the adapter before
+wiring the frontend) — the frontend correctly passes `company.companyId`, a
+different field than `CompanyList.open()`'s PK-keyed route uses. `mvn test`
+758/758 (+3 new).
+
+**Frontend**: `TokenService.beginImpersonation()`/`restoreStash()` stash the real
+tokens and swap in the impersonation access token (no refresh token stashed
+alongside it — can't be silently extended). `AuthService.isImpersonating` reads
+straight off the current token's own claims — survives a page reload for free.
+New `ImpersonateDialog` (password step-up) on the Companies list's new "Login as"
+button; `AdminLayout` gained a persistent banner + Exit while active;
+`error.interceptor.ts` auto-restores the real session on an impersonation token's
+401 instead of the generic `/session-expired` page.
+
+**Verified fully live** on throwaway `:8082`/`:4300` (`:8081`/`:4200` untouched) as
+`super.admin@gmail.com`: full login-as → real company-scoped session (nav,
+dashboard, header all genuinely switched) → Exit → restored SUPER_ADMIN session;
+wrong password correctly rejected; a real `COMPANY_IMPERSONATED` row confirmed
+directly in `audit_logs` with both identities. `tsc --noEmit`/`ng build` clean.
+**Known trade-off, by design**: not tracked in the device/session list (no
+refresh token, nothing to rotate) — it simply expires; accepted per the agreed
+safeguards. Full detail in `CHANGELOG.md` 0.28.11.
+
+Previously current:
+
 `0.28.10` — **Consignment print: real "Print LR" click verified live**, direct
 follow-up ("verify live", "once") closing 0.28.9's own flagged gap. Clicked the
 actual "Print LR" button in the real running app (`:4200`, real session,

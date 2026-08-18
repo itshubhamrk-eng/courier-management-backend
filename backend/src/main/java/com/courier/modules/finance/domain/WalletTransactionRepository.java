@@ -110,6 +110,15 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
                                        @Param("companyId") UUID companyId,
                                        org.springframework.data.domain.Pageable pageable);
 
+    // -------------------------------------------------------------- dashboard: recent activity
+    // Same explicit-companyId discipline documented on the class above, and on
+    // ShipmentRepository / DashboardServiceImpl.summary() (ISSUE-001).
+
+    /** Unfiltered on purpose — only safe inside a CompanyContext.runAs(null, ...) block. */
+    List<WalletTransaction> findTop5ByOrderByCreatedAtDesc();
+
+    List<WalletTransaction> findTop5ByCompanyIdOrderByCreatedAtDesc(UUID companyId);
+
     /** Most recent settled entry of one reason — used for "last recharge". */
     @Query("""
             select t from WalletTransaction t

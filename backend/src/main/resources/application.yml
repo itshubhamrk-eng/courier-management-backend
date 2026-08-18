@@ -7,9 +7,20 @@ spring:
 
   # Virtual threads: the workload is IO-bound (MySQL + Redis), so unbinding
   # request concurrency from the OS thread count is close to free throughput.
+  # Disabled 2026-08-18: JDK 21 virtual threads + this executable jar's classloader
+  # hit a real, reproducible race — a request-handling thread that throws mid-response
+  # crashes a second time trying to LOG that error (NoClassDefFoundError: ch/qos/logback
+  # /classic/spi/ThrowableProxy, thrown from Tomcat's own SocketProcessor on a
+  # VirtualThread), which means the original error is never logged AND the response is
+  # never written — the client sees an infinite pending request, not an error. Confirmed
+  # live: GET /api/v1/super-admin/dashboard hung forever this way, which is what made the
+  # Platform Dashboard page spin on "Loading platform figures..." forever. Same crash
+  # signature also hit a background @Scheduled job's thread, so this wasn't limited to
+  # one endpoint. Revisit if upgrading Spring Boot/Tomcat/logback fixes the underlying
+  # classloading race — the IO-bound-workload rationale above is still valid.
   threads:
     virtual:
-      enabled: true
+      enabled: false
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:courier_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8

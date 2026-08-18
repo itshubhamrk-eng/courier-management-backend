@@ -76,7 +76,9 @@ export class DashboardService {
       recentActivity: raw.recentActivity ?? [],
       recentShipments: raw.recentShipments ?? [],
       branchSummary: raw.branchSummary ?? branches.content.map(toBranchRow),
-      hubSummary: raw.hubSummary ?? [] // hub module not built yet
+      hubSummary: raw.hubSummary ?? [], // hub module not built yet
+      companyOverview: raw.companyOverview ?? null,
+      branchOverview: raw.branchOverview ?? null
     };
   }
 }

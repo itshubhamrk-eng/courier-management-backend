@@ -100,6 +100,58 @@ export interface HubSummaryRow {
   pending?: number;
 }
 
+/** One stage of the shipment lifecycle, with its month-to-date count. */
+export interface PipelineStage { stage: string; count: number; }
+
+/** A row in the Top Routes card. */
+export interface TopRoute {
+  branchId: string | null;
+  branchCode: string | null;
+  branchName: string;
+  shipmentCount: number;
+  revenue: number;
+}
+
+/** A row in the Top Customers card. */
+export interface TopCustomer {
+  customerName: string | null;
+  customerContact: string | null;
+  shipmentCount: number;
+  revenue: number;
+}
+
+/**
+ * Company-wide operational overview (COMPANY_ADMIN profile only) — pipeline, the
+ * action-required backlog, wallet total across every branch, and top routes/customers.
+ * `null` for a branch-scoped caller, whose layout never renders this section.
+ */
+export interface CompanyOverview {
+  pipeline: PipelineStage[];
+  readyForManifest: number;
+  manifestsAwaitingDispatch: number;
+  pendingDelivery: number;
+  delayedShipments: number;
+  totalWalletBalance: number;
+  lowBalanceBranches: number;
+  topRoutes: TopRoute[];
+  topCustomers: TopCustomer[];
+}
+
+/**
+ * Branch-scoped sibling of {@link CompanyOverview} — same pipeline/action-required shape
+ * for a caller with an own branch (BRANCH_MANAGER/BRANCH_OPERATOR/hub roles). No wallet
+ * total or top routes/customers: those are company-wide concepts, and the caller's own
+ * wallet balance is already a KPI tile. `null` for a company/platform-scoped caller,
+ * whose layout renders `companyOverview` instead.
+ */
+export interface BranchOverview {
+  pipeline: PipelineStage[];
+  readyForManifest: number;
+  manifestsAwaitingDispatch: number;
+  pendingDelivery: number;
+  delayedShipments: number;
+}
+
 /** The full aggregate the page consumes. Assembled from several endpoints by the service. */
 export interface DashboardSummary {
   statistics: DashboardStatistics;
@@ -108,4 +160,6 @@ export interface DashboardSummary {
   recentShipments: RecentShipment[];
   branchSummary: BranchSummaryRow[];
   hubSummary: HubSummaryRow[];
+  companyOverview: CompanyOverview | null;
+  branchOverview: BranchOverview | null;
 }

@@ -16,8 +16,11 @@ import { ActivityTimeline } from './components/activity-timeline';
 import { RecentShipments } from './components/recent-shipments';
 import { QuickActions } from './components/quick-actions';
 import { BranchSummary } from './components/branch-summary';
+import { CompanyOverview } from './components/company-overview';
+import { BranchOverview } from './components/branch-overview';
 import { TrackBox } from '@features/shipment-movement/components/track-box';
 import { PackageIllustration } from '@shared/components/illustrations/package-illustration';
+import { FollowUpWidget } from './components/follow-up-widget';
 // import { HubSummary } from './components/hub-summary'; // hub module not built yet
 
 const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
@@ -35,7 +38,8 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe, MatIconModule, StatisticCard, UiCard, ChartCard, ActivityTimeline,
-    RecentShipments, QuickActions, BranchSummary, TrackBox, PackageIllustration /*, HubSummary */
+    RecentShipments, QuickActions, BranchSummary, CompanyOverview, BranchOverview, TrackBox,
+    PackageIllustration, FollowUpWidget /*, HubSummary */
   ],
   template: `
     <div class="dash">
@@ -56,6 +60,7 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
         <app-card title="Track Shipment" subtitle="Enter an AWB (Tracking No.) or Shipment No.">
           <app-track-box />
         </app-card>
+        <app-follow-up-widget data-tour="dash-follow-ups" />
       }
 
       @if (error()) {
@@ -79,7 +84,9 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
           }
         </section>
 
-        <app-quick-actions data-tour="dash-quick-actions" [actions]="layout().quickActions" (pick)="onAction($event)" />
+        @if (layout().quickActions.length > 0) {
+          <app-quick-actions data-tour="dash-quick-actions" [actions]="layout().quickActions" (pick)="onAction($event)" />
+        }
 
         <!-- charts -->
         @if (hasCharts()) {
@@ -98,6 +105,20 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
                 [colorKeys]="['success']" valuePrefix="₹"
                 [loading]="loading()" [data]="data()?.charts?.revenueTrend ?? []" />
             }
+          </section>
+        }
+
+        <!-- company-wide overview (COMPANY_ADMIN only) -->
+        @if (layout().sections.companyOverview) {
+          <section class="dash__overview" data-tour="dash-company-overview">
+            <app-company-overview [loading]="loading()" [data]="data()?.companyOverview ?? null" />
+          </section>
+        }
+
+        <!-- branch-scoped overview (BRANCH_MANAGER / BRANCH_OPERATOR only) -->
+        @if (layout().sections.branchOverview) {
+          <section class="dash__branch-overview" data-tour="dash-branch-overview">
+            <app-branch-overview [loading]="loading()" [data]="data()?.branchOverview ?? null" />
           </section>
         }
 
@@ -146,6 +167,13 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
     .dash__date mat-icon { font-size:18px; width:18px; height:18px; }
     .dash__grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px; }
     .dash__charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:18px; }
+    .dash__overview { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; align-items:start; }
+    @media (max-width:900px){ .dash__overview{ grid-template-columns:1fr; } }
+    /* Stacked full-width, not a grid — only two cards of very different natural height
+       (a short stepper, a variable-length backlog list), so pairing them side by side
+       risks the exact same dead-space-under-the-shorter-card issue .dash__overview's
+       own 2-column layout was built to avoid. */
+    .dash__branch-overview { display:flex; flex-direction:column; gap:18px; }
     .dash__cols { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; align-items:start; }
     .dash__main, .dash__side { display:flex; flex-direction:column; gap:18px; min-width:0; }
     .dash__error { display:flex; align-items:center; gap:16px; padding:8px; }

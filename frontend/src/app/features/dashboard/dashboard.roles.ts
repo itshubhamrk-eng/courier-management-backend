@@ -44,6 +44,10 @@ export interface SectionFlags {
   recentShipments: boolean;
   branchSummary: boolean;
   hubSummary: boolean;
+  /** Company-wide pipeline/action-required/wallet/top-routes/top-customers card — COMPANY profile only. */
+  companyOverview: boolean;
+  /** Branch-scoped pipeline/action-required card — BRANCH_MANAGER/BRANCH_OPERATOR only. */
+  branchOverview: boolean;
 }
 
 export interface DashboardLayout {
@@ -90,7 +94,8 @@ const QA = {
 
 const allSectionsOff: SectionFlags = {
   shipmentTrend: false, deliveryPerformance: false, revenueTrend: false,
-  recentActivity: false, recentShipments: false, branchSummary: false, hubSummary: false
+  recentActivity: false, recentShipments: false, branchSummary: false, hubSummary: false,
+  companyOverview: false, branchOverview: false
 };
 
 export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
@@ -101,10 +106,11 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
   },
   COMPANY: {
     stats: [T.todayShipments, T.delivered, T.inTransit, T.pending, T.revenue, { ...T.activeBranches, tone: 'danger' }],
-    quickActions: [QA.book, QA.search, QA.track, QA.branches, QA.users],
+    quickActions: [],
     sections: {
       shipmentTrend: true, deliveryPerformance: true, revenueTrend: true,
-      recentActivity: true, recentShipments: true, branchSummary: true, hubSummary: false
+      recentActivity: true, recentShipments: true, branchSummary: true, hubSummary: false,
+      companyOverview: true, branchOverview: false
     }
   },
   BRANCH_MANAGER: {
@@ -112,13 +118,13 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
     quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
     sections: {
       ...allSectionsOff, shipmentTrend: true, deliveryPerformance: true,
-      recentActivity: true, recentShipments: true
+      recentActivity: true, recentShipments: true, branchOverview: true
     }
   },
   BRANCH_OPERATOR: {
     stats: [T.todayBookings, T.todayShipments, { ...T.wallet, tone: 'success' }, T.pending],
     quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
-    sections: { ...allSectionsOff, recentActivity: true, recentShipments: true }
+    sections: { ...allSectionsOff, recentActivity: true, recentShipments: true, branchOverview: true }
   },
   HUB_MANAGER: {
     stats: [T.toReceive, { ...T.inSorting, tone: 'danger' }, T.toDispatch, T.pending],

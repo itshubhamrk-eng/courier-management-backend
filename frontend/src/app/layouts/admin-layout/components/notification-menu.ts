@@ -79,5 +79,6 @@ export class NotificationMenu {
   open(n: AppNotification): void {
     this.feed.markRead(n.id);
     if (n.ticketId) this.router.navigate(['/support/tickets', n.ticketId]);
+    else if (n.followUpId) this.router.navigate(['/follow-ups', n.followUpId]);
   }
 }

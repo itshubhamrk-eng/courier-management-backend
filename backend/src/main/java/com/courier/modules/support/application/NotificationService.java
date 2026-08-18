@@ -16,6 +16,10 @@ public interface NotificationService {
      *  ticket action that triggered it. */
     void notify(UUID recipientUserId, NotificationType type, String title, String message, UUID ticketId);
 
+    /** Same contract as {@link #notify}, for a Follow-up Management event — reuses this
+     *  same feed/table rather than a second notification architecture. */
+    void notifyFollowUp(UUID recipientUserId, NotificationType type, String title, String message, UUID followUpId);
+
     /** The current user's own feed, newest first. */
     Page<Notification> list(Pageable pageable);
 

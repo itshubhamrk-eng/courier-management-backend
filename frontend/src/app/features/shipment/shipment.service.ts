@@ -6,7 +6,7 @@ import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary
+  BranchCommissionSummary, BranchPerformanceSummary
 } from '@core/models/shipment.model';
 
 /**
@@ -31,6 +31,12 @@ export class ShipmentService {
   commissionSummary(filters: ShipmentSearchRequest) {
     return this.api.get<BranchCommissionSummary[]>(
       `${API.shipments}/commission-summary`, filters as Record<string, unknown>);
+  }
+  /** Shipment volume/outcome totals grouped by booking branch — the Branch Performance
+   *  Report's summary table. Same filters as `list`. */
+  branchPerformance(filters: ShipmentSearchRequest) {
+    return this.api.get<BranchPerformanceSummary[]>(
+      `${API.shipments}/branch-performance`, filters as Record<string, unknown>);
   }
   get(id: string) { return this.api.get<ShipmentResponse>(`${API.shipments}/${id}`); }
   getByTrackingNumber(trackingNumber: string) {

@@ -177,6 +177,18 @@ public class ShipmentController {
                 .map(mapper::toCommissionSummary).toList());
     }
 
+    @GetMapping("/branch-performance")
+    @Operation(summary = "Shipment volume/outcome totals grouped by booking branch",
+            description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "
+                    + "unpaged — one row per booking branch with at least one matching "
+                    + "shipment, sorted by shipment count descending. Powers the Branch "
+                    + "Performance Report.")
+    public ApiResponse<List<com.courier.modules.shipment.api.dto.BranchPerformanceSummaryResponse>> branchPerformance(
+            @Valid @ParameterObject ShipmentSearchRequest search) {
+        return ApiResponse.success(shipmentService.branchPerformance(mapper.toCriteria(search)).stream()
+                .map(mapper::toBranchPerformance).toList());
+    }
+
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a shipment",
             description = "Refused once the shipment has left the branch (DISPATCHED "

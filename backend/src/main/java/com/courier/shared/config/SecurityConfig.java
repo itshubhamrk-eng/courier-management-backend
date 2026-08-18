@@ -80,6 +80,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // "Login as branch". The authoritative check is @PreAuthorize on
+                        // AuthService#impersonateBranch; this is the outer gate. Matched
+                        // before the company-impersonation rule below since both share the
+                        // "/api/v1/auth/impersonate/" prefix and Spring Security applies the
+                        // first matching rule.
+                        .requestMatchers("/api/v1/auth/impersonate/branch/**").hasRole(Roles.COMPANY_ADMIN)
+                        // "Login as company". The authoritative check is @PreAuthorize on
+                        // AuthService#impersonateCompany; this is the outer gate, same
+                        // arrangement as the other SUPER_ADMIN-only paths below.
+                        .requestMatchers("/api/v1/auth/impersonate/**").hasRole(Roles.SUPER_ADMIN)
                         // Everything else under /actuator is operational data.
                         .requestMatchers("/actuator/**").hasRole(Roles.PLATFORM_ADMIN)
                         // Platform-wide pricing configuration. The authoritative check is

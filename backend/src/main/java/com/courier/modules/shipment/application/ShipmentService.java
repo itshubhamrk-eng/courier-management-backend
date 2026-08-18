@@ -3,6 +3,7 @@ package com.courier.modules.shipment.application;
 import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
+import com.courier.modules.shipment.domain.BranchPerformanceSummary;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
@@ -82,6 +83,13 @@ public interface ShipmentService {
      * is simply absent, not a zero row.
      */
     List<BranchCommissionSummary> commissionSummary(ShipmentCriteria criteria);
+
+    /**
+     * Shipment volume and outcome totals for the same search, grouped by booking branch —
+     * the Branch Performance Report's per-branch row. One row per booking branch with at
+     * least one matching shipment.
+     */
+    List<BranchPerformanceSummary> branchPerformance(ShipmentCriteria criteria);
 
     /**
      * Net amount per shipment, for the list row — batch-fetched (one query for the whole

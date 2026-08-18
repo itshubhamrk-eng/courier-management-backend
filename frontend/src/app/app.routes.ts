@@ -8,6 +8,7 @@ const ADMINS = [AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN];
 const UPDATERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
 // Finance is company-side work — SUPER_ADMIN excluded, branch/finance roles unchanged.
 const WALLET_VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.FINANCE_USER];
+const FINANCE_REPORT_READERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER, AppRole.ACCOUNTS];
 // Customer create/update: COMPANY_ADMIN, BRANCH_MANAGER or the counter desk — mirrors the
 // backend CustomerService @PreAuthorize. Lifecycle (activate/deactivate) is narrower, same
 // as branch lifecycle.
@@ -59,6 +60,12 @@ const SUPPORT_READERS = [
   AppRole.CUSTOMER_SERVICE, AppRole.VIEWER
 ];
 const SUPPORT_ADMIN = [AppRole.SUPER_ADMIN];
+// Follow-up Management: branch operational tasks — every company role (no SUPER_ADMIN,
+// unlike Ticket Support: a follow-up has no cross-tenant view at all).
+const FOLLOW_UP_READERS = [
+  AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB_MANAGER, AppRole.BOOKING_OPERATOR,
+  AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS, AppRole.FINANCE_USER, AppRole.CUSTOMER_SERVICE, AppRole.VIEWER
+];
 
 /**
  * Lazy, guarded routes. The admin shell wraps every authenticated feature; each feature
@@ -302,6 +309,22 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/thc-report').then((m) => m.ThcReport)
       },
       {
+        path: 'reports/branches', title: 'Branch Performance Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/branch-report').then((m) => m.BranchReport)
+      },
+      {
+        path: 'reports/finance', title: 'Finance Report', canActivate: [roleGuard], data: { roles: FINANCE_REPORT_READERS },
+        loadComponent: () => import('@features/reports/finance-report').then((m) => m.FinanceReport)
+      },
+      {
+        path: 'reports/customers', title: 'Customer Report', canActivate: [roleGuard], data: { roles: CUSTOMER_READERS },
+        loadComponent: () => import('@features/reports/customer-report').then((m) => m.CustomerReport)
+      },
+      {
+        path: 'reports/exceptions', title: 'Shipment Exception Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/shipment-exception-report').then((m) => m.ShipmentExceptionReport)
+      },
+      {
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
@@ -399,6 +422,25 @@ export const routes: Routes = [
       {
         path: 'finance/branch-wallet/topup-requests', title: 'Top-up Requests', canActivate: [roleGuard], data: { roles: WALLET_VIEWERS },
         loadComponent: () => import('@features/branch-wallet/topup-requests').then((m) => m.TopupRequests)
+      },
+      // Follow-up Management. 'new' before ':id', and ':id/edit' before the bare ':id'
+      // detail route is unaffected since it's a distinct trailing segment — same
+      // convention every other module here uses.
+      {
+        path: 'follow-ups', title: 'Follow-ups', canActivate: [roleGuard], data: { roles: FOLLOW_UP_READERS },
+        loadComponent: () => import('@features/follow-up/follow-up-list').then((m) => m.FollowUpList)
+      },
+      {
+        path: 'follow-ups/new', title: 'Create Follow-up', canActivate: [roleGuard], data: { roles: FOLLOW_UP_READERS },
+        loadComponent: () => import('@features/follow-up/follow-up-create').then((m) => m.FollowUpCreate)
+      },
+      {
+        path: 'follow-ups/:id/edit', title: 'Edit Follow-up', canActivate: [roleGuard], data: { roles: FOLLOW_UP_READERS },
+        loadComponent: () => import('@features/follow-up/follow-up-edit').then((m) => m.FollowUpEdit)
+      },
+      {
+        path: 'follow-ups/:id', title: 'Follow-up', canActivate: [roleGuard], data: { roles: FOLLOW_UP_READERS },
+        loadComponent: () => import('@features/follow-up/follow-up-detail').then((m) => m.FollowUpDetailPage)
       },
       // Ticket Support (Phase 1). 'new' before ':id' so the literal segment is not
       // swallowed by the parameter, same convention every other module here uses.
