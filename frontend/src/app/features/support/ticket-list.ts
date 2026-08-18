@@ -71,7 +71,7 @@ function slaLabel(s: SlaStatus): string {
 
       <app-card>
         <div class="filters">
-          <app-search placeholder="Search ticket #/subject…" (changed)="onSearch($event)" />
+          <app-search label="Search" placeholder="Search ticket #/subject…" (changed)="onSearch($event)" />
           <app-select [control]="statusControl" label="Status" [options]="statusOptions" [allowEmpty]="true" />
           <app-select [control]="priorityControl" label="Priority" [options]="priorityOptions" [allowEmpty]="true" />
           <app-select [control]="categoryControl" label="Category" [options]="categoryOptions()" [allowEmpty]="true" />

@@ -12,15 +12,20 @@ import { debounceTime, distinctUntilChanged } from 'rxjs';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, MatIconModule],
   template: `
-    <div class="search">
-      <mat-icon class="search__icon">search</mat-icon>
-      <input class="search__input" [formControl]="control" [placeholder]="placeholder()" />
-      @if (control.value) {
-        <button class="search__clear" (click)="control.setValue('')"><mat-icon>close</mat-icon></button>
-      }
-    </div>
+    <label class="search-wrap">
+      @if (label()) { <span class="search-wrap__label">{{ label() }}</span> }
+      <div class="search">
+        <mat-icon class="search__icon">search</mat-icon>
+        <input class="search__input" [formControl]="control" [placeholder]="placeholder()" />
+        @if (control.value) {
+          <button class="search__clear" (click)="control.setValue('')"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+    </label>
   `,
   styles: [`
+    .search-wrap { display:flex; flex-direction:column; gap:6px; }
+    .search-wrap__label { font:500 13px var(--font-sans); color:var(--content-fg); }
     .search { display:flex; align-items:center; gap:8px; height:42px; padding:0 14px;
       background:var(--surface-muted); border:0; border-radius:var(--r-field); min-width:240px;
       box-shadow:var(--shadow-clay-inset); }
@@ -31,6 +36,7 @@ import { debounceTime, distinctUntilChanged } from 'rxjs';
 })
 export class UiSearch implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
+  readonly label = input('');
   readonly placeholder = input('Search…');
   readonly debounce = input(350);
   readonly changed = output<string>();
