@@ -10,6 +10,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { ShipmentService } from '@features/shipment/shipment.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { ShipmentMovementService } from './shipment-movement.service';
 import { Shipment, MovementOutcome } from '@core/models/shipment.model';
 import { RouteIllustration } from '@shared/components/illustrations/route-illustration';
@@ -19,11 +20,16 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
  *  "search the worklist, not the whole company" shape In Scan's receiving-branch
  *  default uses; the shipment table only appears once a delivery user is picked, since
  *  a DRS always belongs to exactly one delivery user.
- *  **Print DRS**: once Generate DRS succeeds, the assigned batch can be printed as a
- *  Delivery Run Sheet — same client-side pattern Trip Hire Challan's "Print THC" uses
- *  (`window.open` + `document.write` + `window.print()`, no PDF service, no new
- *  endpoint) since every field it needs (tracking no., receiver, contact, payment mode,
- *  amount) is already on the list-row `Shipment` this page holds before assigning. */
+ *  **Print DRS**: once Generate DRS succeeds, the DRS preview tab opens automatically
+ *  (`window.open` + `document.write`, no PDF service, no new endpoint) with the assigned
+ *  batch as a Delivery Run Sheet — every field it needs (tracking no., receiver, contact,
+ *  payment mode, amount) is already on the list-row `Shipment` this page holds before
+ *  assigning. That tab carries its own Print and Download PDF buttons (both
+ *  `window.print()` — "Save as PDF" in the browser's print dialog *is* the PDF export).
+ *  "Print DRS" on this page just reopens the same tab. The Amount column on the DRS
+ *  itself only shows a figure for a `collectAtDelivery` payment mode (TO_PAY / COD) — a
+ *  PAID or TBB row is money the delivery boy isn't collecting, so it prints blank and
+ *  the footer total only adds up what's actually being collected on the round. */
 @Component({
   selector: 'app-out-for-delivery',
   standalone: true,
@@ -139,6 +145,9 @@ export class OutForDelivery implements OnInit {
   readonly shipments = signal<Shipment[]>([]);
   readonly userOptions = signal<SelectOption[]>([]);
   readonly paymentModeOptions = signal<SelectOption[]>([]);
+  /** Ids of payment modes flagged `collectAtDelivery` (TO_PAY / COD) — the only ones the
+   *  DRS's Amount column shows a figure for; see the class doc for why. */
+  readonly collectAtDeliveryModeIds = signal<Set<string>>(new Set());
   readonly branchLabel = signal('');
   readonly outcomes = signal<MovementOutcome[]>([]);
   readonly drsNumber = signal<string | null>(null);
@@ -157,6 +166,8 @@ export class OutForDelivery implements OnInit {
     this.movementService.userOptions().subscribe((u) =>
       this.userOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
     this.masterData.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
+    this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
+      this.collectAtDeliveryModeIds.set(new Set(p.content.filter((r) => r['collectAtDelivery'] === true).map((r) => r.id))));
     if (this.myBranchId) {
       this.masterData.branchDirectory().subscribe((list) => {
         const b = list.find((x) => x.id === this.myBranchId);
@@ -211,6 +222,7 @@ export class OutForDelivery implements OnInit {
         else this.notify.success(`${r.successCount} shipment(s) assigned.`);
         this.selectedIds.set(new Set());
         this.load();
+        if (this.printableShipments().length) this.printDrs();
       },
       error: (e: HttpErrorResponse) => { this.assigning.set(false); this.notify.error(e.error?.message ?? 'Could not assign.'); }
     });
@@ -231,16 +243,18 @@ export class OutForDelivery implements OnInit {
     if (!rows.length) return;
     const win = window.open('', '_blank', 'width=800,height=900');
     if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the DRS.'); return; }
-    const totalAmount = rows.reduce((sum, s) => sum + (s.netAmount ?? 0), 0);
+    const collectIds = this.collectAtDeliveryModeIds();
+    const collectAmount = (s: Shipment): number | null => collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
+    const totalAmount = rows.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
     const tableRows = rows.map((s, i) => `<tr>
       <td>${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
       <td>${this.esc(s.receiverName)}</td>
       <td>${this.esc(s.receiverContact)}</td>
       <td>${this.esc(this.label(s.paymentModeId, this.paymentModeOptions()))}</td>
-      <td style="text-align:right">${s.netAmount ?? 0}</td>
+      <td style="text-align:right">${collectAmount(s) ?? '—'}</td>
     </tr>`).join('');
-    win.document.write(`<!doctype html><html><head><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
       <style>
         body { font-family: sans-serif; padding: 24px; color: #111; }
         h1 { font-size: 18px; margin: 0 0 4px; }
@@ -251,7 +265,16 @@ export class OutForDelivery implements OnInit {
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
         tfoot td { font-weight: 600; }
+        .actions { display: flex; gap: 10px; margin-bottom: 20px; }
+        .actions button { font: 600 13px sans-serif; padding: 9px 16px; border-radius: 6px; cursor: pointer; }
+        .actions .print { background: #4f46e5; color: #fff; border: 1px solid #4f46e5; }
+        .actions .pdf { background: #fff; color: #4f46e5; border: 1px solid #4f46e5; }
+        @media print { .actions { display: none; } }
       </style></head><body>
+      <div class="actions">
+        <button class="print" onclick="window.print()">Print</button>
+        <button class="pdf" onclick="window.print()">Download PDF</button>
+      </div>
       <h1>Delivery Run Sheet (DRS)</h1>
       <div class="sub">${this.esc(this.branchLabel())}</div>
       <div class="meta">
@@ -262,10 +285,9 @@ export class OutForDelivery implements OnInit {
       </div>
       <table><thead><tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Contact</th><th>Payment</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${tableRows}</tbody>
-      <tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${totalAmount}</td></tr></tfoot></table>
+      <tfoot><tr><td colspan="5">Total to Collect</td><td style="text-align:right">${totalAmount}</td></tr></tfoot></table>
     </body></html>`);
     win.document.close();
     win.focus();
-    win.print();
   }
 }

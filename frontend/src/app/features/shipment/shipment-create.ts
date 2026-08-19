@@ -11,6 +11,7 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { CustomerService } from '@features/customer/customer.service';
+import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -101,7 +102,7 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
           </app-card>
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
-            <app-item-entry-grid [initial]="voiceItems()" (itemsChange)="onItems($event)" (weightChange)="onWeight($event)" (packagesChange)="onPackages($event)">
+            <app-item-entry-grid [initial]="voiceItems()" [defaultWeightKg]="defaultChargeableWeightKg()" (itemsChange)="onItems($event)" (weightChange)="onWeight($event)" (packagesChange)="onPackages($event)">
               <app-autocomplete class="fld--sm" [control]="c('packageTypeId')" label="Package Type" [options]="packageTypeOptions()" placeholder="Search package type…" />
               <label class="fld fld--sm"><span class="fld__l">Number of Packages</span>
                 <input class="fld__i" type="number" [value]="c('numberOfPackages').value" disabled /></label>
@@ -362,6 +363,7 @@ export class ShipmentCreate implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly settings = inject(SettingsService);
 
   protected readonly submitting = signal(false);
 
@@ -420,6 +422,11 @@ export class ShipmentCreate implements OnInit {
    *  `ShipmentServiceImpl.copyCharge`) purely so the live preview's total matches what
    *  actually gets persisted at booking. */
   protected readonly myBranchGstPercentage = signal<number>(18);
+
+  /** Company Settings → Shipment → default chargeable weight, fed to `ItemEntryGrid`.
+   *  Null until the settings call resolves — the grid falls back to its own constant
+   *  until then. */
+  protected readonly defaultChargeableWeightKg = signal<number | null>(null);
 
   /** Picked at booking time but only uploaded once the shipment id exists — the endpoint
    *  is `POST /shipments/{id}/image-upload`, so there is nothing to upload to until
@@ -499,6 +506,12 @@ export class ShipmentCreate implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
+    this.settings.get().subscribe((d) => {
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
+      if (shipment?.defaultChargeableWeightKg != null) {
+        this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
+      }
+    });
     // Delivery Branch excludes the caller's own booking branch — a shipment cannot be
     // booked and delivered from the same branch (no route covers that pair).
     this.masters.options('branches').subscribe((o) => {

@@ -15,6 +15,7 @@ import { Manifest, DispatchManifestResponse, Shipment } from '@core/models/shipm
 import { ManifestService } from '@features/manifest/manifest.service';
 import { VehicleService } from '@features/manifest/vehicle.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { ShipmentMovementService } from './shipment-movement.service';
 import { ManifestCard } from './components/manifest-card';
 import { TruckIllustration } from '@shared/components/illustrations/truck-illustration';
@@ -30,9 +31,15 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
  *  clicked. Requires the manifest to still carry at least one MANIFEST_CREATED
  *  ("loading sheet created") shipment at dispatch time (enforced server-side).
  *  Departure Time is operator-entered and optional — blank defaults server-side to the
- *  dispatch moment itself (see Manifest.dispatch). Once dispatched, "Print THC" opens a
- *  plain browser print view (own window + window.print(), no PDF service) with the
- *  manifest's vehicle/driver/departure and its LR table. */
+ *  dispatch moment itself (see Manifest.dispatch). Once dispatched, the THC preview tab
+ *  opens automatically (`window.open` + `document.write`, no PDF service) with the
+ *  manifest's vehicle/driver/departure and its LR table; that tab carries its own Print
+ *  and Download PDF buttons (both `window.print()` — "Save as PDF" in the browser's print
+ *  dialog *is* the PDF export, there's no separate file written). "Preview THC" on this
+ *  page just reopens the same tab for an already-dispatched manifest. The Amount column
+ *  on the THC only shows a figure for a `collectAtDelivery` payment mode (TO_PAY / COD)
+ *  — a PAID or TBB shipment isn't cash the vehicle is collecting on this trip — and the
+ *  footer total only adds up what's actually being collected. */
 @Component({
   selector: 'app-trip-hire-challan',
   standalone: true,
@@ -76,7 +83,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
               <span class="text-caption">Status: {{ m.status }}</span></div>
             <div class="mh__actions">
               @if (m.status !== 'CREATED') {
-                <app-button variant="stroked" icon="print" [loading]="printing()" (pressed)="printThc()">Print THC</app-button>
+                <app-button variant="stroked" icon="visibility" [loading]="previewing()" (pressed)="previewThc()">Preview THC</app-button>
               }
               <app-button variant="stroked" icon="close" (pressed)="reset()">Change Manifest</app-button>
             </div>
@@ -179,7 +186,10 @@ export class TripHireChallan implements OnInit {
   readonly result = signal<DispatchManifestResponse | null>(null);
   readonly searching = signal(false);
   readonly dispatching = signal(false);
-  readonly printing = signal(false);
+  readonly previewing = signal(false);
+  /** Ids of payment modes flagged `collectAtDelivery` (TO_PAY / COD) — the only ones the
+   *  THC's Amount column shows a figure for; see the class doc for why. */
+  readonly collectAtDeliveryModeIds = signal<Set<string>>(new Set());
   readonly vehicleOptions = signal<SelectOption[]>([]);
   readonly driverOptions = signal<SelectOption[]>([]);
   readonly openManifests = signal<Manifest[]>([]);
@@ -207,6 +217,8 @@ export class TripHireChallan implements OnInit {
       this.driverOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
     this.masterData.branchDirectory().subscribe((list) =>
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
+    this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
+      this.collectAtDeliveryModeIds.set(new Set(p.content.filter((r) => r['collectAtDelivery'] === true).map((r) => r.id))));
     this.loadOpenManifests();
     const manifestNumber = this.route.snapshot.queryParamMap.get('manifestNumber');
     if (manifestNumber) {
@@ -293,24 +305,26 @@ export class TripHireChallan implements OnInit {
         this.dispatching.set(false);
         this.result.set(r);
         this.pendingRemovals.set([]);
-        this.manifest.set({
+        const dispatched: Manifest = {
           ...manifest, status: r.status, vehicleId: r.vehicleId, driverUserId: r.driverUserId,
           dispatchedAt: r.dispatchedAt, departureTime: r.departureTime
-        });
+        };
+        this.manifest.set(dispatched);
         this.notify.success(`Manifest ${r.manifestNumber} dispatched.`);
         this.loadOpenManifests();
+        this.openThcTab(dispatched, this.manifestShipments());
       },
       error: (e: HttpErrorResponse) => { this.dispatching.set(false); this.notify.error(e.error?.message ?? 'Could not dispatch the manifest.'); }
     });
   }
 
-  printThc(): void {
+  previewThc(): void {
     const m = this.manifest();
     if (!m || m.status === 'CREATED') return;
-    this.printing.set(true);
+    this.previewing.set(true);
     this.manifestService.shipments(m.id).subscribe({
-      next: (shipments) => { this.printing.set(false); this.openThcPrintWindow(m, shipments); },
-      error: () => { this.printing.set(false); this.openThcPrintWindow(m, []); }
+      next: (shipments) => { this.previewing.set(false); this.openThcTab(m, shipments); },
+      error: () => { this.previewing.set(false); this.openThcTab(m, []); }
     });
   }
 
@@ -322,16 +336,18 @@ export class TripHireChallan implements OnInit {
     return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  private openThcPrintWindow(m: Manifest, shipments: Shipment[]): void {
-    const win = window.open('', '_blank', 'width=800,height=900');
-    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the THC.'); return; }
+  private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
+    const collectIds = this.collectAtDeliveryModeIds();
+    const collectAmount = (s: Shipment): number | null => collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
+    const totalAmount = shipments.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
     const rows = shipments.map((s, i) => `<tr>
       <td>${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
       <td>${this.esc(s.senderName)} → ${this.esc(s.receiverName)}</td>
       <td style="text-align:right">${s.chargeableWeight} kg</td>
+      <td style="text-align:right">${collectAmount(s) ?? '—'}</td>
     </tr>`).join('');
-    win.document.write(`<!doctype html><html><head><title>THC ${this.esc(m.manifestNumber)}</title>
+    return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
       <style>
         body { font-family: sans-serif; padding: 24px; color: #111; }
         h1 { font-size: 18px; margin: 0 0 4px; }
@@ -341,7 +357,17 @@ export class TripHireChallan implements OnInit {
         .meta span:first-child { color: #666; font-size: 11px; text-transform: uppercase; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+        tfoot td { font-weight: 600; }
+        .actions { display: flex; gap: 10px; margin-bottom: 20px; }
+        .actions button { font: 600 13px sans-serif; padding: 9px 16px; border-radius: 6px; cursor: pointer; }
+        .actions .print { background: #4f46e5; color: #fff; border: 1px solid #4f46e5; }
+        .actions .pdf { background: #fff; color: #4f46e5; border: 1px solid #4f46e5; }
+        @media print { .actions { display: none; } }
       </style></head><body>
+      <div class="actions">
+        <button class="print" onclick="window.print()">Print</button>
+        <button class="pdf" onclick="window.print()">Download PDF</button>
+      </div>
       <h1>Trip Hire Challan (THC)</h1>
       <div class="sub">Manifest ${this.esc(m.manifestNumber)}</div>
       <div class="meta">
@@ -349,11 +375,17 @@ export class TripHireChallan implements OnInit {
         <div><span>Driver</span><span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</span></div>
         <div><span>Departure</span><span>${(m.departureTime ?? m.dispatchedAt) ? this.esc(new Date((m.departureTime ?? m.dispatchedAt)!).toLocaleString()) : '—'}</span></div>
       </div>
-      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th style="text-align:right">Weight</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="4">No shipments</td></tr>'}</tbody></table>
-    </body></html>`);
+      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th style="text-align:right">Weight</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">No shipments</td></tr>'}</tbody>
+      <tfoot><tr><td colspan="4">Total to Collect</td><td style="text-align:right">${totalAmount}</td></tr></tfoot></table>
+    </body></html>`;
+  }
+
+  private openThcTab(m: Manifest, shipments: Shipment[]): void {
+    const win = window.open('', '_blank');
+    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to preview the THC.'); return; }
+    win.document.write(this.renderThcHtml(m, shipments));
     win.document.close();
     win.focus();
-    win.print();
   }
 }

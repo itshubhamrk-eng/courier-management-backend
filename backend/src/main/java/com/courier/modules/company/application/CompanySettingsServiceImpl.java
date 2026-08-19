@@ -220,6 +220,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.autoGenerateBarcode(), s::setAutoGenerateBarcode);
         set(c.allowDuplicateReferenceNumber(), s::setAllowDuplicateReferenceNumber);
         set(c.autoAssignTrackingNumber(), s::setAutoAssignTrackingNumber);
+        set(c.defaultChargeableWeightKg(), s::setDefaultChargeableWeightKg);
     }
 
     private void applyFinance(CompanySettings s, CompanySettingsCommand c) {

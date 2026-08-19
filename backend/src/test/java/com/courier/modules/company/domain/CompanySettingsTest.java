@@ -47,5 +47,6 @@ class CompanySettingsTest {
         assertThat(s.isWalletEnabled()).isFalse();
         assertThat(s.getSessionTimeoutMinutes()).isEqualTo(30);
         assertThat(s.getPrimaryColor()).isEqualTo("#1976D2");
+        assertThat(s.getDefaultChargeableWeightKg()).isEqualByComparingTo("20.000");
     }
 }

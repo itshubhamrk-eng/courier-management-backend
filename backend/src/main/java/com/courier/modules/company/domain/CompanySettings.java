@@ -139,6 +139,14 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private boolean autoAssignTrackingNumber = true;
 
+    /** Prefilled onto every new item row in the booking screen's item grid — a UX
+     *  default, not a pricing floor; {@link com.courier.modules.pricing.domain
+     *  .ChargeableWeightCalculator} still computes {@code MAX(actual, volumetric)}
+     *  with no minimum. */
+    @Column(name = "default_chargeable_weight_kg", precision = 10, scale = 3, nullable = false)
+    @Builder.Default
+    private BigDecimal defaultChargeableWeightKg = new BigDecimal("20.000");
+
     // === Finance ============================================================
 
     /** Percentage, 0–100. {@code DECIMAL(5,2)} — money-adjacent, never a double. */

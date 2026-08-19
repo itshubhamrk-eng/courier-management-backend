@@ -5,6 +5,7 @@ import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } 
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -97,7 +98,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
           </app-card>
 
           <app-card title="Items">
-            <app-item-entry-grid [initial]="hydrateItems()" (itemsChange)="items.set($event)" (weightChange)="weight.set($event)" />
+            <app-item-entry-grid [initial]="hydrateItems()" [defaultWeightKg]="defaultChargeableWeightKg()" (itemsChange)="items.set($event)" (weightChange)="weight.set($event)" />
           </app-card>
 
           <app-card title="Remarks">
@@ -145,6 +146,7 @@ export class ShipmentEdit implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ShipmentService);
   private readonly masters = inject(MasterDataService);
+  private readonly settings = inject(SettingsService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
@@ -170,6 +172,9 @@ export class ShipmentEdit implements OnInit {
   readonly hydrateItems = signal<ShipmentItemRequest[] | null>(null);
   readonly items = signal<ShipmentItemRequest[]>([]);
   readonly weight = signal({ actual: 0, volumetric: 0, chargeable: 0 });
+  /** Company Settings → Shipment → default chargeable weight, for any new row added
+   *  while editing. */
+  protected readonly defaultChargeableWeightKg = signal<number | null>(null);
 
   private id = '';
 
@@ -215,6 +220,12 @@ export class ShipmentEdit implements OnInit {
     this.masters.options('service-types').subscribe((o) => this.serviceTypeOptions.set(o));
     this.masters.options('package-types').subscribe((o) => this.packageTypeOptions.set(o));
     this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
+    this.settings.get().subscribe((d) => {
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
+      if (shipment?.defaultChargeableWeightKg != null) {
+        this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
+      }
+    });
     this.load();
   }
 

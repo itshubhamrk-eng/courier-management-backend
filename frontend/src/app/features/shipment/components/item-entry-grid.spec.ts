@@ -32,13 +32,13 @@ describe('ItemEntryGrid — weight preview', () => {
   });
 
   it('an untouched starting row previews the default weight and is itself a real item', () => {
-    // DEFAULT_WEIGHT_KG (5) prefills every new row so the preview isn't a misleading
+    // DEFAULT_WEIGHT_KG (20) prefills every new row so the preview isn't a misleading
     // zero, and itemName defaults to 'Package' (a real value, not just a placeholder) so
     // an untouched row is exactly the "one implicit package" a single-item booking is —
     // it must survive to the emitted item list unedited, or nothing ever gets booked.
-    expect(weight).toEqual({ actual: 5, volumetric: 0, chargeable: 5 });
+    expect(weight).toEqual({ actual: 20, volumetric: 0, chargeable: 20 });
     expect(items).toEqual([{
-      itemName: 'Package', quantity: 1, weight: 5,
+      itemName: 'Package', quantity: 1, weight: 20,
       lengthCm: null, widthCm: null, heightCm: null,
       declaredValue: null, fragile: false, dangerousGoods: false
     }]);
@@ -87,5 +87,35 @@ describe('ItemEntryGrid — weight preview', () => {
     fixture.detectChanges();
 
     expect(items.length).toBe(1);
+  });
+
+  it('seeds the still-pristine first row from defaultWeightKg once the company setting resolves', () => {
+    // Simulates the real timing: emptyRow() runs with the fallback constant at field-
+    // initializer time, before a parent's [defaultWeightKg] binding (itself fed by an
+    // async settings call) can resolve — the seeding effect must catch up afterwards.
+    const f = TestBed.createComponent(ItemEntryGrid);
+    let seeded: unknown[] = [];
+    f.componentInstance.itemsChange.subscribe((i) => (seeded = i));
+    f.componentRef.setInput('defaultWeightKg', 25);
+    f.detectChanges();
+
+    expect(seeded).toEqual([{
+      itemName: 'Package', quantity: 1, weight: 25,
+      lengthCm: null, widthCm: null, heightCm: null,
+      declaredValue: null, fragile: false, dangerousGoods: false
+    }]);
+  });
+
+  it('does not override a user-edited row once defaultWeightKg resolves', () => {
+    // The seeding effect only touches a still-untouched default row.
+    internals.patch(0, { itemName: 'Box', quantity: 1, weight: 7 });
+    fixture.componentRef.setInput('defaultWeightKg', 25);
+    fixture.detectChanges();
+
+    expect(items).toEqual([{
+      itemName: 'Box', quantity: 1, weight: 7,
+      lengthCm: null, widthCm: null, heightCm: null,
+      declaredValue: null, fragile: false, dangerousGoods: false
+    }]);
   });
 });

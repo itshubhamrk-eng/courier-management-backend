@@ -59,6 +59,8 @@ public record CompanySettingsRequest(
         Boolean autoGenerateBarcode,
         Boolean allowDuplicateReferenceNumber,
         Boolean autoAssignTrackingNumber,
+        @DecimalMin(value = "0.001", message = "must be greater than zero")
+        @Digits(integer = 7, fraction = 3) BigDecimal defaultChargeableWeightKg,
 
         // --- finance
         @DecimalMin("0.0") @DecimalMax("100.0") @Digits(integer = 3, fraction = 2)
