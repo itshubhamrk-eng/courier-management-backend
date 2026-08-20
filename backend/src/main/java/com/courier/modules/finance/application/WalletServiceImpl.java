@@ -21,6 +21,7 @@ import com.courier.modules.finance.domain.WalletTransaction;
 import com.courier.modules.finance.domain.WalletTransactionCriteria;
 import com.courier.modules.finance.domain.WalletTransactionRepository;
 import com.courier.modules.finance.domain.WalletTransactionSpecifications;
+import com.courier.modules.finance.infrastructure.CompanyPaymentGatewayResolver;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
@@ -109,7 +110,7 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final WalletTransactionRepository transactionRepository;
     private final BranchDirectoryPort branchDirectory;
-    private final PaymentGatewayPort paymentGateway;
+    private final CompanyPaymentGatewayResolver paymentGatewayResolver;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -244,6 +245,7 @@ public class WalletServiceImpl implements WalletService {
     @PreAuthorize(COMPANY_USERS_ONLY)
     public PaymentGatewayPort.GatewayOrder openRecharge(RechargeCommand command) {
         UUID companyId = requireCompany();
+        PaymentGatewayPort paymentGateway = paymentGatewayResolver.resolve(companyId);
         UUID branchId = resolveBranchForWrite(command.branchId(), companyId);
         Wallet wallet = getOrCreateForBranch(branchId);
         requireOperational(wallet);
@@ -279,6 +281,7 @@ public class WalletServiceImpl implements WalletService {
     @PreAuthorize(COMPANY_USERS_ONLY)
     public WalletTransaction completeRecharge(RechargeCommand command) {
         UUID companyId = requireCompany();
+        PaymentGatewayPort paymentGateway = paymentGatewayResolver.resolve(companyId);
         UUID branchId = resolveBranchForWrite(command.branchId(), companyId);
 
         String paymentId = required(command.paymentReference(), "paymentReference");

@@ -17,8 +17,8 @@ import java.util.UUID;
 /**
  * Body of {@code POST /api/v1/shipments}.
  *
- * <p>Not accepted: {@code companyId} (from the JWT), {@code shipmentNumber}/{@code
- * trackingNumber} (generated), {@code status} (a new shipment starts {@code BOOKED}),
+ * <p>Not accepted: {@code companyId} (from the JWT), {@code trackingNumber} (always
+ * generated), {@code status} (a new shipment starts {@code BOOKED}),
  * {@code actualWeight}/{@code volumetricWeight}/{@code chargeableWeight} as top-level
  * writes (computed from {@code items}; the bare {@code actualWeight}/dimension fields here
  * are the fallback used only when {@code items} is empty — see
@@ -28,6 +28,10 @@ import java.util.UUID;
 public record CreateShipmentRequest(
         @NotNull UUID bookingBranchId,
         @NotNull UUID deliveryBranchId,
+        @Schema(description = "Optional — enter a specific shipment number instead of "
+                + "the auto-generated \"<BRANCH_CODE>-<serial>\" one. Must be unique "
+                + "within the company; booking is refused with a 422 if it's already in use.")
+        @Size(max = 30) String manualShipmentNumber,
         @NotBlank @Size(max = 10) String pickupPincode,
         @NotBlank @Size(max = 10) String deliveryPincode,
         @NotBlank @Size(max = 150) String senderName,
@@ -45,6 +49,11 @@ public record CreateShipmentRequest(
         @Min(1) Integer numberOfPackages,
         @Size(max = 500) String remarks,
         @DecimalMin(value = "0") BigDecimal otherCharges,
+        @Schema(description = "Optional override of the Pricing Engine's own ODA charge — "
+                + "typed at booking time when the operator needs to adjust it. Null uses the "
+                + "engine's own computed value unchanged. GST is recomputed on the difference "
+                + "at the booking branch's GST percentage.")
+        @DecimalMin(value = "0") BigDecimal odaCharge,
         @Schema(description = "Only meaningful when this lane falls back to the Freight "
                 + "Factor grid (no route/rate available) — raises the matched cell's own "
                 + "factor. Must be greater than or equal to the matched factor.")
@@ -64,6 +73,15 @@ public record CreateShipmentRequest(
                 + "branches/hubs, in the order the shipment passes through them")
         List<UUID> crossingBranchIds,
         @Schema(description = "The whole route's crossing charge — not per hop")
-        @DecimalMin(value = "0") BigDecimal crossingCharge
+        @DecimalMin(value = "0") BigDecimal crossingCharge,
+        @Schema(description = "Drives whether an E-Way Bill is mandatory before AWB "
+                + "generation — see GET /company-settings for the company's own threshold "
+                + "(default 50000.00). Null is never mandatory.")
+        @DecimalMin(value = "0") BigDecimal invoiceValue,
+        @Valid
+        @Schema(description = "Required when invoiceValue exceeds the mandatory threshold "
+                + "— booking is refused with a 422 otherwise. Optional and simply attached "
+                + "when supplied below the threshold.")
+        EwayBillBookingRequest ewayBill
 ) {
 }

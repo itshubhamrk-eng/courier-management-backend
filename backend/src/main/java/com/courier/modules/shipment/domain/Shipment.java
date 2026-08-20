@@ -168,6 +168,20 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "declared_value", precision = 19, scale = 4)
     private BigDecimal declaredValue;
 
+    /** Entered at booking time — the number {@code EwayBillService.isRequired} checks
+     *  against the company's own configurable threshold. Distinct from {@link #declaredValue}
+     *  (an insurance-adjacent figure the Pricing Engine reads); this one drives only the
+     *  E-Way Bill mandatory/optional decision. See {@code com.courier.modules.ewaybill}. */
+    @Column(name = "invoice_value", precision = 19, scale = 4)
+    private BigDecimal invoiceValue;
+
+    /** Frozen at booking time from {@link #invoiceValue} vs. the threshold in effect that
+     *  moment — never recomputed against a later threshold change, so an already-booked
+     *  shipment's own requirement never silently drifts. */
+    @Column(name = "eway_bill_required", nullable = false)
+    @Builder.Default
+    private boolean ewayBillRequired = false;
+
     @Column(name = "number_of_packages", nullable = false)
     @Builder.Default
     private Integer numberOfPackages = 1;

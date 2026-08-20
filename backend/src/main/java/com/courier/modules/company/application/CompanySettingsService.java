@@ -29,6 +29,10 @@ public interface CompanySettingsService {
 
     CompanySettings patchSla(CompanySettingsCommand command);
 
+    /** The E-Way Bill mandatory-invoice-value threshold (default 50000.00) that
+     *  {@code com.courier.modules.ewaybill} reads at booking time. */
+    CompanySettings patchEwayBill(CompanySettingsCommand command);
+
     CompanySettings patchSecurity(CompanySettingsCommand command);
 
     CompanySettings patchNotification(CompanySettingsCommand command);

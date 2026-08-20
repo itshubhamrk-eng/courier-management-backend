@@ -19,6 +19,7 @@ import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES } 
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentService } from './shipment.service';
+import { EwayBillService } from './eway-bill.service';
 import { printConsignmentCopies } from './consignment-print.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
@@ -165,6 +166,42 @@ const TIMELINE_ICONS: Record<string, string> = {
             <app-card title="Remarks"><p class="sv__remarks">{{ shipment()!.remarks }}</p></app-card>
           }
 
+          @if (shipment()!.ewayBillRequired || shipment()!.invoiceValue || shipment()!.ewayBill) {
+            <app-card title="E-Way Bill">
+              <dl class="kv">
+                <dt>Required</dt><dd>{{ shipment()!.ewayBillRequired ? 'Yes' : 'No' }}</dd>
+                @if (shipment()!.invoiceValue != null) {
+                  <dt>Invoice Value</dt><dd class="mono">{{ shipment()!.invoiceValue | number: '1.2-2' }}</dd>
+                }
+                @if (shipment()!.ewayBill; as eb) {
+                  <dt>E-Way Bill Number</dt><dd>{{ eb.ewayBillNumber || '—' }}</dd>
+                  <dt>Status</dt><dd>{{ eb.status }}</dd>
+                  @if (eb.validFrom || eb.validUntil) {
+                    <dt>Validity</dt>
+                    <dd>{{ eb.validFrom ? (eb.validFrom | date: 'mediumDate') : '—' }} – {{ eb.validUntil ? (eb.validUntil | date: 'mediumDate') : '—' }}</dd>
+                  }
+                  @if (eb.documentUrl) {
+                    <dt>Document</dt><dd><a [href]="eb.documentUrl" target="_blank" rel="noopener">View document</a></dd>
+                  }
+                } @else if (shipment()!.ewayBillRequired) {
+                  <dt>E-Way Bill</dt><dd class="eway-missing">Missing — required before AWB generation</dd>
+                }
+              </dl>
+              @if (can().update && shipment()!.ewayBill; as eb) {
+                <div class="eway-actions">
+                  @if (eb.status !== 'VALIDATED' && eb.status !== 'CANCELLED') {
+                    <app-button variant="stroked" [loading]="ewayBillBusy()" (pressed)="validateEwayBill(eb.id)">Validate</app-button>
+                  }
+                  @if (eb.status !== 'CANCELLED') {
+                    <app-button variant="stroked" (pressed)="ewayBillFile.click()">Upload Document</app-button>
+                    <input #ewayBillFile type="file" accept=".pdf,.jpg,.jpeg,.png" hidden (change)="onEwayBillFile($event, eb.id)" />
+                    <app-button variant="danger" [loading]="ewayBillBusy()" (pressed)="cancelEwayBill(eb.id)">Cancel</app-button>
+                  }
+                </div>
+              }
+            </app-card>
+          }
+
           @if (shipment()!.shipmentImageUrl) {
             <app-card title="Shipment Photo">
               <img class="sv__pod" [src]="shipment()!.shipmentImageUrl" alt="Shipment photo" />
@@ -220,11 +257,14 @@ const TIMELINE_ICONS: Record<string, string> = {
     .commission__row strong { font-weight:600; }
     .commission__row--total { border-top:1px solid var(--surface-border); padding-top:10px; margin-top:2px; }
     .commission__row--total strong { color:var(--brand-600); }
+    .eway-missing { color:var(--danger); }
+    .eway-actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
     @media (max-width:860px){ .sv__grid-parties { grid-template-columns:1fr; } .sv__grid { grid-template-columns:1fr; } .sv__grid app-card:nth-child(3) { grid-column:auto; } .sv__grid2 { grid-template-columns:1fr; } }
   `]
 })
 export class ShipmentView implements OnInit {
   private readonly service = inject(ShipmentService);
+  private readonly ewayBillService = inject(EwayBillService);
   private readonly auth = inject(AuthService);
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
@@ -239,6 +279,7 @@ export class ShipmentView implements OnInit {
   readonly loadingDetails = signal(true);
   readonly steps = signal<TimelineStep[]>([]);
   readonly charge = signal<ShipmentCharge | null>(null);
+  readonly ewayBillBusy = signal(false);
 
   private readonly branchOptions = signal<SelectOption[]>([]);
   private readonly serviceTypeOptions = signal<SelectOption[]>([]);
@@ -319,6 +360,44 @@ export class ShipmentView implements OnInit {
       },
       otherCharges: c.otherCharges,
       remarks: s.remarks ?? null
+    });
+  }
+
+  // ------------------------------------------------------------------- E-Way Bill
+
+  validateEwayBill(id: string): void {
+    this.ewayBillBusy.set(true);
+    this.ewayBillService.validate(id).subscribe({
+      next: () => { this.ewayBillBusy.set(false); this.notify.success('E-Way Bill validated.'); this.load(); },
+      error: (e) => { this.ewayBillBusy.set(false); this.notify.error(e?.error?.message ?? 'Could not validate the E-Way Bill.'); }
+    });
+  }
+
+  onEwayBillFile(event: Event, ewayBillId: string): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.ewayBillBusy.set(true);
+    this.ewayBillService.upload(ewayBillId, file).subscribe({
+      next: () => { this.ewayBillBusy.set(false); this.notify.success('E-Way Bill document uploaded.'); this.load(); },
+      error: (e) => { this.ewayBillBusy.set(false); this.notify.error(e?.error?.message ?? 'Could not upload the document.'); }
+    });
+  }
+
+  cancelEwayBill(id: string): void {
+    this.confirmDialog.prompt({
+      title: 'Cancel E-Way Bill',
+      message: 'This E-Way Bill will be cancelled and cannot be edited, validated or documented again.',
+      label: 'Reason (optional)', placeholder: 'Amended, reissued…',
+      confirmLabel: 'Cancel E-Way Bill', danger: true
+    }).subscribe((reason) => {
+      if (reason === undefined) return;
+      this.ewayBillBusy.set(true);
+      this.ewayBillService.cancel(id, reason).subscribe({
+        next: () => { this.ewayBillBusy.set(false); this.notify.success('E-Way Bill cancelled.'); this.load(); },
+        error: (e) => { this.ewayBillBusy.set(false); this.notify.error(e?.error?.message ?? 'Could not cancel the E-Way Bill.'); }
+      });
     });
   }
 

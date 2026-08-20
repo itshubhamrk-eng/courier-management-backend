@@ -39,6 +39,11 @@ public record UpdateShipmentRequest(
         @Min(1) Integer numberOfPackages,
         @Size(max = 500) String remarks,
         @DecimalMin(value = "0") BigDecimal otherCharges,
+        @Schema(description = "Optional override of the Pricing Engine's own ODA charge — "
+                + "typed at booking time when the operator needs to adjust it. Null uses the "
+                + "engine's own computed value unchanged. GST is recomputed on the difference "
+                + "at the booking branch's GST percentage.")
+        @DecimalMin(value = "0") BigDecimal odaCharge,
         @Schema(description = "Only meaningful when this lane falls back to the Freight "
                 + "Factor grid (no route/rate available) — raises the matched cell's own "
                 + "factor. Must be greater than or equal to the matched factor.")
@@ -48,6 +53,8 @@ public record UpdateShipmentRequest(
         BigDecimal actualWeight,
         BigDecimal length,
         BigDecimal width,
-        BigDecimal height
+        BigDecimal height,
+        @DecimalMin(value = "0") BigDecimal invoiceValue,
+        @Valid EwayBillBookingRequest ewayBill
 ) {
 }

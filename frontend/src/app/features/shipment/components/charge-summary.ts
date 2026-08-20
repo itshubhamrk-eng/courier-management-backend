@@ -39,9 +39,6 @@ export interface ChargeSummaryData {
       @if (charges().handlingCharge) {
         <dt>Handling</dt><dd class="mono">{{ charges().handlingCharge | number: '1.2-2' }}</dd>
       }
-      @if (charges().odaCharge) {
-        <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
-      }
       @if (charges().insuranceCharge) {
         <dt>Insurance</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
       }
@@ -53,6 +50,15 @@ export interface ChargeSummaryData {
         </dd>
       } @else {
         <dd class="mono">{{ charges().otherCharges | number: '1.2-2' }}</dd>
+      }
+      @if (editable()) {
+        <dt>ODA Charge</dt>
+        <dd class="mono">
+          <input class="net-input" type="number" step="0.01" min="0"
+                 [value]="charges().odaCharge" (input)="onOdaChargeInput($event)" />
+        </dd>
+      } @else if (charges().odaCharge) {
+        <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
       }
       @if (charges().gstAmount) {
         <dt>GST</dt><dd class="mono">{{ charges().gstAmount | number: '1.2-2' }}</dd>
@@ -95,6 +101,9 @@ export class ChargeSummary {
   /** Emits the typed Other Charges amount — unlike {@link netAmountChange}, this one IS
    *  sent to the server (see `ShipmentCreate.otherCharges` form control). */
   readonly otherChargesChange = output<number>();
+  /** Emits the typed ODA Charge override — sent to the server, same as
+   *  {@link otherChargesChange} (see `ShipmentCreate.odaCharge` form control). */
+  readonly odaChargeChange = output<number>();
 
   protected onNetAmountInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
@@ -104,5 +113,10 @@ export class ChargeSummary {
   protected onOtherChargesInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
     if (!Number.isNaN(v)) this.otherChargesChange.emit(v);
+  }
+
+  protected onOdaChargeInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isNaN(v)) this.odaChargeChange.emit(v);
   }
 }

@@ -20,6 +20,9 @@ export const API = {
   customers: '/customers',
   rates: '/rates',
   shipments: '/shipments',
+  /** POD Auto Verification — verify/{id}, verification/{id}, review/{id}. See
+   *  MEMORY/modules/pod-verification.md. */
+  pod: (shipmentId: string) => `/shipments/${shipmentId}/pod`,
   /** The Pricing Engine's one endpoint — no frontend module of its own, called here for
    *  the booking wizard's live preview. See core/models/shipment.model.ts. */
   pricing: '/pricing',
@@ -32,6 +35,7 @@ export const API = {
   branchWallet: '/branch-wallet',
   hubs: '/hubs',
   companySettings: '/company-settings',
+  companyRazorpayConfig: '/company-razorpay-config',
   subscriptionPlans: '/subscription-plans',
   /** The platform console: platform dashboard and platform-operator accounts. */
   superAdmin: '/super-admin',
@@ -46,5 +50,9 @@ export const API = {
   supportSlaRules: '/support/sla-rules',
   notifications: '/notifications',
   /** Follow-up Management — branch operational tasks. See MEMORY/modules/follow-up.md. */
-  followUps: '/follow-ups'
+  followUps: '/follow-ups',
+  /** E-Way Bill Management — standalone CRUD/lifecycle. Shipment Booking itself carries
+   *  E-Way Bill data inline (see shipments); this is for managing one afterward. See
+   *  MEMORY/modules/eway-bill.md. */
+  ewayBills: '/eway-bills'
 } as const;

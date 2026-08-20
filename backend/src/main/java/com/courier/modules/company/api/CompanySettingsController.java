@@ -96,6 +96,17 @@ public class CompanySettingsController {
                 "SLA settings updated");
     }
 
+    @PatchMapping("/eway-bill")
+    @Operation(summary = "Update the E-Way Bill mandatory-value threshold",
+            description = "Invoice value above which com.courier.modules.ewaybill requires "
+                    + "an E-Way Bill before AWB generation (default 50000.00).")
+    public ApiResponse<CompanySettingsResponse> ewayBill(
+            @Valid @RequestBody CompanySettingsRequest request) {
+        return ApiResponse.success(
+                mapper.toResponse(service.patchEwayBill(mapper.toCommand(request))),
+                "E-Way Bill settings updated");
+    }
+
     @PatchMapping("/security")
     @Operation(summary = "Update security settings",
             description = "Stored per company. Note: auth does not yet read these — they "

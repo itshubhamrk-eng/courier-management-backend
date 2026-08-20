@@ -32,6 +32,8 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     Optional<Shipment> findByCompanyIdAndTrackingNumber(UUID companyId, String trackingNumber);
 
+    boolean existsByCompanyIdAndShipmentNumber(UUID companyId, String shipmentNumber);
+
     List<Shipment> findAllByCompanyIdAndIdIn(UUID companyId, Collection<UUID> ids);
 
     List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);

@@ -8,6 +8,170 @@ All notable changes to this project. Format based on
 
 ---
 
+## [0.30.3] — 2026-08-20 — Manual ODA Charge override at booking
+
+ODA Charge row moved below Other Charges in the booking summary (`charge-summary.ts`) and
+made editable, same manual-entry pattern as Other Charges — was previously a read-only echo
+of the Pricing Engine's own `chargeBreakup.odaCharge`. Typing over it sends `odaCharge` on
+`CreateShipmentRequest`/`UpdateShipmentRequest`; `ShipmentServiceImpl.copyCharge` treats it
+as an override of `priced.odaCharge()` (not an addition, unlike `otherCharges`) and applies
+GST only to the *difference* from the engine's own figure, at the booking branch's GST% —
+mirrors `gstOnOtherCharges`. `odaChargeOverride` resets to null on every reprice in
+`shipment-create.ts`, same as `manualNetAmount`.
+
+## [0.30.2] — 2026-08-20 — Consignment print: 4 copies with per-copy amount rules
+
+`consignment-print.util.ts` now prints Customer/Office/Driver/Delivery copies (was
+Original/Office). Amount block varies by copy + payment mode (detected via
+`paymentModeLabel.includes('(PAID)')`, same convention as `shipment-create.ts`):
+Customer & Office hide the amount behind a plain "ToPay" on Paid orders; Driver drops the
+amount block entirely on Paid orders; Delivery always shows a "ToPay" collect line, 0.00
+on Paid orders since nothing is left to collect.
+
+## [0.30.1] — 2026-08-20 — POD Auto Verification
+
+Direct full-spec request. New package `com.courier.modules.pod`, migrations `V48`/`V49`.
+AI-scored gate in front of the existing delivery close-out: `OUT_FOR_DELIVERY` -> upload
+POD -> AI Verification -> `PASS` -> Complete Delivery, `REVIEW` -> manual approve/reject,
+`FAIL` -> upload a new POD. **AI never itself updates a shipment's status** —
+`ShipmentServiceImpl.deliver()` (the only code path that ever writes `DELIVERED`) is
+completely untouched; this module only ever writes `pod_verification` rows. Full design
+writeup in `MEMORY/modules/pod-verification.md` — this entry is the summary.
+
+**Backend**: `PodVerification` (own table, `V48`), `PodVerificationStatus`
+(`PASS`/`REVIEW`/`FAIL`, no `PENDING` — `verify()` runs synchronously),
+`PodVerificationService`/`Impl`, and a `PodVerificationProvider` abstraction (the brief's
+own explicit AI-provider-abstraction requirement) with one implementation,
+`HeuristicPodVerificationProvider` — a deterministic local scorer, not a trained model,
+since no AI/vision vendor credential exists in this dev environment (same class of gap
+`NotificationPort`/SMTP already carries honestly). It decodes the photo with the JDK's own
+`ImageIO` and scores darkness/blur/resolution, checks signature presence, cross-checks the
+claimed AWB against **this platform's own database record** for the shipment (real ground
+truth, no OCR needed), and flags duplicates via a SHA-256 photo-hash comparison across the
+company's prior verifications. Thresholds are configurable, never hardcoded:
+`pod.verification.auto-verify-threshold`/`manual-review-threshold`
+(`POD_AUTO_VERIFY_THRESHOLD`/`POD_MANUAL_REVIEW_THRESHOLD`, defaults 85/60,
+`PodVerificationProperties`). `pod.ai.enabled=false` swaps in
+`UnavailablePodVerificationProvider`, exercising the brief's own "provider unavailable ->
+route to REVIEW, never a silent PASS" rule for real. `ShipmentService` gained one new
+method, `attachPodAsset`, so a captured photo/signature is durably stored *before* the
+delivery decision exists (unlike `deliver()`'s own asset recording, which only fires once
+delivery commits). RBAC is role-based, same posture as every module since Ticket Support
+(`PermissionModule`/`DefaultPermissionCatalog` untouched — Ticket/Follow-up/Vehicle-fleet
+never got catalogue rows for their own actions either): `WRITERS`
+(`COMPANY_ADMIN`/`BRANCH_MANAGER`/`OPERATOR`) verify, `REVIEWERS`
+(`COMPANY_ADMIN`/`BRANCH_MANAGER` only) review/approve/reject, any authenticated user reads.
+New `GET /api/v1/pod/pending-review` — beyond the brief's own three-endpoint API list, but
+without it a reviewer has no way to discover what needs deciding.
+
+**A real, live-found platform bug fixed in passing**: `GlobalExceptionHandler` handled a
+missing plain `@RequestParam` but not a missing **multipart** part
+(`MissingServletRequestPartException`) — calling `verify()` with no photo file 500'd as
+"An unexpected error occurred" instead of a clean 400. Pre-existing gap in shared
+infrastructure (the original `uploadPodFile`/booking-photo-upload endpoints carried the
+same latent gap since 0.17.9, just never tripped before). Fixed with a handler mirroring
+the existing `MissingServletRequestParameterException` one exactly.
+
+**Frontend**: `features/shipment-movement/delivery.ts` reworked — photo/signature file
+pickers -> "Run AI Verification" -> a result card (score, receiver/AWB/date/
+signature/image-quality, reasons) -> `PASS` shows the existing "Complete Delivery" (calls
+the unchanged `deliver()`, `signatureUrl`/`photoUrl` now `null` since already attached),
+`REVIEW` shows a "Check Review Status" refresh, `FAIL` shows "Upload New POD". New
+`features/shipment-movement/pod-review.ts` — the Manual Review screen (worklist -> select
+-> photo/signature thumbnails -> AI result -> Approve/Reject with remarks). New nav leaf
+"POD Review" under Operations (`COMPANY_ADMIN`/`BRANCH_MANAGER` only), new route
+`/movement/pod-review`.
+
+**Verified live** on real `courier_db` via a throwaway `:8082`/`:4300` (`:8100`/`:4200`,
+run by a concurrent session, untouched throughout — see below): missing-photo now returns
+a clean 400 (confirms the exception-handler fix), wrong-status refused with the exact
+message, a real `OUT_FOR_DELIVERY` fixture (`PUNE-000001`) correctly ran the full pipeline
+(status check, duplicate-hash check, AI analysis) and stopped exactly at the pre-existing,
+accepted "no storage backend configured" gap — proving the AI step executed, not that it
+was skipped — `GET .../pod/verification` 404s cleanly with no run, `GET
+/pod/pending-review` empty-lists cleanly, a foreign company's shipment 404s (isolation).
+Through the Angular console: the new "POD Review" nav leaf and its empty state render with
+no console errors; `Delivery` itself loads correctly. **Not verified live**: the actual
+`PASS`/`REVIEW`/`FAIL` happy path (blocked on no S3/file-storage backend in this dev
+environment — an accepted pre-existing gap, not a defect here), and the Delivery/POD-Review
+click paths specifically (no `OUT_FOR_DELIVERY` fixture existed at the logged-in branch
+this session). `mvn test` 813 → 835 (22 new: `PodVerificationServiceImplTest`,
+`HeuristicPodVerificationProviderTest` — real JPEG/PNG bytes via `java.awt.Graphics2D`,
+not fixture files), `tsc --noEmit`/`ng build` clean. One pre-existing, unrelated `ng test`
+failure (`navigation.config.spec.ts`, `"reports-dashboard"`) confirmed present before this
+task's own changes via `git stash` comparison — not touched.
+
+**Concurrent-session note**: this working tree had E-Way Bill Management (`0.30.0`, above)
+and a Razorpay-per-company-config feature (`V46`) uncommitted throughout this task, neither
+touched here. One of those sessions independently found and fixed a real schema bug in
+*this* module mid-task — `V48`'s `pod_hash CHAR(64)` didn't match the entity's default
+`VARCHAR` mapping, a `ddl-auto: validate` mismatch this module's own Mockito-only tests
+couldn't catch — via a forward-only `V49`, found already applied to the real dev DB by the
+time this task's own live-boot verification ran. Left as-is, not folded into `V48`.
+
+Previously current:
+
+## [0.30.0] — 2026-08-20 — E-Way Bill Management
+
+Direct full-spec request. New package `com.courier.modules.ewaybill`, migration `V47`.
+Business rule: invoice value over the company's own configurable threshold
+(`CompanySettings.ewayBillMandatoryValue`, default 50000.00) makes an E-Way Bill mandatory
+before AWB generation; at or under it, optional. See `MEMORY/modules/eway-bill.md` for the
+full design writeup — this entry is the summary.
+
+**Backend**: `EwayBill` entity (own table `eway_bill`, `EwayBillStatus` lifecycle with
+`CANCELLED` terminal, no unique `(company, shipment)` since a cancelled row is reissued as
+a fresh one, not reused), `EwayBillRepository`, `EwayBillService`/`EwayBillServiceImpl`
+(standalone CRUD + validate/upload/cancel), `EwayBillProvider`/`LocalEwayBillProvider`
+(local-only field/format validation — no external government API, per the brief's own
+instruction — swappable later with zero caller changes). Integrated into
+`ShipmentServiceImpl.create()`/`update()` **inline**, ahead of AWB minting, since this
+codebase generates the AWB synchronously inside that one transaction rather than as a
+separate step: `enforceBookingRequirement` throws before any persistence when a mandatory
+E-Way Bill is missing or invalid, with the brief's own exact wording
+(`"E-Way Bill is mandatory because invoice value exceeds ₹50,000."`). `shipments` gained
+`invoiceValue`/`ewayBillRequired` (frozen at booking time). New `company_settings_config
+.ewayBillMandatoryValue` + `PATCH /company-settings/eway-bill` section. New
+`PermissionModule.EWAY_BILL` (8 rights, catalogue 223 → 231) and two new
+`PermissionAction`s, `VALIDATE`/`CANCEL` — `EWAY_BILL_VIEW` from the brief seeded as
+`EWAY_BILL_READ`, matching this catalogue's existing `_READ` (never `_VIEW`) vocabulary.
+
+**A real bug found by `EwayBillServiceImplTest`, not live boot**: `upsertForShipment`'s
+first draft reused the read path's "newest row, fall back to a cancelled one" lookup for
+writes too — attempting to resurrect a `CANCELLED` row straight to `VALIDATED`, which
+`EwayBillStatus.canTransitionTo`'s own terminal-state guard correctly refused. Fixed with a
+dedicated non-cancelled-only lookup for the write path.
+
+**Frontend**: `shipment-create.ts` — new "E-Way Bill" card (Invoice Value, an
+auto-opening `E-Way Bill Optional`/`⚠ E-Way Bill Mandatory` chip, Add/Remove, E-Way Bill
+Number/Invoice Number/Invoice Date/Vehicle Number/Validity/document picker) and a matching
+Booking Summary line; `ewayBillReason()` (plain method, this file's own established
+non-`computed()` pattern for reading `FormControl.value`) disables Book Shipment with the
+reason shown — UX only, the backend re-enforces the real gate regardless. The document
+uploads via `POST /eway-bills/{id}/upload` once `book()` returns the new nested
+`ShipmentResponse.ewayBill.id`. `shipment-view.ts` — new "E-Way Bill" card
+(Required/Invoice Value/Number/Status/Validity/Document) with Validate/Upload/Cancel
+actions against a new `features/shipment/eway-bill.service.ts`. No standalone E-Way Bill
+list page — not asked for by the brief's own Frontend section.
+
+**Verification**: `mvn test` 791 → 813 at this task's own commit point (`EwayBillStatusTest`,
+`EwayBillServiceImplTest`'s 20 cases incl. the cancel-reissue bug above),
+`DefaultPermissionCatalogTest` 223 → 231. `tsc --noEmit -p tsconfig.app.json`/
+`ng build --configuration production` clean, `ng test` 133/134 (one pre-existing, unrelated
+`navigation.config.spec.ts` failure, confirmed via `git log` — this task never touched that
+file). **Not verified live** — no MySQL boot or browser click-through this session; `V47`
+not yet applied against a real database.
+
+**Concurrent-session note**: this working tree had at least two other sessions actively
+building unrelated features in the same `shipment` module files throughout this task — a
+"manual shipment number" feature and a "POD Auto Verification" feature both landed
+mid-task, briefly breaking `mvn test`/`tsc` on their own not-yet-finished edits a few times
+(self-resolved a short wait later each time). Final state has all three features' code and
+tests coexisting cleanly; `mvn test` reached 835/835 by the last run of this session,
+reflecting the other sessions' own added coverage on top of this task's 813.
+
+Previously current:
+
 ## [0.29.2] — 2026-08-18 — Four new reports: Finance, Branch Performance, Customer, Shipment Exception
 
 Direct request: "create important reports." Scoped via `AskUserQuestion` to exactly

@@ -108,7 +108,8 @@ public class ShipmentMovementController {
         return ApiResponse.success(
                 shipmentMapper.toResponse(delivered, shipmentService.getItems(delivered.getId()),
                         shipmentService.getDeliveryAssignment(delivered.getId()),
-                        shipmentService.getAssets(delivered.getId())),
+                        shipmentService.getAssets(delivered.getId()),
+                        shipmentService.getEwayBill(delivered.getId()).orElse(null)),
                 "Shipment delivered");
     }
 

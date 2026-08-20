@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.application.command;
 
+import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
 import com.courier.modules.shipment.domain.ShipmentType;
 
 import java.math.BigDecimal;
@@ -10,6 +11,9 @@ import java.util.UUID;
 /**
  * Everything Shipment Booking needs to book one shipment.
  *
+ * @param manualShipmentNumber optional — used verbatim instead of the auto-generated
+ *                              shipment number when supplied; must be unique within the
+ *                              company
  * @param bookingDate      defaults to today when null, the same convention Rate Master's
  *                         and the Pricing Engine's own calculators use
  * @param items            the packed item grid; when empty, {@code actualWeight} (and
@@ -26,10 +30,16 @@ import java.util.UUID;
  *                          the intermediate hubs in the order the shipment passes through them
  * @param crossingCharge    the whole route's crossing charge (not per hop); defaults to
  *                          zero when {@code crossing} is true and this is null
+ * @param invoiceValue      drives whether an E-Way Bill is mandatory — see
+ *                          {@code EwayBillService.isRequired}; null is never mandatory
+ * @param ewayBill          the E-Way Bill's own data, required when {@code invoiceValue}
+ *                          exceeds the company's threshold (booking is refused otherwise),
+ *                          optional and simply attached-if-given below it
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
         UUID deliveryBranchId,
+        String manualShipmentNumber,
         String pickupPincode,
         String deliveryPincode,
         String senderName,
@@ -47,6 +57,7 @@ public record CreateShipmentCommand(
         Integer numberOfPackages,
         String remarks,
         BigDecimal otherCharges,
+        BigDecimal odaCharge,
         BigDecimal freightFactorOverride,
         List<ShipmentItemCommand> items,
         BigDecimal actualWeight,
@@ -55,6 +66,8 @@ public record CreateShipmentCommand(
         BigDecimal height,
         Boolean crossing,
         List<UUID> crossingBranchIds,
-        BigDecimal crossingCharge
+        BigDecimal crossingCharge,
+        BigDecimal invoiceValue,
+        EwayBillDataCommand ewayBill
 ) {
 }

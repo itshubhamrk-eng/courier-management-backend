@@ -23,6 +23,7 @@ public record CompanySettingsResponse(
         Shipment shipment,
         Finance finance,
         Sla sla,
+        EwayBill ewayBill,
         Notification notification,
         Security security,
         Branding branding,
@@ -58,6 +59,10 @@ public record CompanySettingsResponse(
     public record Sla(boolean slaBreachTicketEnabled, int slaBookingToLoadingSheetHours,
                       int slaLoadingSheetToThcHours, int slaThcToInscanHours,
                       int slaInscanToDrsHours, int slaDrsToDeliveryHours) {
+    }
+
+    @Schema(name = "EwayBillSettings", description = "E-Way Bill Management's configurable mandatory threshold")
+    public record EwayBill(BigDecimal ewayBillMandatoryValue) {
     }
 
     @Schema(name = "NotificationSettings")

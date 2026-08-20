@@ -207,6 +207,15 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private int slaDrsToDeliveryHours = 12;
 
+    // === E-Way Bill ==========================================================
+    // Invoice value above which E-Way Bill Management (com.courier.modules.ewaybill)
+    // requires one before AWB generation; at or under it, optional. Never hardcoded in
+    // application code — this is the one source of truth for the threshold.
+
+    @Column(name = "eway_bill_mandatory_value", precision = 19, scale = 4, nullable = false)
+    @Builder.Default
+    private BigDecimal ewayBillMandatoryValue = new BigDecimal("50000.0000");
+
     // === Notification =======================================================
 
     @Column(name = "sms_enabled", nullable = false)

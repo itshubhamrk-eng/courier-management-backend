@@ -1,0 +1,44 @@
+package com.courier.modules.ewaybill.api;
+
+import com.courier.modules.ewaybill.api.dto.CreateEwayBillRequest;
+import com.courier.modules.ewaybill.api.dto.EwayBillResponse;
+import com.courier.modules.ewaybill.api.dto.UpdateEwayBillRequest;
+import com.courier.modules.ewaybill.application.command.CreateEwayBillCommand;
+import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
+import com.courier.modules.ewaybill.application.command.UpdateEwayBillCommand;
+import com.courier.modules.ewaybill.domain.EwayBill;
+import org.springframework.stereotype.Component;
+
+/** Wire contract <-> application/domain types for E-Way Bill Management. */
+@Component
+public class EwayBillMapper {
+
+    public CreateEwayBillCommand toCommand(CreateEwayBillRequest r) {
+        return new CreateEwayBillCommand(r.shipmentId(), new EwayBillDataCommand(
+                r.ewayBillNumber(), r.invoiceNumber(), r.invoiceDate(), r.invoiceValue(),
+                r.documentType(), r.documentNumber(), r.documentDate(), r.transporterId(),
+                r.vehicleNumber(), r.distance(), r.validFrom(), r.validUntil(),
+                r.documentUrl(), r.remarks()));
+    }
+
+    public UpdateEwayBillCommand toCommand(UpdateEwayBillRequest r) {
+        return new UpdateEwayBillCommand(r.version(), new EwayBillDataCommand(
+                r.ewayBillNumber(), r.invoiceNumber(), r.invoiceDate(), r.invoiceValue(),
+                r.documentType(), r.documentNumber(), r.documentDate(), r.transporterId(),
+                r.vehicleNumber(), r.distance(), r.validFrom(), r.validUntil(),
+                r.documentUrl(), r.remarks()));
+    }
+
+    public EwayBillResponse toResponse(EwayBill b) {
+        return new EwayBillResponse(
+                b.getId(), b.getShipmentId(), b.getEwayBillNumber(),
+                b.getInvoiceNumber(), b.getInvoiceDate(), b.getInvoiceValue(),
+                b.getDocumentType() == null ? null : b.getDocumentType().name(),
+                b.getDocumentNumber(), b.getDocumentDate(),
+                b.getTransporterId(), b.getVehicleNumber(), b.getDistance(),
+                b.getValidFrom(), b.getValidUntil(),
+                b.getStatus().name(),
+                b.getDocumentUrl(), b.getRemarks(),
+                b.getCreatedBy(), b.getCreatedAt(), b.getUpdatedBy(), b.getUpdatedAt(), b.getVersion());
+    }
+}

@@ -24,6 +24,7 @@ import { ItemEntryGrid } from './components/item-entry-grid';
 import { ChargeSummary } from './components/charge-summary';
 import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
+import { EwayBillService } from './eway-bill.service';
 import { printConsignmentCopies } from './consignment-print.util';
 import { parseVoiceBooking } from './voice-booking.util';
 
@@ -36,6 +37,16 @@ function today(): string {
 }
 
 type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: string | null };
+
+/** A native `<input type="date">` value (`yyyy-MM-dd`) has no time-of-day; the backend's
+ *  `validFrom`/`validUntil` are `Instant`, so a bare date is widened to the start/end of
+ *  that day in UTC. */
+function toInstantStart(date: string | null | undefined): string | null {
+  return date ? `${date}T00:00:00Z` : null;
+}
+function toInstantEnd(date: string | null | undefined): string | null {
+  return date ? `${date}T23:59:59Z` : null;
+}
 
 /**
  * Create Shipment — a single page, not a step wizard: Booking Details, Parties,
@@ -75,6 +86,8 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
               <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search delivery branch…" />
               <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
+              <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
+                <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
             </div>
             <div class="spacer"></div>
             <label class="chk">
@@ -196,6 +209,63 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
             </div>
           </app-card>
 
+          <app-card title="E-Way Bill" subtitle="Required over the mandatory invoice value; optional below it.">
+            <div class="grid3">
+              <label class="fld"><span class="fld__l">Invoice Value</span>
+                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('invoiceValue')" placeholder="0.00" /></label>
+              <div class="fld">
+                <span class="fld__l">Status</span>
+                @if (ewayBillMandatory()) {
+                  <span class="eway-chip eway-chip--mandatory">⚠ E-Way Bill Mandatory</span>
+                } @else {
+                  <span class="eway-chip eway-chip--optional">E-Way Bill Optional</span>
+                }
+              </div>
+            </div>
+
+            @if (!ewayBillOpen()) {
+              <div class="spacer"></div>
+              <app-button variant="stroked" (pressed)="addEwayBill()">+ Add E-Way Bill</app-button>
+            } @else {
+              <div class="spacer"></div>
+              <div class="grid3">
+                <label class="fld"><span class="fld__l">E-Way Bill Number</span>
+                  <input class="fld__i" [formControl]="c('ewayBillNumber')" placeholder="12-digit number" maxlength="30" /></label>
+                <label class="fld"><span class="fld__l">Invoice Number</span>
+                  <input class="fld__i" [formControl]="c('ewayBillInvoiceNumber')" placeholder="e.g. INV-1042" maxlength="50" /></label>
+                <label class="fld"><span class="fld__l">Invoice Date</span>
+                  <input class="fld__i" type="date" [formControl]="c('ewayBillInvoiceDate')" /></label>
+                <label class="fld"><span class="fld__l">Vehicle Number</span>
+                  <input class="fld__i" [formControl]="c('ewayBillVehicleNumber')" placeholder="e.g. MH12AB1234" maxlength="20" /></label>
+                <label class="fld"><span class="fld__l">Valid From</span>
+                  <input class="fld__i" type="date" [formControl]="c('ewayBillValidFrom')" /></label>
+                <label class="fld"><span class="fld__l">Valid Until</span>
+                  <input class="fld__i" type="date" [formControl]="c('ewayBillValidUntil')" /></label>
+              </div>
+              <div class="spacer"></div>
+              <label class="fld"><span class="fld__l">Remarks</span>
+                <input class="fld__i" [formControl]="c('ewayBillRemarks')" placeholder="Optional" /></label>
+              <div class="spacer"></div>
+              <div class="eway-doc">
+                @if (selectedEwayBillFile(); as file) {
+                  <span class="eway-doc__name">{{ file.name }}</span>
+                  <button type="button" class="eway-doc__remove" (click)="removeEwayBillFile()"><mat-icon>close</mat-icon></button>
+                } @else {
+                  <button type="button" class="img__btn" (click)="ewayBillFile.click()">
+                    <mat-icon>upload_file</mat-icon> Upload document (PDF/JPG/PNG)
+                  </button>
+                }
+                <input #ewayBillFile type="file" accept=".pdf,.jpg,.jpeg,.png" hidden (change)="onEwayBillFile($event)" />
+              </div>
+              <div class="spacer"></div>
+              <app-button variant="stroked" (pressed)="removeEwayBill()">Remove</app-button>
+            }
+            @if (ewayBillReason(); as reason) {
+              <div class="spacer"></div>
+              <p class="err">{{ reason }}</p>
+            }
+          </app-card>
+
           <app-card title="Shipment Image" subtitle="Optional — a photo of the parcel, uploaded once the shipment is booked.">
             <div class="img">
               @if (imagePreviewUrl(); as preview) {
@@ -225,6 +295,12 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
             <span class="sum__lbl">Load</span>
             <span class="sum__val">{{ c('numberOfPackages').value || 1 }} pkg · {{ weight().chargeable | number: '1.3-3' }} kg</span>
 
+            @if (c('invoiceValue').value) {
+              <span class="sum__lbl">Invoice Value</span>
+              <span class="sum__val">{{ c('invoiceValue').value | number: '1.2-2' }}
+                — {{ ewayBillMandatory() ? 'E-Way Bill Mandatory' : 'E-Way Bill Optional' }}</span>
+            }
+
             <div class="sum__body">
               @if (freightFactorApplicable()) {
                 <div class="factor-row">
@@ -253,14 +329,17 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
                 </div>
                 <app-charge-summary [charges]="{
                   freight: p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
-                  handlingCharge: p.chargeBreakup.handlingCharge, odaCharge: p.chargeBreakup.odaCharge,
+                  handlingCharge: p.chargeBreakup.handlingCharge,
+                  odaCharge: odaChargeOverride() ?? p.chargeBreakup.odaCharge,
                   insuranceCharge: p.chargeBreakup.insuranceCharge,
-                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges(),
+                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta(),
                   discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
                   otherCharges: otherCharges(),
                   netAmount: (manualNetAmount() ?? p.chargeBreakup.netAmount) + otherCharges() + gstOnOtherCharges()
+                    + odaChargeDelta() + gstOnOdaChargeDelta()
                 }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
-                  (otherChargesChange)="otherCharges.set($event)" />
+                  (otherChargesChange)="otherCharges.set($event)"
+                  (odaChargeChange)="odaChargeOverride.set($event)" />
               }
             </div>
 
@@ -268,8 +347,13 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
               <app-select [control]="c('paymentModeId')" label="Payment Mode" [options]="paymentModeOptions()" placeholder="Select a payment mode" />
             </div>
 
+            @if (ewayBillReason(); as reason) {
+              <p class="err">{{ reason }}</p>
+            }
             <div class="sum__cta">
-              <app-button icon="check" [loading]="submitting()" [disabled]="!pricing() || pricingLoading() || form.invalid" (pressed)="book()">Book Shipment</app-button>
+              <app-button icon="check" [loading]="submitting()"
+                [disabled]="!pricing() || pricingLoading() || form.invalid || ewayBillReason() !== null"
+                (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
         </aside>
@@ -349,6 +433,15 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
       border:1px solid var(--surface-border); background:var(--surface); color:var(--content-fg);
       display:grid; place-items:center; cursor:pointer; }
     .img__remove mat-icon { font-size:16px; width:16px; height:16px; }
+    .eway-chip { display:inline-flex; align-items:center; height:38px; padding:0 12px; border-radius:var(--r-field);
+      font:600 13px var(--font-sans); width:fit-content; }
+    .eway-chip--optional { background:var(--brand-50); color:var(--brand-700); }
+    .eway-chip--mandatory { background:var(--danger-bg); color:var(--danger); }
+    .eway-doc { display:flex; align-items:center; gap:10px; }
+    .eway-doc__name { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .eway-doc__remove { width:26px; height:26px; border-radius:50%; border:1px solid var(--surface-border);
+      background:var(--surface); color:var(--content-fg); display:grid; place-items:center; cursor:pointer; flex-shrink:0; }
+    .eway-doc__remove mat-icon { font-size:16px; width:16px; height:16px; }
     @media (max-width:960px){ .lr { grid-template-columns:1fr; } .lr__sum { position:static; } }
     @media (max-width:760px){ .grid2, .grid3, .parties { grid-template-columns:1fr; } }
   `]
@@ -356,6 +449,7 @@ type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: 
 export class ShipmentCreate implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ShipmentService);
+  private readonly ewayBillService = inject(EwayBillService);
   private readonly customers = inject(CustomerService);
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
@@ -406,6 +500,13 @@ export class ShipmentCreate implements OnInit {
    *  the desk's own figure, not a stale echo of one specific preview. */
   protected readonly otherCharges = signal<number>(0);
 
+  /** ODA Charge override — null until the operator types over the Pricing Engine's own
+   *  `chargeBreakup.odaCharge` for this preview. Unlike {@link otherCharges} this one
+   *  replaces the engine's line rather than adding a new one, so it resets to null (falls
+   *  back to the engine's figure again) on every reprice — see {@link priceIt$}. IS sent
+   *  to the server, see {@link book}. */
+  protected readonly odaChargeOverride = signal<number | null>(null);
+
   /** Set only when the current preview priced through the Freight Factor fallback (no
    *  route/rate for this lane) — gates the "Freight Factor" input in the summary. */
   protected readonly freightFactorApplicable = signal(false);
@@ -435,6 +536,22 @@ export class ShipmentCreate implements OnInit {
   protected readonly selectedImageFile = signal<File | null>(null);
   protected readonly imagePreviewUrl = signal<string | null>(null);
 
+  /**
+   * E-Way Bill Management (`com.courier.modules.ewaybill`), integrated inline: invoice
+   * value over the company's own configurable threshold (`ewayBillThreshold`, from
+   * `GET /company-settings`'s `ewayBill` section, default 50000) makes an E-Way Bill
+   * mandatory before AWB generation. The backend re-checks and enforces this itself
+   * inside `POST /shipments` — `ewayBillReason()` below is UX only, never the real gate;
+   * see `MEMORY/modules/eway-bill.md`.
+   */
+  protected readonly ewayBillThreshold = signal(50000);
+  /** Shown/hidden by "Add E-Way Bill"/"Remove" — auto-opens once invoice value crosses
+   *  the threshold, see `ngOnInit`. */
+  protected readonly ewayBillOpen = signal(false);
+  /** Picked at booking time, uploaded once the shipment (and its E-Way Bill row) exist —
+   *  same delayed-upload shape as `selectedImageFile`. */
+  protected readonly selectedEwayBillFile = signal<File | null>(null);
+
   private readonly pricingTrigger$ = new Subject<void>();
 
   /** Search-as-you-type over the Customer module by name or mobile (see `CustomerSpecifications`
@@ -454,6 +571,7 @@ export class ShipmentCreate implements OnInit {
 
   protected readonly form: FormGroup = this.fb.group({
     bookingBranchId: [this.myBranchId, Validators.required],
+    manualShipmentNumber: ['', Validators.maxLength(30)],
     deliveryBranchId: [null as string | null, Validators.required],
     pickupPincode: [''],
     deliveryPincode: [''],
@@ -472,7 +590,15 @@ export class ShipmentCreate implements OnInit {
     remarks: [''],
     crossing: [false],
     crossingBranchIds: this.fb.array<FormControl<string | null>>([]),
-    crossingCharge: [null as number | null]
+    crossingCharge: [null as number | null],
+    invoiceValue: [null as number | null],
+    ewayBillNumber: [''],
+    ewayBillInvoiceNumber: [''],
+    ewayBillInvoiceDate: [today()],
+    ewayBillVehicleNumber: [''],
+    ewayBillValidFrom: [null as string | null],
+    ewayBillValidUntil: [null as string | null],
+    ewayBillRemarks: ['']
   });
 
   protected get crossingBranchArray(): FormArray<FormControl<string | null>> {
@@ -511,6 +637,17 @@ export class ShipmentCreate implements OnInit {
       if (shipment?.defaultChargeableWeightKg != null) {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
       }
+      const ewayBill = (d as { ewayBill?: { ewayBillMandatoryValue?: number } })?.ewayBill;
+      if (ewayBill?.ewayBillMandatoryValue != null) {
+        this.ewayBillThreshold.set(Number(ewayBill.ewayBillMandatoryValue));
+      }
+    });
+    // Auto-opens the E-Way Bill section the moment invoice value crosses the threshold —
+    // a desk typing a large invoice shouldn't also have to remember to click "Add E-Way
+    // Bill" themselves. Never auto-closes it once opened, even if the value drops back
+    // down, since the desk may already be partway through filling it in.
+    this.c('invoiceValue').valueChanges.subscribe(() => {
+      if (this.ewayBillMandatory()) this.ewayBillOpen.set(true);
     });
     // Delivery Branch excludes the caller's own booking branch — a shipment cannot be
     // booked and delivered from the same branch (no route covers that pair).
@@ -677,6 +814,23 @@ export class ShipmentCreate implements OnInit {
     return (this.otherCharges() * this.myBranchGstPercentage()) / 100;
   }
 
+  /** ODA Charge is normally the Pricing Engine's own figure (GST on it already folded into
+   *  `chargeBreakup.gstAmount`) — once the operator types an override, only the *difference*
+   *  from the engine's figure needs fresh GST, same branch GST% as {@link gstOnOtherCharges}.
+   *  Mirrors `ShipmentServiceImpl.copyCharge`'s `odaChargeDelta`/`gstOnOdaChargeDelta`. */
+  protected gstOnOdaChargeDelta(): number {
+    return (this.odaChargeDelta() * this.myBranchGstPercentage()) / 100;
+  }
+
+  /** Difference between the typed ODA override and the Pricing Engine's own figure — zero
+   *  until the operator edits it. See {@link gstOnOdaChargeDelta}. */
+  protected odaChargeDelta(): number {
+    const override = this.odaChargeOverride();
+    if (override === null) return 0;
+    const engineOda = this.pricing()?.chargeBreakup.odaCharge ?? 0;
+    return override - engineOda;
+  }
+
   protected onPackages(count: number): void {
     this.form.get('numberOfPackages')?.setValue(count, { emitEvent: false });
   }
@@ -700,6 +854,55 @@ export class ShipmentCreate implements OnInit {
     this.selectedImageFile.set(null);
     this.imagePreviewUrl.set(null);
   }
+
+  // ------------------------------------------------------------------- E-Way Bill
+
+  /** A plain method, not `computed()` — same `FormControl.value`-staleness reason as
+   *  {@link readyToPrice}. Re-invoked on every change-detection run, so it never lags
+   *  behind a typed invoice value. */
+  protected ewayBillMandatory(): boolean {
+    const v = Number(this.c('invoiceValue').value);
+    return !!v && v > this.ewayBillThreshold();
+  }
+
+  /** Null once nothing blocks booking; otherwise the reason shown next to the Book
+   *  button. Mirrors `LocalEwayBillProvider`'s own field checks for instant feedback —
+   *  the backend re-runs the real check server-side regardless, since this is UX only. */
+  protected ewayBillReason(): string | null {
+    if (!this.ewayBillMandatory()) return null;
+    if (!this.ewayBillOpen()) {
+      return 'E-Way Bill is mandatory because invoice value exceeds the configured threshold — add one below.';
+    }
+    const number = (this.c('ewayBillNumber').value ?? '').trim();
+    const invoiceNumber = (this.c('ewayBillInvoiceNumber').value ?? '').trim();
+    if (!/^\d{12}$/.test(number)) return 'E-Way Bill number must be exactly 12 digits.';
+    if (!invoiceNumber) return 'An E-Way Bill invoice number is required.';
+    if (!this.c('ewayBillInvoiceDate').value) return 'An E-Way Bill invoice date is required.';
+    return null;
+  }
+
+  protected addEwayBill(): void { this.ewayBillOpen.set(true); }
+
+  protected removeEwayBill(): void {
+    this.ewayBillOpen.set(false);
+    this.c('ewayBillNumber').setValue('');
+    this.c('ewayBillInvoiceNumber').setValue('');
+    this.c('ewayBillInvoiceDate').setValue(today());
+    this.c('ewayBillVehicleNumber').setValue('');
+    this.c('ewayBillValidFrom').setValue(null);
+    this.c('ewayBillValidUntil').setValue(null);
+    this.c('ewayBillRemarks').setValue('');
+    this.selectedEwayBillFile.set(null);
+  }
+
+  protected onEwayBillFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) this.selectedEwayBillFile.set(file);
+  }
+
+  protected removeEwayBillFile(): void { this.selectedEwayBillFile.set(null); }
 
   /**
    * Rule-based transcript → form fields (see `voice-booking.util.ts`). Only ever
@@ -794,6 +997,7 @@ export class ShipmentCreate implements OnInit {
     this.pricing.set(null);
     this.pricingError.set(null);
     this.manualNetAmount.set(null);
+    this.odaChargeOverride.set(null);
     this.pricingTrigger$.next();
   }
 
@@ -818,11 +1022,12 @@ export class ShipmentCreate implements OnInit {
 
   protected book(): void {
     const p = this.pricing();
-    if (!p || this.form.invalid) return;
+    if (!p || this.form.invalid || this.ewayBillReason() !== null) return;
     const v = this.form.getRawValue();
 
     const body: CreateShipmentRequest = {
-      bookingBranchId: v.bookingBranchId, deliveryBranchId: v.deliveryBranchId,
+      bookingBranchId: v.bookingBranchId, manualShipmentNumber: v.manualShipmentNumber?.trim() || null,
+      deliveryBranchId: v.deliveryBranchId,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
       receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
@@ -830,16 +1035,34 @@ export class ShipmentCreate implements OnInit {
       bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
       remarks: v.remarks || null, otherCharges: this.otherCharges() || null,
+      odaCharge: this.odaChargeOverride(),
       freightFactorOverride: this.freightFactorOverride(), items: this.items(),
       crossing: v.crossing || null,
       crossingBranchIds: v.crossing ? (v.crossingBranchIds as (string | null)[]).filter((id): id is string => !!id) : null,
-      crossingCharge: v.crossingCharge || null
+      crossingCharge: v.crossingCharge || null,
+      invoiceValue: v.invoiceValue || null,
+      ewayBill: this.ewayBillOpen() && (v.ewayBillNumber?.trim() || v.ewayBillInvoiceNumber?.trim()) ? {
+        ewayBillNumber: v.ewayBillNumber?.trim() || null,
+        invoiceNumber: v.ewayBillInvoiceNumber?.trim() || '',
+        invoiceDate: v.ewayBillInvoiceDate || today(),
+        documentType: 'INVOICE',
+        vehicleNumber: v.ewayBillVehicleNumber?.trim() || null,
+        validFrom: toInstantStart(v.ewayBillValidFrom),
+        validUntil: toInstantEnd(v.ewayBillValidUntil),
+        remarks: v.ewayBillRemarks?.trim() || null
+      } : null
     };
 
     this.submitting.set(true);
     this.service.create(body).subscribe({
       next: (s) => {
         this.submitting.set(false);
+        const ewayBillFile = this.selectedEwayBillFile();
+        if (ewayBillFile && s.ewayBill?.id) {
+          this.ewayBillService.upload(s.ewayBill.id, ewayBillFile).subscribe({
+            error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but the E-Way Bill document could not be uploaded.`)
+          });
+        }
         this.notify.success(`Shipment ${s.shipmentNumber} booked — AWB ${s.trackingNumber}.`);
         printConsignmentCopies({
           companyName: this.auth.companyName() ?? 'Courier SaaS',
@@ -855,8 +1078,10 @@ export class ShipmentCreate implements OnInit {
           declaredValue: v.declaredValue || null,
           charges: {
             ...p.chargeBreakup,
-            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges(),
+            odaCharge: this.odaChargeOverride() ?? p.chargeBreakup.odaCharge,
+            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta(),
             netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
+              + this.odaChargeDelta() + this.gstOnOdaChargeDelta()
           },
           otherCharges: this.otherCharges(),
           remarks: v.remarks || null

@@ -81,6 +81,12 @@ public record CompanySettingsRequest(
         @Min(1) @Max(720) Integer slaInscanToDrsHours,
         @Min(1) @Max(720) Integer slaDrsToDeliveryHours,
 
+        // --- E-Way Bill
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        @Digits(integer = 15, fraction = 4)
+        @Schema(description = "Invoice value above which an E-Way Bill is mandatory before AWB generation")
+        BigDecimal ewayBillMandatoryValue,
+
         // --- notification
         Boolean smsEnabled,
         Boolean emailEnabled,

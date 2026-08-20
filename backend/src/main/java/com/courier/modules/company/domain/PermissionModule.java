@@ -61,6 +61,8 @@ public enum PermissionModule {
     ROUTE_MASTER("Route Master", 120),
 
     SHIPMENT("Shipments", 130),
+    /** One row per E-Way Bill raised against a shipment. See {@code com.courier.modules.ewaybill}. */
+    EWAY_BILL("E-Way Bill", 135),
     TRACKING("Tracking", 140),
     MANIFEST("Manifests", 150),
     PICKUP("Pickups", 160),

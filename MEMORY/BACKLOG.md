@@ -415,6 +415,72 @@ Ordered. Top item is always the next thing to build.
       inherited "company role, not JWT authority" gap), the `RIVAL_CO` cross-company
       check, concurrent out-scan/dispatch under real load
 
+## E-Way Bill Management  `[x]`  DONE (v0.30.0, `V47`)
+
+> New package `com.courier.modules.ewaybill`, integrated inline into Shipment Booking's
+> own `create()`/`update()` transaction (this codebase mints the AWB synchronously, with
+> no separate later step to intercept). See `MEMORY/modules/eway-bill.md`.
+
+- [x] `EwayBill` entity/repository, `EwayBillStatus` lifecycle (`CANCELLED` terminal, a
+      cancelled row is reissued fresh, never reused)
+- [x] Configurable `CompanySettings.ewayBillMandatoryValue` (default 50000.00), never
+      hardcoded; `shipments.invoiceValue`/`ewayBillRequired` (frozen at booking time)
+- [x] Booking-time gate: mandatory-and-missing/invalid blocks the whole transaction before
+      AWB minting, with the brief's own exact refusal wording
+- [x] `EwayBillProvider`/`LocalEwayBillProvider` — local-only validation seam, ready for a
+      real government API to be swapped in later with no caller change
+- [x] Standalone `POST/PUT/GET /eway-bills`, `.../validate`, `.../upload`, `.../cancel`
+- [x] `PermissionModule.EWAY_BILL` (8 rights, catalogue 223 → 231); RBAC still role-based
+      like every other module ahead of the "authorise on permissions" capstone below
+- [x] Frontend: booking-flow E-Way Bill card + Booking Summary line (client-side check is
+      UX only), Shipment Details E-Way Bill card + Validate/Upload/Cancel
+- [x] 21 new backend unit tests (`mvn test` 791 → 813 at this task's own commit point;
+      caught a real cancel-reissue bug in `upsertForShipment`), frontend `tsc`/`ng build`
+      clean
+- [ ] Not verified live — no MySQL boot or browser click-through this session
+- [ ] No standalone E-Way Bill list/management page — not asked for by this module's own
+      Frontend section
+- [ ] External government/GST-network E-Way Bill API — deliberately not implemented, per
+      the brief's own instruction; `EwayBillProvider` is the seam for it later
+
+## POD Auto Verification  `[x]`  DONE (v0.30.1, `V48`+`V49`)
+
+> New package `com.courier.modules.pod`. AI-scored gate in front of the existing
+> `ShipmentServiceImpl.deliver()` — AI never itself moves a shipment to `DELIVERED`. See
+> `MEMORY/modules/pod-verification.md`.
+
+- [x] `PodVerification`/`PodVerificationStatus` (`PASS`/`REVIEW`/`FAIL`), `PodVerificationService`/`Impl`
+- [x] `PodVerificationProvider` abstraction + `HeuristicPodVerificationProvider` — honest
+      deterministic local scorer (no AI vendor credential in this dev environment),
+      not coupled to one provider; a real vision/OCR provider is a second implementation
+- [x] Image-quality scoring via `ImageIO` (darkness/blur/resolution), signature presence,
+      AWB cross-check against the platform's own DB record, SHA-256 duplicate-POD
+      detection, a weak honestly-labelled tampering signal
+- [x] Configurable thresholds, never hardcoded (`POD_AUTO_VERIFY_THRESHOLD`/
+      `POD_MANUAL_REVIEW_THRESHOLD`, defaults 85/60)
+- [x] `pod.ai.enabled=false` -> `UnavailablePodVerificationProvider`: provider-unavailable
+      always routes to `REVIEW`, never a silent `PASS`
+- [x] `POST /shipments/{id}/pod/verify`, `GET .../pod/verification`, `POST .../pod/review`,
+      plus `GET /pod/pending-review` (added beyond the brief's own list — the reviewer
+      worklist)
+- [x] RBAC role-based like every module since Ticket Support; no new permission-catalogue
+      rows (same precedent as Ticket/Follow-up/Vehicle-fleet)
+- [x] Frontend: `delivery.ts` reworked into capture -> AI verify -> decision flow; new
+      `pod-review.ts` Manual Review screen; new nav leaf "POD Review"
+- [x] Found and fixed a real pre-existing platform bug: `GlobalExceptionHandler` 500'd on
+      a missing multipart part instead of a clean 400
+- [x] 22 new backend unit tests (`mvn test` 813 → 835), `tsc`/`ng build` clean
+- [x] Verified live over real HTTP against real `courier_db` (business rules, refusals,
+      isolation, the AI pipeline itself confirmed reaching and executing) — see the module
+      doc's Verified-live section for exactly what was and wasn't covered
+- [ ] The full PASS/REVIEW/FAIL happy path not exercised live — no S3/file-storage backend
+      configured in this dev environment (accepted pre-existing gap, not new here)
+- [ ] Delivery/POD-Review click paths not exercised live — no `OUT_FOR_DELIVERY` fixture
+      existed at the logged-in test branch this session
+- [ ] `deliver()` itself does not server-side-require a `PASS` verification to exist — the
+      gate is frontend-level by design, deliberately not coupling `ShipmentServiceImpl` to
+      the new `pod` module; see the module doc's "Deliberately not built"
+
 ## Phase 4 — Organization Structure: Hub, Serviceability  `[ ]`  <- **NEXT**
 
 > Takes migration **`V17`+** (`V16` used by Rate Master). Hub is almost certainly the

@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.application;
 
+import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
@@ -139,6 +140,11 @@ public interface ShipmentService {
 
     ShipmentDocument addDocument(UUID shipmentId, AddDocumentCommand command);
 
+    /** The shipment's current E-Way Bill, if it has one — see
+     *  {@code EwayBillService.findLatestForShipment}. Empty when it never needed or never
+     *  received one. */
+    java.util.Optional<EwayBillService.EwayBillSnapshot> getEwayBill(UUID shipmentId);
+
     /** Every uploaded image of this shipment (booking photo, POD photo/signature), newest
      *  first — see {@link ShipmentAsset}. */
     List<ShipmentAsset> getAssets(UUID shipmentId);
@@ -157,6 +163,20 @@ public interface ShipmentService {
 
     record UploadShipmentImageCommand(byte[] content, String filename, String contentType) {
     }
+
+    /**
+     * Persists a POD asset (photo or signature) immediately — the seam POD Auto
+     * Verification ({@code com.courier.modules.pod}) uses to record the captured document
+     * before the delivery decision is made, unlike {@link #deliver}'s own asset recording
+     * which only fires once delivery actually commits. Requires no particular shipment
+     * status — verification can run against an {@code OUT_FOR_DELIVERY} shipment that has
+     * not yet been decided.
+     *
+     * @param kind {@code PHOTO} or {@code SIGNATURE}
+     * @return the persisted asset, whose id is the {@code podDocumentId} the caller stamps
+     *         onto its own verification record
+     */
+    ShipmentAsset attachPodAsset(UUID shipmentId, String kind, String url);
 
     /** @param documentType one of the five the brief names, as a string on the wire */
     record AddDocumentCommand(String documentType, String documentName, String documentUrl,

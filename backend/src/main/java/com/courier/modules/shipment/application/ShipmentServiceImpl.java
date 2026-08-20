@@ -2,6 +2,7 @@ package com.courier.modules.shipment.application;
 
 import com.courier.modules.crossing.application.CrossingService;
 import com.courier.modules.customer.application.CustomerService;
+import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.master.application.PackageTypeService;
@@ -155,6 +156,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final CrossingService crossingService;
     private final TicketService ticketService;
     private final TicketCategoryService ticketCategoryService;
+    private final EwayBillService ewayBillService;
 
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
@@ -185,6 +187,23 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
 
+        String manualShipmentNumber = command.manualShipmentNumber() == null
+                ? null : command.manualShipmentNumber().trim();
+        if (manualShipmentNumber != null && !manualShipmentNumber.isEmpty()
+                && shipmentRepository.existsByCompanyIdAndShipmentNumber(companyId, manualShipmentNumber)) {
+            throw new BusinessRuleException(
+                    "Shipment number '%s' is already in use.".formatted(manualShipmentNumber));
+        }
+
+        // E-Way Bill gate, ahead of pricing and AWB generation, exactly where the brief's
+        // own booking flow places it: no-op when invoiceValue does not exceed the
+        // company's threshold, otherwise requires command.ewayBill() to be present and
+        // pass EwayBillProvider validation — throwing here (before anything is persisted
+        // or an AWB is minted) is how "do not generate AWB" is actually enforced, on the
+        // backend, not just hidden in the frontend.
+        boolean ewayBillRequired = ewayBillService.isRequired(command.invoiceValue());
+        ewayBillService.enforceBookingRequirement(command.invoiceValue(), command.ewayBill());
+
         PricingResult priced = priceIt(command.bookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
@@ -194,14 +213,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
         BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
-        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, bookingBranch);
+        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch);
 
         if (paymentMode.isCollectAtBooking()) {
             requireSufficientBalance(command.bookingBranchId(), netAmount);
         }
 
         Shipment shipment = Shipment.builder()
-                .shipmentNumber(nextShipmentNumber(command.bookingBranchId(), bookingBranch.getBranchCode()))
+                .shipmentNumber(manualShipmentNumber != null && !manualShipmentNumber.isEmpty()
+                        ? manualShipmentNumber
+                        : nextShipmentNumber(command.bookingBranchId(), bookingBranch.getBranchCode()))
                 .trackingNumber(nextTrackingNumber(companyId))
                 .bookingDate(bookingDate)
                 .bookingBranchId(command.bookingBranchId())
@@ -228,9 +249,15 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .numberOfPackages(command.numberOfPackages() == null ? 1 : command.numberOfPackages())
                 .status(ShipmentStatus.BOOKED)
                 .remarks(command.remarks())
+                .invoiceValue(command.invoiceValue())
+                .ewayBillRequired(ewayBillRequired)
                 .build();
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
+
+        if (command.ewayBill() != null) {
+            ewayBillService.upsertForShipment(saved.getId(), command.ewayBill());
+        }
 
         // Reuse-or-create master data for next time's search suggestion; not a shipment
         // field, so a bad name/mobile here fails the whole booking same as any other
@@ -239,7 +266,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         customerService.findOrCreateForBooking(command.receiverName(), command.receiverContact());
 
         persistItems(saved, companyId, items);
-        persistCharges(saved, companyId, priced, otherCharges, bookingBranch);
+        persistCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch);
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
 
         if (crossing) {
@@ -286,6 +313,11 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         LocalDate bookingDate = command.bookingDate() == null ? shipment.getBookingDate() : command.bookingDate();
 
+        // Same gate as create() — an edit that raises invoiceValue past the threshold
+        // must not leave the shipment BOOKED without a validated E-Way Bill either.
+        boolean ewayBillRequired = ewayBillService.isRequired(command.invoiceValue());
+        ewayBillService.enforceBookingRequirement(command.invoiceValue(), command.ewayBill());
+
         PricingResult priced = priceIt(shipment.getBookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
@@ -314,8 +346,14 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setDeclaredValue(command.declaredValue());
         shipment.setNumberOfPackages(command.numberOfPackages() == null ? 1 : command.numberOfPackages());
         shipment.setRemarks(command.remarks());
+        shipment.setInvoiceValue(command.invoiceValue());
+        shipment.setEwayBillRequired(ewayBillRequired);
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
+
+        if (command.ewayBill() != null) {
+            ewayBillService.upsertForShipment(saved.getId(), command.ewayBill());
+        }
 
         BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
         com.courier.modules.company.domain.Branch bookingBranch =
@@ -323,13 +361,13 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         itemRepository.deleteAllByShipmentIdAndCompanyId(saved.getId(), companyId);
         persistItems(saved, companyId, items);
-        replaceCharges(saved, companyId, priced, otherCharges, bookingBranch);
+        replaceCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch);
 
         log.info("Shipment {} ({}) updated in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
-                        "netAmount", netAmountWithOtherCharges(priced, otherCharges, bookingBranch).toPlainString()));
+                        "netAmount", netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch).toPlainString()));
 
         return saved;
     }
@@ -547,6 +585,15 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
         return shipmentAssetRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Optional<EwayBillService.EwayBillSnapshot> getEwayBill(UUID shipmentId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        return ewayBillService.findLatestForShipment(shipment.getId());
     }
 
     // ------------------------------------------------------------------- cancel
@@ -966,6 +1013,21 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .build());
     }
 
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public ShipmentAsset attachPodAsset(UUID shipmentId, String kind, String url) {
+        UUID companyId = requireCompany();
+        loadOrThrow(shipmentId, companyId);
+        ShipmentAsset asset = ShipmentAsset.builder()
+                .shipmentId(shipmentId)
+                .assetType(ShipmentAssetType.POD)
+                .kind(kind)
+                .assetUrl(url.trim())
+                .build();
+        return shipmentAssetRepository.save(asset);
+    }
+
     private static final Set<String> BOOKING_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "heic");
 
     @Override
@@ -1285,15 +1347,16 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     private ShipmentCharge persistCharges(Shipment shipment, UUID companyId, PricingResult priced,
-                                          BigDecimal otherCharges, com.courier.modules.company.domain.Branch bookingBranch) {
-        ShipmentCharge charge = toCharge(priced, otherCharges, bookingBranch);
+                                          BigDecimal otherCharges, BigDecimal odaCharge,
+                                          com.courier.modules.company.domain.Branch bookingBranch) {
+        ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch);
         charge.setCompanyId(companyId);
         charge.setShipmentId(shipment.getId());
         return chargeRepository.save(charge);
     }
 
     private void replaceCharges(Shipment shipment, UUID companyId, PricingResult priced, BigDecimal otherCharges,
-                                com.courier.modules.company.domain.Branch bookingBranch) {
+                                BigDecimal odaCharge, com.courier.modules.company.domain.Branch bookingBranch) {
         ShipmentCharge existing = chargeRepository
                 .findByShipmentIdWithinCompany(shipment.getId(), companyId)
                 .orElseGet(() -> {
@@ -1302,14 +1365,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                     fresh.setShipmentId(shipment.getId());
                     return fresh;
                 });
-        copyCharge(priced, otherCharges, bookingBranch, existing);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, existing);
         chargeRepository.save(existing);
     }
 
-    private ShipmentCharge toCharge(PricingResult priced, BigDecimal otherCharges,
+    private ShipmentCharge toCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                                     com.courier.modules.company.domain.Branch bookingBranch) {
         ShipmentCharge charge = ShipmentCharge.builder().build();
-        copyCharge(priced, otherCharges, bookingBranch, charge);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, charge);
         return charge;
     }
 
@@ -1342,12 +1405,23 @@ public class ShipmentServiceImpl implements ShipmentService {
      *       every report</li>
      * </ul>
      * The remaining freight share is company/head-office revenue, not stored separately.
+     *
+     * <p>{@code odaCharge} is an optional override of the Pricing Engine's own {@code
+     * priced.odaCharge()} — same manual-at-booking-time idea as {@code otherCharges}, except
+     * it replaces the engine's line instead of adding a new one. GST is recomputed only on
+     * the difference from the engine's original figure (so an unedited ODA contributes
+     * exactly what {@code priced.gstAmount()} already accounted for), at the booking
+     * branch's own {@code gstPercentage} — same source {@code gstOnOtherCharges} uses.
      */
-    private void copyCharge(PricingResult priced, BigDecimal otherCharges,
+    private void copyCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                             com.courier.modules.company.domain.Branch bookingBranch, ShipmentCharge charge) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
         BigDecimal freight = priced.freight();
         BigDecimal gstOnOtherCharges = gstOnOtherCharges(safeOtherCharges, bookingBranch);
+
+        BigDecimal finalOdaCharge = odaCharge == null ? priced.odaCharge() : odaCharge;
+        BigDecimal odaChargeDelta = finalOdaCharge.subtract(priced.odaCharge());
+        BigDecimal gstOnOdaChargeDelta = percentOf(odaChargeDelta, bookingBranch.getGstPercentage());
 
         BigDecimal branchShareOfOtherCharges = BigDecimal.valueOf(100)
                 .subtract(bookingBranch.getCommissionOnOtherCharges());
@@ -1362,9 +1436,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         charge.setFreight(freight);
         charge.setFuelCharge(priced.fuelCharge());
         charge.setHandlingCharge(priced.handlingCharge());
-        charge.setOdaCharge(priced.odaCharge());
+        charge.setOdaCharge(finalOdaCharge);
         charge.setInsuranceCharge(priced.insuranceCharge());
-        charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges));
+        charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges).add(gstOnOdaChargeDelta));
         charge.setDiscountAmount(priced.discountAmount());
         charge.setRoundOff(priced.roundOff());
         charge.setOtherCharges(safeOtherCharges);
@@ -1372,7 +1446,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         charge.setBranchCommissionOnOtherAmount(branchCommissionOnOtherAmount);
         charge.setCompanyCommissionOnBasicFreight(companyCommissionOnBasicFreight);
         charge.setTotalCommission(totalCommission);
-        charge.setNetAmount(priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges));
+        charge.setNetAmount(priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges)
+                .add(odaChargeDelta).add(gstOnOdaChargeDelta));
         charge.setMatchedRouteId(priced.matchedRoute() == null ? null : priced.matchedRoute().getId());
         charge.setMatchedRateId(priced.matchedRate() == null ? null : priced.matchedRate().getId());
         charge.setAppliedFreightFactor(priced.appliedFreightFactor());
@@ -1392,9 +1467,14 @@ public class ShipmentServiceImpl implements ShipmentService {
      *  call too, for the pre-booking wallet-sufficiency check and audit logging, so both
      *  never drift apart. */
     private static BigDecimal netAmountWithOtherCharges(PricingResult priced, BigDecimal otherCharges,
+                                                         BigDecimal odaCharge,
                                                          com.courier.modules.company.domain.Branch bookingBranch) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
-        return priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges(safeOtherCharges, bookingBranch));
+        BigDecimal finalOdaCharge = odaCharge == null ? priced.odaCharge() : odaCharge;
+        BigDecimal odaChargeDelta = finalOdaCharge.subtract(priced.odaCharge());
+        BigDecimal gstOnOdaChargeDelta = percentOf(odaChargeDelta, bookingBranch.getGstPercentage());
+        return priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges(safeOtherCharges, bookingBranch))
+                .add(odaChargeDelta).add(gstOnOdaChargeDelta);
     }
 
     private void appendHistory(Shipment shipment, UUID companyId, ShipmentStatus previous,

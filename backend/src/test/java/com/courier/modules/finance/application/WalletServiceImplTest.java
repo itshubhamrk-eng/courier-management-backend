@@ -15,6 +15,7 @@ import com.courier.modules.finance.domain.WalletStatus;
 import com.courier.modules.finance.domain.WalletTransaction;
 import com.courier.modules.finance.domain.WalletTransactionCriteria;
 import com.courier.modules.finance.domain.WalletTransactionRepository;
+import com.courier.modules.finance.infrastructure.CompanyPaymentGatewayResolver;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
@@ -75,6 +76,7 @@ class WalletServiceImplTest {
     @Mock private WalletTransactionRepository transactionRepository;
     @Mock private BranchDirectoryPort branchDirectory;
     @Mock private PaymentGatewayPort paymentGateway;
+    @Mock private CompanyPaymentGatewayResolver paymentGatewayResolver;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
 
@@ -84,7 +86,8 @@ class WalletServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new WalletServiceImpl(walletRepository, transactionRepository, branchDirectory,
-                paymentGateway, auditService, eventPublisher);
+                paymentGatewayResolver, auditService, eventPublisher);
+        when(paymentGatewayResolver.resolve(any())).thenReturn(paymentGateway);
 
         CompanyContext.setCompanyId(TENANT);
         planted(ADMIN, Roles.COMPANY_ADMIN);

@@ -9,6 +9,7 @@ import static com.courier.modules.company.domain.PermissionAction.ACTIVATE;
 import static com.courier.modules.company.domain.PermissionAction.APPROVE;
 import static com.courier.modules.company.domain.PermissionAction.ASSIGN;
 import static com.courier.modules.company.domain.PermissionAction.CALCULATE;
+import static com.courier.modules.company.domain.PermissionAction.CANCEL;
 import static com.courier.modules.company.domain.PermissionAction.CREATE;
 import static com.courier.modules.company.domain.PermissionAction.DEACTIVATE;
 import static com.courier.modules.company.domain.PermissionAction.DELETE;
@@ -27,6 +28,7 @@ import static com.courier.modules.company.domain.PermissionAction.SUSPEND;
 import static com.courier.modules.company.domain.PermissionAction.SEARCH;
 import static com.courier.modules.company.domain.PermissionAction.UPDATE;
 import static com.courier.modules.company.domain.PermissionAction.UPLOAD;
+import static com.courier.modules.company.domain.PermissionAction.VALIDATE;
 
 /**
  * Which actions exist for which module.
@@ -114,6 +116,11 @@ public final class DefaultPermissionCatalog {
         MATRIX.put(PermissionModule.SHIPMENT,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, IMPORT, EXPORT, PRINT, ASSIGN,
                         UPLOAD));
+        // "VIEW" from the E-Way Bill brief is seeded as READ — this catalogue has never
+        // used a "_VIEW" code (SHIPMENT_READ, CUSTOMER_READ, ...), so EWAY_BILL follows
+        // the same vocabulary rather than being the one exception.
+        MATRIX.put(PermissionModule.EWAY_BILL,
+                EnumSet.of(CREATE, READ, UPDATE, SEARCH, EXPORT, UPLOAD, VALIDATE, CANCEL));
         // Scans are appended, never edited or removed: a tracking history that can be
         // rewritten is not evidence.
         MATRIX.put(PermissionModule.TRACKING, EnumSet.of(CREATE, READ, SEARCH, EXPORT));

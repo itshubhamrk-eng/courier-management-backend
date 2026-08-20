@@ -21,17 +21,22 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
 import { MasterDataService } from '@features/masters/master-data.service';
 import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { PaymentMode } from '@core/models/master.model';
+import { PodService } from '@core/services/pod.service';
+import { PodVerification } from '@core/models/pod.model';
 
 type StatusFilter = 'ALL' | 'IN_SCAN' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
 const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
 /** Delivery — a filterable worklist of this branch's IN_SCAN / OUT_FOR_DELIVERY / DELIVERED
- *  orders (status + text search over tracking/shipment number/receiver), then the Delivery
- *  Form (Receiver Name + Remarks required; OTP optional; Signature/Photo captured via a real
- *  file picker that uploads to S3 through ShipmentMovementService.uploadPodFile and fills the
- *  URL field with the returned link — no camera/signature-pad hardware capture, a file picker
- *  is what "capture" means here). Only an OUT_FOR_DELIVERY row opens the form — IN_SCAN/
- *  DELIVERED rows are shown for context, not actionable here. */
+ *  orders (status + text search over tracking/shipment number/receiver), then a capture ->
+ *  AI verification -> decision flow for an OUT_FOR_DELIVERY row:
+ *
+ *  Upload POD (photo required, signature optional, real file picker) -> "Run AI
+ *  Verification" (PodService.verify, POD Auto Verification module) -> PASS shows
+ *  "Complete Delivery" (the existing, unchanged ShipmentMovementService.deliver — AI never
+ *  itself marks a shipment DELIVERED), REVIEW shows a pending state with a manual "Check
+ *  Review Status" refresh (a POD Review screen elsewhere approves/rejects it), FAIL shows
+ *  "Upload New POD" to recapture. See MEMORY/modules/pod-verification.md. */
 @Component({
   selector: 'app-delivery',
   standalone: true,
@@ -114,23 +119,80 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
         </app-card>
 
         <app-card title="Delivery Form">
-          <form [formGroup]="form" (ngSubmit)="deliver()" class="df">
+          <form [formGroup]="form" (ngSubmit)="onEnter()" class="df">
             <div class="grid2">
               <app-input [control]="c('receiverName')" label="Receiver Name" [required]="true" />
               <app-input [control]="c('otp')" label="OTP" placeholder="Optional" />
             </div>
             <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" />
-            <div class="pod">
-              <app-input [control]="c('photoUrl')" label="Photo" placeholder="Optional — upload or paste a URL" />
-              <button type="button" class="pod__btn" (click)="photoFile.click()" [disabled]="uploadingPhoto()">
-                <mat-icon>upload</mat-icon> {{ uploadingPhoto() ? 'Uploading…' : 'Choose file' }}
-              </button>
-              <input #photoFile type="file" accept="image/*,video/*,application/pdf" hidden
-                     (change)="onPodFile($event)" />
-            </div>
-            <div class="df__bar">
-              <app-button type="submit" icon="task_alt" [loading]="delivering()">Mark Delivered</app-button>
-            </div>
+
+            @if (!verification() || verification()!.verificationStatus === 'FAIL') {
+              <div class="pod-row">
+                <div class="pod">
+                  <span class="pod__label">Photo <em>required</em></span>
+                  <button type="button" class="pod__btn" (click)="photoFile.click()">
+                    <mat-icon>photo_camera</mat-icon> {{ photo() ? photo()!.name : 'Choose file' }}
+                  </button>
+                  <input #photoFile type="file" accept="image/*" hidden (change)="onFile($event, 'photo')" />
+                </div>
+                <div class="pod">
+                  <span class="pod__label">Signature <em>optional</em></span>
+                  <button type="button" class="pod__btn" (click)="signatureFile.click()">
+                    <mat-icon>draw</mat-icon> {{ signature() ? signature()!.name : 'Choose file' }}
+                  </button>
+                  <input #signatureFile type="file" accept="image/*" hidden (change)="onFile($event, 'signature')" />
+                </div>
+              </div>
+              <div class="df__bar">
+                <app-button icon="smart_toy" [loading]="verifying()" [disabled]="!photo()" (pressed)="runVerification()">
+                  Run AI Verification
+                </app-button>
+              </div>
+            }
+
+            @if (verifying()) {
+              <div class="ai-status ai-status--pending">
+                <mat-icon>hourglass_top</mat-icon>
+                <span>AI Verification — Processing…</span>
+              </div>
+            }
+
+            @if (verification(); as v) {
+              <div class="ai-result" [class.ai-result--pass]="v.verificationStatus === 'PASS'"
+                   [class.ai-result--review]="v.verificationStatus === 'REVIEW'"
+                   [class.ai-result--fail]="v.verificationStatus === 'FAIL'">
+                <div class="ai-result__head">
+                  <mat-icon>{{ statusIcon(v) }}</mat-icon>
+                  <strong>{{ statusLabel(v) }}</strong>
+                  <span class="ai-result__score">{{ v.verificationScore }}/100</span>
+                </div>
+                <dl class="ai-result__grid">
+                  <div><dt>Receiver</dt><dd>{{ v.detectedReceiverName || '—' }}</dd></div>
+                  <div><dt>AWB</dt><dd>{{ v.detectedAwb || '—' }}</dd></div>
+                  <div><dt>Date</dt><dd>{{ v.detectedDate || '—' }}</dd></div>
+                  <div><dt>Signature</dt><dd>{{ v.signatureDetected ? 'Detected' : 'Not detected' }}</dd></div>
+                  <div><dt>Image Quality</dt><dd>{{ v.imageQuality || '—' }}</dd></div>
+                </dl>
+                @if (v.verificationReasons.length) {
+                  <ul class="ai-result__reasons">
+                    @for (r of v.verificationReasons; track r) { <li>{{ r }}</li> }
+                  </ul>
+                }
+
+                <div class="df__bar">
+                  @if (v.verificationStatus === 'PASS') {
+                    <app-button icon="task_alt" [loading]="delivering()" (pressed)="deliver()">Complete Delivery</app-button>
+                  } @else if (v.verificationStatus === 'REVIEW') {
+                    <app-button variant="stroked" icon="refresh" [loading]="checkingReview()" (pressed)="checkReviewStatus()">
+                      Check Review Status
+                    </app-button>
+                    <span class="ai-result__hint">Sent for manual review — a supervisor must approve or reject it.</span>
+                  } @else {
+                    <app-button variant="stroked" icon="upload" (pressed)="uploadNewPod()">Upload New POD</app-button>
+                  }
+                </div>
+              </div>
+            }
           </form>
         </app-card>
       }
@@ -142,9 +204,12 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
     .filters app-input { flex:1; min-width:220px; }
     .filters app-select { min-width:200px; }
     .df { display:flex; flex-direction:column; gap:16px; }
-    .df__bar { display:flex; justify-content:flex-end; gap:10px; }
+    .df__bar { display:flex; justify-content:flex-end; align-items:center; gap:10px; }
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+    .pod-row { display:flex; gap:20px; flex-wrap:wrap; }
     .pod { display:flex; flex-direction:column; gap:8px; }
+    .pod__label { font:600 12px var(--font-sans); color:var(--content-muted); }
+    .pod__label em { font-style:normal; color:var(--content-muted); opacity:.7; }
     .pod__btn { display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
       border:1px solid var(--surface-border); background:var(--surface); border-radius:var(--r-field);
       padding:6px 12px; font:600 12px var(--font-sans); color:var(--content-fg); cursor:pointer; }
@@ -166,6 +231,20 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
     .tbl--right { text-align:right; }
     .tbl__row--actionable { cursor:pointer; }
     .tbl__row--actionable:hover { background:var(--surface-muted); }
+    .ai-status { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:var(--r-field);
+      background:var(--surface-muted); font:600 13px var(--font-sans); color:var(--content-muted); }
+    .ai-result { display:flex; flex-direction:column; gap:12px; padding:14px 16px; border-radius:var(--r-field);
+      border:1px solid var(--surface-border); }
+    .ai-result--pass { border-color:var(--success-fg, #1a7f3c); background:var(--success-bg, #e6f7ec); }
+    .ai-result--review { border-color:#b58900; background:#fff8e1; }
+    .ai-result--fail { border-color:#c0392b; background:#fdecea; }
+    .ai-result__head { display:flex; align-items:center; gap:8px; font:700 14px var(--font-sans); }
+    .ai-result__score { margin-left:auto; font:600 13px var(--font-sans); color:var(--content-muted); }
+    .ai-result__grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px 16px; margin:0; }
+    .ai-result__grid dt { font:600 11px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.03em; }
+    .ai-result__grid dd { margin:2px 0 0; font:500 13px var(--font-sans); }
+    .ai-result__reasons { margin:0; padding-left:18px; font:400 13px var(--font-sans); color:var(--content-muted); }
+    .ai-result__hint { font:400 12px var(--font-sans); color:var(--content-muted); }
     @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
   `]
 })
@@ -177,6 +256,7 @@ export class Delivery implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly shipmentService = inject(ShipmentService);
   private readonly movementService = inject(ShipmentMovementService);
+  private readonly podService = inject(PodService);
   private readonly masters = inject(MasterDataService);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
@@ -184,7 +264,11 @@ export class Delivery implements OnInit {
   readonly shipment = signal<Shipment | null>(null);
   readonly paymentMode = signal<PaymentMode | null>(null);
   readonly delivering = signal(false);
-  readonly uploadingPhoto = signal(false);
+  readonly verifying = signal(false);
+  readonly checkingReview = signal(false);
+  readonly verification = signal<PodVerification | null>(null);
+  readonly photo = signal<File | null>(null);
+  readonly signature = signal<File | null>(null);
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);
@@ -208,8 +292,7 @@ export class Delivery implements OnInit {
   readonly form: FormGroup = this.fb.group({
     receiverName: ['', [Validators.required, Validators.maxLength(150)]],
     remarks: ['', Validators.maxLength(500)],
-    otp: ['', Validators.maxLength(10)],
-    photoUrl: ['', Validators.maxLength(1000)]
+    otp: ['', Validators.maxLength(10)]
   });
 
   private pendingTrackingNumber: string | null = null;
@@ -223,6 +306,23 @@ export class Delivery implements OnInit {
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
+
+  /** Enter-key submit inside the form — routes to whichever action is currently valid,
+   *  same as clicking the one visible primary button would. */
+  protected onEnter(): void {
+    const status = this.verification()?.verificationStatus;
+    if (status === 'PASS') this.deliver();
+    else if (!status || status === 'FAIL') this.runVerification();
+  }
+
+  protected statusIcon(v: PodVerification): string {
+    return v.verificationStatus === 'PASS' ? 'verified' : v.verificationStatus === 'REVIEW' ? 'warning' : 'cancel';
+  }
+
+  protected statusLabel(v: PodVerification): string {
+    return v.verificationStatus === 'PASS' ? 'Verified'
+      : v.verificationStatus === 'REVIEW' ? 'Manual Review Required' : 'Verification Failed';
+  }
 
   load(): void {
     if (!this.myBranchId) return;
@@ -253,32 +353,75 @@ export class Delivery implements OnInit {
     }
     this.shipment.set(s);
     this.paymentMode.set(null);
+    this.verification.set(null);
+    this.photo.set(null);
+    this.signature.set(null);
     this.form.patchValue({ receiverName: s.receiverName });
     this.masters.get(MASTER_DEFINITIONS['payment-modes'], s.paymentModeId)
       .subscribe((pm) => this.paymentMode.set(pm as PaymentMode));
+    // A prior REVIEW/PASS may already exist (e.g. the delivery user navigated away and
+    // back) — hydrate it silently so the AI step isn't repeated unnecessarily.
+    this.podService.getLatest(s.id).subscribe({
+      next: (v) => this.verification.set(v),
+      error: () => this.verification.set(null)
+    });
   }
 
   reset(): void {
     this.shipment.set(null);
     this.paymentMode.set(null);
+    this.verification.set(null);
+    this.photo.set(null);
+    this.signature.set(null);
     this.form.reset();
     this.load();
   }
 
-  onPodFile(event: Event): void {
+  onFile(event: Event, kind: 'photo' | 'signature'): void {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const file = input.files?.[0] ?? null;
     input.value = '';
-    const shipment = this.shipment();
-    if (!file || !shipment) return;
+    if (kind === 'photo') this.photo.set(file); else this.signature.set(file);
+  }
 
-    this.uploadingPhoto.set(true);
-    this.movementService.uploadPodFile(shipment.id, file, 'PHOTO').subscribe({
-      next: ({ url }) => { this.uploadingPhoto.set(false); this.c('photoUrl').setValue(url); },
+  uploadNewPod(): void {
+    this.verification.set(null);
+    this.photo.set(null);
+    this.signature.set(null);
+  }
+
+  runVerification(): void {
+    const shipment = this.shipment();
+    const photo = this.photo();
+    if (!shipment || !photo) { this.notify.error('A delivery photo is required.'); return; }
+    if (this.c('receiverName').invalid) { this.form.markAllAsTouched(); return; }
+
+    this.verifying.set(true);
+    this.podService.verify(shipment.id, {
+      photo, signature: this.signature(),
+      receiverName: this.c('receiverName').value.trim(),
+      awbNumber: shipment.trackingNumber, shipmentNumber: shipment.shipmentNumber,
+      deliveryDateTime: new Date().toISOString()
+    }).subscribe({
+      next: (v) => { this.verifying.set(false); this.verification.set(v); },
       error: (e: HttpErrorResponse) => {
-        this.uploadingPhoto.set(false);
-        this.notify.error(e.error?.message ?? 'Could not upload the file.');
+        this.verifying.set(false);
+        this.notify.error(e.error?.message ?? 'POD verification failed.');
       }
+    });
+  }
+
+  checkReviewStatus(): void {
+    const shipment = this.shipment();
+    if (!shipment) return;
+    this.checkingReview.set(true);
+    this.podService.getLatest(shipment.id).subscribe({
+      next: (v) => {
+        this.checkingReview.set(false);
+        this.verification.set(v);
+        if (v.verificationStatus === 'REVIEW') this.notify.error('Still awaiting manual review.');
+      },
+      error: () => this.checkingReview.set(false)
     });
   }
 
@@ -290,7 +433,8 @@ export class Delivery implements OnInit {
     this.movementService.deliver({
       shipmentId: shipment.id, receiverName: v.receiverName.trim(),
       remarks: v.remarks?.trim() || null, otp: v.otp?.trim() || null,
-      signatureUrl: null, photoUrl: v.photoUrl?.trim() || null
+      // POD was already captured and stored by PodService.verify — nothing left to attach.
+      signatureUrl: null, photoUrl: null
     }).subscribe({
       next: () => {
         this.delivering.set(false);

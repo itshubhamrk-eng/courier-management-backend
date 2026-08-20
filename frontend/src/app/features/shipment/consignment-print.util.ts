@@ -1,4 +1,5 @@
 import { ChargeBreakup } from '@core/models/shipment.model';
+import JsBarcode from 'jsbarcode';
 
 /** Everything the consignment note needs — nothing invented, every value comes off the
  *  real booking form and the price it was actually booked at (same `PricingResponse` the
@@ -37,6 +38,18 @@ export interface ConsignmentPrintData {
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
+/** Renders `value` (the LR/tracking number) to a barcode as a static inline SVG string —
+ *  built off-DOM and serialized, so the printed page needs no script of its own to draw it
+ *  (`printConsignmentCopies` writes plain HTML into a fresh iframe document). CODE128
+ *  handles the tracking number's full alnum/digit range with no character-set gate. */
+function barcodeSvg(value: string): string {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  JsBarcode(svg, value, {
+    format: 'CODE128', displayValue: false, margin: 0, height: 34, width: 1.6
+  });
+  return svg.outerHTML;
+}
+
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
 const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
@@ -67,7 +80,9 @@ function amountInWords(amount: number): string {
   return `${parts.join(' ')} Only`;
 }
 
-function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' | 'Office Copy'): string {
+type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Copy';
+
+function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
   const total = d.charges.netAmount + d.otherCharges;
   const detailRows: Array<[string, string]> = [
@@ -87,6 +102,40 @@ function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' 
     ['Demurrage Charge', 0],
     ['Reschedule Fine', 0]
   ];
+
+  // Already-Paid orders carry no money left to show/collect — Customer & Office copies hide
+  // the paid amount (print "ToPay" instead), the Driver copy drops the amount block entirely
+  // (nothing to collect), and the Delivery copy always shows the ToPay-to-collect figure,
+  // which is 0 once the order was Paid at booking.
+  const isPaid = d.paymentModeLabel.includes('(PAID)');
+  const amountMode: 'normal' | 'hidden' | 'omitted' | 'collect' =
+    label === 'Driver Copy' ? (isPaid ? 'omitted' : 'normal') :
+    label === 'Delivery Copy' ? 'collect' :
+    isPaid ? 'hidden' : 'normal';
+
+  const collectTotal = isPaid ? 0 : total;
+  const amountSection = amountMode === 'omitted' ? '' : amountMode === 'hidden' ? `
+          <table class="charges">
+            <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
+            <tr class="total"><td>Total Receivable</td><td>ToPay</td></tr>
+          </table>
+          <div class="zero">To Pay</div>
+          <div class="note">
+            Note : Terms And Conditions Applied<br>
+            All articles are received in good condition
+          </div>` : `
+          <table class="charges">
+            <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
+            ${amountMode === 'collect'
+              ? `<tr><td>ToPay</td><td>${collectTotal.toFixed(2)}</td></tr>`
+              : chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('') +
+                `<tr class="total"><td>Total Receivable</td><td>${total.toFixed(2)}</td></tr>`}
+          </table>
+          <div class="zero">${esc(amountInWords(amountMode === 'collect' ? collectTotal : total))}</div>
+          <div class="note">
+            Note : Terms And Conditions Applied<br>
+            All articles are received in good condition
+          </div>`;
 
   return `
     <section class="copy">
@@ -114,6 +163,7 @@ function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' 
         <div class="lrbox">
           <span class="lrbox-label">LR No</span>
           <span class="lrbox-no">${esc(d.trackingNumber)}</span>
+          <div class="lrbox-barcode">${barcodeSvg(d.trackingNumber)}</div>
         </div>
       </div>
 
@@ -154,17 +204,7 @@ function copy(d: ConsignmentPrintData, label: 'Original Copy' | 'Customer Copy' 
             <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
           </table>
         </div>
-        <div class="right">
-          <table class="charges">
-            <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
-            ${chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('')}
-            <tr class="total"><td>Total Receivable</td><td>${total.toFixed(2)}</td></tr>
-          </table>
-          <div class="zero">${esc(amountInWords(total))}</div>
-          <div class="note">
-            Note : Terms And Conditions Applied<br>
-            All articles are received in good condition
-          </div>
+        <div class="right">${amountSection}
         </div>
       </div>
 
@@ -209,9 +249,11 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .co{font-size:13px;line-height:1.3;border-left:2px solid var(--line)}
   .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
   .co p{margin:0;color:var(--muted);text-align:center}
-  .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
   .lrbox-label{font-size:11px;font-weight:700;color:var(--muted)}
-  .lrbox-no{font-size:18px;font-weight:800}
+  .lrbox-no{font-size:16px;font-weight:800}
+  .lrbox-barcode{line-height:0}
+  .lrbox-barcode svg{width:150px;height:34px}
 
   /* title strip */
   .title{display:grid;grid-template-columns:1fr auto;align-items:start;gap:16px;padding:8px 14px 10px;border-bottom:2px solid var(--line)}
@@ -250,8 +292,10 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
     @page{size:A4 landscape;margin:8mm}
   }
 </style></head><body>
-  ${copy(data, 'Original Copy')}
+  ${copy(data, 'Customer Copy')}
   ${copy(data, 'Office Copy')}
+  ${copy(data, 'Driver Copy')}
+  ${copy(data, 'Delivery Copy')}
   ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 50);</script>' : ''}
 </body></html>`;
 }

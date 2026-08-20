@@ -135,6 +135,10 @@ public enum AuditAction {
     WALLET_TOPUP_REQUESTED,
     WALLET_TOPUP_APPROVED,
     WALLET_TOPUP_REJECTED,
+    // A company's own Razorpay credentials, used instead of the platform-wide gateway.
+    // The audit detail never carries the key secret itself, only enabled/keyId/whether a
+    // secret was rotated — same "never returned" rule the secret's own API response follows.
+    COMPANY_RAZORPAY_CONFIG_UPDATED,
 
     // --- master data (Phase 6, COMPANY_ADMIN). One set for all twelve lists: the entity
     // name is already carried on every audit row, so a MASTER_COUNTRY_CREATED /
@@ -155,6 +159,13 @@ public enum AuditAction {
     SHIPMENT_CANCELLED,
     SHIPMENT_DOCUMENT_UPLOADED,
     SHIPMENT_IMAGE_UPLOADED,
+
+    // --- E-Way Bill Management (V47)
+    EWAY_BILL_CREATED,
+    EWAY_BILL_UPDATED,
+    EWAY_BILL_VALIDATED,
+    EWAY_BILL_UPLOADED,
+    EWAY_BILL_CANCELLED,
 
     // --- shipment movement (V19: minimal Manifest + the movement pipeline on top of it)
     VEHICLE_CREATED,
@@ -213,6 +224,12 @@ public enum AuditAction {
     FOLLOWUP_STATUS_CHANGED,
     FOLLOWUP_RESCHEDULED,
     FOLLOWUP_NOTE_ADDED,
+
+    // --- POD Auto Verification (V48): AI-scored proof-of-delivery, never itself moves a
+    // shipment to DELIVERED — see MEMORY/modules/pod-verification.md.
+    POD_VERIFICATION_RUN,
+    POD_VERIFICATION_APPROVED,
+    POD_VERIFICATION_REJECTED,
 
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,

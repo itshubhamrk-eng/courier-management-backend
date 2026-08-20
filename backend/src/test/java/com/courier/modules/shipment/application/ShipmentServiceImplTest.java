@@ -103,6 +103,7 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.crossing.application.CrossingService crossingService;
     @Mock private com.courier.modules.support.application.TicketService ticketService;
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
+    @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
     @Mock private PaymentModeService paymentModeService;
@@ -125,7 +126,7 @@ class ShipmentServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
+                ewayBillService, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -356,14 +357,14 @@ class ShipmentServiceImplTest {
     @DisplayName("a missing pickup or delivery pincode is refused")
     void blankPincodeRejected() {
         CreateShipmentCommand withoutPincode = new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, "", DELIVERY_PINCODE,
+                BOOKING_BRANCH, DELIVERY_BRANCH, null, "", DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(withoutPincode))
                 .isInstanceOf(BusinessRuleException.class)
@@ -378,6 +379,28 @@ class ShipmentServiceImplTest {
         assertThatThrownBy(() -> service.create(command()))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("exceeds");
+    }
+
+    @Test
+    @DisplayName("a manually entered shipment number is used verbatim instead of the "
+            + "auto-generated one")
+    void manualShipmentNumberHonored() {
+        Shipment created = service.create(commandWithManualNumber("MANUAL-001"));
+
+        assertThat(created.getShipmentNumber()).isEqualTo("MANUAL-001");
+        verify(branchShipmentSequenceRepository, never()).advance(any());
+    }
+
+    @Test
+    @DisplayName("a manual shipment number already used by this company is refused")
+    void manualShipmentNumberDuplicateRejected() {
+        when(shipmentRepository.existsByCompanyIdAndShipmentNumber(COMPANY, "MANUAL-001")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(commandWithManualNumber("MANUAL-001")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("already in use");
+
+        verify(shipmentRepository, never()).save(any());
     }
 
     // ------------------------------------------------------------------- cancel
@@ -505,14 +528,26 @@ class ShipmentServiceImplTest {
 
     private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 senderName, senderAddress, senderContact,
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
+    }
+
+    private static CreateShipmentCommand commandWithManualNumber(String manualShipmentNumber) {
+        return new CreateShipmentCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, manualShipmentNumber, PICKUP_PINCODE, DELIVERY_PINCODE,
+                "Asha Shah", "221B Baker Street, Pune", "9876543210",
+                "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
+                SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
+                List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
+                        null, null, null, null, false, false)),
+                null, null, null, null, null, null, null, null, null);
     }
 
     private static UpdateShipmentCommand updateCommand(Long expectedVersion) {
@@ -521,24 +556,24 @@ class ShipmentServiceImplTest {
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma (updated)", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "updated", null, null,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "updated", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact,
                                                    boolean crossing, java.util.UUID crossingBranchId) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 senderName, senderAddress, senderContact,
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
-                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, crossing,
-                crossingBranchId == null ? null : List.of(crossingBranchId), null);
+                crossingBranchId == null ? null : List.of(crossingBranchId), null, null, null);
     }
 
     private static Shipment existingShipment(ShipmentStatus status) {

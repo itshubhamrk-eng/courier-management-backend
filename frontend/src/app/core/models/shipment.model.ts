@@ -114,12 +114,102 @@ export interface ShipmentResponse {
   podPhotoUrl?: string | null;
   podSignatureUrl?: string | null;
   shipmentImageUrl?: string | null;
+  /** Drives whether an E-Way Bill is mandatory — see `ShipmentEwayBillInfo`/`ewayBillRequired`. */
+  invoiceValue?: number | null;
+  /** Frozen at booking time from `invoiceValue` vs. the threshold in effect then — never
+   *  recomputed against a later threshold change. */
+  ewayBillRequired: boolean;
+  /** The shipment's current E-Way Bill, if it has ever had one. */
+  ewayBill?: ShipmentEwayBillInfo | null;
   createdBy?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
   updatedDate?: string | null;
   version: number;
   items: ShipmentItem[];
+}
+
+/**
+ * E-Way Bill Management (`com.courier.modules.ewaybill`) — integrated into Shipment
+ * Booking: an invoice value over the company's own configurable threshold
+ * (`CompanySettings.ewayBillMandatoryValue`, default 50000.00, see
+ * `GET /company-settings`'s `ewayBill` section) makes an E-Way Bill mandatory before AWB
+ * generation; at or under it, one is optional. The backend enforces this inside
+ * `POST`/`PUT /shipments` — the frontend's own checks below are UX only, never the real
+ * gate. See MEMORY/modules/eway-bill.md.
+ */
+export type EwayBillStatus =
+  | 'NOT_REQUIRED' | 'REQUIRED' | 'PENDING' | 'UPLOADED' | 'VALIDATED' | 'INVALID'
+  | 'EXPIRED' | 'CANCELLED';
+
+/** The E-Way Bill data a booking screen supplies inline, in the same call that books or
+ *  edits a shipment — mirrors backend `EwayBillBookingRequest`. Its own `invoiceValue`
+ *  is not repeated here; the shipment's own `invoiceValue` carries it. */
+export interface EwayBillBookingRequest {
+  ewayBillNumber?: string | null;
+  invoiceNumber: string;
+  invoiceDate: string;
+  documentType?: string | null;
+  documentNumber?: string | null;
+  documentDate?: string | null;
+  transporterId?: string | null;
+  vehicleNumber?: string | null;
+  distance?: number | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  documentUrl?: string | null;
+  remarks?: string | null;
+}
+
+/** The shipment's current E-Way Bill, read-only — mirrors backend
+ *  `ShipmentResponse.EwayBillInfo`, nested on `ShipmentResponse.ewayBill`. */
+export interface ShipmentEwayBillInfo {
+  id: string;
+  ewayBillNumber?: string | null;
+  status: EwayBillStatus;
+  invoiceValue: number;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  documentUrl?: string | null;
+}
+
+/** Full standalone E-Way Bill record — mirrors backend `EwayBillResponse`, the
+ *  `/eway-bills` CRUD/lifecycle endpoints used from Shipment Details post-booking. */
+export interface EwayBill {
+  id: string;
+  shipmentId: string;
+  ewayBillNumber?: string | null;
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceValue: number;
+  documentType: string;
+  documentNumber?: string | null;
+  documentDate?: string | null;
+  transporterId?: string | null;
+  vehicleNumber?: string | null;
+  distance?: number | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  status: EwayBillStatus;
+  documentUrl?: string | null;
+  remarks?: string | null;
+  createdBy?: string | null;
+  createdDate?: string | null;
+  updatedBy?: string | null;
+  updatedDate?: string | null;
+  version: number;
+}
+
+/** Body of POST /eway-bills — attaches an E-Way Bill to an already-booked shipment. */
+export interface CreateEwayBillRequest extends EwayBillBookingRequest {
+  shipmentId: string;
+  invoiceValue: number;
+}
+
+/** Body of PUT /eway-bills/{id}. */
+export interface UpdateEwayBillRequest extends EwayBillBookingRequest {
+  invoiceValue: number;
+  version: number;
 }
 
 /** The Pricing Engine's own charge breakup, persisted at booking time — GET /shipments/{id}/charges. */
@@ -209,6 +299,10 @@ export interface ShipmentFields {
   /** Manual, typed at booking time — not computed by the Pricing Engine — added on top of
    *  its net amount server-side. See `ShipmentCharge.otherCharges`. */
   otherCharges?: number | null;
+  /** Optional override of the Pricing Engine's own `ShipmentCharge.odaCharge` — typed at
+   *  booking time when the operator needs to adjust it. Null uses the engine's own computed
+   *  value unchanged; GST is recomputed server-side on the difference. */
+  odaCharge?: number | null;
   /** Only meaningful when this lane falls back to the Freight Factor grid (no route/rate
    *  available) — raises the matched cell's own factor. Must be >= the matched factor;
    *  the server refuses a smaller value. See `PricingResponse.appliedFreightFactor`. */
@@ -218,11 +312,22 @@ export interface ShipmentFields {
   length?: number | null;
   width?: number | null;
   height?: number | null;
+  /** Drives whether an E-Way Bill is mandatory — see `EwayBillBookingRequest`. Null is
+   *  never mandatory. */
+  invoiceValue?: number | null;
+  /** Required when `invoiceValue` exceeds the company's own mandatory threshold — booking
+   *  is refused with a 422 otherwise (backend-enforced; the frontend's own checks in
+   *  shipment-create.ts are UX only). Optional and simply attached when supplied below it. */
+  ewayBill?: EwayBillBookingRequest | null;
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
 export interface CreateShipmentRequest extends ShipmentFields {
   bookingBranchId: string;
+  /** Optional — enter a specific shipment number instead of the auto-generated
+   *  "<BRANCH_CODE>-<serial>" one. Must be unique within the company; booking is
+   *  refused with a 422 if it's already in use. */
+  manualShipmentNumber?: string | null;
   /** Route this shipment through one or more intermediate branches/hubs, in order,
    *  instead of straight to the delivery branch. When true, crossingBranchIds must carry
    *  at least one branch. */

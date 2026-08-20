@@ -23,6 +23,7 @@ public class CompanySettingsMapper {
                 r.slaBreachTicketEnabled(), r.slaBookingToLoadingSheetHours(),
                 r.slaLoadingSheetToThcHours(), r.slaThcToInscanHours(),
                 r.slaInscanToDrsHours(), r.slaDrsToDeliveryHours(),
+                r.ewayBillMandatoryValue(),
                 r.smsEnabled(), r.emailEnabled(), r.whatsappEnabled(), r.pushNotificationEnabled(),
                 r.passwordPolicy(), r.sessionTimeoutMinutes(), r.maxLoginAttempts(),
                 r.lockDurationMinutes(), r.otpExpiryMinutes(),
@@ -53,6 +54,7 @@ public class CompanySettingsMapper {
                         s.isSlaBreachTicketEnabled(), s.getSlaBookingToLoadingSheetHours(),
                         s.getSlaLoadingSheetToThcHours(), s.getSlaThcToInscanHours(),
                         s.getSlaInscanToDrsHours(), s.getSlaDrsToDeliveryHours()),
+                new CompanySettingsResponse.EwayBill(s.getEwayBillMandatoryValue()),
                 new CompanySettingsResponse.Notification(
                         s.isSmsEnabled(), s.isEmailEnabled(), s.isWhatsappEnabled(),
                         s.isPushNotificationEnabled()),

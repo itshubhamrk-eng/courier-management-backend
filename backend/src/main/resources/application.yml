@@ -143,6 +143,13 @@ app:
       reject-common-passwords: true
       # Forced rotation, disabled by default: NIST SP 800-63B advises against it.
       max-age: 0s
+  security:
+    # AES-256-GCM key (base64, 32 decoded bytes) for values that must live in the DB
+    # rather than purely in env vars — e.g. a company's own Razorpay key secret
+    # (CompanyRazorpayConfig). No default: saving such a secret without this key
+    # configured fails at that point, not silently. Generate with: openssl rand -base64 32
+    encryption-key: ${SECRETS_ENCRYPTION_KEY:}
+
   storage:
     s3:
       # Off by default, same fail-closed shape as payment.razorpay below: a deployment
@@ -194,6 +201,15 @@ app:
       - http://localhost:4200
       - http://localhost:5173
     allow-credentials: false
+
+pod:
+  ai:
+    # false swaps in UnavailablePodVerificationProvider, simulating an unreachable/
+    # unconfigured AI vendor — POD Auto Verification then always routes to REVIEW.
+    enabled: ${POD_AI_ENABLED:true}
+  verification:
+    auto-verify-threshold: ${POD_AUTO_VERIFY_THRESHOLD:85}
+    manual-review-threshold: ${POD_MANUAL_REVIEW_THRESHOLD:60}
 
 pricing:
   volumetric-divisor: 5000

@@ -99,7 +99,8 @@ public class ShipmentController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/shipments/{id}")
                         .buildAndExpand(created.getId()).toUri())
                 .body(ApiResponse.success(
-                        mapper.toResponse(created, shipmentService.getItems(created.getId())),
+                        mapper.toResponse(created, shipmentService.getItems(created.getId()),
+                                shipmentService.getEwayBill(created.getId()).orElse(null)),
                         "Shipment booked"));
     }
 
@@ -112,7 +113,8 @@ public class ShipmentController {
                                                 @Valid @RequestBody UpdateShipmentRequest request) {
         Shipment updated = shipmentService.update(id, mapper.toCommand(request));
         return ApiResponse.success(
-                mapper.toResponse(updated, shipmentService.getItems(id)), "Shipment updated");
+                mapper.toResponse(updated, shipmentService.getItems(id),
+                        shipmentService.getEwayBill(id).orElse(null)), "Shipment updated");
     }
 
     @GetMapping("/{id}")
@@ -120,7 +122,8 @@ public class ShipmentController {
     public ApiResponse<ShipmentResponse> get(@PathVariable UUID id) {
         Shipment shipment = shipmentService.getById(id);
         return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(id),
-                shipmentService.getDeliveryAssignment(id), shipmentService.getAssets(id)));
+                shipmentService.getDeliveryAssignment(id), shipmentService.getAssets(id),
+                shipmentService.getEwayBill(id).orElse(null)));
     }
 
     @GetMapping("/track/{trackingNumber}")
@@ -130,7 +133,8 @@ public class ShipmentController {
     public ApiResponse<ShipmentResponse> getByTrackingNumber(@PathVariable String trackingNumber) {
         Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
         return ApiResponse.success(mapper.toResponse(shipment, shipmentService.getItems(shipment.getId()),
-                shipmentService.getDeliveryAssignment(shipment.getId()), shipmentService.getAssets(shipment.getId())));
+                shipmentService.getDeliveryAssignment(shipment.getId()), shipmentService.getAssets(shipment.getId()),
+                shipmentService.getEwayBill(shipment.getId()).orElse(null)));
     }
 
     @GetMapping
@@ -197,7 +201,8 @@ public class ShipmentController {
                                                 @RequestParam(required = false) String remarks) {
         Shipment cancelled = shipmentService.cancel(id, remarks);
         return ApiResponse.success(
-                mapper.toResponse(cancelled, shipmentService.getItems(id)), "Shipment cancelled");
+                mapper.toResponse(cancelled, shipmentService.getItems(id),
+                        shipmentService.getEwayBill(id).orElse(null)), "Shipment cancelled");
     }
 
     @PostMapping("/{id}/documents")

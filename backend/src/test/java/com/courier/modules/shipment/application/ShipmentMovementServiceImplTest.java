@@ -101,6 +101,7 @@ class ShipmentMovementServiceImplTest {
     @Mock private com.courier.modules.crossing.application.CrossingService crossingService;
     @Mock private com.courier.modules.support.application.TicketService ticketService;
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
+    @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
@@ -116,7 +117,7 @@ class ShipmentMovementServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
+                ewayBillService, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");

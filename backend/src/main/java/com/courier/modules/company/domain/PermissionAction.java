@@ -75,7 +75,22 @@ public enum PermissionAction {
      * {@code READ} because a counter clerk who may quote a price is not thereby someone
      * who should see the whole rate card, and vice versa.
      */
-    CALCULATE(22);
+    CALCULATE(22),
+
+    /**
+     * Confirm an E-Way Bill's own data is good — its own right, distinct from
+     * {@code UPDATE}: editing the fields and declaring them correct enough to let a
+     * shipment's AWB be generated are different decisions, the same split
+     * {@code DISPATCH}/{@code RECEIVE} draw for a manifest.
+     */
+    VALIDATE(23),
+
+    /**
+     * Withdraw a specific E-Way Bill without deleting its record — an E-Way Bill is
+     * never physically removed, only cancelled, the same append-only spirit financial
+     * records in this project already follow.
+     */
+    CANCEL(24);
 
     private final int offset;
 

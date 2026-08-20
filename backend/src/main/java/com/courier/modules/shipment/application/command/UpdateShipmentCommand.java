@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.application.command;
 
+import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
 import com.courier.modules.shipment.domain.ShipmentType;
 
 import java.math.BigDecimal;
@@ -35,11 +36,14 @@ public record UpdateShipmentCommand(
         Integer numberOfPackages,
         String remarks,
         BigDecimal otherCharges,
+        BigDecimal odaCharge,
         BigDecimal freightFactorOverride,
         List<ShipmentItemCommand> items,
         BigDecimal actualWeight,
         BigDecimal length,
         BigDecimal width,
-        BigDecimal height
+        BigDecimal height,
+        BigDecimal invoiceValue,
+        EwayBillDataCommand ewayBill
 ) {
 }

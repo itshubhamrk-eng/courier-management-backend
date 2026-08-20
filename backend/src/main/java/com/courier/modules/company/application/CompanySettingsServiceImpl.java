@@ -72,6 +72,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         applyShipment(settings, command);
         applyFinance(settings, command);
         applySla(settings, command);
+        applyEwayBill(settings, command);
         applyNotification(settings, command);
         applySecurity(settings, command);
         applyBranding(settings, command);
@@ -106,6 +107,13 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
     @PreAuthorize(WRITERS)
     public CompanySettings patchSla(CompanySettingsCommand command) {
         return patch("sla", command, s -> applySla(s, command));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public CompanySettings patchEwayBill(CompanySettingsCommand command) {
+        return patch("ewayBill", command, s -> applyEwayBill(s, command));
     }
 
     @Override
@@ -240,6 +248,10 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.slaThcToInscanHours(), s::setSlaThcToInscanHours);
         set(c.slaInscanToDrsHours(), s::setSlaInscanToDrsHours);
         set(c.slaDrsToDeliveryHours(), s::setSlaDrsToDeliveryHours);
+    }
+
+    private void applyEwayBill(CompanySettings s, CompanySettingsCommand c) {
+        set(c.ewayBillMandatoryValue(), s::setEwayBillMandatoryValue);
     }
 
     private void applyNotification(CompanySettings s, CompanySettingsCommand c) {

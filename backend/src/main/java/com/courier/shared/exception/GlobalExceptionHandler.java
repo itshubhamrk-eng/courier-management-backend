@@ -101,6 +101,14 @@ public class GlobalExceptionHandler {
                 "Required parameter '%s' is missing".formatted(ex.getParameterName()), request, null);
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex,
+            HttpServletRequest request) {
+        return build(ErrorCode.MISSING_PARAMETER,
+                "Required file part '%s' is missing".formatted(ex.getRequestPartName()), request, null);
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
                                                                 HttpServletRequest request) {

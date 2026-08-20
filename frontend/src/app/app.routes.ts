@@ -378,6 +378,14 @@ export const routes: Routes = [
         path: 'movement/delivery', title: 'Delivery', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/shipment-movement/delivery').then((m) => m.Delivery)
       },
+      // POD Auto Verification's Manual Review screen — reviewer tier only (COMPANY_ADMIN/
+      // BRANCH_MANAGER), mirrors PodVerificationServiceImpl's REVIEWERS @PreAuthorize
+      // exactly (narrower than MOVEMENT_WRITERS, which also admits the booking/delivery
+      // desks who may capture a POD but not decide one).
+      {
+        path: 'movement/pod-review', title: 'POD Review', canActivate: [roleGuard], data: { roles: UPDATERS },
+        loadComponent: () => import('@features/shipment-movement/pod-review').then((m) => m.PodReview)
+      },
       // Master data — one set of screens for all twelve lists, selected by :master.
       // 'new' is declared before ':id' so the literal segment is not swallowed by the
       // parameter, the same ordering the permissions module needed for 'assign'.

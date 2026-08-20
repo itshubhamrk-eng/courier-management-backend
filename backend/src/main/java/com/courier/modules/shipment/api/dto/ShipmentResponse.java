@@ -31,7 +31,15 @@ public record ShipmentResponse(
         ShipmentStatus status,
         String remarks,
         Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
+        BigDecimal invoiceValue, boolean ewayBillRequired, EwayBillInfo ewayBill,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
         List<ShipmentItemResponse> items
 ) {
+    /** The shipment's current E-Way Bill, read-only — plain fields only (no enum type),
+     *  so this module never depends on {@code com.courier.modules.ewaybill}'s domain
+     *  package, only its application interface (see {@code ShipmentMapper}). */
+    @Schema(name = "ShipmentEwayBillInfo")
+    public record EwayBillInfo(UUID id, String ewayBillNumber, String status, BigDecimal invoiceValue,
+                               Instant validFrom, Instant validUntil, String documentUrl) {
+    }
 }

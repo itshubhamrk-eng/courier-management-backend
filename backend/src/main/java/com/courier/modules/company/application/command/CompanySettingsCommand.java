@@ -30,6 +30,8 @@ public record CompanySettingsCommand(
         Integer slaLoadingSheetToThcHours, Integer slaThcToInscanHours,
         Integer slaInscanToDrsHours, Integer slaDrsToDeliveryHours,
 
+        BigDecimal ewayBillMandatoryValue,
+
         Boolean smsEnabled, Boolean emailEnabled, Boolean whatsappEnabled,
         Boolean pushNotificationEnabled,
 

@@ -6,6 +6,7 @@ import { Observable, forkJoin, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
+import { AuthService } from '@core/auth/auth.service';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
@@ -36,10 +37,13 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
  *  manifest's vehicle/driver/departure and its LR table; that tab carries its own Print
  *  and Download PDF buttons (both `window.print()` — "Save as PDF" in the browser's print
  *  dialog *is* the PDF export, there's no separate file written). "Preview THC" on this
- *  page just reopens the same tab for an already-dispatched manifest. The Amount column
- *  on the THC only shows a figure for a `collectAtDelivery` payment mode (TO_PAY / COD)
- *  — a PAID or TBB shipment isn't cash the vehicle is collecting on this trip — and the
- *  footer total only adds up what's actually being collected. */
+ *  page just reopens the same tab for an already-dispatched manifest. The THC follows a
+ *  branded challan layout (KTC-style: title bar, company/challan-number header, meta strip,
+ *  bordered shipment table, total row, signature footer) trimmed to columns this data model
+ *  actually has — no place/route/qty, since a shipment carries none of those. Its TO PAY
+ *  FREIGHT column only shows a figure for `topayModeIds` — `collectAtDelivery` but not
+ *  `cashOnDelivery` — since COD cash and billed/paid freight aren't the trip's to-pay amount;
+ *  the footer total only adds up that column. */
 @Component({
   selector: 'app-trip-hire-challan',
   standalone: true,
@@ -176,6 +180,7 @@ export class TripHireChallan implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly manifestService = inject(ManifestService);
   private readonly vehicleService = inject(VehicleService);
@@ -187,9 +192,10 @@ export class TripHireChallan implements OnInit {
   readonly searching = signal(false);
   readonly dispatching = signal(false);
   readonly previewing = signal(false);
-  /** Ids of payment modes flagged `collectAtDelivery` (TO_PAY / COD) — the only ones the
-   *  THC's Amount column shows a figure for; see the class doc for why. */
-  readonly collectAtDeliveryModeIds = signal<Set<string>>(new Set());
+  /** Ids of payment modes that are `collectAtDelivery` but NOT `cashOnDelivery` — i.e. pure
+   *  "To Pay" freight, the only figure the THC's To Pay Freight column carries. COD is cash
+   *  the driver collects on delivery, not freight owed on the trip itself, so it's excluded. */
+  readonly topayModeIds = signal<Set<string>>(new Set());
   readonly vehicleOptions = signal<SelectOption[]>([]);
   readonly driverOptions = signal<SelectOption[]>([]);
   readonly openManifests = signal<Manifest[]>([]);
@@ -218,7 +224,9 @@ export class TripHireChallan implements OnInit {
     this.masterData.branchDirectory().subscribe((list) =>
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
-      this.collectAtDeliveryModeIds.set(new Set(p.content.filter((r) => r['collectAtDelivery'] === true).map((r) => r.id))));
+      this.topayModeIds.set(new Set(p.content
+        .filter((r) => r['collectAtDelivery'] === true && r['cashOnDelivery'] !== true)
+        .map((r) => r.id))));
     this.loadOpenManifests();
     const manifestNumber = this.route.snapshot.queryParamMap.get('manifestNumber');
     if (manifestNumber) {
@@ -336,48 +344,114 @@ export class TripHireChallan implements OnInit {
     return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  /** Mirrors the branded KTC-style Trip Hire Challan layout, trimmed to the columns this
+   *  data model actually carries — no place/route/qty/logo/GST, since a shipment has no
+   *  such fields and nothing here should be invented. TO PAY FREIGHT only carries a figure
+   *  for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's doc. */
   private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
-    const collectIds = this.collectAtDeliveryModeIds();
-    const collectAmount = (s: Shipment): number | null => collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
-    const totalAmount = shipments.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
+    const topayIds = this.topayModeIds();
+    const topayFreight = (s: Shipment): number | null => topayIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
+    const totalWeight = shipments.reduce((sum, s) => sum + (s.chargeableWeight ?? 0), 0);
+    const totalFreight = shipments.reduce((sum, s) => sum + (topayFreight(s) ?? 0), 0);
+    const bookingDate = (s: Shipment) => s.bookingDate ? this.esc(new Date(s.bookingDate).toLocaleDateString('en-GB')) : '—';
     const rows = shipments.map((s, i) => `<tr>
-      <td>${i + 1}</td>
+      <td class="center">${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
-      <td>${this.esc(s.senderName)} → ${this.esc(s.receiverName)}</td>
-      <td style="text-align:right">${s.chargeableWeight} kg</td>
-      <td style="text-align:right">${collectAmount(s) ?? '—'}</td>
+      <td>${this.esc(s.senderName)}</td>
+      <td>${this.esc(s.receiverName)}</td>
+      <td class="center">${bookingDate(s)}</td>
+      <td class="right">${s.chargeableWeight}</td>
+      <td class="right">${topayFreight(s) ?? ''}</td>
     </tr>`).join('');
+    const dispatched = m.departureTime ?? m.dispatchedAt;
+    const dispatchedDate = dispatched ? new Date(dispatched) : null;
+    const companyName = this.esc(this.auth.companyName() ?? 'Trip Hire Challan');
+
     return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
       <style>
-        body { font-family: sans-serif; padding: 24px; color: #111; }
-        h1 { font-size: 18px; margin: 0 0 4px; }
-        .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
-        .meta { display: flex; gap: 32px; margin-bottom: 20px; font-size: 13px; }
-        .meta div { display: flex; flex-direction: column; }
-        .meta span:first-child { color: #666; font-size: 11px; text-transform: uppercase; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
-        tfoot td { font-weight: 600; }
-        .actions { display: flex; gap: 10px; margin-bottom: 20px; }
-        .actions button { font: 600 13px sans-serif; padding: 9px 16px; border-radius: 6px; cursor: pointer; }
-        .actions .print { background: #4f46e5; color: #fff; border: 1px solid #4f46e5; }
-        .actions .pdf { background: #fff; color: #4f46e5; border: 1px solid #4f46e5; }
-        @media print { .actions { display: none; } }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 9px; }
+        .toolbar { width: 900px; margin: 0 auto 10px; }
+        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #777; background: #eee; cursor: pointer; font-size: 12px; }
+        .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #777; }
+        .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #777; }
+        .header { display: grid; grid-template-columns: 1fr 230px; border-bottom: 1px solid #777; }
+        .company-info { text-align: center; padding: 10px; line-height: 15px; }
+        .company-info .big { font-size: 13px; font-weight: bold; }
+        .challan-box { border-left: 1px solid #777; padding: 10px; text-align: center; }
+        .challan-number { font-size: 12px; font-weight: bold; }
+        .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #777; }
+        .meta div { padding: 4px 6px; border-right: 1px solid #777; }
+        .meta div:last-child { border-right: 0; }
+        .label { font-weight: bold; display: block; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border-right: 1px solid #777; border-bottom: 1px solid #777; padding: 3px 4px; vertical-align: middle; height: 19px; word-wrap: break-word; }
+        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 8px; }
+        td { font-size: 8px; }
+        td.center, th.center { text-align: center; }
+        td.right, th.right { text-align: right; }
+        .c-sr { width: 30px; }
+        .c-date { width: 75px; }
+        .c-weight, .c-freight { width: 75px; }
+        .total-row td { font-weight: bold; height: 22px; }
+        .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
+        .footer-left { padding: 5px; border-right: 1px solid #777; }
+        .footer-right { text-align: center; padding: 5px; font-weight: bold; }
+        .signature { height: 22px; margin-top: 2px; }
+        @media print {
+          body { background: #fff; padding: 0; margin: 0; }
+          .toolbar { display: none; }
+          .challan { width: 100%; border: 1px solid #000; }
+          @page { size: A4 portrait; margin: 8mm; }
+        }
+        @media screen and (max-width: 950px) { .challan, .toolbar { width: 100%; overflow-x: auto; } }
       </style></head><body>
-      <div class="actions">
-        <button class="print" onclick="window.print()">Print</button>
-        <button class="pdf" onclick="window.print()">Download PDF</button>
+
+      <div class="toolbar">
+        <button onclick="window.print()">Print</button>
+        <button onclick="window.print()">Download PDF</button>
       </div>
-      <h1>Trip Hire Challan (THC)</h1>
-      <div class="sub">Manifest ${this.esc(m.manifestNumber)}</div>
-      <div class="meta">
-        <div><span>Vehicle</span><span>${this.esc(this.label(m.vehicleId, this.vehicleOptions()))}</span></div>
-        <div><span>Driver</span><span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</span></div>
-        <div><span>Departure</span><span>${(m.departureTime ?? m.dispatchedAt) ? this.esc(new Date((m.departureTime ?? m.dispatchedAt)!).toLocaleString()) : '—'}</span></div>
+
+      <div class="challan">
+        <div class="title">TRIP HIRE CHALLAN</div>
+
+        <div class="header">
+          <div class="company-info"><span class="big">${companyName}</span></div>
+          <div class="challan-box">
+            <div class="challan-number">${this.esc(m.manifestNumber)}</div>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div><span class="label">DATE</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleDateString('en-GB')) : '—'}</div>
+          <div><span class="label">TIME</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleTimeString()) : '—'}</div>
+          <div><span class="label">VEHICLE NO</span>${this.esc(this.label(m.vehicleId, this.vehicleOptions()))}</div>
+          <div><span class="label">DRIVER NAME</span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</div>
+        </div>
+
+        <table>
+          <thead><tr>
+            <th class="c-sr">SR<br>NO.</th>
+            <th>TRACKING NO</th>
+            <th>CONSIGNOR NAME</th>
+            <th>CONSIGNEE NAME</th>
+            <th class="c-date">BOOKING<br>DATE</th>
+            <th class="c-weight">WEIGHT</th>
+            <th class="c-freight">TO PAY<br>FREIGHT</th>
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" class="center">No shipments</td></tr>'}</tbody>
+          <tfoot><tr class="total-row">
+            <td colspan="5" class="right">Total</td>
+            <td class="right">${totalWeight}</td>
+            <td class="right">${totalFreight}</td>
+          </tr></tfoot>
+        </table>
+
+        <div class="footer">
+          <div class="footer-left"><strong>${companyName}</strong></div>
+          <div class="footer-right">SIGNATURE<div class="signature"></div></div>
+        </div>
       </div>
-      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th style="text-align:right">Weight</th><th style="text-align:right">Amount</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5">No shipments</td></tr>'}</tbody>
-      <tfoot><tr><td colspan="4">Total to Collect</td><td style="text-align:right">${totalAmount}</td></tr></tfoot></table>
     </body></html>`;
   }
 
