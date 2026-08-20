@@ -64,12 +64,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set - see .env.example}
       # No default: the app must not start with a guessable signing key.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
+      # No default: unset only bites when a company saves its own Razorpay key secret
+      # (CompanyRazorpayConfigServiceImpl), not at startup — see EncryptedStringConverter.
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       AWS_S3_ENABLED: ${AWS_S3_ENABLED:-false}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      RAZORPAY_ENABLED: ${RAZORPAY_ENABLED:-false}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_API_URL: ${RAZORPAY_API_URL:-https://api.razorpay.com/v1}
     ports:
       - "${BACKEND_PORT:-8091}:8080"
     networks:

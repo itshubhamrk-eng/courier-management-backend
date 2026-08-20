@@ -180,7 +180,13 @@ export class WalletRecharge implements OnInit {
     remarks: ['', Validators.maxLength(300)]
   });
 
-  protected readonly amount = computed(() => Number(this.c('amount').value) || 0);
+  // FormControl.value is a plain property, not a signal — computed() would never see a
+  // dependency to invalidate on and would freeze at the initial value. valueChanges is the
+  // reactive source that actually fires as the user types.
+  protected readonly amount = toSignal(
+    this.form.controls['amount'].valueChanges.pipe(map((v) => Number(v) || 0)),
+    { initialValue: 0 }
+  );
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
   protected invalid(name: string): boolean { const ct = this.c(name); return ct.invalid && (ct.touched || ct.dirty); }
   money(n: number | null | undefined): string { return formatMoney(n, this.cur()); }
