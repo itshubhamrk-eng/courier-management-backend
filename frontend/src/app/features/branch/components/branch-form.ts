@@ -61,12 +61,12 @@ function emailish(control: AbstractControl): ValidationErrors | null {
       <app-card title="Basic Information" subtitle="Identity and classification.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('branchCode')" label="Branch Code" [required]="true" placeholder="PUNE_MAIN" />
+            <app-input [control]="c('branchCode')" label="Branch Code" [required]="true" placeholder="PUNE_MAIN" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Branch Code</span>
               <span class="stat__v mono">{{ branch()?.branchCode || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
-          <app-input [control]="c('branchName')" label="Branch Name" [required]="true" placeholder="Pune Main Branch" />
+          <app-input [control]="c('branchName')" label="Branch Name" [required]="true" placeholder="Pune Main Branch" [maxLength]="150" />
           <app-select [control]="c('branchType')" label="Vendor / Branch Type" [options]="types" placeholder="Select a type" />
           @if (isCreate()) {
             <app-select [control]="c('managerId')" label="Manager" [options]="managerOptions()"
@@ -80,22 +80,22 @@ function emailish(control: AbstractControl): ValidationErrors | null {
 
       <app-card title="Contact" subtitle="How to reach this branch.">
         <div class="grid">
-          <app-input [control]="c('email')" label="Email" type="email" placeholder="pune@company.com" />
-          <app-input [control]="c('mobile')" label="Mobile" type="tel" placeholder="+91 90000 00000" />
-          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" />
+          <app-input [control]="c('email')" label="Email" type="email" placeholder="pune@company.com" [maxLength]="255" />
+          <app-input [control]="c('mobile')" label="Mobile" type="tel" placeholder="+91 90000 00000" [maxLength]="20" />
+          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" [maxLength]="20" />
         </div>
       </app-card>
 
       <app-card title="Address" subtitle="Where the branch is located.">
         <div class="grid">
-          <app-input [control]="c('addressLine1')" label="Address Line 1" placeholder="Building, street" />
-          <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Landmark, area" />
-          <app-input [control]="c('country')" label="Country" placeholder="India" />
-          <app-input [control]="c('state')" label="State" placeholder="Maharashtra" />
-          <app-input [control]="c('city')" label="City" placeholder="Pune" />
-          <app-input [control]="c('district')" label="Area / District" placeholder="Shivajinagar" />
-          <app-input [control]="c('taluka')" label="Taluka" placeholder="Haveli" />
-          <app-input [control]="c('postalCode')" label="Pincode" placeholder="411005" />
+          <app-input [control]="c('addressLine1')" label="Address Line 1" placeholder="Building, street" [maxLength]="255" />
+          <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Landmark, area" [maxLength]="255" />
+          <app-input [control]="c('country')" label="Country" placeholder="India" [maxLength]="100" />
+          <app-input [control]="c('state')" label="State" placeholder="Maharashtra" [maxLength]="100" />
+          <app-input [control]="c('city')" label="City" placeholder="Pune" [maxLength]="100" />
+          <app-input [control]="c('district')" label="Area / District" placeholder="Shivajinagar" [maxLength]="100" />
+          <app-input [control]="c('taluka')" label="Taluka" placeholder="Haveli" [maxLength]="100" />
+          <app-input [control]="c('postalCode')" label="Pincode" placeholder="411005" [maxLength]="20" />
         </div>
       </app-card>
 
@@ -132,14 +132,14 @@ function emailish(control: AbstractControl): ValidationErrors | null {
         <app-card title="Branch User"
                   subtitle="The login for this branch. Created with it, along with its wallet.">
           <div class="grid">
-            <app-input [control]="u('email')" label="Login Email" type="email"
+            <app-input [control]="u('email')" label="Login Email" type="email" [maxLength]="255"
                        placeholder="Defaults to the branch email, then to a derived address" />
-            <app-input [control]="u('mobile')" label="Mobile" type="tel"
+            <app-input [control]="u('mobile')" label="Mobile" type="tel" [maxLength]="20"
                        placeholder="Defaults to the branch mobile" />
-            <app-input [control]="u('firstName')" label="First Name"
+            <app-input [control]="u('firstName')" label="First Name" [maxLength]="100"
                        placeholder="Defaults to the branch name" />
-            <app-input [control]="u('lastName')" label="Last Name" placeholder="Branch" />
-            <app-input [control]="u('password')" label="Password" type="password"
+            <app-input [control]="u('lastName')" label="Last Name" placeholder="Branch" [maxLength]="100" />
+            <app-input [control]="u('password')" label="Password" type="password" [maxLength]="128"
                        [togglePassword]="true" autocomplete="new-password"
                        placeholder="Leave blank to generate one" />
           </div>
@@ -163,7 +163,7 @@ function emailish(control: AbstractControl): ValidationErrors | null {
       </app-card>
 
       <app-card title="Notes" subtitle="Internal remarks.">
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this branch" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this branch" [maxLength]="500" />
       </app-card>
 
       <div class="bform__bar">

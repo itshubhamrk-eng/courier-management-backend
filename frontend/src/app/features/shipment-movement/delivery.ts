@@ -121,10 +121,10 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
         <app-card title="Delivery Form">
           <form [formGroup]="form" (ngSubmit)="onEnter()" class="df">
             <div class="grid2">
-              <app-input [control]="c('receiverName')" label="Receiver Name" [required]="true" />
-              <app-input [control]="c('otp')" label="OTP" placeholder="Optional" />
+              <app-input [control]="c('receiverName')" label="Receiver Name" [required]="true" [maxLength]="150" />
+              <app-input [control]="c('otp')" label="OTP" placeholder="Optional" [maxLength]="10" />
             </div>
-            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" />
+            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" [maxLength]="500" />
 
             @if (!verification() || verification()!.verificationStatus === 'FAIL') {
               <div class="pod-row">

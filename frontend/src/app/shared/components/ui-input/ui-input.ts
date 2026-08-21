@@ -16,7 +16,8 @@ import { MatIconModule } from '@angular/material/icon';
         @if (icon()) { <mat-icon class="field__icon">{{ icon() }}</mat-icon> }
         <input class="field__input" [type]="effectiveType()" [placeholder]="placeholder()"
                [formControl]="control()" [attr.autocomplete]="autocomplete()"
-               [attr.min]="min()" [attr.max]="max()" [attr.step]="step()" />
+               [attr.min]="min()" [attr.max]="max()" [attr.step]="step()"
+               [attr.maxlength]="maxLength()" />
         @if (canToggle()) {
           <button type="button" class="field__eye" (click)="reveal.set(!reveal())"
                   [attr.aria-label]="reveal() ? 'Hide password' : 'Show password'" tabindex="-1">
@@ -61,6 +62,7 @@ export class UiInput {
   readonly min = input<number | null>(null);
   readonly max = input<number | null>(null);
   readonly step = input<number | null>(null);
+  readonly maxLength = input<number | null>(null);
   /**
    * Overrides the generic message when the caller knows a better one — a pattern the
    * caller declared, for instance, where "Invalid value." says nothing useful. Empty
@@ -80,6 +82,7 @@ export class UiInput {
     if (e['required']) return 'This field is required.';
     if (e['email']) return 'Enter a valid email address.';
     if (e['minlength']) return `At least ${e['minlength'].requiredLength} characters.`;
+    if (e['maxlength']) return `At most ${e['maxlength'].requiredLength} characters.`;
     if (e['min']) return `Must be at least ${e['min'].min}.`;
     if (e['max']) return `Must be at most ${e['max'].max}.`;
     return 'Invalid value.';

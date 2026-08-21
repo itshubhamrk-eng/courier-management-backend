@@ -34,7 +34,7 @@ const SUB_TYPES: SelectOption[] = TRANSACTION_SUB_TYPES.map((s) => ({ value: s, 
       <app-select [control]="c('transactionType')" label="Transaction Type" [options]="types" [multiple]="true" placeholder="Any type" />
       <app-select [control]="c('subTransactionType')" label="Sub Transaction Type" [options]="subTypes" [multiple]="true" placeholder="Any sub type" />
       <app-select [control]="c('paymentStatus')" label="Payment Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
-      <app-input [control]="c('referenceId')" label="Reference" placeholder="e.g. RZP-XXXX / UTR" />
+      <app-input [control]="c('referenceId')" label="Reference" placeholder="e.g. RZP-XXXX / UTR" [maxLength]="100" />
 
       <div class="tf__bar">
         <app-button variant="text" (pressed)="clear()">Clear all</app-button>

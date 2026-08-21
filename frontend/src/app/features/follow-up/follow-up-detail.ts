@@ -85,7 +85,7 @@ function statusTone(s: FollowUpStatus): 'success' | 'warning' | 'danger' | 'info
 
             <app-card title="Add Note">
               <label class="fld"><span class="fld__l">Note</span>
-                <textarea class="ta" rows="3" placeholder="Add a note to this follow-up's history…" [formControl]="noteControl"></textarea>
+                <textarea class="ta" rows="3" placeholder="Add a note to this follow-up's history…" maxlength="1000" [formControl]="noteControl"></textarea>
               </label>
               <div class="row-actions">
                 <app-button icon="send" [loading]="noting()" [disabled]="!noteControl.value.trim()" (pressed)="addNote()">Add Note</app-button>
@@ -121,7 +121,7 @@ function statusTone(s: FollowUpStatus): 'success' | 'warning' | 'danger' | 'info
             @if (!isTerminal()) {
               <app-card title="Assignment">
                 <app-select [control]="assigneeControl" label="Assign To" [options]="userOptions()" />
-                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="assignRemarksControl" placeholder="Optional" /></label>
+                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="assignRemarksControl" placeholder="Optional" maxlength="1000" /></label>
                 <div class="row-actions">
                   <app-button [loading]="acting()" [disabled]="!assigneeControl.value" (pressed)="assign()">Assign</app-button>
                 </div>
@@ -129,13 +129,13 @@ function statusTone(s: FollowUpStatus): 'success' | 'warning' | 'danger' | 'info
 
               <app-card title="Status">
                 <app-select [control]="statusControl" label="Move to" [options]="statusOptions" />
-                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="statusRemarksControl" placeholder="Optional" /></label>
+                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="statusRemarksControl" placeholder="Optional" maxlength="1000" /></label>
                 <div class="row-actions"><app-button variant="stroked" [loading]="acting()" (pressed)="changeStatus()">Update Status</app-button></div>
               </app-card>
 
               <app-card title="Reschedule">
                 <label class="fld"><span class="fld__l">New Due Date</span><input class="fld__i" type="date" [formControl]="rescheduleDateControl" /></label>
-                <label class="fld"><span class="fld__l">Reason</span><input class="fld__i" type="text" [formControl]="rescheduleReasonControl" placeholder="Optional" /></label>
+                <label class="fld"><span class="fld__l">Reason</span><input class="fld__i" type="text" [formControl]="rescheduleReasonControl" placeholder="Optional" maxlength="1000" /></label>
                 <div class="row-actions">
                   <app-button variant="stroked" icon="event_repeat" [loading]="acting()" [disabled]="!rescheduleDateControl.value" (pressed)="reschedule()">Reschedule</app-button>
                 </div>
@@ -196,13 +196,13 @@ export class FollowUpDetailPage implements OnInit {
   private readonly branchNames = signal<Map<string, string>>(new Map());
   readonly userNames = signal<Map<string, string>>(new Map());
 
-  readonly noteControl = new FormControl('', { nonNullable: true });
+  readonly noteControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
   readonly assigneeControl = new FormControl<string | null>(null);
-  readonly assignRemarksControl = new FormControl('', { nonNullable: true });
+  readonly assignRemarksControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
   readonly statusControl = new FormControl<FollowUpStatus>('IN_PROGRESS', { nonNullable: true, validators: [Validators.required] });
-  readonly statusRemarksControl = new FormControl('', { nonNullable: true });
+  readonly statusRemarksControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
   readonly rescheduleDateControl = new FormControl('', { nonNullable: true });
-  readonly rescheduleReasonControl = new FormControl('', { nonNullable: true });
+  readonly rescheduleReasonControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
 
   readonly statusOptions: SelectOption[] = MOVEABLE_FOLLOW_UP_STATUSES.map((s) => ({ value: s, label: label(s) }));
 

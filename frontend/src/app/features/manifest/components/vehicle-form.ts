@@ -32,10 +32,10 @@ const STATUS_OPTIONS: SelectOption[] = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'I
     <form [formGroup]="form" (ngSubmit)="submit()" class="vform">
       <app-card title="Basic Information" subtitle="Identity and classification.">
         <div class="grid">
-          <app-input [control]="c('vehicleNumber')" label="Vehicle Number" [required]="true" placeholder="MH12AB1234" />
+          <app-input [control]="c('vehicleNumber')" label="Vehicle Number" [required]="true" placeholder="MH12AB1234" [maxLength]="30" />
           <app-select [control]="c('vehicleType')" label="Vehicle Type" [options]="VEHICLE_TYPE_OPTIONS" />
-          <app-input [control]="c('make')" label="Make" placeholder="Tata" />
-          <app-input [control]="c('model')" label="Model" placeholder="407" />
+          <app-input [control]="c('make')" label="Make" placeholder="Tata" [maxLength]="50" />
+          <app-input [control]="c('model')" label="Model" placeholder="407" [maxLength]="50" />
           <app-select [control]="c('fuelType')" label="Fuel Type" [options]="FUEL_TYPE_OPTIONS" [allowEmpty]="true" emptyLabel="Not set" />
           <app-autocomplete [control]="c('branchId')" label="Base Branch" [options]="branchOptions()" placeholder="Search branch…" />
         </div>
@@ -73,7 +73,7 @@ const STATUS_OPTIONS: SelectOption[] = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'I
       }
 
       <app-card title="Notes" subtitle="Internal remarks.">
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this vehicle" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this vehicle" [maxLength]="500" />
       </app-card>
 
       <div class="vform__bar">
@@ -142,8 +142,8 @@ export class VehicleForm {
     return this.fb.group({
       vehicleNumber: ['', [Validators.required, Validators.maxLength(30)]],
       vehicleType: ['OTHER' as VehicleType, Validators.required],
-      make: [''],
-      model: [''],
+      make: ['', Validators.maxLength(50)],
+      model: ['', Validators.maxLength(50)],
       fuelType: [null as FuelType | null],
       branchId: [null as string | null],
       capacityKg: [null as number | null, [Validators.min(0)]],
@@ -155,7 +155,7 @@ export class VehicleForm {
       fitnessExpiry: [null as string | null],
       permitExpiry: [null as string | null],
       status: ['AVAILABLE' as VehicleStatus],
-      remarks: ['']
+      remarks: ['', Validators.maxLength(500)]
     });
   }
 

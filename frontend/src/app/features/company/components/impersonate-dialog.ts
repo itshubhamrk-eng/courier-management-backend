@@ -35,7 +35,7 @@ export interface ImpersonateData {
       </div>
 
       <app-input [control]="password" type="password" label="Your password" [togglePassword]="true"
-        placeholder="••••••••" [required]="true" />
+        placeholder="••••••••" [required]="true" [maxLength]="72" />
 
       <div class="id__actions">
         <app-button variant="stroked" type="button" (pressed)="ref.close()">Cancel</app-button>
@@ -57,7 +57,7 @@ export class ImpersonateDialog {
   private readonly fb = inject(FormBuilder);
 
   readonly form = this.fb.group({
-    password: ['', [Validators.required]]
+    password: ['', [Validators.required, Validators.maxLength(72)]]
   });
 
   get password(): FormControl {

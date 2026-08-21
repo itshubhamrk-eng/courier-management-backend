@@ -22,11 +22,11 @@ import { environment } from '@env/environment';
       </div>
       <form class="login__form" [formGroup]="form" (ngSubmit)="submit()">
         <app-input [control]="ctrl('companyCode')" label="Company code" placeholder="e.g. ACME_LOGISTICS"
-                   icon="apartment" autocomplete="organization" />
+                   icon="apartment" autocomplete="organization" [maxLength]="50" />
         <app-input [control]="ctrl('email')" label="Email" type="email" placeholder="you@company.com"
-                   icon="mail" [required]="true" autocomplete="username" />
+                   icon="mail" [required]="true" autocomplete="username" [maxLength]="255" />
         <app-input [control]="ctrl('password')" label="Password" type="password" placeholder="••••••••"
-                   icon="lock" [required]="true" [togglePassword]="true" autocomplete="current-password" />
+                   icon="lock" [required]="true" [togglePassword]="true" autocomplete="current-password" [maxLength]="72" />
         <div class="login__row">
           <label class="login__remember">
             <input type="checkbox" formControlName="rememberMe" /> <span>Remember me</span>
@@ -81,9 +81,9 @@ export class Login {
   readonly devMode = !environment.production;
 
   readonly form = this.fb.nonNullable.group({
-    companyCode: [''],
-    email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(8)]],
+    companyCode: ['', Validators.maxLength(50)],
+    email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
+    password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
     rememberMe: [false]
   });
 

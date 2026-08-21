@@ -43,8 +43,8 @@ const SUB_TYPES: SelectOption[] = CREDIT_SUB_TYPES.map((s) => ({ value: s, label
           @if (invalid('amount')) { <span class="amt__err">Enter an amount greater than zero.</span> }
         </label>
         <app-select [control]="c('subTransactionType')" label="Reason" [options]="subTypes" placeholder="Select a reason" />
-        <app-input [control]="c('referenceId')" label="Reference" placeholder="Optional — e.g. UTR / voucher" />
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" />
+        <app-input [control]="c('referenceId')" label="Reference" placeholder="Optional — e.g. UTR / voucher" [maxLength]="100" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" [maxLength]="300" />
         <div class="md__actions">
           <app-button variant="stroked" (pressed)="ref.close(null)">Cancel</app-button>
           <app-button type="submit" icon="add" [loading]="busy()">Credit</app-button>
@@ -81,7 +81,7 @@ export class CreditDialog {
   protected readonly form: FormGroup = this.fb.group({
     amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     subTransactionType: ['MCR' as SubTransactionType, Validators.required],
-    referenceId: [''],
+    referenceId: ['', Validators.maxLength(100)],
     remarks: ['', Validators.maxLength(300)]
   });
 

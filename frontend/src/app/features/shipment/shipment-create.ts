@@ -124,7 +124,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
             </app-item-entry-grid>
             <div class="spacer"></div>
             <label class="fld"><span class="fld__l">Remarks</span>
-              <textarea class="ta" rows="2" placeholder="Handle with care, deliver before noon…" [formControl]="c('remarks')"></textarea></label>
+              <textarea class="ta" rows="2" placeholder="Handle with care, deliver before noon…" maxlength="500" [formControl]="c('remarks')"></textarea></label>
           </app-card>
 
           <app-card title="Parties">
@@ -133,7 +133,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 <div class="party__title">Consignor (Sender)</div>
                 <label class="fld party__lookup"><span class="fld__l">Name</span>
                   <input class="fld__i" [formControl]="c('senderName')" placeholder="Sender's full name, or search by name / mobile"
-                    (focus)="openSuggest('sender', 'name')" (blur)="closeSuggest('sender')" />
+                    maxlength="150" (focus)="openSuggest('sender', 'name')" (blur)="closeSuggest('sender')" />
                   @if (senderSuggestOpen() === 'name' && senderSuggestions().length) {
                     <ul class="lookup__list">
                       @for (cust of senderSuggestions(); track cust.id) {
@@ -147,11 +147,11 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">Address</span>
-                  <textarea class="ta" rows="2" [formControl]="c('senderAddress')" placeholder="Pickup address"></textarea></label>
+                  <textarea class="ta" rows="2" [formControl]="c('senderAddress')" placeholder="Pickup address" maxlength="500"></textarea></label>
                 <div class="spacer"></div>
                 <label class="fld party__lookup"><span class="fld__l">Contact Number</span>
                   <input class="fld__i" type="tel" [formControl]="c('senderContact')" placeholder="10-digit mobile number, or search"
-                    (focus)="openSuggest('sender', 'contact')" (blur)="closeSuggest('sender')" />
+                    maxlength="20" (focus)="openSuggest('sender', 'contact')" (blur)="closeSuggest('sender')" />
                   @if (senderSuggestOpen() === 'contact' && senderSuggestions().length) {
                     <ul class="lookup__list">
                       @for (cust of senderSuggestions(); track cust.id) {
@@ -165,14 +165,14 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">From Pincode</span>
-                  <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" /></label>
+                  <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" maxlength="10" /></label>
               </div>
 
               <div class="party party--receiver">
                 <div class="party__title">Consignee (Receiver)</div>
                 <label class="fld party__lookup"><span class="fld__l">Name</span>
                   <input class="fld__i" [formControl]="c('receiverName')" placeholder="Receiver's full name, or search by name / mobile"
-                    (focus)="openSuggest('receiver', 'name')" (blur)="closeSuggest('receiver')" />
+                    maxlength="150" (focus)="openSuggest('receiver', 'name')" (blur)="closeSuggest('receiver')" />
                   @if (receiverSuggestOpen() === 'name' && receiverSuggestions().length) {
                     <ul class="lookup__list">
                       @for (cust of receiverSuggestions(); track cust.id) {
@@ -186,11 +186,11 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">Address</span>
-                  <textarea class="ta" rows="2" [formControl]="c('receiverAddress')" placeholder="Delivery address"></textarea></label>
+                  <textarea class="ta" rows="2" [formControl]="c('receiverAddress')" placeholder="Delivery address" maxlength="500"></textarea></label>
                 <div class="spacer"></div>
                 <label class="fld party__lookup"><span class="fld__l">Contact Number</span>
                   <input class="fld__i" type="tel" [formControl]="c('receiverContact')" placeholder="10-digit mobile number, or search"
-                    (focus)="openSuggest('receiver', 'contact')" (blur)="closeSuggest('receiver')" />
+                    maxlength="20" (focus)="openSuggest('receiver', 'contact')" (blur)="closeSuggest('receiver')" />
                   @if (receiverSuggestOpen() === 'contact' && receiverSuggestions().length) {
                     <ul class="lookup__list">
                       @for (cust of receiverSuggestions(); track cust.id) {
@@ -204,7 +204,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 </label>
                 <div class="spacer"></div>
                 <label class="fld"><span class="fld__l">To Pincode</span>
-                  <input class="fld__i" [formControl]="c('deliveryPincode')" placeholder="e.g. 400008" /></label>
+                  <input class="fld__i" [formControl]="c('deliveryPincode')" placeholder="e.g. 400008" maxlength="10" /></label>
               </div>
             </div>
           </app-card>
@@ -244,7 +244,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
               </div>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Remarks</span>
-                <input class="fld__i" [formControl]="c('ewayBillRemarks')" placeholder="Optional" /></label>
+                <input class="fld__i" [formControl]="c('ewayBillRemarks')" placeholder="Optional" maxlength="500" /></label>
               <div class="spacer"></div>
               <div class="eway-doc">
                 @if (selectedEwayBillFile(); as file) {
@@ -573,32 +573,32 @@ export class ShipmentCreate implements OnInit {
     bookingBranchId: [this.myBranchId, Validators.required],
     manualShipmentNumber: ['', Validators.maxLength(30)],
     deliveryBranchId: [null as string | null, Validators.required],
-    pickupPincode: [''],
-    deliveryPincode: [''],
-    senderName: ['', Validators.required],
-    senderAddress: ['', Validators.required],
-    senderContact: ['', Validators.required],
-    receiverName: ['', Validators.required],
-    receiverAddress: ['', Validators.required],
-    receiverContact: ['', Validators.required],
+    pickupPincode: ['', Validators.maxLength(10)],
+    deliveryPincode: ['', Validators.maxLength(10)],
+    senderName: ['', [Validators.required, Validators.maxLength(150)]],
+    senderAddress: ['', [Validators.required, Validators.maxLength(500)]],
+    senderContact: ['', [Validators.required, Validators.maxLength(20)]],
+    receiverName: ['', [Validators.required, Validators.maxLength(150)]],
+    receiverAddress: ['', [Validators.required, Validators.maxLength(500)]],
+    receiverContact: ['', [Validators.required, Validators.maxLength(20)]],
     serviceTypeId: [null as string | null, Validators.required],
     packageTypeId: [null as string | null, Validators.required],
     paymentModeId: [null as string | null, Validators.required],
     bookingDate: [today()],
     numberOfPackages: [1],
     declaredValue: [null as number | null],
-    remarks: [''],
+    remarks: ['', Validators.maxLength(500)],
     crossing: [false],
     crossingBranchIds: this.fb.array<FormControl<string | null>>([]),
     crossingCharge: [null as number | null],
     invoiceValue: [null as number | null],
-    ewayBillNumber: [''],
-    ewayBillInvoiceNumber: [''],
+    ewayBillNumber: ['', Validators.maxLength(30)],
+    ewayBillInvoiceNumber: ['', Validators.maxLength(50)],
     ewayBillInvoiceDate: [today()],
-    ewayBillVehicleNumber: [''],
+    ewayBillVehicleNumber: ['', Validators.maxLength(20)],
     ewayBillValidFrom: [null as string | null],
     ewayBillValidUntil: [null as string | null],
-    ewayBillRemarks: ['']
+    ewayBillRemarks: ['', Validators.maxLength(500)]
   });
 
   protected get crossingBranchArray(): FormArray<FormControl<string | null>> {

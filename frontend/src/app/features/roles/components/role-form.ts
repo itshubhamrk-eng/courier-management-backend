@@ -32,7 +32,7 @@ const TYPE_OPTIONS: SelectOption[] = ROLE_TYPES.map((t) => ({
       <app-card title="Role Details" subtitle="Identity and functional grouping.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('roleCode')" label="Role Code" [required]="true" placeholder="NIGHT_SHIFT_SUPERVISOR" />
+            <app-input [control]="c('roleCode')" label="Role Code" [required]="true" placeholder="NIGHT_SHIFT_SUPERVISOR" [maxLength]="50" />
             <div class="hint-cell">
               <span class="hint">Saved uppercased, spaces become underscores. Immutable afterwards.</span>
               @if (codePreview()) { <span class="preview">Will save as <b>{{ codePreview() }}</b></span> }
@@ -42,11 +42,11 @@ const TYPE_OPTIONS: SelectOption[] = ROLE_TYPES.map((t) => ({
               <span class="stat__v mono">{{ role()?.roleCode }}</span><span class="stat__h">Immutable</span></div>
             <div></div>
           }
-          <app-input [control]="c('roleName')" label="Role Name" [required]="true" placeholder="Night Shift Supervisor" />
+          <app-input [control]="c('roleName')" label="Role Name" [required]="true" placeholder="Night Shift Supervisor" [maxLength]="100" />
           <app-select [control]="c('roleType')" label="Role Type" [options]="typeOptions" placeholder="Select a type" />
         </div>
         <div class="full">
-          <app-input [control]="c('description')" label="Description" placeholder="What this role is for." />
+          <app-input [control]="c('description')" label="Description" placeholder="What this role is for." [maxLength]="255" />
         </div>
       </app-card>
 

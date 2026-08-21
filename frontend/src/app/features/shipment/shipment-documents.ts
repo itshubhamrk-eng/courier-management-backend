@@ -53,10 +53,10 @@ const ICONS: Record<string, string> = {
           <form [formGroup]="form" (ngSubmit)="submit()" class="df">
             <div class="grid3">
               <app-select [control]="c('documentType')" label="Document Type" [options]="typeOptions" placeholder="Select a type" />
-              <app-input [control]="c('documentName')" label="Document Name" placeholder="Invoice-2607.pdf" [required]="true" />
-              <app-input [control]="c('documentUrl')" label="Document URL" placeholder="https://…" [required]="true" />
+              <app-input [control]="c('documentName')" label="Document Name" placeholder="Invoice-2607.pdf" [required]="true" [maxLength]="255" />
+              <app-input [control]="c('documentUrl')" label="Document URL" placeholder="https://…" [required]="true" [maxLength]="1000" />
             </div>
-            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" />
+            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" [maxLength]="500" />
             <div class="df__bar">
               <app-button variant="stroked" type="button" (pressed)="formOpen.set(false)">Cancel</app-button>
               <app-button type="submit" icon="upload_file" [loading]="uploading()">Attach</app-button>

@@ -53,12 +53,12 @@ function effectiveRangeValid(group: AbstractControl): ValidationErrors | null {
       <app-card title="Identity" subtitle="What this rate is called, and the lane it prices.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('rateCode')" label="Rate Code" [required]="true" placeholder="RATE-PUNE-MUM-STD" />
+            <app-input [control]="c('rateCode')" label="Rate Code" [required]="true" placeholder="RATE-PUNE-MUM-STD" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Rate Code</span>
               <span class="stat__v mono">{{ rate()?.rateCode || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
-          <app-input [control]="c('rateName')" label="Rate Name" [required]="true" placeholder="Pune-Mumbai Standard" />
+          <app-input [control]="c('rateName')" label="Rate Name" [required]="true" placeholder="Pune-Mumbai Standard" [maxLength]="150" />
         </div>
       </app-card>
 
@@ -246,7 +246,7 @@ export class RateForm {
 
   private build(): FormGroup {
     return this.fb.group({
-      rateCode: ['', [Validators.required, Validators.pattern(CODE)]],
+      rateCode: ['', [Validators.required, Validators.pattern(CODE), Validators.maxLength(50)]],
       rateName: ['', [Validators.required, Validators.maxLength(150)]],
       routeId: [null as string | null, Validators.required],
       serviceTypeId: [null as string | null, Validators.required],

@@ -53,7 +53,7 @@ const QUOTA_FIELDS: QuotaField[] = [
       <app-card title="Plan Details" subtitle="Identity and commercial tier.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('planCode')" label="Plan Code" [required]="true" placeholder="STANDARD_MONTHLY" />
+            <app-input [control]="c('planCode')" label="Plan Code" [required]="true" placeholder="STANDARD_MONTHLY" [maxLength]="50" />
             <div class="hint-cell">
               <span class="hint">Saved uppercased. Immutable afterwards.</span>
               @if (codePreview()) { <span class="preview">Will save as <b>{{ codePreview() }}</b></span> }
@@ -63,11 +63,11 @@ const QUOTA_FIELDS: QuotaField[] = [
               <span class="stat__v mono">{{ plan()?.planCode }}</span><span class="stat__h">Immutable</span></div>
             <div></div>
           }
-          <app-input [control]="c('planName')" label="Plan Name" [required]="true" placeholder="Standard" />
+          <app-input [control]="c('planName')" label="Plan Name" [required]="true" placeholder="Standard" [maxLength]="100" />
           <app-select [control]="c('planType')" label="Tier" [options]="typeOptions" placeholder="Select a tier" />
         </div>
         <div class="full">
-          <app-input [control]="c('description')" label="Description" placeholder="What this plan is for." />
+          <app-input [control]="c('description')" label="Description" placeholder="What this plan is for." [maxLength]="500" />
         </div>
       </app-card>
 
@@ -81,7 +81,7 @@ const QUOTA_FIELDS: QuotaField[] = [
             <input type="number" min="0" step="0.01" [formControl]="c('monthlyPrice')" placeholder="0.00" /></label>
           <label class="nf"><span>Yearly Price</span>
             <input type="number" min="0" step="0.01" [formControl]="c('yearlyPrice')" placeholder="0.00" /></label>
-          <app-input [control]="c('currency')" label="Currency" placeholder="INR" />
+          <app-input [control]="c('currency')" label="Currency" placeholder="INR" [maxLength]="3" />
         </div>
         <div class="grid grid--3">
           <label class="nf"><span>Trial Days</span>
@@ -228,7 +228,7 @@ export class PlanForm {
       planType: [null as PlanType | null, Validators.required],
       monthlyPrice: [0, [Validators.required, Validators.min(0)]],
       yearlyPrice: [0, [Validators.required, Validators.min(0)]],
-      currency: ['INR', [Validators.pattern(CURRENCY)]],
+      currency: ['INR', [Validators.pattern(CURRENCY), Validators.maxLength(3)]],
       trialDays: [0, [Validators.min(0), Validators.max(365)]],
       displayOrder: [0, [Validators.min(0)]],
       ...quotaGroup

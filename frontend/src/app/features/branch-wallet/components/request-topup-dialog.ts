@@ -36,7 +36,7 @@ export interface RequestTopupDialogData {
           </div>
           @if (invalid('amount')) { <span class="amt__err">Enter an amount greater than zero.</span> }
         </label>
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Why the branch needs it" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Why the branch needs it" [maxLength]="300" />
         <div class="md__actions">
           <app-button variant="stroked" (pressed)="ref.close(null)">Cancel</app-button>
           <app-button type="submit" icon="send" [loading]="busy()">Send Request</app-button>

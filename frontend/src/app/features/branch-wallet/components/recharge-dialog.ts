@@ -40,16 +40,16 @@ const QUICK = [500, 1000, 2000, 5000];
           <span class="amt__l">Amount<i>*</i></span>
           <div class="amt__wrap" [class.amt__wrap--err]="invalid('amount')">
             <span class="amt__cur">{{ data.currency }}</span>
-            <input class="amt__i" type="number" min="1" step="1" formControlName="amount" placeholder="0.00" />
+            <input class="amt__i" type="number" min="1" max="999999" step="1" maxlength="6" formControlName="amount" placeholder="0.00" (input)="clampAmount($event)" />
           </div>
-          @if (invalid('amount')) { <span class="amt__err">Enter an amount greater than zero.</span> }
+          @if (invalid('amount')) { <span class="amt__err">Enter an amount up to 999999.</span> }
         </label>
         <div class="quick">
           @for (q of quick; track q) {
             <button type="button" class="quick__b" (click)="setAmount(q)">+{{ money(q) }}</button>
           }
         </div>
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" [maxLength]="300" />
         <div class="md__actions">
           <app-button variant="stroked" (pressed)="ref.close(null)">Cancel</app-button>
           <app-button type="submit" icon="lock" [loading]="busy()">Pay {{ money(amount()) }}</app-button>
@@ -89,7 +89,7 @@ export class RechargeDialog {
   protected readonly quick = QUICK;
 
   protected readonly form: FormGroup = this.fb.group({
-    amount: [null as number | null, [Validators.required, Validators.min(1)]],
+    amount: [null as number | null, [Validators.required, Validators.min(1), Validators.max(999999)]],
     remarks: ['', Validators.maxLength(300)]
   });
 
@@ -104,6 +104,14 @@ export class RechargeDialog {
   protected invalid(name: string): boolean { const ct = this.c(name); return ct.invalid && (ct.touched || ct.dirty); }
   protected money(n: number): string { return formatMoney(n, this.data.currency); }
   protected setAmount(n: number): void { this.c('amount').setValue((Number(this.c('amount').value) || 0) + n); this.c('amount').markAsDirty(); }
+
+  protected clampAmount(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    if (input.value.length > 6) {
+      input.value = input.value.slice(0, 6);
+      this.c('amount').setValue(Number(input.value));
+    }
+  }
 
   pay(): void {
     if (this.busy()) return;

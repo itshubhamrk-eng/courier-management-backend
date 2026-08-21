@@ -73,16 +73,16 @@ type Phase = 'form' | 'processing' | 'success' | 'failed';
                   <span class="amt__l">Amount<i>*</i></span>
                   <div class="amt__wrap" [class.amt__wrap--err]="invalid('amount')">
                     <span class="amt__cur">{{ cur() }}</span>
-                    <input class="amt__i" type="number" min="1" step="1" formControlName="amount" placeholder="0.00" />
+                    <input class="amt__i" type="number" min="1" max="999999" step="1" maxlength="6" formControlName="amount" placeholder="0.00" (input)="clampAmount($event)" />
                   </div>
-                  @if (invalid('amount')) { <span class="amt__err">Enter an amount greater than zero.</span> }
+                  @if (invalid('amount')) { <span class="amt__err">Enter an amount up to 999999.</span> }
                 </label>
                 <div class="quick">
                   @for (q of quick; track q) {
                     <button type="button" class="quick__b" (click)="add(q)">+{{ money(q) }}</button>
                   }
                 </div>
-                <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" />
+                <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional note" [maxLength]="300" />
                 <div class="rform__bar">
                   <app-button variant="stroked" (pressed)="back()">Cancel</app-button>
                   <app-button type="submit" icon="lock" [loading]="phase() === 'processing'">
@@ -176,7 +176,7 @@ export class WalletRecharge implements OnInit {
   readonly cur = computed(() => this.wallet()?.currency ?? 'INR');
 
   protected readonly form: FormGroup = this.fb.group({
-    amount: [null as number | null, [Validators.required, Validators.min(1)]],
+    amount: [null as number | null, [Validators.required, Validators.min(1), Validators.max(999999)]],
     remarks: ['', Validators.maxLength(300)]
   });
 
@@ -191,6 +191,14 @@ export class WalletRecharge implements OnInit {
   protected invalid(name: string): boolean { const ct = this.c(name); return ct.invalid && (ct.touched || ct.dirty); }
   money(n: number | null | undefined): string { return formatMoney(n, this.cur()); }
   add(n: number): void { this.c('amount').setValue((Number(this.c('amount').value) || 0) + n); this.c('amount').markAsDirty(); }
+
+  clampAmount(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    if (input.value.length > 6) {
+      input.value = input.value.slice(0, 6);
+      this.c('amount').setValue(Number(input.value));
+    }
+  }
   stepDone(n: number): boolean {
     const p = this.phase();
     if (n === 1) return p !== 'form';

@@ -48,9 +48,9 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
               <div class="stat"><span class="stat__l">Booking Branch</span><span class="stat__v">{{ branchLabel(shipment()!.bookingBranchId) }}</span><span class="stat__h">Immutable once booked</span></div>
               <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="deliveryBranchOptions()" placeholder="Search delivery branch…" />
               <label class="fld"><span class="fld__l">From Pincode</span>
-                <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" /></label>
+                <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" maxlength="10" /></label>
               <label class="fld"><span class="fld__l">To Pincode</span>
-                <input class="fld__i" [formControl]="c('deliveryPincode')" placeholder="e.g. 400008" /></label>
+                <input class="fld__i" [formControl]="c('deliveryPincode')" placeholder="e.g. 400008" maxlength="10" /></label>
             </div>
           </app-card>
 
@@ -58,25 +58,25 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
             <div class="party party--sender">
               <div class="party__title">Consignor (Sender)</div>
               <label class="fld"><span class="fld__l">Name</span>
-                <input class="fld__i" [formControl]="c('senderName')" placeholder="Sender's full name" /></label>
+                <input class="fld__i" [formControl]="c('senderName')" placeholder="Sender's full name" maxlength="150" /></label>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Address</span>
-                <textarea class="ta" rows="2" [formControl]="c('senderAddress')" placeholder="Pickup address"></textarea></label>
+                <textarea class="ta" rows="2" [formControl]="c('senderAddress')" placeholder="Pickup address" maxlength="500"></textarea></label>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Contact Number</span>
-                <input class="fld__i" type="tel" [formControl]="c('senderContact')" placeholder="10-digit mobile number" /></label>
+                <input class="fld__i" type="tel" [formControl]="c('senderContact')" placeholder="10-digit mobile number" maxlength="20" /></label>
             </div>
 
             <div class="party party--receiver">
               <div class="party__title">Consignee (Receiver)</div>
               <label class="fld"><span class="fld__l">Name</span>
-                <input class="fld__i" [formControl]="c('receiverName')" placeholder="Receiver's full name" /></label>
+                <input class="fld__i" [formControl]="c('receiverName')" placeholder="Receiver's full name" maxlength="150" /></label>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Address</span>
-                <textarea class="ta" rows="2" [formControl]="c('receiverAddress')" placeholder="Delivery address"></textarea></label>
+                <textarea class="ta" rows="2" [formControl]="c('receiverAddress')" placeholder="Delivery address" maxlength="500"></textarea></label>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Contact Number</span>
-                <input class="fld__i" type="tel" [formControl]="c('receiverContact')" placeholder="10-digit mobile number" /></label>
+                <input class="fld__i" type="tel" [formControl]="c('receiverContact')" placeholder="10-digit mobile number" maxlength="20" /></label>
             </div>
           </div>
 
@@ -102,7 +102,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
           </app-card>
 
           <app-card title="Remarks">
-            <textarea class="ta" rows="2" [formControl]="c('remarks')"></textarea>
+            <textarea class="ta" rows="2" [formControl]="c('remarks')" maxlength="500"></textarea>
           </app-card>
 
           <div class="ef__bar">
@@ -180,14 +180,14 @@ export class ShipmentEdit implements OnInit {
 
   protected readonly form: FormGroup = this.fb.group({
     deliveryBranchId: [null as string | null, Validators.required],
-    pickupPincode: [''],
-    deliveryPincode: [''],
-    senderName: ['', Validators.required],
-    senderAddress: ['', Validators.required],
-    senderContact: ['', Validators.required],
-    receiverName: ['', Validators.required],
-    receiverAddress: ['', Validators.required],
-    receiverContact: ['', Validators.required],
+    pickupPincode: ['', Validators.maxLength(10)],
+    deliveryPincode: ['', Validators.maxLength(10)],
+    senderName: ['', [Validators.required, Validators.maxLength(150)]],
+    senderAddress: ['', [Validators.required, Validators.maxLength(500)]],
+    senderContact: ['', [Validators.required, Validators.maxLength(20)]],
+    receiverName: ['', [Validators.required, Validators.maxLength(150)]],
+    receiverAddress: ['', [Validators.required, Validators.maxLength(500)]],
+    receiverContact: ['', [Validators.required, Validators.maxLength(20)]],
     serviceTypeId: [null as string | null, Validators.required],
     packageTypeId: [null as string | null, Validators.required],
     paymentModeId: [null as string | null, Validators.required],
@@ -196,7 +196,7 @@ export class ShipmentEdit implements OnInit {
     numberOfPackages: [1],
     declaredValue: [null as number | null],
     otherCharges: [null as number | null],
-    remarks: ['']
+    remarks: ['', Validators.maxLength(500)]
   });
 
   /**

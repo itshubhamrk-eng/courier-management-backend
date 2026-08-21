@@ -27,9 +27,9 @@ const CURRENCY = /^$|^[A-Za-z]{3}$/;
     <form [formGroup]="form" (ngSubmit)="submit()" class="cform">
       <app-card title="General Information" subtitle="Identity and subscription.">
         <div class="grid">
-          <app-input [control]="c('companyName')" label="Company Name" [required]="true" placeholder="Legacy Couriers Pvt Ltd" />
-          <app-input [control]="c('legalName')" label="Legal Name" placeholder="Registered legal name" />
-          <app-input [control]="c('displayName')" label="Display Name" placeholder="Shown across the app" />
+          <app-input [control]="c('companyName')" label="Company Name" [required]="true" placeholder="Legacy Couriers Pvt Ltd" [maxLength]="150" />
+          <app-input [control]="c('legalName')" label="Legal Name" placeholder="Registered legal name" [maxLength]="200" />
+          <app-input [control]="c('displayName')" label="Display Name" placeholder="Shown across the app" [maxLength]="100" />
           <div class="field-static">
             <span class="field-static__label">Company Code</span>
             <span class="field-static__value">{{ profile().companyCode }}</span>
@@ -47,39 +47,39 @@ const CURRENCY = /^$|^[A-Za-z]{3}$/;
 
       <app-card title="Business Information" subtitle="Statutory registration numbers.">
         <div class="grid">
-          <app-input [control]="c('gstNumber')" label="GST Number" placeholder="22AAAAA0000A1Z5" />
-          <app-input [control]="c('panNumber')" label="PAN Number" placeholder="AAAAA0000A" />
-          <app-input [control]="c('cinNumber')" label="CIN (Optional)" placeholder="U74999KA2020PTC000000" />
+          <app-input [control]="c('gstNumber')" label="GST Number" placeholder="22AAAAA0000A1Z5" [maxLength]="15" />
+          <app-input [control]="c('panNumber')" label="PAN Number" placeholder="AAAAA0000A" [maxLength]="10" />
+          <app-input [control]="c('cinNumber')" label="CIN (Optional)" placeholder="U74999KA2020PTC000000" [maxLength]="21" />
         </div>
       </app-card>
 
       <app-card title="Contact Information" subtitle="How customers and the platform reach you.">
         <div class="grid">
-          <app-input [control]="c('email')" label="Email" type="email" [required]="true" placeholder="ops@company.com" />
-          <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" placeholder="+91 90000 00000" />
-          <app-input [control]="c('alternateMobile')" label="Telephone" type="tel" placeholder="+91 80 0000 0000" />
-          <app-input [control]="c('website')" label="Website" placeholder="https://company.com" />
+          <app-input [control]="c('email')" label="Email" type="email" [required]="true" placeholder="ops@company.com" [maxLength]="255" />
+          <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" placeholder="+91 90000 00000" [maxLength]="20" />
+          <app-input [control]="c('alternateMobile')" label="Telephone" type="tel" placeholder="+91 80 0000 0000" [maxLength]="20" />
+          <app-input [control]="c('website')" label="Website" placeholder="https://company.com" [maxLength]="255" />
         </div>
       </app-card>
 
       <app-card title="Address" subtitle="Registered address of the company.">
         <div class="grid">
-          <app-input [control]="c('addressLine1')" label="Address Line 1" placeholder="Street, building" />
-          <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Area, landmark" />
-          <app-input [control]="c('country')" label="Country" placeholder="India" />
-          <app-input [control]="c('state')" label="State" placeholder="Karnataka" />
-          <app-input [control]="c('city')" label="City" placeholder="Bengaluru" />
-          <app-input [control]="c('postalCode')" label="Pincode" placeholder="560001" />
+          <app-input [control]="c('addressLine1')" label="Address Line 1" placeholder="Street, building" [maxLength]="255" />
+          <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Area, landmark" [maxLength]="255" />
+          <app-input [control]="c('country')" label="Country" placeholder="India" [maxLength]="100" />
+          <app-input [control]="c('state')" label="State" placeholder="Karnataka" [maxLength]="100" />
+          <app-input [control]="c('city')" label="City" placeholder="Bengaluru" [maxLength]="100" />
+          <app-input [control]="c('postalCode')" label="Pincode" placeholder="560001" [maxLength]="20" />
         </div>
       </app-card>
 
       <app-card title="Regional" subtitle="Locale and formatting defaults.">
         <div class="grid">
-          <app-input [control]="c('timezone')" label="Timezone" placeholder="Asia/Kolkata" />
-          <app-input [control]="c('currency')" label="Currency" placeholder="INR" />
-          <app-input [control]="c('language')" label="Language" placeholder="en" />
-          <app-input [control]="c('dateFormat')" label="Date Format" placeholder="dd-MM-yyyy" />
-          <app-input [control]="c('timeFormat')" label="Time Format" placeholder="HH:mm" />
+          <app-input [control]="c('timezone')" label="Timezone" placeholder="Asia/Kolkata" [maxLength]="64" />
+          <app-input [control]="c('currency')" label="Currency" placeholder="INR" [maxLength]="3" />
+          <app-input [control]="c('language')" label="Language" placeholder="en" [maxLength]="10" />
+          <app-input [control]="c('dateFormat')" label="Date Format" placeholder="dd-MM-yyyy" [maxLength]="20" />
+          <app-input [control]="c('timeFormat')" label="Time Format" placeholder="HH:mm" [maxLength]="20" />
         </div>
       </app-card>
 
@@ -185,11 +185,11 @@ export class CompanyForm {
       displayName: ['', Validators.maxLength(100)],
       subscriptionPlanId: ['', Validators.required],
       email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
-      mobile: ['', [Validators.required, Validators.pattern(PHONE)]],
-      alternateMobile: ['', Validators.pattern(PHONE)],
+      mobile: ['', [Validators.required, Validators.pattern(PHONE), Validators.maxLength(20)]],
+      alternateMobile: ['', [Validators.pattern(PHONE), Validators.maxLength(20)]],
       website: ['', [Validators.pattern(WEBSITE), Validators.maxLength(255)]],
-      gstNumber: ['', Validators.pattern(GSTIN)],
-      panNumber: ['', Validators.pattern(PAN)],
+      gstNumber: ['', [Validators.pattern(GSTIN), Validators.maxLength(15)]],
+      panNumber: ['', [Validators.pattern(PAN), Validators.maxLength(10)]],
       cinNumber: ['', Validators.maxLength(21)],
       logo: ['', Validators.maxLength(500)],
       favicon: ['', Validators.maxLength(500)],
@@ -200,7 +200,7 @@ export class CompanyForm {
       city: ['', Validators.maxLength(100)],
       postalCode: ['', Validators.maxLength(20)],
       timezone: ['', Validators.maxLength(64)],
-      currency: ['', Validators.pattern(CURRENCY)],
+      currency: ['', [Validators.pattern(CURRENCY), Validators.maxLength(3)]],
       language: ['', Validators.maxLength(10)],
       dateFormat: ['', Validators.maxLength(20)],
       timeFormat: ['', Validators.maxLength(20)]

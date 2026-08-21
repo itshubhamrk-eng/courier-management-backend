@@ -26,7 +26,7 @@ const DEFAULT: SelectOption[] = [{ value: 'true', label: 'Default only' }, { val
       <app-select [control]="c('roleType')" label="Type" [options]="types" [multiple]="true" placeholder="Any type" />
       <app-select [control]="c('isSystemRole')" label="Kind" [options]="kinds" [allowEmpty]="true" emptyLabel="Any kind" />
       <app-select [control]="c('isDefault')" label="Default role" [options]="defaults" [allowEmpty]="true" emptyLabel="Any" />
-      <app-input [control]="c('permissionCode')" label="Grants permission" placeholder="e.g. SHIPMENT_DELETE" />
+      <app-input [control]="c('permissionCode')" label="Grants permission" placeholder="e.g. SHIPMENT_DELETE" [maxLength]="100" />
 
       <div class="rf__bar">
         <app-button variant="text" (pressed)="clear()">Clear all</app-button>

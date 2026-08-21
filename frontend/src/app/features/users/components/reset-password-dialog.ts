@@ -20,9 +20,9 @@ export interface ResetPasswordData { userId: string; displayName: string; }
       <h2 class="text-h2">Reset password</h2>
       <p class="text-caption">{{ data.displayName }} — sets a new password without the old one.</p>
 
-      <app-input [control]="pwd" label="New Password" type="password" [togglePassword]="true"
+      <app-input [control]="pwd" label="New Password" type="password" [togglePassword]="true" [maxLength]="72"
                  [required]="true" autocomplete="new-password" placeholder="At least 8 characters" />
-      <app-input [control]="confirm" label="Confirm Password" type="password" [togglePassword]="true"
+      <app-input [control]="confirm" label="Confirm Password" type="password" [togglePassword]="true" [maxLength]="72"
                  [required]="true" autocomplete="new-password" placeholder="Re-enter the password" />
       @if (mismatch()) { <span class="rp__err">Passwords do not match.</span> }
 
@@ -48,7 +48,7 @@ export class ResetPasswordDialog {
   private readonly notify = inject(NotificationService);
 
   readonly pwd = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(8), Validators.maxLength(72)] });
-  readonly confirm = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+  readonly confirm = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(72)] });
   readonly mustChange = new FormControl(true, { nonNullable: true });
   readonly busy = signal(false);
 

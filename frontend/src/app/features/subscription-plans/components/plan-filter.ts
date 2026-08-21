@@ -22,7 +22,7 @@ const TYPES: SelectOption[] = PLAN_TYPES.map((t) => ({
     <form [formGroup]="form" (ngSubmit)="apply()" class="pf">
       <app-select [control]="c('isActive')" label="Status" [options]="statuses" [allowEmpty]="true" emptyLabel="Any status" />
       <app-select [control]="c('planType')" label="Tier" [options]="types" [allowEmpty]="true" emptyLabel="Any tier" />
-      <app-input [control]="c('currency')" label="Currency" placeholder="e.g. INR" />
+      <app-input [control]="c('currency')" label="Currency" placeholder="e.g. INR" [maxLength]="3" />
       <div class="pf__row">
         <app-input [control]="c('minPrice')" label="Min monthly price" placeholder="0" />
         <app-input [control]="c('maxPrice')" label="Max monthly price" placeholder="99999" />

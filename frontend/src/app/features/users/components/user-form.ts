@@ -34,39 +34,39 @@ const GENDERS: SelectOption[] = [
       <app-card title="Basic Information" subtitle="Identity and name.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('employeeCode')" label="Employee Code" placeholder="EMP001" />
+            <app-input [control]="c('employeeCode')" label="Employee Code" placeholder="EMP001" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Employee Code</span>
               <span class="stat__v">{{ user()?.employeeCode || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
-          <app-input [control]="c('employeeId')" label="Employee ID" placeholder="Payroll / HR id" />
-          <app-input [control]="c('firstName')" label="First Name" [required]="true" placeholder="Asha" />
-          <app-input [control]="c('middleName')" label="Middle Name" placeholder="—" />
-          <app-input [control]="c('lastName')" label="Last Name" placeholder="Nair" />
-          <app-input [control]="c('displayName')" label="Display Name" placeholder="Shown across the app" />
+          <app-input [control]="c('employeeId')" label="Employee ID" placeholder="Payroll / HR id" [maxLength]="50" />
+          <app-input [control]="c('firstName')" label="First Name" [required]="true" placeholder="Asha" [maxLength]="100" />
+          <app-input [control]="c('middleName')" label="Middle Name" placeholder="—" [maxLength]="100" />
+          <app-input [control]="c('lastName')" label="Last Name" placeholder="Nair" [maxLength]="100" />
+          <app-input [control]="c('displayName')" label="Display Name" placeholder="Shown across the app" [maxLength]="150" />
         </div>
       </app-card>
 
       <app-card title="Account & Contact" subtitle="Login handle and how to reach them.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('email')" label="Email" type="email" [required]="true" placeholder="asha@company.com" />
-            <app-input [control]="c('username')" label="Username" placeholder="asha.nair" />
+            <app-input [control]="c('email')" label="Email" type="email" [required]="true" placeholder="asha@company.com" [maxLength]="255" />
+            <app-input [control]="c('username')" label="Username" placeholder="asha.nair" [maxLength]="100" />
           } @else {
             <div class="stat"><span class="stat__l">Email</span>
               <span class="stat__v">{{ user()?.email }}</span><span class="stat__h">Immutable</span></div>
             <div class="stat"><span class="stat__l">Username</span>
               <span class="stat__v">{{ user()?.username || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
-          <app-input [control]="c('mobile')" label="Mobile" type="tel" placeholder="+91 90000 00000" />
-          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" />
+          <app-input [control]="c('mobile')" label="Mobile" type="tel" placeholder="+91 90000 00000" [maxLength]="20" />
+          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" [maxLength]="20" />
         </div>
       </app-card>
 
       @if (isCreate()) {
         <app-card title="Security" subtitle="Leave the password blank to create a PENDING account an admin later activates by resetting the password.">
           <div class="grid">
-            <app-input [control]="c('password')" label="Initial Password" type="password" [togglePassword]="true"
+            <app-input [control]="c('password')" label="Initial Password" type="password" [togglePassword]="true" [maxLength]="72"
                        autocomplete="new-password" placeholder="Optional — min 8 chars" />
           </div>
         </app-card>
@@ -77,8 +77,8 @@ const GENDERS: SelectOption[] = [
           <app-select [control]="c('gender')" label="Gender" [options]="genders" placeholder="Select" />
           <label class="dt"><span class="dt__l">Date of Birth</span>
             <input class="dt__i" type="date" [formControl]="c('dateOfBirth')" [max]="today" /></label>
-          <app-input [control]="c('designation')" label="Designation" placeholder="Operations Executive" />
-          <app-input [control]="c('department')" label="Department" placeholder="Operations" />
+          <app-input [control]="c('designation')" label="Designation" placeholder="Operations Executive" [maxLength]="100" />
+          <app-input [control]="c('department')" label="Department" placeholder="Operations" [maxLength]="100" />
           <label class="dt"><span class="dt__l">Joining Date</span>
             <input class="dt__i" type="date" [formControl]="c('joiningDate')" /></label>
           <app-select [control]="c('reportingManagerId')" label="Reporting Manager" [options]="managerOptions()"
@@ -100,7 +100,7 @@ const GENDERS: SelectOption[] = [
       </app-card>
 
       <app-card title="Notes" subtitle="Internal remarks.">
-        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this user" />
+        <app-input [control]="c('remarks')" label="Remarks" placeholder="Any internal note about this user" [maxLength]="500" />
       </app-card>
 
       <div class="uform__bar">
@@ -192,8 +192,8 @@ export class UserForm {
       employeeCode: ['', Validators.maxLength(50)],
       employeeId: ['', Validators.maxLength(50)],
       email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
-      username: ['', Validators.pattern(USERNAME)],
-      password: ['', Validators.minLength(8)],
+      username: ['', [Validators.pattern(USERNAME), Validators.maxLength(100)]],
+      password: ['', [Validators.minLength(8), Validators.maxLength(72)]],
       roleIds: [[] as string[]],
       // shared
       firstName: ['', [Validators.required, Validators.maxLength(100)]],

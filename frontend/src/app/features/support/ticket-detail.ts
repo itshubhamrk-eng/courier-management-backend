@@ -101,7 +101,7 @@ function slaLabel(s: SlaStatus): string {
 
             <app-card title="Reply">
               <label class="fld"><span class="fld__l">Message</span>
-                <textarea class="ta" rows="3" placeholder="Write a reply…" [formControl]="replyControl"></textarea>
+                <textarea class="ta" rows="3" placeholder="Write a reply…" maxlength="5000" [formControl]="replyControl"></textarea>
               </label>
               @if (isStaff()) {
                 <label class="chk"><input type="checkbox" [formControl]="internalControl" /> Internal note (staff only, hidden from requester)</label>
@@ -167,7 +167,7 @@ function slaLabel(s: SlaStatus): string {
             @if (canManage()) {
               <app-card title="Assignment">
                 <app-select [control]="agentControl" label="Agent" [options]="agentOptions()" />
-                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="assignRemarksControl" placeholder="Optional" /></label>
+                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="assignRemarksControl" placeholder="Optional" maxlength="1000" /></label>
                 <div class="row-actions">
                   @if (ticket()!.status === 'OPEN') {
                     <app-button [loading]="acting()" [disabled]="!agentControl.value" (pressed)="assign()">Assign</app-button>
@@ -180,7 +180,7 @@ function slaLabel(s: SlaStatus): string {
 
               <app-card title="Status">
                 <app-select [control]="statusControl" label="Move to" [options]="statusOptions" />
-                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="statusRemarksControl" placeholder="Optional" /></label>
+                <label class="fld"><span class="fld__l">Remarks</span><input class="fld__i" type="text" [formControl]="statusRemarksControl" placeholder="Optional" maxlength="1000" /></label>
                 <div class="row-actions"><app-button variant="stroked" [loading]="acting()" (pressed)="changeStatus()">Update Status</app-button></div>
               </app-card>
 
@@ -265,12 +265,12 @@ export class TicketDetailPage implements OnInit {
   private readonly categoryNames = signal<Map<string, string>>(new Map());
   readonly userNames = signal<Map<string, string>>(new Map());
 
-  readonly replyControl = new FormControl('', { nonNullable: true });
+  readonly replyControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(5000)] });
   readonly internalControl = new FormControl(false, { nonNullable: true });
   readonly agentControl = new FormControl<string | null>(null);
-  readonly assignRemarksControl = new FormControl('', { nonNullable: true });
+  readonly assignRemarksControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
   readonly statusControl = new FormControl<TicketStatus>('IN_PROGRESS', { nonNullable: true, validators: [Validators.required] });
-  readonly statusRemarksControl = new FormControl('', { nonNullable: true });
+  readonly statusRemarksControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(1000)] });
   readonly priorityControl = new FormControl<TicketPriority>('MEDIUM', { nonNullable: true });
   readonly categoryControl = new FormControl<string | null>(null);
   readonly subCategoryControl = new FormControl<string | null>(null);

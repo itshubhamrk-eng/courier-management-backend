@@ -21,9 +21,9 @@ const CAP: SelectOption[] = [{ value: 'true', label: 'Enabled' }, { value: 'fals
     <form [formGroup]="form" (ngSubmit)="apply()" class="bf">
       <app-select [control]="c('branchType')" label="Type" [options]="types" [multiple]="true" placeholder="Any type" />
       <app-select [control]="c('status')" label="Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
-      <app-input [control]="c('city')" label="City" placeholder="e.g. Pune" />
-      <app-input [control]="c('state')" label="State" placeholder="e.g. Maharashtra" />
-      <app-input [control]="c('postalCode')" label="Pincode" placeholder="e.g. 411005" />
+      <app-input [control]="c('city')" label="City" placeholder="e.g. Pune" [maxLength]="100" />
+      <app-input [control]="c('state')" label="State" placeholder="e.g. Maharashtra" [maxLength]="100" />
+      <app-input [control]="c('postalCode')" label="Pincode" placeholder="e.g. 411005" [maxLength]="20" />
       <app-select [control]="c('allowBooking')" label="Booking" [options]="cap" [allowEmpty]="true" emptyLabel="Any" />
       <app-select [control]="c('allowDelivery')" label="Delivery" [options]="cap" [allowEmpty]="true" emptyLabel="Any" />
       <app-select [control]="c('allowPickup')" label="Pickup" [options]="cap" [allowEmpty]="true" emptyLabel="Any" />

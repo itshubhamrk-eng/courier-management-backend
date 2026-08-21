@@ -27,8 +27,8 @@ const LOCKED: SelectOption[] = [{ value: 'true', label: 'Locked only' }, { value
       <app-autocomplete [control]="c('branchId')" label="Branch" [options]="branchOptions()" placeholder="Any branch" />
       <app-select [control]="c('hubId')" label="Hub" [options]="hubOptions()" [allowEmpty]="true" emptyLabel="Any hub" />
       <app-select [control]="c('roleCode')" label="Role" [options]="roleOptions()" [allowEmpty]="true" emptyLabel="Any role" />
-      <app-input [control]="c('department')" label="Department" placeholder="Operations" />
-      <app-input [control]="c('designation')" label="Designation" placeholder="Executive" />
+      <app-input [control]="c('department')" label="Department" placeholder="Operations" [maxLength]="100" />
+      <app-input [control]="c('designation')" label="Designation" placeholder="Executive" [maxLength]="100" />
       <label class="dt"><span class="dt__l">Joined from</span><input class="dt__i" type="date" [formControl]="c('joinedFrom')" /></label>
       <label class="dt"><span class="dt__l">Joined to</span><input class="dt__i" type="date" [formControl]="c('joinedTo')" /></label>
 

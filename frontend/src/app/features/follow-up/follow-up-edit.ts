@@ -40,9 +40,9 @@ function toDateInput(iso: string): string { return iso ? iso.substring(0, 10) : 
 
         <app-card title="Follow-up Details">
           <div class="grid">
-            <app-input class="fld--wide" [control]="titleControl" label="Title" [required]="true" />
+            <app-input class="fld--wide" [control]="titleControl" label="Title" [required]="true" [maxLength]="200" />
             <label class="fld fld--wide"><span class="fld__l">Description</span>
-              <textarea class="ta" rows="3" [formControl]="descriptionControl"></textarea>
+              <textarea class="ta" rows="3" maxlength="5000" [formControl]="descriptionControl"></textarea>
             </label>
             <app-select [control]="typeControl" label="Type" [options]="typeOptions" />
             <app-select [control]="priorityControl" label="Priority" [options]="priorityOptions" />
@@ -85,7 +85,7 @@ export class FollowUpEdit implements OnInit {
   readonly branchOptions = signal<SelectOption[]>([]);
 
   readonly titleControl = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] });
-  readonly descriptionControl = new FormControl('', { nonNullable: true });
+  readonly descriptionControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(5000)] });
   readonly typeControl = new FormControl<FollowUpType>('GENERAL', { nonNullable: true });
   readonly priorityControl = new FormControl<FollowUpPriority>('MEDIUM', { nonNullable: true });
   readonly branchControl = new FormControl<string | null>(null);

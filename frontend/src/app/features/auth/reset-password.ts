@@ -25,10 +25,10 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
         <a class="auth-card__back" routerLink="/forgot-password">Request a new link</a>
       } @else {
         <form class="auth-card__form" [formGroup]="form" (ngSubmit)="submit()">
-          <app-input [control]="ctrl('newPassword')" label="New password" type="password"
+          <app-input [control]="ctrl('newPassword')" label="New password" type="password" [maxLength]="72"
                      placeholder="••••••••" icon="lock" [required]="true" [togglePassword]="true"
                      autocomplete="new-password" />
-          <app-input [control]="ctrl('confirm')" label="Confirm password" type="password"
+          <app-input [control]="ctrl('confirm')" label="Confirm password" type="password" [maxLength]="72"
                      placeholder="••••••••" icon="lock" [required]="true" [togglePassword]="true"
                      autocomplete="new-password" />
           @if (mismatch()) { <p class="auth-card__error">Passwords do not match.</p> }
@@ -62,8 +62,8 @@ export class ResetPassword {
   readonly error = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group({
-    newPassword: ['', [Validators.required, Validators.minLength(8)]],
-    confirm: ['', [Validators.required]]
+    newPassword: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
+    confirm: ['', [Validators.required, Validators.maxLength(72)]]
   }, { validators: [matchPasswords] });
 
   ctrl(name: 'newPassword' | 'confirm') { return this.form.controls[name]; }

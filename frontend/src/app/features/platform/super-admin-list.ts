@@ -73,12 +73,12 @@ import { SuperAdminService } from './super-admin.service';
         subtitle="The address must be unused across the whole platform, not just one company.">
         <form [formGroup]="form" (ngSubmit)="submit()" class="form">
           <app-input [control]="ctrl('email')" label="Email" type="email" [required]="true"
-            placeholder="ops@platform.test" />
-          <app-input [control]="ctrl('firstName')" label="First name" />
-          <app-input [control]="ctrl('lastName')" label="Last name" />
-          <app-input [control]="ctrl('phone')" label="Phone" type="tel" />
+            placeholder="ops@platform.test" [maxLength]="255" />
+          <app-input [control]="ctrl('firstName')" label="First name" [maxLength]="100" />
+          <app-input [control]="ctrl('lastName')" label="Last name" [maxLength]="100" />
+          <app-input [control]="ctrl('phone')" label="Phone" type="tel" [maxLength]="20" />
           <app-input [control]="ctrl('password')" label="Password (optional)" type="password"
-            [togglePassword]="true" />
+            [togglePassword]="true" [maxLength]="72" />
 
           <p class="hint">
             <mat-icon>info</mat-icon>
@@ -124,11 +124,11 @@ export class SuperAdminListPage implements OnInit {
   readonly form = this.fb.group({
     // Trimmed before validating: a pasted address with surrounding spaces is valid, and
     // the server trims it anyway, so showing an error about nothing is just wrong.
-    email: ['', [Validators.required, trimmedEmail]],
-    firstName: [''],
-    lastName: [''],
-    phone: [''],
-    password: ['']
+    email: ['', [Validators.required, trimmedEmail, Validators.maxLength(255)]],
+    firstName: ['', Validators.maxLength(100)],
+    lastName: ['', Validators.maxLength(100)],
+    phone: ['', Validators.maxLength(20)],
+    password: ['', Validators.maxLength(72)]
   });
 
   ngOnInit(): void {

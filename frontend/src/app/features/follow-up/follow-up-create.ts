@@ -34,9 +34,9 @@ const TYPE_OPTIONS: SelectOption[] = FOLLOW_UP_TYPES.map((t) => ({ value: t, lab
 
       <app-card title="Follow-up Details">
         <div class="grid">
-          <app-input class="fld--wide" [control]="titleControl" label="Title" placeholder="e.g. Call customer about delivery time" [required]="true" />
+          <app-input class="fld--wide" [control]="titleControl" label="Title" placeholder="e.g. Call customer about delivery time" [required]="true" [maxLength]="200" />
           <label class="fld fld--wide"><span class="fld__l">Description</span>
-            <textarea class="ta" rows="3" placeholder="What needs to happen, and why…" [formControl]="descriptionControl"></textarea>
+            <textarea class="ta" rows="3" placeholder="What needs to happen, and why…" maxlength="5000" [formControl]="descriptionControl"></textarea>
           </label>
           <app-select [control]="typeControl" label="Type" [options]="typeOptions" />
           <app-select [control]="priorityControl" label="Priority" [options]="priorityOptions" />
@@ -86,7 +86,7 @@ export class FollowUpCreate implements OnInit {
   customerId: string | null = null;
 
   readonly titleControl = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] });
-  readonly descriptionControl = new FormControl('', { nonNullable: true });
+  readonly descriptionControl = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(5000)] });
   readonly typeControl = new FormControl<FollowUpType>('GENERAL', { nonNullable: true });
   readonly priorityControl = new FormControl<FollowUpPriority>('MEDIUM', { nonNullable: true });
   readonly branchControl = new FormControl<string | null>(null);

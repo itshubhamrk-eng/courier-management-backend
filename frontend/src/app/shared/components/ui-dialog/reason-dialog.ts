@@ -44,7 +44,7 @@ export interface ReasonData {
       </div>
 
       <app-input [control]="reason" [label]="data.label ?? 'Reason'"
-        [placeholder]="data.placeholder ?? ''" [required]="true" />
+        [placeholder]="data.placeholder ?? ''" [required]="true" [maxLength]="data.maxLength ?? 500" />
 
       <div class="rd__actions">
         <app-button variant="stroked" type="button" (pressed)="ref.close()">Cancel</app-button>

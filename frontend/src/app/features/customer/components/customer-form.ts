@@ -51,38 +51,38 @@ function upperPattern(pattern: RegExp) {
       <app-card title="Basic Information" subtitle="Identity and classification.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('customerCode')" label="Customer Code" placeholder="Blank generates one" />
+            <app-input [control]="c('customerCode')" label="Customer Code" placeholder="Blank generates one" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Customer Code</span>
               <span class="stat__v mono">{{ customer()?.customerCode || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
           <app-select [control]="c('customerType')" label="Customer Type" [options]="types" placeholder="Select a type" />
           @if (isBusiness()) {
-            <app-input [control]="c('companyName')" label="Company Name" placeholder="Acme Traders" />
+            <app-input [control]="c('companyName')" label="Company Name" placeholder="Acme Traders" [maxLength]="150" />
           }
         </div>
       </app-card>
 
       <app-card title="Contact Person" subtitle="Who to reach for this customer.">
         <div class="grid">
-          <app-input [control]="c('firstName')" label="First Name" [required]="true" placeholder="Asha" />
-          <app-input [control]="c('middleName')" label="Middle Name" placeholder="" />
-          <app-input [control]="c('lastName')" label="Last Name" [required]="true" placeholder="Shah" />
+          <app-input [control]="c('firstName')" label="First Name" [required]="true" placeholder="Asha" [maxLength]="100" />
+          <app-input [control]="c('middleName')" label="Middle Name" placeholder="" [maxLength]="100" />
+          <app-input [control]="c('lastName')" label="Last Name" [required]="true" placeholder="Shah" [maxLength]="100" />
         </div>
       </app-card>
 
       <app-card title="Contact" subtitle="How to reach this customer.">
         <div class="grid">
-          <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" placeholder="+91 90000 00000" />
-          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" />
-          <app-input [control]="c('email')" label="Email" type="email" placeholder="asha@company.com" />
+          <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" placeholder="+91 90000 00000" [maxLength]="20" />
+          <app-input [control]="c('alternateMobile')" label="Alternate Mobile" type="tel" placeholder="+91 80 0000 0000" [maxLength]="20" />
+          <app-input [control]="c('email')" label="Email" type="email" placeholder="asha@company.com" [maxLength]="255" />
         </div>
       </app-card>
 
       <app-card title="Tax Details" [subtitle]="isBusiness() ? 'GST is mandatory for a business customer.' : 'Optional for an individual customer.'">
         <div class="grid">
-          <app-input [control]="c('gstNumber')" label="GST Number" [required]="isBusiness()" placeholder="27ABCDE1234F1Z5" />
-          <app-input [control]="c('panNumber')" label="PAN Number" placeholder="ABCDE1234F" />
+          <app-input [control]="c('gstNumber')" label="GST Number" [required]="isBusiness()" placeholder="27ABCDE1234F1Z5" [maxLength]="15" />
+          <app-input [control]="c('panNumber')" label="PAN Number" placeholder="ABCDE1234F" [maxLength]="10" />
         </div>
       </app-card>
 
@@ -152,17 +152,17 @@ export class CustomerForm {
 
   private build(): FormGroup {
     return this.fb.group({
-      customerCode: ['', [Validators.pattern(CODE)]],
+      customerCode: ['', [Validators.pattern(CODE), Validators.maxLength(50)]],
       customerType: ['INDIVIDUAL' as CustomerType, Validators.required],
       companyName: ['', Validators.maxLength(150)],
       firstName: ['', [Validators.required, Validators.maxLength(100)]],
       middleName: ['', Validators.maxLength(100)],
       lastName: ['', [Validators.required, Validators.maxLength(100)]],
-      mobile: ['', [Validators.required, Validators.pattern(PHONE)]],
-      alternateMobile: ['', Validators.pattern(PHONE)],
+      mobile: ['', [Validators.required, Validators.pattern(PHONE), Validators.maxLength(20)]],
+      alternateMobile: ['', [Validators.pattern(PHONE), Validators.maxLength(20)]],
       email: ['', [emailish, Validators.maxLength(255)]],
-      gstNumber: ['', [upperPattern(GSTIN)]],
-      panNumber: ['', [upperPattern(PAN)]]
+      gstNumber: ['', [upperPattern(GSTIN), Validators.maxLength(15)]],
+      panNumber: ['', [upperPattern(PAN), Validators.maxLength(10)]]
     });
   }
 

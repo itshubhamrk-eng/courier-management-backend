@@ -31,10 +31,10 @@ const PRIORITY_OPTIONS: SelectOption[] = TICKET_PRIORITIES.map((p) => ({ value: 
 
       <app-card title="Ticket Details">
         <div class="grid">
-          <app-input [control]="subjectControl" label="Subject" placeholder="Short summary of the issue" [required]="true" />
+          <app-input [control]="subjectControl" label="Subject" placeholder="Short summary of the issue" [required]="true" [maxLength]="200" />
           <label class="fld fld--wide"><span class="fld__l">Description<i>*</i></span>
             <textarea class="ta" rows="4" placeholder="What happened, when, and what you expected instead…"
-              [formControl]="descriptionControl"></textarea>
+              maxlength="5000" [formControl]="descriptionControl"></textarea>
           </label>
           <app-select [control]="categoryControl" label="Category" [options]="categoryOptions()" />
           <app-select [control]="subCategoryControl" label="Sub-category" [options]="subCategoryOptions()" [allowEmpty]="true" />
@@ -94,7 +94,7 @@ export class TicketCreate implements OnInit {
   customerId: string | null = null;
 
   readonly subjectControl = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] });
-  readonly descriptionControl = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+  readonly descriptionControl = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(5000)] });
   readonly categoryControl = new FormControl<string | null>(null, Validators.required);
   readonly subCategoryControl = new FormControl<string | null>(null);
   readonly priorityControl = new FormControl<TicketPriority>('MEDIUM', { nonNullable: true });

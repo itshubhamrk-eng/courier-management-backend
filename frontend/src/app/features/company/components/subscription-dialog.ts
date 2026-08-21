@@ -80,7 +80,7 @@ export type SubscriptionDialogResult =
         the cycle, because the contract is what the invoice will say.
       </p>
 
-      <app-input [control]="ctrl('remarks')" label="Reference (PO or invoice number)" />
+      <app-input [control]="ctrl('remarks')" label="Reference (PO or invoice number)" [maxLength]="500" />
 
       @if (!renewing()) {
         <p class="sub__note">
@@ -129,7 +129,7 @@ export class SubscriptionDialog {
     periods: ['1', [Validators.pattern(/^[1-9][0-9]{0,2}$/)]],
     startDate: ['', [isoDate]],
     endDate: ['', [isoDate]],
-    remarks: ['']
+    remarks: ['', Validators.maxLength(500)]
   });
 
   ctrl(name: string): FormControl {

@@ -24,9 +24,9 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
         </div>
         <form class="auth-card__form" [formGroup]="form" (ngSubmit)="submit()">
           <app-input [control]="ctrl('companyId')" label="Company ID" placeholder="Your company id"
-                     icon="apartment" [required]="true" />
+                     icon="apartment" [required]="true" [maxLength]="50" />
           <app-input [control]="ctrl('email')" label="Email" type="email" placeholder="you@company.com"
-                     icon="mail" [required]="true" autocomplete="username" />
+                     icon="mail" [required]="true" autocomplete="username" [maxLength]="255" />
           <app-button type="submit" [loading]="loading()" [disabled]="form.invalid">Send reset link</app-button>
         </form>
       } @else {
@@ -58,8 +58,8 @@ export class ForgotPassword {
   readonly sent = signal(false);
 
   readonly form = this.fb.nonNullable.group({
-    companyId: ['', [Validators.required]],
-    email: ['', [Validators.required, Validators.email]]
+    companyId: ['', [Validators.required, Validators.maxLength(50)]],
+    email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]]
   });
 
   ctrl(name: 'companyId' | 'email') { return this.form.controls[name]; }

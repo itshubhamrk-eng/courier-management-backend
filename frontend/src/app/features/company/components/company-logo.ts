@@ -26,7 +26,7 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
         <div class="brand__meta">
           <span class="brand__label">Logo</span>
           @if (editable()) {
-            <app-input [control]="logoControl()" placeholder="https://…/logo.png" icon="link" />
+            <app-input [control]="logoControl()" placeholder="https://…/logo.png" icon="link" [maxLength]="500" />
             <button type="button" class="brand__file" (click)="logoFile.click()">
               <mat-icon>upload</mat-icon> Choose file
             </button>
@@ -48,7 +48,7 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
         <div class="brand__meta">
           <span class="brand__label">Favicon</span>
           @if (editable()) {
-            <app-input [control]="faviconControl()" placeholder="https://…/favicon.ico" icon="link" />
+            <app-input [control]="faviconControl()" placeholder="https://…/favicon.ico" icon="link" [maxLength]="500" />
             <button type="button" class="brand__file" (click)="favFile.click()">
               <mat-icon>upload</mat-icon> Choose file
             </button>

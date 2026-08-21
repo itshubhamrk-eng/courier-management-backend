@@ -93,7 +93,8 @@ import { MasterField, MasterFieldOption } from '../master.config';
                messages for one problem reads as two problems, and UiInput's generic
                "Invalid value." says nothing about a pattern this field declared. -->
           <app-input [control]="control()" [label]="field().label" [required]="!!field().required"
-                     [placeholder]="field().placeholder ?? ''" [errorMessage]="error() ?? ''" />
+                     [placeholder]="field().placeholder ?? ''" [errorMessage]="error() ?? ''"
+                     [maxLength]="field().maxLength ?? null" />
           @if (!error() && field().hint) { <span class="fld__hint">{{ field().hint }}</span> }
         </div>
       }

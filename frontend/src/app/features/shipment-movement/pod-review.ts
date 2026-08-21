@@ -113,7 +113,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
 
         <app-card title="Decision">
           <form [formGroup]="form" class="df">
-            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" />
+            <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" [maxLength]="1000" />
             <div class="df__bar">
               <app-button variant="danger" icon="cancel" [loading]="deciding() === 'reject'" (pressed)="decide(false)">Reject</app-button>
               <app-button icon="check_circle" [loading]="deciding() === 'approve'" (pressed)="decide(true)">Approve</app-button>

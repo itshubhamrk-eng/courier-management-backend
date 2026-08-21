@@ -56,9 +56,9 @@ function toOptions(rows: GeographyOption[]): SelectOption[] {
                       [allowEmpty]="true" emptyLabel="Not set" placeholder="Select an area first" />
         </div>
 
-        <app-input [control]="c('addressLine1')" label="Address Line 1" [required]="true" placeholder="Building, street" />
-        <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Landmark, area" />
-        <app-input [control]="c('landmark')" label="Landmark" placeholder="Near..." />
+        <app-input [control]="c('addressLine1')" label="Address Line 1" [required]="true" placeholder="Building, street" [maxLength]="255" />
+        <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Landmark, area" [maxLength]="255" />
+        <app-input [control]="c('landmark')" label="Landmark" placeholder="Near..." [maxLength]="150" />
 
         <div class="grid">
           <app-input [control]="c('latitude')" label="Latitude" type="text" placeholder="18.520430" />

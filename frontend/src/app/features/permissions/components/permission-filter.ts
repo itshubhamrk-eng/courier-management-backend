@@ -27,7 +27,7 @@ const GATED: SelectOption[] = [{ value: 'true', label: 'Plan-gated only' }];
       <app-select [control]="c('status')" label="Status" [options]="statuses" [allowEmpty]="true" emptyLabel="Any status" />
       <app-select [control]="c('isSystemPermission')" label="Kind" [options]="kinds" [allowEmpty]="true" emptyLabel="Any kind" />
       <app-select [control]="c('planGatedOnly')" label="Plan gating" [options]="gated" [allowEmpty]="true" emptyLabel="Any" />
-      <app-input [control]="c('resource')" label="Resource" placeholder="e.g. shipments, rate-master" />
+      <app-input [control]="c('resource')" label="Resource" placeholder="e.g. shipments, rate-master" [maxLength]="100" />
 
       <div class="pf__bar">
         <app-button variant="text" (pressed)="clear()">Clear all</app-button>

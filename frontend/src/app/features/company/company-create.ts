@@ -57,11 +57,11 @@ const PAN = /^$|^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
         <app-card title="Identity" subtitle="The code is permanent — operational records will quote it.">
           <div class="grid">
             <app-input [control]="c('companyCode')" label="Company code" [required]="true"
-              placeholder="ACME_LOGISTICS"
+              placeholder="ACME_LOGISTICS" [maxLength]="50"
               errorMessage="2–50 characters: letters, digits, hyphen or underscore" />
-            <app-input [control]="c('companyName')" label="Company name" [required]="true" />
-            <app-input [control]="c('legalName')" label="Legal name" />
-            <app-input [control]="c('displayName')" label="Display name" />
+            <app-input [control]="c('companyName')" label="Company name" [required]="true" [maxLength]="150" />
+            <app-input [control]="c('legalName')" label="Legal name" [maxLength]="200" />
+            <app-input [control]="c('displayName')" label="Display name" [maxLength]="100" />
             <app-select [control]="c('subscriptionPlanId')" label="Subscription plan" [options]="planOptions()" />
           </div>
           <p class="hint">
@@ -72,25 +72,25 @@ const PAN = /^$|^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
 
         <app-card title="Contact">
           <div class="grid">
-            <app-input [control]="c('email')" label="Email" type="email" [required]="true" />
-            <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" />
-            <app-input [control]="c('alternateMobile')" label="Telephone" type="tel" />
-            <app-input [control]="c('website')" label="Website" />
+            <app-input [control]="c('email')" label="Email" type="email" [required]="true" [maxLength]="255" />
+            <app-input [control]="c('mobile')" label="Mobile" type="tel" [required]="true" [maxLength]="20" />
+            <app-input [control]="c('alternateMobile')" label="Telephone" type="tel" [maxLength]="20" />
+            <app-input [control]="c('website')" label="Website" [maxLength]="255" />
           </div>
         </app-card>
 
         <app-card title="Registration">
           <div class="grid">
-            <app-input [control]="c('gstNumber')" label="GSTIN" />
-            <app-input [control]="c('panNumber')" label="PAN" />
-            <app-input [control]="c('cinNumber')" label="CIN" />
+            <app-input [control]="c('gstNumber')" label="GSTIN" [maxLength]="15" />
+            <app-input [control]="c('panNumber')" label="PAN" [maxLength]="10" />
+            <app-input [control]="c('cinNumber')" label="CIN" [maxLength]="21" />
           </div>
         </app-card>
 
         <app-card title="Address" subtitle="Country → State → District → City narrows the picker; only the selected names are saved.">
           <div class="grid">
-            <app-input [control]="c('addressLine1')" label="Address line 1" />
-            <app-input [control]="c('addressLine2')" label="Address line 2" />
+            <app-input [control]="c('addressLine1')" label="Address line 1" [maxLength]="255" />
+            <app-input [control]="c('addressLine2')" label="Address line 2" [maxLength]="255" />
             <app-select [control]="c('countryId')" label="Country" [options]="countryOpts()"
                         [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a country" />
             <app-select [control]="c('stateId')" label="State" [options]="stateOpts()"
@@ -99,7 +99,7 @@ const PAN = /^$|^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
                         [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a state first" />
             <app-select [control]="c('cityId')" label="City" [options]="cityOpts()"
                         [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a district first" />
-            <app-input [control]="c('postalCode')" label="Pincode" />
+            <app-input [control]="c('postalCode')" label="Pincode" [maxLength]="20" />
           </div>
         </app-card>
 
@@ -110,10 +110,10 @@ const PAN = /^$|^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
         <app-card title="First administrator"
           subtitle="Leave blank to use the company's own email and mobile.">
           <div class="grid">
-            <app-input [control]="c('adminEmail')" label="Admin email" type="email" />
-            <app-input [control]="c('adminMobile')" label="Admin mobile" type="tel" />
-            <app-input [control]="c('adminFirstName')" label="First name" />
-            <app-input [control]="c('adminLastName')" label="Last name" />
+            <app-input [control]="c('adminEmail')" label="Admin email" type="email" [maxLength]="255" />
+            <app-input [control]="c('adminMobile')" label="Admin mobile" type="tel" [maxLength]="20" />
+            <app-input [control]="c('adminFirstName')" label="First name" [maxLength]="100" />
+            <app-input [control]="c('adminLastName')" label="Last name" [maxLength]="100" />
           </div>
           <p class="hint">
             <mat-icon>vpn_key</mat-icon>
@@ -155,29 +155,29 @@ export class CompanyCreatePage implements OnInit {
   readonly form = this.fb.group({
     // Mirrors the backend's own pattern, so the same input is refused in the same place
     // rather than surviving the form and coming back as a 400.
-    companyCode: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9][A-Za-z0-9_-]{1,48}[A-Za-z0-9]$/)]],
+    companyCode: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9][A-Za-z0-9_-]{1,48}[A-Za-z0-9]$/), Validators.maxLength(50)]],
     companyName: ['', [Validators.required, Validators.maxLength(150)]],
     legalName: ['', Validators.maxLength(200)],
     displayName: ['', Validators.maxLength(100)],
     subscriptionPlanId: ['', [Validators.required]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
-    mobile: ['', [Validators.required, Validators.pattern(PHONE)]],
-    alternateMobile: ['', Validators.pattern(PHONE)],
+    mobile: ['', [Validators.required, Validators.pattern(PHONE), Validators.maxLength(20)]],
+    alternateMobile: ['', [Validators.pattern(PHONE), Validators.maxLength(20)]],
     website: ['', [Validators.pattern(WEBSITE), Validators.maxLength(255)]],
-    gstNumber: ['', Validators.pattern(GSTIN)],
-    panNumber: ['', Validators.pattern(PAN)],
+    gstNumber: ['', [Validators.pattern(GSTIN), Validators.maxLength(15)]],
+    panNumber: ['', [Validators.pattern(PAN), Validators.maxLength(10)]],
     cinNumber: ['', Validators.maxLength(21)],
-    addressLine1: [''],
-    addressLine2: [''],
+    addressLine1: ['', Validators.maxLength(255)],
+    addressLine2: ['', Validators.maxLength(255)],
     countryId: [null as string | null],
     stateId: [null as string | null],
     districtId: [null as string | null],
     cityId: [null as string | null],
-    postalCode: [''],
-    logo: [''],
-    favicon: [''],
+    postalCode: ['', Validators.maxLength(20)],
+    logo: ['', Validators.maxLength(500)],
+    favicon: ['', Validators.maxLength(500)],
     adminEmail: ['', [Validators.email, Validators.maxLength(255)]],
-    adminMobile: ['', Validators.pattern(PHONE)],
+    adminMobile: ['', [Validators.pattern(PHONE), Validators.maxLength(20)]],
     adminFirstName: ['', Validators.maxLength(100)],
     adminLastName: ['', Validators.maxLength(100)]
   });
