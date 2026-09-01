@@ -13,4 +13,6 @@ public interface CommunicationSettingRepository extends JpaRepository<Communicat
     List<CommunicationSetting> findAllByCompanyId(UUID companyId);
 
     long countByCompanyId(UUID companyId);
+
+    boolean existsByCompanyIdAndEnabledTrue(UUID companyId);
 }

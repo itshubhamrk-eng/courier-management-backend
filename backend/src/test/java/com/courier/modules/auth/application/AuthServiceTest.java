@@ -177,6 +177,24 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("a platform-role user's login-bookkeeping company mismatch never turns an "
+            + "already-successful login into a 500")
+    void loginSurvivesBookkeepingCompanyIsolation() {
+        // Found in prod 2026-09-02: SUPER_ADMIN signed in with a companyCode resolved from
+        // the request (not their own platform company) — password verified and the session
+        // was already issued, but the bookkeeping update on their User row then tripped
+        // CompanyIsolationException, previously uncaught here and surfaced as an unhandled 500.
+        stubSuccessfulAuthentication();
+        org.mockito.Mockito.doThrow(new com.courier.shared.exception.CompanyIsolationException(
+                        "Cross-company update blocked for User"))
+                .when(loginAttemptService).recordSuccess(eq(userId), any(), eq("10.0.0.1"), eq("JUnit"));
+
+        AuthService.AuthResult result = authService.login(command("correct-password", false));
+
+        assertThat(result.tokens().accessToken()).isEqualTo("access");
+    }
+
+    @Test
     @DisplayName("the company is bound before any user lookup, so the company filter applies")
     void bindsCompanyBeforeLookup() {
         stubSuccessfulAuthentication();

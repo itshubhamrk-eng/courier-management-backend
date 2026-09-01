@@ -124,6 +124,12 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
         return repository.findByCompanyIdAndChannel(companyId, channel).filter(CommunicationSetting::isEnabled);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasAnyEnabled(UUID companyId) {
+        return repository.existsByCompanyIdAndEnabledTrue(companyId);
+    }
+
     private boolean requireConfig(CommunicationSetting setting, String key) {
         Map<String, String> config = CommunicationConfigJson.read(objectMapper, setting.getConfigJson());
         String value = config.get(key);

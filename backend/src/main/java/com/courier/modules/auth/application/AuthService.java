@@ -209,6 +209,17 @@ public class AuthService {
             // test), not just the optimistic case.
             log.warn("Login bookkeeping lost a race for user {} (concurrent login to the same account) "
                     + "— the login itself still succeeded", user.getId());
+        } catch (com.courier.shared.exception.CompanyIsolationException e) {
+            // Same scenario the BadCredentials catch above already documents: a
+            // platform-role user (SUPER_ADMIN/PLATFORM_ADMIN) genuinely anchored to a
+            // different company than the one this login resolved (companyId came from
+            // a companyCode the caller supplied/had prefilled, not from the user's own
+            // row). Password verified correctly and the session/tokens are already
+            // issued — found in prod 2026-09-02 when this crashed SUPER_ADMIN login as
+            // an unhandled 500 instead of failing open the same way the bad-password
+            // path already does.
+            log.error("Login bookkeeping blocked by company isolation for user {} (resolved company {}) "
+                    + "— the login itself still succeeded", user.getId(), companyId, e);
         }
 
         log.info("User {} signed in to company {} (session {}, rememberMe={})",

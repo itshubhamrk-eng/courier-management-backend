@@ -8,6 +8,68 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — SUPER_ADMIN login 500 on a company-mismatch bookkeeping race
+
+Found live on prod right after the company-domain-map deploy: SUPER_ADMIN signing in on
+`vendor.amazinglpl.com` with the auto-filled `AMAZING_LOGISTICS` company code still in the
+field (the "Not your company? Sign in without one" escape hatch exists but is easy to miss)
+resolved `companyId` to that tenant, not the platform company. Password verified and the
+session/tokens were already issued, but the post-login bookkeeping update
+(`loginAttemptService.recordSuccess`) then hit `CompanyIsolationException` updating the
+platform-owned User row while bound to the wrong company — uncaught, surfaced as an
+unhandled 500. `AuthService.login`'s bad-password path already defends against this exact
+scenario (own comment says so); the correct-password path's `recordSuccess` catch only
+handled `ConcurrencyFailureException`. Added a sibling catch for `CompanyIsolationException`,
+same fail-open reasoning: login already succeeded, a bookkeeping race must never turn that
+into a client-visible failure. Verified against prod directly: `POST /auth/login` with
+`it.shubham.rk@gmail.com` + blank companyCode now returns 200 with the correct platform
+`companyId`. Root workaround (clear the company-code field) still stands regardless — this
+just stops the crash if it's missed again.
+
+## [Unreleased] — 2026-09-02 — Communication Center booking-path regression: HikariCP pool exhaustion
+
+Found running a local 50-VU k6 load test the same day Communication Center shipped: every
+booking now fires `ShipmentEvent.Booked` → `ShipmentCommunicationListener` (`AFTER_COMMIT`,
+`REQUIRES_NEW`) → `CommunicationOrchestrator.handle()`, which loops all 3 channels doing a
+dedup lookup + setting lookup + template lookup per channel even when the company has never
+touched Communication Center — up to ~10 extra queries and a second sequential connection
+checkout per booking, previously zero for a TOPAY (non-wallet-debiting) booking. Pushed the
+pool (`HikariCP`, size 20 on the local test profile) into `Connection is not available`
+timeouts already at 50 VUs — the 2026-08-17 baseline held clean to ~175-180 VUs. Symptom:
+`create_shipment_duration` p95 5.1s (target <1s), 1.74% `http_req_failed`, real 500s on
+`POST /api/v1/shipments`.
+
+Fix: `CommunicationSettingService.hasAnyEnabled(companyId)` (new, `existsByCompanyIdAndEnabledTrue`
+— an exists-projection query, never hydrates `secretEncrypted` so `EncryptedStringConverter`
+doesn't run). `CommunicationOrchestrator.handle()` checks it first and returns immediately for
+a company with zero channels enabled — the common case for every company today — instead of
+writing 3 `CANCELLED` log rows nobody will read. Retested at 50 VUs after the fix:
+`create_shipment_duration` p95 51ms, 0% `http_req_failed`. Then ran the fixed build to 10000
+successful local bookings (two k6 runs, split only by the CLI's default 10-minute
+`maxDuration`, not by any failure) with 0% errors throughout.
+
+Separately noted, not fixed: `CommunicationSettingServiceImpl.list()`/`get()` auto-create a
+row with `enabled(true)` for any missing channel on a plain read — merely opening the
+Communication settings page silently turns a channel on. Explains a stray company found with
+WHATSAPP already enabled from earlier manual testing, feeding a `CommunicationDispatchJob`
+sweep that's retried the same row every 30s since (blocked on `SECRETS_ENCRYPTION_KEY` not
+being set in the local test environment — a local env gap, not a code bug).
+
+## [Unreleased] — 2026-09-02 — Deployed to prod (commit 59a4d9e)
+
+69 uncommitted files (Communication Center module, idle-timeout logout, ToPay print fix,
+prod build-config split, branch geography dropdowns, login company-domain-map, plus several
+backend domain tweaks) had accumulated on `main` without ever being committed or shipped.
+Committed as `59a4d9e`, backend `mvn compile` and frontend `tsc --noEmit` both clean, then
+rsynced `backend/`, `frontend/`, and root `docker-compose.yml` to the prod box
+(35.154.220.116) and rebuilt backend then frontend sequentially (not parallel — 1GB RAM).
+Found `courier-backend` running a stale 10-hour-old unhealthy image from a prior partial
+deploy attempt — `docker compose up -d` alone didn't recreate it, needed
+`--force-recreate`. Flyway confirmed schema already at V50 (no migration needed — DB had
+been synced ahead of the code). Live and verified: `vendor.amazinglpl.com` 200,
+`prod-api.amazinglpl.com` login endpoint reachable (400 on dummy creds), no fresh nginx
+errors. See [[prod-ec2-deployment]] for the deploy gotchas found.
+
 ## [Unreleased] — 2026-09-02 — Consignment print: "ToPay" label wrong on Paid orders
 
 Direct bug report ("paid order receipt getting topay name on receipt"). 0.30.2's own

@@ -28,6 +28,13 @@ public interface CommunicationSettingService {
      *  through a controller. */
     Optional<CommunicationSetting> findEnabled(UUID companyId, CommunicationChannel channel);
 
+    /** Cheap existence check (no entity hydration, so {@code secretEncrypted}'s
+     *  {@code EncryptedStringConverter} never runs) — lets {@code CommunicationOrchestrator}
+     *  skip its whole per-channel loop for the common case of a company that has never
+     *  configured Communication Center at all, rather than paying 3 channel lookups + 3
+     *  CANCELLED-row inserts per shipment event for a feature it never opted into. */
+    boolean hasAnyEnabled(UUID companyId);
+
     record ConnectionTestResult(boolean ok, String message) {
     }
 }

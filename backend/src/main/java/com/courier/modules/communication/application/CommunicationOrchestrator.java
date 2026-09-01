@@ -39,6 +39,16 @@ public class CommunicationOrchestrator {
     private final CommunicationLogRepository logRepository;
 
     public void handle(UUID companyId, UUID shipmentId, CommunicationEventType eventType) {
+        // Cheapest possible check first: a company that has never enabled any channel
+        // (the default for every company today — nothing opts in automatically) gets
+        // zero queries beyond this one, instead of a per-channel lookup+insert pass that
+        // only ever produces CANCELLED rows nobody will read. Found necessary running a
+        // 50-VU local load test 2026-09-02: every booking paying for this loop regardless
+        // of Communication Center ever being configured pushed the request's REQUIRES_NEW
+        // transaction long enough to exhaust HikariCP under concurrent booking traffic.
+        if (!settingService.hasAnyEnabled(companyId)) {
+            return;
+        }
         var snapshot = shipmentDirectoryPort.findSnapshot(companyId, shipmentId);
         if (snapshot.isEmpty()) {
             log.warn("Communication event {} for shipment {} in company {} — shipment not found, skipping",

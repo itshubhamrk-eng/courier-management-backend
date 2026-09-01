@@ -52,6 +52,7 @@ class CommunicationOrchestratorTest {
     void setUp() {
         orchestrator = new CommunicationOrchestrator(shipmentDirectoryPort, settingService, templateService,
                 logRepository);
+        when(settingService.hasAnyEnabled(any())).thenReturn(true);
         when(shipmentDirectoryPort.findSnapshot(COMPANY, SHIPMENT_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
         when(logRepository.findByShipmentIdAndEventTypeAndChannel(any(), any(), any())).thenReturn(Optional.empty());
         when(logRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -173,6 +174,16 @@ class CommunicationOrchestratorTest {
 
         orchestrator.handle(COMPANY, SHIPMENT_ID, CommunicationEventType.SHIPMENT_BOOKED);
 
+        verify(logRepository, never()).save(any());
+    }
+
+    @Test
+    void noChannelEverEnabled_skipsEntirelyWithoutTouchingShipmentOrLogRepository() {
+        when(settingService.hasAnyEnabled(COMPANY)).thenReturn(false);
+
+        orchestrator.handle(COMPANY, SHIPMENT_ID, CommunicationEventType.SHIPMENT_BOOKED);
+
+        verify(shipmentDirectoryPort, never()).findSnapshot(any(), any());
         verify(logRepository, never()).save(any());
     }
 
