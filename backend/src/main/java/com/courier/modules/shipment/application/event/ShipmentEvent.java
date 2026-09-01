@@ -100,4 +100,42 @@ public sealed interface ShipmentEvent {
             Instant occurredAt
     ) implements ShipmentEvent {
     }
+
+    // ---------------------------------------------------------------- Communication Center
+    //
+    // The six records below carry only ids/scalars, same discipline as every event above —
+    // com.courier.modules.communication's own listener re-reads full shipment detail at
+    // dispatch time rather than trusting a copy that could go stale by the time a retry
+    // re-processes it minutes later. This module has no idea that listener exists; it just
+    // publishes what happened. See ShipmentServiceImpl's six call sites (create/cancel/
+    // transitionToDispatched/scanOneIn/assignOneOutForDelivery/deliver) and
+    // com.courier.modules.communication.application.ShipmentCommunicationListener.
+    //
+    // No RTO_INITIATED/RTO_DELIVERED equivalents exist here — this codebase has no
+    // return-to-origin flow yet (only a generic RETURNED terminal state nothing writes, per
+    // ShipmentStatus's own doc). CommunicationEventType still declares both for architecture
+    // readiness; nothing publishes into them until a real RTO module exists.
+
+    record Booked(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
+
+    record Dispatched(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
+
+    /** Published when a shipment reaches its own final destination branch — not on an
+     *  intermediate crossing-hub in-scan (see {@code ShipmentServiceImpl.scanOneIn}'s
+     *  {@code finalDestination} branch), since a crossing hop is not the customer-facing
+     *  "your shipment arrived at the branch" moment the brief's {@code SHIPMENT_RECEIVED}
+     *  describes. */
+    record ReceivedAtBranch(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
+
+    record OutForDelivery(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
+
+    record Delivered(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
+
+    record Cancelled(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    }
 }

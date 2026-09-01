@@ -93,6 +93,8 @@ public class WalletMapper {
     }
 
     public WalletTransactionResponse toResponse(WalletTransaction t) {
+        String createdByName = branchDirectory.findUser(t.getCreatedBy(), t.getCompanyId())
+                .map(BranchDirectoryPort.UserRef::displayName).orElse(null);
         return new WalletTransactionResponse(
                 t.getId(), t.getCompanyId(), t.getWalletId(), t.getTransactionNo(),
                 t.getTransactionType(),
@@ -102,7 +104,7 @@ public class WalletMapper {
                 t.getAmount(), t.getBalanceBefore(), t.getBalanceAfter(),
                 t.getReferenceType(), t.getReferenceId(), t.getRemarks(),
                 t.getPaymentGateway(), t.getPaymentReference(), t.getPaymentStatus(),
-                t.getCreatedBy(), t.getCreatedAt());
+                t.getCreatedBy(), createdByName, t.getCreatedAt());
     }
 
     public RechargeOrderResponse toResponse(PaymentGatewayPort.GatewayOrder order,

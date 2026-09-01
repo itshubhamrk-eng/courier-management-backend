@@ -276,7 +276,7 @@ public class RateServiceImpl implements RateService {
                 matched = lowest;
                 chargeableWeight = matched.getMinimumWeight();
                 freight = matched.getBaseRate();
-            } else if (actualWeight.compareTo(highest.getMaximumWeight()) >= 0) {
+            } else if (actualWeight.compareTo(highest.getMaximumWeight()) > 0) {
                 matched = highest;
                 BigDecimal extra = actualWeight.subtract(matched.getMaximumWeight());
                 BigDecimal units = extra.divide(matched.getAdditionalWeight(), 0, RoundingMode.CEILING);

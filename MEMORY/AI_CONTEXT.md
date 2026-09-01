@@ -7,6 +7,146 @@
 
 ## Current Version
 
+`0.31.0` — **Communication Center module, COMPLETE end-to-end.** Direct full-spec request.
+New package `com.courier.modules.communication`, migration `V50`. Event-driven multi-channel
+(WhatsApp/SMS/Email) customer notifications: business modules never send messages directly —
+`ShipmentServiceImpl` (still the only writer of Shipment Booking/Movement state) publishes six
+new plain-scalar `ShipmentEvent` records (`Booked`/`Dispatched`/`ReceivedAtBranch`/
+`OutForDelivery`/`Delivered`/`Cancelled`) at its six existing call sites (create/cancel/
+transitionToDispatched/scanOneIn's final-destination branch/assignOneOutForDelivery/deliver);
+a new `ShipmentCommunicationListener` (`AFTER_COMMIT`+`REQUIRES_NEW`, same discipline
+`ShipmentBookingWalletListener` already set) is the only place a shipment event turns into a
+communication attempt.
+
+**Flow, as code**: `CommunicationOrchestrator.handle` finds enabled channels -> loads the
+active template -> queues one `communication_log` row per channel (`PENDING`, or `CANCELLED`
+with a stated reason: channel disabled, customer opted out, no active template, no address on
+file) — a fast DB insert only, never a network call on the listener thread. A new
+`CommunicationDispatchJob` (`@Scheduled`, this codebase's outbox-plus-sweep answer to "use
+Kafka if available, otherwise an event abstraction ready for it" — no Kafka dependency exists
+anywhere in this repo) picks up due rows cross-tenant (same `CompanyContext`-unbound sweep
+shape `TicketSlaSweepJob`/`ShipmentSlaSweepJob` already use) and `CommunicationSendService`
+renders the template (`{{customerName}}`/`companyName`/`shipmentNumber`/`trackingNumber`/
+`pickupLocation`/`deliveryLocation`/`amount`/`deliveryDate`/`receiverName`/`trackingUrl`/
+`podUrl`) and calls the right provider.
+
+**Two deliberately separate on/off switches**, resolving a real contradiction in the brief's
+own DB-schema-vs-Default-Events sections: `communication_setting.enabled` is the channel-level
+master switch per company (WhatsApp/SMS/Email on at all); `communication_template.status`
+(`ACTIVE`/`INACTIVE`) is the actual per-event-per-channel switch the brief's "Company Admin can
+enable/disable each channel per event" describes. The four default events (`SHIPMENT_BOOKED`/
+`SHIPMENT_DISPATCHED`/`OUT_FOR_DELIVERY`/`SHIPMENT_DELIVERED`) x three channels seed lazily
+(`CommunicationTemplateServiceImpl.seedDefaultsIfEmpty`, get-or-create like `CompanySettings`)
+the first time a company's templates are read; `SHIPMENT_RECEIVED`/`SHIPMENT_CANCELLED` and the
+two RTO events exist for a Company Admin to create manually.
+
+**Providers**: `WhatsAppProvider`/`SmsProvider`/`EmailProvider` interfaces, each with a
+`LogOnly*` default (no dev-environment vendor account exists — same accepted-gap class as
+auth's own `LogOnlyNotificationSender`) and a real implementation gated by an explicit
+`app.communication.<channel>.enabled` property pair (`@ConditionalOnProperty`, no
+`@ConditionalOnMissingBean`, mirrors `PaymentGatewayConfig`'s own reasoning exactly):
+`MetaWhatsAppProvider` (Meta Cloud API, plain `RestClient`, no SDK, approved-template-only
+sends), `GenericHttpSmsProvider` (POSTs to whatever `apiUrl` a company configures — "do not
+hardcode provider" taken literally), `SmtpEmailProvider` (new `spring-boot-starter-mail`
+dependency, platform-level `spring.mail.*`, a company only sets its own from-name/from-email
+identity — SMTP itself isn't a per-company secret here, unlike WhatsApp/SMS credentials which
+are genuinely per-company and live encrypted in `communication_setting.secret_encrypted` via
+the same `EncryptedStringConverter` `CompanyRazorpayConfig` (V46) already uses).
+
+**RTO_INITIATED/RTO_DELIVERED are declared, never published** — this codebase has no
+return-to-origin flow (`ShipmentStatus.RETURNED` is a generic terminal state nothing writes
+yet, per its own doc). A future RTO module can start publishing into these two rows with zero
+schema/enum change here — flagged, not guessed.
+
+**Backend**: `communication_template`/`communication_setting`/`communication_log` (all
+company-owned, the project's usual shape), `customers` gained `whatsapp_enabled`/
+`sms_enabled`/`email_enabled` (default `TRUE`, opt-out not opt-in) threaded through
+`CreateCustomerCommand`/`UpdateCustomerCommand`/both DTOs/the mapper/`CustomerServiceImpl`.
+`ShipmentDirectoryPort` (owned by `communication`, implemented by `shipment.infrastructure
+.CommunicationShipmentDirectoryAdapter`) goes straight to repositories, never a
+`@PreAuthorize`-guarded service method — the dispatch job's scheduler thread carries no
+authenticated caller, the same reason `TicketDirectory`/`AuthBranchDirectory` do the same;
+sender/receiver `Customer` rows are looked up (never created) by exact mobile match, reusing
+the row `ShipmentServiceImpl.create`'s own `findOrCreateForBooking` call already wrote.
+14 endpoints across four controllers (templates/settings/logs/dashboard). RBAC role-based like
+every module since Ticket Support (no new `PermissionModule`/`PermissionAction` rows) —
+settings/template writes `COMPANY_ADMIN`-only, dashboard/logs/retry `COMPANY_ADMIN`+
+`BRANCH_MANAGER`. 36 new backend unit tests (`mvn test` 835 -> 871), covering Success/Failure/
+Retry/Disabled-Channel/Customer-Preference/Duplicate-Event/Company-Isolation per the brief's
+own test list.
+
+**Frontend**: `features/communication/` — Dashboard (today's Sent/Delivered/Failed/Pending,
+folding `DELIVERED` into `Sent` since a delivered message was necessarily sent first), Channel
+Settings (one card per channel, secrets never round-tripped — blank keeps the stored one),
+Templates (list + edit dialog with Enable/Disable, variable-insert chips, live Preview against
+synthetic sample data), Logs (filter/paginate/Retry Failed). New `ShipmentCommunicationCard`
+embedded in Shipment Details ("SHIPMENT_BOOKED ✓ WhatsApp Sent ✓ SMS Sent ✗ Email Sent" per the
+brief's own example). Customer create/edit gained a "Communication Preferences" card
+(`mat-checkbox` x3, same pattern `module-permission-card.ts` already uses). New nav section
+"Communication Center", `COMMUNICATION_READERS`/`COMMUNICATION_ADMIN` role gates mirroring the
+backend split exactly. 11 new frontend tests (`ng test` 134 -> 145, the one pre-existing
+`reports-dashboard` nav failure untouched and unrelated), `tsc --noEmit`/`ng build
+--configuration production` both clean.
+
+**Verified fully live** on a throwaway `:8083` (`:8100`/`:4200` untouched throughout — a
+concurrent session's own `:8082`/`:4300` pair was also live and untouched) against real
+`courier_db`, `V50` applied cleanly (schema now at 50): settings/templates lazy-seed exactly
+3/12 rows; booked a fresh test shipment (`PUNE-000019`, own fixture, no existing row touched)
+and confirmed the full pipeline end to end — 3 `communication_log` rows queued on
+`SHIPMENT_BOOKED`, WhatsApp/SMS picked up by the dispatch sweep and marked `SENT` with a
+synthetic `providerMessageId` within one sweep interval, Email correctly `CANCELLED` ("No
+EMAIL address on file"); dashboard aggregation matched exactly; cancelling that same shipment
+correctly queued `SHIPMENT_CANCELLED` rows `CANCELLED` with "No active template" (proving the
+seed-only-four-events design live, not just in a unit test); `test-connection` correctly
+reported missing WhatsApp credentials; a `BRANCH_MANAGER` token correctly 403'd on
+`PUT /communication/settings/WHATSAPP` (`COMPANY_ADMIN`-only); template preview rendered
+correctly against synthetic data; the auto-created test `Customer` row carried the expected
+`whatsappEnabled=smsEnabled=emailEnabled=true` defaults. **Not verified live**: a genuine
+`FAILED`/retry cycle (no real vendor credentials in this dev environment to force a provider
+failure) and the `DELIVERED` terminal status (no provider delivery-receipt webhook exists yet
+for any channel) — both covered by unit tests instead
+(`CommunicationSendServiceImplTest`/`CommunicationLogServiceImplTest`), not fabricated live.
+
+**Same-day "test it live" follow-up**: a full Chrome click-through (throwaway `:8083`/`:4301`,
+real `:8100`/`:4200` and the concurrent session's `:8082`/`:4300` both untouched) as
+`first.admin@gmail.com` found and fixed two real UI bugs: (1) Chrome's autofill overwrote
+Channel Settings' Business Account ID/Sender ID/Access Token/API Key fields with the signed-in
+admin's own saved email/password (`autocomplete="off"` alone doesn't stop Chrome once a
+`type="password"` field makes it treat the card as a login form) — fixed with
+`autocomplete="new-password"` on the secret field; (2) the Customer form's sticky action bar
+painted directly over the new Communication Preferences checkboxes once that card pushed the
+form's total height into the exact band where the bar's pinned position overlaps normal-flow
+content — real DOM elements, correct colors, simply hidden underneath an opaque sibling
+(confirmed via `getBoundingClientRect()` overlap, not guessed) — fixed with a structural
+`padding-bottom` on the form container. Every other page/action clicked through clean:
+Dashboard, Channel Settings save/test-connection, Templates list/edit/preview,
+Logs+filters, the Shipment Details Communication tab (rendered the brief's own worked
+example exactly), and a real Customer create persisting a deliberately-unchecked preference.
+Full detail in `CHANGELOG.md` 0.31.0 and `MEMORY/modules/communication.md`.
+
+**Same-day bugfix**: Consignment print's Customer/Office copy was printing a literal
+"ToPay" label on Paid orders (0.30.2's own per-copy amount rules had this backwards).
+`consignment-print.util.ts`'s `'hidden'` amount mode renamed to `'paid'` — now shows
+"Total Paid" + the real amount instead. Driver/Delivery copy logic untouched. Not
+verified live — code fix only, `tsc --noEmit` clean. Full detail in `CHANGELOG.md`
+Unreleased 2026-09-02.
+
+Previously current:
+
+`0.30.3` — **Manual ODA Charge override at booking.** ODA Charge row moved below Other
+Charges in the booking summary and made editable — was a read-only echo of the Pricing
+Engine's own `chargeBreakup.odaCharge`. `ShipmentServiceImpl.copyCharge` treats a typed value
+as an override (not an addition, unlike `otherCharges`), applying GST only to the difference
+from the engine's own figure at the booking branch's GST%. (Concurrent-session entry,
+reconstructed from `CHANGELOG.md` — this file had not been updated for 0.30.2/0.30.3 when this
+task started.)
+
+`0.30.2` — **Consignment print: 4 copies with per-copy amount rules.** Customer/Office/
+Driver/Delivery copies (was Original/Office), amount block varies by copy + payment mode.
+(Concurrent-session entry, reconstructed from `CHANGELOG.md` — see above.)
+
+Previously current:
+
 `0.30.1` — **POD Auto Verification module, COMPLETE end-to-end.** Direct full-spec
 request. New package `com.courier.modules.pod`, migrations `V48`/`V49`. AI-scored gate in
 front of the existing delivery close-out: `OUT_FOR_DELIVERY` -> upload POD -> AI

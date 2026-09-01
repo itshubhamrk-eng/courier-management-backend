@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CreateBranchRequest } from '@core/models/branch.model';
 import { BranchForm } from './branch-form';
@@ -27,7 +29,7 @@ describe('BranchForm — the branchUser block', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [BranchForm],
-      providers: [provideNoopAnimations()]
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideNoopAnimations()]
     });
     fixture = TestBed.createComponent(BranchForm);
     fixture.componentRef.setInput('mode', 'create');

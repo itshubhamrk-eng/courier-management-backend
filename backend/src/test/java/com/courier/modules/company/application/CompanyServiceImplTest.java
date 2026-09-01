@@ -9,6 +9,7 @@ import com.courier.modules.company.domain.CompanyRepository;
 import com.courier.modules.company.domain.CompanyRoleRepository;
 import com.courier.modules.company.domain.CompanySettingRepository;
 import com.courier.modules.company.domain.CompanyStatus;
+import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.subscription.application.SubscriptionPlanService;
 import com.courier.modules.subscription.domain.PlanType;
 import com.courier.modules.subscription.domain.SubscriptionPlan;
@@ -69,6 +70,7 @@ class CompanyServiceImplTest {
     @Mock private SubscriptionPlanService subscriptionPlanService;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private FileStoragePort fileStoragePort;
 
     private CompanyServiceImpl service;
     private SubscriptionPlan plan;
@@ -77,7 +79,7 @@ class CompanyServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CompanyServiceImpl(repository, roleRepository, settingRepository,
-                provisioningService, subscriptionPlanService, auditService, eventPublisher);
+                provisioningService, subscriptionPlanService, auditService, eventPublisher, fileStoragePort);
 
         plan = SubscriptionPlan.builder()
                 .planCode("STANDARD_MONTHLY")

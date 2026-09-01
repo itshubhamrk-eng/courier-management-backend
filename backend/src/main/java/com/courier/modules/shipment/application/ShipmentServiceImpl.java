@@ -287,6 +287,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     saved.getId(), companyId, saved.getBookingBranchId(), saved.getShipmentNumber(),
                     netAmount, Instant.now()));
         }
+        eventPublisher.publishEvent(new ShipmentEvent.Booked(saved.getId(), companyId, Instant.now()));
 
         return saved;
     }
@@ -621,6 +622,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_CANCELLED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "previousStatus", previous.name()));
+        eventPublisher.publishEvent(new ShipmentEvent.Cancelled(saved.getId(), companyId, Instant.now()));
 
         return saved;
     }
@@ -759,6 +761,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     bookingBranchId, manifestId, vehicleId);
             saved.add(s);
             publishDispatchCommissionIfEarned(s, companyId, charges.get(s.getId()));
+            eventPublisher.publishEvent(new ShipmentEvent.Dispatched(s.getId(), companyId, Instant.now()));
         }
         auditService.record(AuditAction.MANIFEST_DISPATCHED, "Manifest", manifestId,
                 Map.of("shipmentCount", saved.size(), "vehicleId", vehicleId.toString()));
@@ -873,6 +876,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     receivingBranchId, saved.getManifestId(), null);
             auditService.record(AuditAction.SHIPMENT_IN_SCANNED, ENTITY, saved.getId(),
                     Map.of("shipmentNumber", saved.getShipmentNumber()));
+            eventPublisher.publishEvent(new ShipmentEvent.ReceivedAtBranch(saved.getId(), companyId, Instant.now()));
             return new MovementOutcome(trackingNumber, true, null);
         }
 
@@ -944,6 +948,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 shipment.getDeliveryBranchId(), saved.getManifestId(), null);
         auditService.record(AuditAction.SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "deliveryUserId", deliveryUserId.toString()));
+        eventPublisher.publishEvent(new ShipmentEvent.OutForDelivery(saved.getId(), companyId, Instant.now()));
         return new MovementOutcome(saved.getShipmentNumber(), true, null);
     }
 
@@ -976,6 +981,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 shipment.getDeliveryBranchId(), saved.getManifestId(), null);
         auditService.record(AuditAction.SHIPMENT_DELIVERED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "receiverName", command.receiverName()));
+        eventPublisher.publishEvent(new ShipmentEvent.Delivered(saved.getId(), companyId, Instant.now()));
 
         PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
         if (paymentMode.isCollectAtDelivery()) {

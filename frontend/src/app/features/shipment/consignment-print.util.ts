@@ -9,6 +9,8 @@ import JsBarcode from 'jsbarcode';
  *  prints as "—". */
 export interface ConsignmentPrintData {
   companyName: string;
+  /** Company branding, `AuthService.companyLogo()` — absent falls back to the text wordmark. */
+  companyLogo: string | null;
   shipmentNumber: string;
   trackingNumber: string;
   bookingDate: string;
@@ -103,23 +105,23 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
     ['Reschedule Fine', 0]
   ];
 
-  // Already-Paid orders carry no money left to show/collect — Customer & Office copies hide
-  // the paid amount (print "ToPay" instead), the Driver copy drops the amount block entirely
-  // (nothing to collect), and the Delivery copy always shows the ToPay-to-collect figure,
-  // which is 0 once the order was Paid at booking.
+  // Already-Paid orders carry no money left to collect — Customer & Office copies show the
+  // amount as already Paid (not a "ToPay" figure), the Driver copy drops the amount block
+  // entirely (nothing to collect), and the Delivery copy always shows the ToPay-to-collect
+  // figure, which is 0 once the order was Paid at booking.
   const isPaid = d.paymentModeLabel.includes('(PAID)');
-  const amountMode: 'normal' | 'hidden' | 'omitted' | 'collect' =
+  const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
     label === 'Driver Copy' ? (isPaid ? 'omitted' : 'normal') :
     label === 'Delivery Copy' ? 'collect' :
-    isPaid ? 'hidden' : 'normal';
+    isPaid ? 'paid' : 'normal';
 
   const collectTotal = isPaid ? 0 : total;
-  const amountSection = amountMode === 'omitted' ? '' : amountMode === 'hidden' ? `
+  const amountSection = amountMode === 'omitted' ? '' : amountMode === 'paid' ? `
           <table class="charges">
             <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
-            <tr class="total"><td>Total Receivable</td><td>ToPay</td></tr>
+            <tr class="total"><td>Total Paid</td><td>${total.toFixed(2)}</td></tr>
           </table>
-          <div class="zero">To Pay</div>
+          <div class="zero">${esc(amountInWords(total))} (Paid)</div>
           <div class="note">
             Note : Terms And Conditions Applied<br>
             All articles are received in good condition
@@ -145,11 +147,12 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
       <div class="head">
         <div class="brand">
           <div class="logo">
+            ${d.companyLogo ? `<img class="mark" src="${esc(d.companyLogo)}" alt="${esc(d.companyName)}">` : `
             <div class="word">${esc(d.companyName)}</div>
             <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
               <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
             </svg>
-            <div class="tag">Courier &amp; Logistics</div>
+            <div class="tag">Courier &amp; Logistics</div>`}
           </div>
         </div>
         <div class="co">
@@ -243,6 +246,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .head > div{padding:10px 12px}
   .head .brand{display:flex;align-items:center;justify-content:center}
   .logo{line-height:1;text-align:center}
+  .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
   .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
   .logo .swoosh{display:block;margin:2px auto 0}
   .logo .tag{font-size:10px;color:var(--orange);font-weight:600;margin-top:2px}

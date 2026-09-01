@@ -26,8 +26,16 @@ public interface BranchDirectoryPort {
                      boolean active) {
     }
 
+    /** Identity of one user, flattened to what a wallet statement shows against
+     *  {@code createdBy}/{@code updatedBy}: their display name. */
+    record UserRef(UUID userId, UUID companyId, String displayName) {
+    }
+
     /** The branch, if it exists within this company. Empty for a foreign or unknown id. */
     Optional<BranchRef> findBranch(UUID branchId, UUID companyId);
+
+    /** The user, if it exists within this company. Empty for a foreign, unknown or system id. */
+    Optional<UserRef> findUser(UUID userId, UUID companyId);
 
     /** The branch this user is placed at ({@code users.branch_id}), if any. */
     Optional<UUID> branchOfUser(UUID userId, UUID companyId);

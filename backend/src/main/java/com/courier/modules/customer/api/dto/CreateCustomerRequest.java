@@ -47,6 +47,10 @@ public record CreateCustomerRequest(
         String gstNumber,
 
         @Pattern(regexp = "^$|^[A-Z]{5}[0-9]{4}[A-Z]$", message = "must be a valid 10-character PAN")
-        String panNumber
+        String panNumber,
+
+        @Schema(description = "Communication preference — defaults to true when omitted") Boolean whatsappEnabled,
+        @Schema(description = "Communication preference — defaults to true when omitted") Boolean smsEnabled,
+        @Schema(description = "Communication preference — defaults to true when omitted") Boolean emailEnabled
 ) {
 }

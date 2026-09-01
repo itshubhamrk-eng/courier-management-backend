@@ -1066,6 +1066,7 @@ export class ShipmentCreate implements OnInit {
         this.notify.success(`Shipment ${s.shipmentNumber} booked — AWB ${s.trackingNumber}.`);
         printConsignmentCopies({
           companyName: this.auth.companyName() ?? 'Courier SaaS',
+          companyLogo: this.auth.companyLogo(),
           shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
           expectedDeliveryDate: s.expectedDeliveryDate ?? null,
           bookingBranchLabel: this.myBranchLabel(), deliveryBranchLabel: this.branchLabel(v.deliveryBranchId),

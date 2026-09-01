@@ -90,6 +90,21 @@ public class Customer extends CompanyOwnedEntity {
     @Builder.Default
     private CustomerStatus status = CustomerStatus.ACTIVE;
 
+    // Communication Center (V50) preferences — opt-out, not opt-in. Read by
+    // com.courier.modules.communication's send-time gate: company channel enabled AND
+    // that event's template ACTIVE on that channel AND this customer's own preference.
+    @Column(name = "whatsapp_enabled", nullable = false)
+    @Builder.Default
+    private boolean whatsappEnabled = true;
+
+    @Column(name = "sms_enabled", nullable = false)
+    @Builder.Default
+    private boolean smsEnabled = true;
+
+    @Column(name = "email_enabled", nullable = false)
+    @Builder.Default
+    private boolean emailEnabled = true;
+
     // ---------------------------------------------------------------- behaviour
 
     public static String normaliseCode(String code) {

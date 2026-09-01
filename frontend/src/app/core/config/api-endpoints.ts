@@ -54,5 +54,11 @@ export const API = {
   /** E-Way Bill Management — standalone CRUD/lifecycle. Shipment Booking itself carries
    *  E-Way Bill data inline (see shipments); this is for managing one afterward. See
    *  MEMORY/modules/eway-bill.md. */
-  ewayBills: '/eway-bills'
+  ewayBills: '/eway-bills',
+  /** Communication Center — WhatsApp/SMS/Email, event-driven. See
+   *  MEMORY/modules/communication.md. */
+  communicationTemplates: '/communication/templates',
+  communicationSettings: '/communication/settings',
+  communicationLogs: '/communication/logs',
+  communicationDashboard: '/communication/dashboard'
 } as const;

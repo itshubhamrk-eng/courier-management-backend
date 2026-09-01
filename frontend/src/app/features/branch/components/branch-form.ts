@@ -12,7 +12,11 @@ import {
   BranchResponse, BranchType, BRANCH_TYPES,
   BranchUserRequest, CreateBranchRequest, UpdateBranchRequest
 } from '@core/models/branch.model';
-import { Lookup } from '../branch.service';
+import { BranchService, GeographyOption, Lookup } from '../branch.service';
+
+function toOptions(rows: GeographyOption[]): SelectOption[] {
+  return rows.map((r) => ({ value: r.id, label: r.name }));
+}
 
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_ -]{1,48}[A-Za-z0-9]$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -90,10 +94,21 @@ function emailish(control: AbstractControl): ValidationErrors | null {
         <div class="grid">
           <app-input [control]="c('addressLine1')" label="Address Line 1" placeholder="Building, street" [maxLength]="255" />
           <app-input [control]="c('addressLine2')" label="Address Line 2" placeholder="Landmark, area" [maxLength]="255" />
-          <app-input [control]="c('country')" label="Country" placeholder="India" [maxLength]="100" />
-          <app-input [control]="c('state')" label="State" placeholder="Maharashtra" [maxLength]="100" />
-          <app-input [control]="c('city')" label="City" placeholder="Pune" [maxLength]="100" />
-          <app-input [control]="c('district')" label="Area / District" placeholder="Shivajinagar" [maxLength]="100" />
+          @if (isCreate()) {
+            <app-select [control]="c('countryId')" label="Country" [options]="countryOpts()"
+                        [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a country" />
+            <app-select [control]="c('stateId')" label="State" [options]="stateOpts()"
+                        [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a country first" />
+            <app-select [control]="c('districtId')" label="Area / District" [options]="districtOpts()"
+                        [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a state first" />
+            <app-select [control]="c('cityId')" label="City" [options]="cityOpts()"
+                        [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a district first" />
+          } @else {
+            <app-input [control]="c('country')" label="Country" placeholder="India" [maxLength]="100" />
+            <app-input [control]="c('state')" label="State" placeholder="Maharashtra" [maxLength]="100" />
+            <app-input [control]="c('district')" label="Area / District" placeholder="Shivajinagar" [maxLength]="100" />
+            <app-input [control]="c('city')" label="City" placeholder="Pune" [maxLength]="100" />
+          }
           <app-input [control]="c('taluka')" label="Taluka" placeholder="Haveli" [maxLength]="100" />
           <app-input [control]="c('postalCode')" label="Pincode" placeholder="411005" [maxLength]="20" />
         </div>
@@ -205,6 +220,7 @@ function emailish(control: AbstractControl): ValidationErrors | null {
 })
 export class BranchForm {
   private readonly fb = inject(FormBuilder);
+  private readonly service = inject(BranchService);
 
   readonly mode = input<'create' | 'edit'>('create');
   readonly branch = input<BranchResponse | null>(null);
@@ -230,7 +246,35 @@ export class BranchForm {
     return this.managers().find((m) => m.id === id)?.label ?? '—';
   });
 
+  private readonly countries = signal<GeographyOption[]>([]);
+  private readonly states = signal<GeographyOption[]>([]);
+  private readonly districts = signal<GeographyOption[]>([]);
+  private readonly cities = signal<GeographyOption[]>([]);
+
+  protected readonly countryOpts = computed(() => toOptions(this.countries()));
+  protected readonly stateOpts = computed(() => toOptions(this.states()));
+  protected readonly districtOpts = computed(() => toOptions(this.districts()));
+  protected readonly cityOpts = computed(() => toOptions(this.cities()));
+
   constructor() {
+    if (this.isCreate()) {
+      this.service.countries().subscribe((rows) => this.countries.set(rows));
+      this.c('countryId').valueChanges.subscribe((id) => {
+        this.cascade('state', id);
+        this.c('country').setValue(this.nameOf(this.countries(), id), { emitEvent: false });
+      });
+      this.c('stateId').valueChanges.subscribe((id) => {
+        this.cascade('district', id);
+        this.c('state').setValue(this.nameOf(this.states(), id), { emitEvent: false });
+      });
+      this.c('districtId').valueChanges.subscribe((id) => {
+        this.cascade('city', id);
+        this.c('district').setValue(this.nameOf(this.districts(), id), { emitEvent: false });
+      });
+      this.c('cityId').valueChanges.subscribe((id) => {
+        this.c('city').setValue(this.nameOf(this.cities(), id), { emitEvent: false });
+      });
+    }
     effect(() => {
       const editing = this.mode() === 'edit';
       const branchCode = this.form.get('branchCode') as FormControl;
@@ -250,6 +294,28 @@ export class BranchForm {
 
   /** A control inside the create-only `branchUser` group. */
   protected u(name: string): FormControl { return this.form.get(['branchUser', name]) as FormControl; }
+
+  /** Clears and reloads everything beneath the level just changed. */
+  private cascade(level: 'state' | 'district' | 'city', parentId: string | null): void {
+    const resetLists: Record<string, () => void> = {
+      state: () => { this.states.set([]); this.districts.set([]); this.cities.set([]); },
+      district: () => { this.districts.set([]); this.cities.set([]); },
+      city: () => this.cities.set([])
+    };
+    resetLists[level]();
+
+    if (!parentId) return;
+    switch (level) {
+      case 'state': this.service.states(parentId).subscribe((rows) => this.states.set(rows)); break;
+      case 'district': this.service.districts(parentId).subscribe((rows) => this.districts.set(rows)); break;
+      case 'city': this.service.cities(parentId).subscribe((rows) => this.cities.set(rows)); break;
+    }
+  }
+
+  /** Resolves the picked id back to the plain name the backend actually stores. */
+  private nameOf(rows: GeographyOption[], id: string | null): string | null {
+    return id ? (rows.find((r) => r.id === id)?.name ?? null) : null;
+  }
 
   private hydrate(b: BranchResponse): void {
     if (this.hydrated()) return;
@@ -289,6 +355,10 @@ export class BranchForm {
       state: ['', Validators.maxLength(100)],
       city: ['', Validators.maxLength(100)],
       district: ['', Validators.maxLength(100)],
+      countryId: [null as string | null],
+      stateId: [null as string | null],
+      districtId: [null as string | null],
+      cityId: [null as string | null],
       taluka: ['', Validators.maxLength(100)],
       postalCode: ['', Validators.maxLength(20)],
       openingTime: [''],

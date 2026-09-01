@@ -77,6 +77,15 @@ services:
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_API_URL: ${RAZORPAY_API_URL:-https://api.razorpay.com/v1}
+      COMMUNICATION_WHATSAPP_ENABLED: ${COMMUNICATION_WHATSAPP_ENABLED:-false}
+      COMMUNICATION_SMS_ENABLED: ${COMMUNICATION_SMS_ENABLED:-false}
+      # Deliberately NOT COMMUNICATION_EMAIL_ENABLED/SPRING_MAIL_*: Spring Boot only
+      # auto-configures a JavaMailSender bean when spring.mail.host is a genuinely absent
+      # property, not merely blank — passing SPRING_MAIL_HOST through with a `:-` empty
+      # default would still count as "present" and create a broken bean, defeating
+      # EmailProviderConfig's own startup-fail-fast gate. A deployment that wants real
+      # SMTP adds SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD and COMMUNICATION_EMAIL_ENABLED
+      # here itself, deliberately, rather than inheriting a silently-blank default.
     ports:
       - "${BACKEND_PORT:-8091}:8080"
     networks:
@@ -86,6 +95,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Dev quick-fill login buttons + visible company code field ship with the
+        # "development" config. A deployment fronting real customers sets
+        # FRONTEND_BUILD_CONFIGURATION=production in its own .env to strip both.
+        BUILD_CONFIGURATION: ${FRONTEND_BUILD_CONFIGURATION:-development}
     container_name: courier-frontend
     restart: unless-stopped
     depends_on:

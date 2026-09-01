@@ -34,6 +34,11 @@ const SUPPORT_READERS = [...COMPANY_ROLES, AppRole.SUPER_ADMIN];
 /** Follow-up Management: branch operational tasks — every company role, no SUPER_ADMIN
  * (unlike Ticket Support, a follow-up has no cross-tenant view at all). */
 const FOLLOW_UP_READERS = COMPANY_ROLES;
+/** Communication Center: dashboard/logs are readable by whoever runs a branch; Channel
+ * Settings/Templates are COMPANY_ADMIN's own call (mirrors backend @PreAuthorize —
+ * no SUPER_ADMIN, this is company-owned config, not platform-owned). */
+const COMMUNICATION_READERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
+const COMMUNICATION_ADMIN = [AppRole.COMPANY_ADMIN];
 /** Every branch role reads what it books, moves or is asked about. */
 const SHIPMENT_READERS = [...MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 /** Every branch staff role reads its own reports. */
@@ -219,6 +224,16 @@ export const NAVIGATION: NavNode[] = [
       { id: 'support-categories', title: 'Categories', icon: 'category', route: '/support/categories', roles: PLATFORM },
       // Per-priority first-response/resolution targets — company-scoped, COMPANY_ADMIN's own call.
       { id: 'support-sla-rules', title: 'SLA Rules', icon: 'schedule', route: '/support/sla-rules', roles: ADMINS }
+    ]
+  },
+
+  {
+    id: 'communication', title: 'Communication Center', icon: 'forum', order: 6.6,
+    children: [
+      { id: 'communication-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/communication/dashboard', roles: COMMUNICATION_READERS },
+      { id: 'communication-settings', title: 'Channel Settings', icon: 'tune', route: '/communication/settings', roles: COMMUNICATION_ADMIN },
+      { id: 'communication-templates', title: 'Templates', icon: 'description', route: '/communication/templates', roles: COMMUNICATION_ADMIN },
+      { id: 'communication-logs', title: 'Logs', icon: 'history', route: '/communication/logs', roles: COMMUNICATION_READERS }
     ]
   },
 

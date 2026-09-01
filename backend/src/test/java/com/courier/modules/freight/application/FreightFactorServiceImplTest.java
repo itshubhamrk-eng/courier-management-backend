@@ -112,7 +112,7 @@ class FreightFactorServiceImplTest {
     @DisplayName("overlap on only one axis is accepted")
     void oneAxisOverlapAccepted() {
         // Same distance band as candidate, but disjoint weight band -> no 2D conflict.
-        FreightFactor existing = existingCell("0.000", "100.000", "10.000", "20.000");
+        FreightFactor existing = existingCell("0.000", "100.000", "10.001", "20.000");
         when(repository.findByCompanyIdAndStatus(COMPANY, FreightFactorStatus.ACTIVE))
                 .thenReturn(List.of(existing));
 

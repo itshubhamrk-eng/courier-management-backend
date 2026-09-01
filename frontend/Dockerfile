@@ -19,12 +19,14 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-# Dev configuration on purpose: this image is the courier-dev stack (see
-# docker-compose.yml's "courier-dev" project name). Prod config strips
-# environment.production to true, which hides the dev quick-fill login
-# buttons testers rely on. Point this at the prod config only when this
-# Dockerfile starts building an actual production image.
-RUN npm run build -- --configuration=development
+# Defaults to "development" (this is the courier-dev stack — see
+# docker-compose.yml's "courier-dev" project name): environment.production
+# stays false, which is what shows the dev quick-fill login buttons testers
+# rely on and the manual company-code field. A deployment fronting real
+# customers passes --build-arg BUILD_CONFIGURATION=production (docker-compose.yml
+# wires this to the FRONTEND_BUILD_CONFIGURATION env var) to strip both.
+ARG BUILD_CONFIGURATION=development
+RUN npm run build -- --configuration=${BUILD_CONFIGURATION}
 
 # --- Stage 2: runtime (Nginx) -------------------------------------------------
 FROM nginx:1.27-alpine AS runtime

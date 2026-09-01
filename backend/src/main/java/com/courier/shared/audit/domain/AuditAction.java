@@ -231,6 +231,13 @@ public enum AuditAction {
     POD_VERIFICATION_APPROVED,
     POD_VERIFICATION_REJECTED,
 
+    // --- Communication Center (V50): multi-channel event-driven notifications — see
+    // MEMORY/modules/communication.md.
+    COMMUNICATION_SETTING_UPDATED,
+    COMMUNICATION_TEMPLATE_CREATED,
+    COMMUNICATION_TEMPLATE_UPDATED,
+    COMMUNICATION_RETRIED,
+
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,
     UPDATED,

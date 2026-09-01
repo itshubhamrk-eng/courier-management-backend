@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { NavigationService } from '@core/navigation/navigation.service';
 import { TourService } from '@core/services/tour.service';
 import { AuthService } from '@core/auth/auth.service';
+import { IdleTimeoutService } from '@core/auth/idle-timeout.service';
 import { Sidebar } from './components/sidebar';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
@@ -60,6 +61,7 @@ export class AdminLayout {
   private readonly nav = inject(NavigationService);
   private readonly tour = inject(TourService);
   private readonly router = inject(Router);
+  private readonly idleTimeout = inject(IdleTimeoutService);
   protected readonly auth = inject(AuthService);
 
   /** Mobile/tablet: drawer visible. Desktop collapse lives in NavigationService (persisted). */
@@ -67,6 +69,9 @@ export class AdminLayout {
   private readonly isMobile = signal(false);
 
   constructor() {
+    this.idleTimeout.start();
+    this.destroyRef.onDestroy(() => this.idleTimeout.stop());
+
     // Sidebar/header DOM must be painted before driver.js can measure tour-step anchors.
     afterNextRender(() => this.tour.maybeAutoStart());
 

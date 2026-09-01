@@ -64,7 +64,7 @@ public class FreightCalculator implements ChargeCalculator {
             if (chargeableWeight.compareTo(lowest.getMinimumWeight()) < 0) {
                 matched = lowest;
                 freight = matched.getBaseRate();
-            } else if (chargeableWeight.compareTo(highest.getMaximumWeight()) >= 0) {
+            } else if (chargeableWeight.compareTo(highest.getMaximumWeight()) > 0) {
                 matched = highest;
                 BigDecimal extra = chargeableWeight.subtract(matched.getMaximumWeight());
                 BigDecimal units = extra.divide(matched.getAdditionalWeight(), 0, RoundingMode.CEILING);

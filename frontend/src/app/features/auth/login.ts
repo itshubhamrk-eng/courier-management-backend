@@ -7,6 +7,7 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { HttpErrorResponse } from '@angular/common/http';
 import { environment } from '@env/environment';
+import { companyCodeForHostname } from '@core/config/company-domain-map';
 
 /** Sign-in. Company slug (company code) is optional — the backend resolves it. */
 @Component({
@@ -21,8 +22,13 @@ import { environment } from '@env/environment';
         <p class="text-caption">Sign in to your Courier SaaS console.</p>
       </div>
       <form class="login__form" [formGroup]="form" (ngSubmit)="submit()">
-        <app-input [control]="ctrl('companyCode')" label="Company code" placeholder="e.g. ACME_LOGISTICS"
-                   icon="apartment" autocomplete="organization" [maxLength]="50" />
+        @if (devMode || companyLocked()) {
+          <app-input [control]="ctrl('companyCode')" label="Company code" placeholder="e.g. ACME_LOGISTICS"
+                     icon="apartment" autocomplete="organization" [maxLength]="50" />
+          @if (companyLocked()) {
+            <button type="button" class="login__unlock" (click)="clearCompanyLock()">Not your company? Sign in without one</button>
+          }
+        }
         <app-input [control]="ctrl('email')" label="Email" type="email" placeholder="you@company.com"
                    icon="mail" [required]="true" autocomplete="username" [maxLength]="255" />
         <app-input [control]="ctrl('password')" label="Password" type="password" placeholder="••••••••"
@@ -66,6 +72,8 @@ import { environment } from '@env/environment';
     .login__dev-btn { flex:1; padding:8px 10px; border:0; border-radius:10px; background:var(--surface-muted);
       box-shadow:var(--shadow-clay-inset); color:var(--content-fg); font:600 12px var(--font-sans); cursor:pointer; transition:color .15s; }
     .login__dev-btn:hover { color:var(--brand-700); }
+    .login__unlock { align-self:flex-start; margin-top:-8px; padding:0; border:0; background:none; color:var(--brand-600);
+      font:500 12px var(--font-sans); cursor:pointer; text-decoration:underline; }
   `]
 })
 export class Login {
@@ -79,6 +87,12 @@ export class Login {
   readonly error = signal<string | null>(null);
   /** Dev-only credential quick-fill; stripped from production builds. */
   readonly devMode = !environment.production;
+  /** True while the company code is prefilled from this hostname's own domain map
+   *  (see {@link companyCodeForHostname}) — shows the field (even outside devMode)
+   *  with an escape hatch, since a platform-role account (SUPER_ADMIN/PLATFORM_ADMIN)
+   *  has no company and must be able to clear it rather than be silently locked into
+   *  whichever company this domain maps to. */
+  readonly companyLocked = signal(false);
 
   readonly form = this.fb.nonNullable.group({
     companyCode: ['', Validators.maxLength(50)],
@@ -86,6 +100,19 @@ export class Login {
     password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
     rememberMe: [false]
   });
+
+  constructor() {
+    const companyCode = companyCodeForHostname(window.location.hostname);
+    if (companyCode) {
+      this.form.controls.companyCode.setValue(companyCode);
+      this.companyLocked.set(true);
+    }
+  }
+
+  clearCompanyLock(): void {
+    this.form.controls.companyCode.setValue('');
+    this.companyLocked.set(false);
+  }
 
   ctrl(name: 'companyCode' | 'email' | 'password') { return this.form.controls[name]; }
 

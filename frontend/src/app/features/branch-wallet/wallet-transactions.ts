@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '@env/environment';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
+import { AuthService } from '@core/auth/auth.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
 import {
@@ -71,6 +72,7 @@ export class WalletTransactions implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -136,7 +138,7 @@ export class WalletTransactions implements OnInit {
 
   receipt(t: WalletTransaction): void {
     const w = this.wallet();
-    if (w) downloadReceipt(t, w, environment.appName);
+    if (w) downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
     else this.notify.error('Wallet not loaded yet.');
   }
 

@@ -83,6 +83,9 @@ public class CustomerServiceImpl implements CustomerService {
                 .email(command.email())
                 .gstNumber(command.gstNumber())
                 .panNumber(command.panNumber())
+                .whatsappEnabled(command.whatsappEnabled() == null || command.whatsappEnabled())
+                .smsEnabled(command.smsEnabled() == null || command.smsEnabled())
+                .emailEnabled(command.emailEnabled() == null || command.emailEnabled())
                 .status(CustomerStatus.ACTIVE)
                 .build();
 
@@ -125,7 +128,8 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
         return new CreateCustomerCommand(null, CustomerType.INDIVIDUAL, null,
-                firstName, null, lastName, mobile, null, null, null, null);
+                firstName, null, lastName, mobile, null, null, null, null,
+                null, null, null);
     }
 
     /** Retries on collision, same shape as {@code WalletServiceImpl.nextWalletNumber()}. */
@@ -165,6 +169,9 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setEmail(command.email());
         customer.setGstNumber(command.gstNumber());
         customer.setPanNumber(command.panNumber());
+        customer.setWhatsappEnabled(command.whatsappEnabled());
+        customer.setSmsEnabled(command.smsEnabled());
+        customer.setEmailEnabled(command.emailEnabled());
 
         customer.applyInvariants();
         Customer saved = repository.save(customer);

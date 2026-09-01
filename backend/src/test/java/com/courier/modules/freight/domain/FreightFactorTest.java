@@ -10,25 +10,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The half-open distance/weight intervals and the 2D overlap rule a freight factor cell
+ * The closed distance/weight intervals and the 2D overlap rule a freight factor cell
  * must satisfy — the same shape {@code RateTest} exercises for a single-dimension slab,
  * extended to two independent dimensions.
  */
 class FreightFactorTest {
 
     @Test
-    @DisplayName("the minimum is included and the maximum excluded, on both axes")
-    void halfOpen() {
+    @DisplayName("both the minimum and the maximum are included, on both axes")
+    void closedBothEnds() {
         FreightFactor cell = cell("0.000", "100.000", "0.000", "10.000", "5.00");
 
         assertThat(cell.coversDistance(new BigDecimal("0.000"))).isTrue();
         assertThat(cell.coversDistance(new BigDecimal("99.999"))).isTrue();
-        assertThat(cell.coversDistance(new BigDecimal("100.000"))).isFalse();
+        assertThat(cell.coversDistance(new BigDecimal("100.000"))).isTrue();
+        assertThat(cell.coversDistance(new BigDecimal("100.001"))).isFalse();
         assertThat(cell.coversDistance(null)).isFalse();
 
         assertThat(cell.coversWeight(new BigDecimal("0.000"))).isTrue();
         assertThat(cell.coversWeight(new BigDecimal("9.999"))).isTrue();
-        assertThat(cell.coversWeight(new BigDecimal("10.000"))).isFalse();
+        assertThat(cell.coversWeight(new BigDecimal("10.000"))).isTrue();
+        assertThat(cell.coversWeight(new BigDecimal("10.001"))).isFalse();
         assertThat(cell.coversWeight(null)).isFalse();
     }
 
@@ -38,11 +40,11 @@ class FreightFactorTest {
         FreightFactor base = cell("0.000", "100.000", "0.000", "10.000", "5.00");
 
         // Same distance band, disjoint weight band -> no conflict.
-        FreightFactor disjointWeight = cell("0.000", "100.000", "10.000", "20.000", "5.00");
+        FreightFactor disjointWeight = cell("0.000", "100.000", "10.001", "20.000", "5.00");
         assertThat(base.overlaps(disjointWeight)).isFalse();
 
         // Same weight band, disjoint distance band -> no conflict.
-        FreightFactor disjointDistance = cell("100.000", "200.000", "0.000", "10.000", "5.00");
+        FreightFactor disjointDistance = cell("100.001", "200.000", "0.000", "10.000", "5.00");
         assertThat(base.overlaps(disjointDistance)).isFalse();
 
         // Both bands overlap -> conflict, symmetric.
@@ -52,14 +54,25 @@ class FreightFactorTest {
     }
 
     @Test
-    @DisplayName("exactly adjacent ranges on either axis do not overlap")
-    void adjacentIsFine() {
+    @DisplayName("ranges that share a boundary value still overlap, on either axis")
+    void sharedBoundaryOverlaps() {
         FreightFactor base = cell("0.000", "100.000", "0.000", "10.000", "5.00");
-        FreightFactor adjacentDistance = cell("100.000", "200.000", "0.000", "10.000", "5.00");
-        FreightFactor adjacentWeight = cell("0.000", "100.000", "10.000", "20.000", "5.00");
+        FreightFactor touchingDistance = cell("100.000", "200.000", "0.000", "10.000", "5.00");
+        FreightFactor touchingWeight = cell("0.000", "100.000", "10.000", "20.000", "5.00");
 
-        assertThat(base.overlaps(adjacentDistance)).isFalse();
-        assertThat(base.overlaps(adjacentWeight)).isFalse();
+        assertThat(base.overlaps(touchingDistance)).isTrue();
+        assertThat(base.overlaps(touchingWeight)).isTrue();
+    }
+
+    @Test
+    @DisplayName("ranges offset by the smallest increment do not overlap")
+    void smallestIncrementOffsetIsFine() {
+        FreightFactor base = cell("0.000", "100.000", "0.000", "10.000", "5.00");
+        FreightFactor nextDistance = cell("100.001", "200.000", "0.000", "10.000", "5.00");
+        FreightFactor nextWeight = cell("0.000", "100.000", "10.001", "20.000", "5.00");
+
+        assertThat(base.overlaps(nextDistance)).isFalse();
+        assertThat(base.overlaps(nextWeight)).isFalse();
     }
 
     @Test

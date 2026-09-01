@@ -16,6 +16,10 @@ public record CreateCustomerCommand(
         String alternateMobile,
         String email,
         String gstNumber,
-        String panNumber
+        String panNumber,
+        /** Null means "default true" — see {@code CustomerServiceImpl.create}. */
+        Boolean whatsappEnabled,
+        Boolean smsEnabled,
+        Boolean emailEnabled
 ) {
 }

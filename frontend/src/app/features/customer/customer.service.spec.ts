@@ -36,7 +36,8 @@ describe('CustomerService', () => {
 
   it('updates with PUT carrying the version', () => {
     service.update('c-1', {
-      customerType: 'INDIVIDUAL', firstName: 'Asha', lastName: 'Shah', mobile: '9876543210', version: 2
+      customerType: 'INDIVIDUAL', firstName: 'Asha', lastName: 'Shah', mobile: '9876543210',
+      whatsappEnabled: true, smsEnabled: true, emailEnabled: true, version: 2
     }).subscribe();
 
     const request = http.expectOne(`${base}/customers/c-1`);

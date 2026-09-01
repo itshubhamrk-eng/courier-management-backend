@@ -25,6 +25,9 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
  * that calls `ManifestService.removeShipment` directly and reverts the shipment to
  * BOOKED; the card owns this mutation itself rather than delegating to a parent output,
  * the same way it already owns fetching its own shipment list.
+ * `showPrintAction` (Loading Sheet) adds a Print button that just emits `print` with the
+ * manifest — the card has no opinion on layout, the parent renders the actual sheet (see
+ * `LoadingSheet.printLoadingSheet`, the same branded-challan approach THC's own print uses).
  */
 @Component({
   selector: 'app-manifest-card',
@@ -43,6 +46,9 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
           <div class="stat"><span class="stat__value">{{ totalParcels() }}</span><span class="stat__label">Total Parcels</span></div>
           @if (showDispatchAction()) {
             <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">THC</app-button>
+          }
+          @if (showPrintAction()) {
+            <app-button variant="stroked" icon="print" (pressed)="print.emit(manifest())">Print</app-button>
           }
           @if (showInScanAction()) {
             <app-button icon="qr_code_scanner" [loading]="inScanLoading()"
@@ -114,10 +120,12 @@ export class ManifestCard implements OnInit {
   readonly showDispatchAction = input(false);
   readonly showInScanAction = input(false);
   readonly showRemoveAction = input(false);
+  readonly showPrintAction = input(false);
   readonly inScanLoading = input(false);
   readonly dispatch = output<Manifest>();
   readonly inScan = output<Manifest>();
   readonly removed = output<Manifest>();
+  readonly print = output<Manifest>();
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);

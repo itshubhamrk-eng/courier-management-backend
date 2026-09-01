@@ -14,6 +14,7 @@ import com.courier.modules.company.domain.CompanySetting;
 import com.courier.modules.company.domain.CompanySettingRepository;
 import com.courier.modules.company.domain.CompanySpecifications;
 import com.courier.modules.company.domain.CompanyStatus;
+import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.subscription.application.SubscriptionPlanService;
 import com.courier.modules.subscription.domain.BillingCycle;
 import com.courier.modules.subscription.domain.SubscriptionPlan;
@@ -21,6 +22,7 @@ import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.DuplicateResourceException;
+import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.Roles;
 import com.courier.shared.security.SecurityUtils;
@@ -42,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -71,6 +74,7 @@ public class CompanyServiceImpl implements CompanyService {
     private final SubscriptionPlanService subscriptionPlanService;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final FileStoragePort fileStoragePort;
 
     @Override
     @Transactional
@@ -356,6 +360,37 @@ public class CompanyServiceImpl implements CompanyService {
                 saved.getId(), saved.getCompanyId(), saved.getCompanyCode(), previous, Instant.now()));
 
         return saved;
+    }
+
+    private static final Set<String> BRANDING_KINDS = Set.of("LOGO", "FAVICON");
+    private static final Set<String> BRANDING_EXTENSIONS =
+            Set.of("png", "jpg", "jpeg", "svg", "webp", "ico");
+
+    @Override
+    public String uploadBranding(String kind, byte[] content, String filename, String contentType) {
+        String normalisedKind = kind == null ? "" : kind.trim().toUpperCase();
+        if (!BRANDING_KINDS.contains(normalisedKind)) {
+            throw new BusinessRuleException("kind must be one of " + BRANDING_KINDS + ".");
+        }
+
+        String extension = extensionOf(filename);
+        if (!BRANDING_EXTENSIONS.contains(extension)) {
+            throw new BusinessRuleException(ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                    "Only PNG/JPEG/SVG/WEBP/ICO images are accepted for a logo or favicon.");
+        }
+
+        String key = "%s-%s.%s".formatted(normalisedKind.toLowerCase(), UUID.randomUUID(), extension);
+        FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
+                content, key, contentType, "company-branding"));
+        return stored.url();
+    }
+
+    private static String extensionOf(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 ? "" : filename.substring(dot + 1).toLowerCase();
     }
 
     // ------------------------------------------------------------- subscription

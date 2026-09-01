@@ -7,6 +7,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import {
   CustomerResponse, CustomerType, CUSTOMER_TYPES, CreateCustomerRequest, UpdateCustomerRequest
 } from '@core/models/customer.model';
@@ -45,7 +46,7 @@ function upperPattern(pattern: RegExp) {
   selector: 'app-customer-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton],
+  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton, MatCheckboxModule],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="cform">
       <app-card title="Basic Information" subtitle="Identity and classification.">
@@ -86,6 +87,14 @@ function upperPattern(pattern: RegExp) {
         </div>
       </app-card>
 
+      <app-card title="Communication Preferences" subtitle="Which channels this customer may be notified on — off by request, on by default.">
+        <div class="cform__prefs">
+          <mat-checkbox [formControl]="c('whatsappEnabled')">WhatsApp</mat-checkbox>
+          <mat-checkbox [formControl]="c('smsEnabled')">SMS</mat-checkbox>
+          <mat-checkbox [formControl]="c('emailEnabled')">Email</mat-checkbox>
+        </div>
+      </app-card>
+
       <div class="cform__bar">
         <span class="cform__note">@if (form.invalid && form.touched) { Fix the highlighted fields before saving. }</span>
         <div class="cform__actions">
@@ -98,8 +107,14 @@ function upperPattern(pattern: RegExp) {
     </form>
   `,
   styles: [`
-    .cform { display:flex; flex-direction:column; gap:16px; }
+    /* padding-bottom clears the sticky action bar below: with enough cards, the form's
+       total height can end up short enough that .cform__bar's sticky bottom:0 position
+       visually overlaps the last card's own tail content instead of sitting below it
+       (found live: the Communication Preferences checkboxes were painted, but hidden
+       under the sticky bar's opaque background). */
+    .cform { display:flex; flex-direction:column; gap:16px; padding-bottom:88px; }
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 20px; }
+    .cform__prefs { display:flex; gap:24px; flex-wrap:wrap; }
     .stat { display:flex; flex-direction:column; gap:6px; justify-content:center; }
     .stat__l { font:500 13px var(--font-sans); color:var(--content-fg); }
     .stat__v { font:600 14px var(--font-sans); color:var(--content-fg); }
@@ -143,7 +158,8 @@ export class CustomerForm {
       customerType: cust.customerType, companyName: cust.companyName ?? '',
       firstName: cust.firstName, middleName: cust.middleName ?? '', lastName: cust.lastName,
       mobile: cust.mobile, alternateMobile: cust.alternateMobile ?? '', email: cust.email ?? '',
-      gstNumber: cust.gstNumber ?? '', panNumber: cust.panNumber ?? ''
+      gstNumber: cust.gstNumber ?? '', panNumber: cust.panNumber ?? '',
+      whatsappEnabled: cust.whatsappEnabled, smsEnabled: cust.smsEnabled, emailEnabled: cust.emailEnabled
     }, { emitEvent: true });
     this.typeValue.set(cust.customerType);
     this.form.markAsPristine();
@@ -162,7 +178,10 @@ export class CustomerForm {
       alternateMobile: ['', [Validators.pattern(PHONE), Validators.maxLength(20)]],
       email: ['', [emailish, Validators.maxLength(255)]],
       gstNumber: ['', [upperPattern(GSTIN), Validators.maxLength(15)]],
-      panNumber: ['', [upperPattern(PAN), Validators.maxLength(10)]]
+      panNumber: ['', [upperPattern(PAN), Validators.maxLength(10)]],
+      whatsappEnabled: [true],
+      smsEnabled: [true],
+      emailEnabled: [true]
     });
   }
 
@@ -181,7 +200,8 @@ export class CustomerForm {
       companyName: trim(v.companyName),
       firstName: v.firstName.trim(), middleName: trim(v.middleName), lastName: v.lastName.trim(),
       mobile: v.mobile.trim(), alternateMobile: trim(v.alternateMobile), email: trim(v.email),
-      gstNumber: upper(v.gstNumber), panNumber: upper(v.panNumber)
+      gstNumber: upper(v.gstNumber), panNumber: upper(v.panNumber),
+      whatsappEnabled: !!v.whatsappEnabled, smsEnabled: !!v.smsEnabled, emailEnabled: !!v.emailEnabled
     };
 
     if (this.isCreate()) {

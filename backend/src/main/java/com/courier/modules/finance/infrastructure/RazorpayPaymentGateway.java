@@ -6,6 +6,7 @@ import com.courier.shared.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import javax.crypto.Mac;
@@ -89,10 +90,7 @@ public class RazorpayPaymentGateway implements PaymentGatewayPort {
                     .retrieve()
                     .body(Map.class);
         } catch (Exception e) {
-            // Never surface the gateway's own error text: it can echo request content.
-            log.error("Razorpay order creation failed for receipt {}", receipt, e);
-            throw new BusinessRuleException(ErrorCode.SERVICE_UNAVAILABLE,
-                    "The payment gateway could not be reached. No money has moved; please retry.");
+            throw translateGatewayException(e, "order creation", receipt);
         }
 
         if (response == null || response.get("id") == null) {
@@ -142,10 +140,7 @@ public class RazorpayPaymentGateway implements PaymentGatewayPort {
                     .retrieve()
                     .body(Map.class);
         } catch (Exception e) {
-            log.error("Razorpay payment lookup failed for {}", paymentId, e);
-            throw new BusinessRuleException(ErrorCode.SERVICE_UNAVAILABLE,
-                    "The payment could not be confirmed with the gateway. "
-                            + "Nothing has been credited; please retry.");
+            throw translateGatewayException(e, "payment lookup", paymentId);
         }
 
         if (response == null || response.get("id") == null || response.get("amount") == null) {
@@ -163,6 +158,30 @@ public class RazorpayPaymentGateway implements PaymentGatewayPort {
                 toMajorUnits(amountMinor),
                 response.get("currency") == null ? null : String.valueOf(response.get("currency")),
                 "captured".equalsIgnoreCase(status));
+    }
+
+    /**
+     * A 401/403 from Razorpay means our own key id/secret is wrong or disabled — that is
+     * an operator misconfiguration, not a transient outage, and telling the caller to
+     * retry would just repeat the same failure. Every other failure (DNS, timeout,
+     * connection refused, 5xx) is genuinely transient and worth a retry.
+     *
+     * <p>Never surfaces the gateway's own error text either way: it can echo request
+     * content.
+     */
+    private BusinessRuleException translateGatewayException(Exception e, String operation, String context) {
+        if (e instanceof HttpClientErrorException httpError
+                && (httpError.getStatusCode().value() == 401 || httpError.getStatusCode().value() == 403)) {
+            log.error("Razorpay rejected our credentials during {} for {} — check RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET",
+                    operation, context, e);
+            return new BusinessRuleException(ErrorCode.INTERNAL_ERROR,
+                    "The payment gateway is not configured correctly. No money has moved; "
+                            + "please contact support instead of retrying.");
+        }
+
+        log.error("Razorpay {} failed for {}", operation, context, e);
+        return new BusinessRuleException(ErrorCode.SERVICE_UNAVAILABLE,
+                "The payment gateway could not be reached. No money has moved; please retry.");
     }
 
     // -------------------------------------------------------------------- helpers

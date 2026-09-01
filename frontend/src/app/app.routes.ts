@@ -66,6 +66,11 @@ const FOLLOW_UP_READERS = [
   AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB_MANAGER, AppRole.BOOKING_OPERATOR,
   AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS, AppRole.FINANCE_USER, AppRole.CUSTOMER_SERVICE, AppRole.VIEWER
 ];
+// Communication Center: dashboard/logs readable by whoever runs a branch; Channel
+// Settings/Templates are COMPANY_ADMIN's own call — mirrors the backend's own
+// @PreAuthorize split (no SUPER_ADMIN either way, this is company-owned config).
+const COMMUNICATION_READERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
+const COMMUNICATION_ADMIN = [AppRole.COMPANY_ADMIN];
 
 /**
  * Lazy, guarded routes. The admin shell wraps every authenticated feature; each feature
@@ -475,6 +480,27 @@ export const routes: Routes = [
       {
         path: 'support/sla-rules', title: 'SLA Rules', canActivate: [roleGuard], data: { roles: ADMINS },
         loadComponent: () => import('@features/support/ticket-sla-rules').then((m) => m.TicketSlaRules)
+      },
+      // Communication Center.
+      {
+        path: 'communication/dashboard', title: 'Communication Dashboard', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_READERS },
+        loadComponent: () => import('@features/communication/communication-dashboard').then((m) => m.CommunicationDashboardPage)
+      },
+      {
+        path: 'communication/settings', title: 'Channel Settings', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_ADMIN },
+        loadComponent: () => import('@features/communication/channel-settings').then((m) => m.ChannelSettings)
+      },
+      {
+        path: 'communication/templates', title: 'Notification Templates', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_ADMIN },
+        loadComponent: () => import('@features/communication/communication-templates').then((m) => m.CommunicationTemplates)
+      },
+      {
+        path: 'communication/logs', title: 'Communication Logs', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_READERS },
+        loadComponent: () => import('@features/communication/communication-logs').then((m) => m.CommunicationLogs)
       },
       {
         path: 'users', title: 'Users', canActivate: [roleGuard], data: { roles: USER_READERS },

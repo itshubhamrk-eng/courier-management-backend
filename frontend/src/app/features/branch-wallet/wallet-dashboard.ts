@@ -7,6 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { environment } from '@env/environment';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
+import { AuthService } from '@core/auth/auth.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
 import { WalletResponse, WalletSummary, WalletTransaction, formatMoney } from '@core/models/wallet.model';
@@ -130,6 +131,7 @@ export class WalletDashboard implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
@@ -273,6 +275,6 @@ export class WalletDashboard implements OnInit {
       availableBalance: s.availableBalance, holdBalance: s.holdBalance, totalBalance: s.totalBalance,
       currency: s.currency, createdAt: '', updatedAt: '', version: 0
     };
-    downloadReceipt(t, w, environment.appName);
+    downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
   }
 }

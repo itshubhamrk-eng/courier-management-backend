@@ -28,7 +28,8 @@ public class CustomerMapper {
                 r.customerCode(), r.customerType(), r.companyName(),
                 r.firstName(), r.middleName(), r.lastName(),
                 r.mobile(), r.alternateMobile(), r.email(),
-                r.gstNumber(), r.panNumber());
+                r.gstNumber(), r.panNumber(),
+                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled());
     }
 
     public UpdateCustomerCommand toCommand(UpdateCustomerRequest r) {
@@ -36,7 +37,8 @@ public class CustomerMapper {
                 r.customerType(), r.companyName(),
                 r.firstName(), r.middleName(), r.lastName(),
                 r.mobile(), r.alternateMobile(), r.email(),
-                r.gstNumber(), r.panNumber(), r.version());
+                r.gstNumber(), r.panNumber(),
+                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled(), r.version());
     }
 
     public CustomerCriteria toCriteria(CustomerSearchRequest r) {
@@ -64,7 +66,8 @@ public class CustomerMapper {
                 c.getCompanyName(), c.getFirstName(), c.getMiddleName(), c.getLastName(),
                 c.displayName(),
                 c.getMobile(), c.getAlternateMobile(), c.getEmail(),
-                c.getGstNumber(), c.getPanNumber(), c.getStatus(),
+                c.getGstNumber(), c.getPanNumber(),
+                c.isWhatsappEnabled(), c.isSmsEnabled(), c.isEmailEnabled(), c.getStatus(),
                 c.getCreatedBy(), c.getCreatedAt(), c.getUpdatedBy(), c.getUpdatedAt(), c.getVersion(),
                 addresses.stream().map(this::toResponse).toList());
     }

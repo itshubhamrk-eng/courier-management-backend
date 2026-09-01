@@ -18,6 +18,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
+import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { printConsignmentCopies } from './consignment-print.util';
@@ -36,7 +37,8 @@ const TIMELINE_ICONS: Record<string, string> = {
   selector: 'app-shipment-view',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, DatePipe, RouterLink, MatIconModule, UiCard, UiLoader, UiButton, TrackingCard, ChargeSummary],
+  imports: [DecimalPipe, DatePipe, RouterLink, MatIconModule, UiCard, UiLoader, UiButton, TrackingCard,
+    ChargeSummary, ShipmentCommunicationCard],
   template: `
     @if (loading()) {
       <app-loader [minHeight]="320" caption="Loading…" />
@@ -213,6 +215,8 @@ const TIMELINE_ICONS: Record<string, string> = {
               <img class="sv__pod" [src]="shipment()!.podPhotoUrl" alt="Proof of delivery photo" />
             </app-card>
           }
+
+          <app-shipment-communication-card [shipmentId]="shipment()!.id" />
         </div>
       </div>
     }
@@ -344,6 +348,7 @@ export class ShipmentView implements OnInit {
     const s = this.shipment()!;
     printConsignmentCopies({
       companyName: this.auth.companyName() ?? 'Courier SaaS',
+      companyLogo: this.auth.companyLogo(),
       shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
       expectedDeliveryDate: s.expectedDeliveryDate ?? null,
       bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),

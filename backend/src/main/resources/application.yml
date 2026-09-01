@@ -22,6 +22,15 @@ spring:
     virtual:
       enabled: false
 
+  # No spring.mail.* block here on purpose: Spring Boot only auto-configures a
+  # JavaMailSender bean when spring.mail.host is actually present as a resolved property —
+  # declaring it here with an empty default (${SMTP_HOST:}) would count as "present" and
+  # create a bean with a blank host, silently defeating EmailProviderConfig's own
+  # "fails at startup, not at the first send" gate for app.communication.email.enabled. A
+  # real deployment sets SPRING_MAIL_HOST/SPRING_MAIL_PORT/SPRING_MAIL_USERNAME/
+  # SPRING_MAIL_PASSWORD directly — Spring Boot's relaxed env binding picks them up with
+  # no YAML entry needed, and they stay genuinely absent otherwise.
+
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:courier_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
     username: ${DB_USERNAME:courier}
@@ -194,6 +203,27 @@ app:
       merchant-name: ${RAZORPAY_MERCHANT_NAME:Courier SaaS}
       connect-timeout: 5s
       read-timeout: 15s
+
+  communication:
+    # Each channel defaults to log-only (LogOnlyWhatsAppProvider/LogOnlySmsProvider/
+    # LogOnlyEmailProvider) — no dev-environment vendor account exists to call for real.
+    # Per-company Phone Number ID/API URL/from-email etc. still live in the
+    # communication_setting table regardless of these flags; this only selects whether
+    # this deployment makes real outbound HTTP/SMTP calls at all.
+    whatsapp:
+      enabled: ${COMMUNICATION_WHATSAPP_ENABLED:false}
+    sms:
+      enabled: ${COMMUNICATION_SMS_ENABLED:false}
+    email:
+      enabled: ${COMMUNICATION_EMAIL_ENABLED:false}
+    retry:
+      max-attempts: ${COMMUNICATION_RETRY_MAX_ATTEMPTS:5}
+      backoff-minutes: ${COMMUNICATION_RETRY_BACKOFF_MINUTES:15}
+    dispatch:
+      fixed-delay-ms: ${COMMUNICATION_DISPATCH_INTERVAL_MS:30000}
+    # {trackingNumber} is substituted — the public tracking page this frontend already
+    # serves at /track/:awb.
+    tracking-url-template: ${COMMUNICATION_TRACKING_URL_TEMPLATE:http://localhost:4200/track/{trackingNumber}}
 
   cors:
     allowed-origins:

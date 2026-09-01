@@ -39,6 +39,18 @@ export class CompanyService {
   /** Full profile — GET /companies/{id}. */
   getProfile(id: string) { return this.api.get<CompanyProfile>(`${API.companies}/${id}`); }
 
+  /**
+   * Uploads a logo or favicon and returns its URL. Not company-scoped — the create form
+   * has no company id yet — so this only stores the file; the caller still writes the
+   * returned URL into the company record via `create` or `update`.
+   */
+  uploadBranding(kind: 'LOGO' | 'FAVICON', file: File) {
+    const body = new FormData();
+    body.append('kind', kind);
+    body.append('file', file);
+    return this.api.post<{ url: string }>(`${API.companies}/branding-upload`, body);
+  }
+
   /** Full replacement — PUT /companies/{id}. Body must carry the last-read version. */
   update(id: string, body: CompanyRequest) {
     return this.api.put<CompanyProfile>(`${API.companies}/${id}`, body);

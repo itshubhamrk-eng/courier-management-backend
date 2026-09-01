@@ -149,9 +149,25 @@ public class AuthService {
             // Look the user up only to advance the lock counter. The response is
             // identical whether or not this finds anything.
             User candidate = userRepository.findByEmail(email).orElse(null);
-            loginAttemptService.recordFailure(companyId, candidate == null ? null : candidate.getId(), email,
-                    candidate == null ? LoginFailureReason.UNKNOWN_USER : LoginFailureReason.BAD_PASSWORD,
-                    command.ipAddress(), command.userAgent());
+            try {
+                loginAttemptService.recordFailure(companyId, candidate == null ? null : candidate.getId(), email,
+                        candidate == null ? LoginFailureReason.UNKNOWN_USER : LoginFailureReason.BAD_PASSWORD,
+                        command.ipAddress(), command.userAgent());
+            } catch (RuntimeException bookkeeping) {
+                // This lookup runs outside any @Transactional boundary (see this
+                // method's own class javadoc), so the company filter that would
+                // normally hide another company's row is not guaranteed active —
+                // `candidate` can resolve to a platform-role user genuinely anchored
+                // to a different company than the one this login attempt resolved
+                // (e.g. a SUPER_ADMIN signing in on a company-mapped domain). Bumping
+                // that row's lockout counter then trips CompanyIsolationException
+                // (Sev-1, logged here at ERROR for the same alerting reason) — but a
+                // bookkeeping failure must never turn an otherwise-correct "invalid
+                // credentials" response into a 500, same principle as recordSuccess's
+                // own race-swallow below.
+                log.error("Login-failure bookkeeping blocked for {} (company {}): {}",
+                        email, companyId, bookkeeping.getMessage(), bookkeeping);
+            }
             throw new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
 

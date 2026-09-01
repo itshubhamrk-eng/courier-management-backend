@@ -19,6 +19,7 @@ public record CustomerResponse(
         String displayName,
         String mobile, String alternateMobile, String email,
         String gstNumber, String panNumber,
+        boolean whatsappEnabled, boolean smsEnabled, boolean emailEnabled,
         CustomerStatus status,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
         List<CustomerAddressResponse> addresses

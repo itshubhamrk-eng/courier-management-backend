@@ -39,6 +39,10 @@ public record UpdateCustomerRequest(
         @Pattern(regexp = "^$|^[A-Z]{5}[0-9]{4}[A-Z]$", message = "must be a valid 10-character PAN")
         String panNumber,
 
+        boolean whatsappEnabled,
+        boolean smsEnabled,
+        boolean emailEnabled,
+
         @NotNull @PositiveOrZero
         @Schema(description = "Version last read; a stale value returns 409") Long version
 ) {

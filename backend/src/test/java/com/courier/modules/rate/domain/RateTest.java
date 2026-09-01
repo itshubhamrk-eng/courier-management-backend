@@ -12,28 +12,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The half-open weight interval and the invariants a rate must satisfy before it can be
- * saved — the same shape {@code WeightSlabTest} exercises for the master weight slab this
- * class mirrors, plus the fields unique to a rate card row.
+ * The closed weight interval and the invariants a rate must satisfy before it can be
+ * saved, plus the fields unique to a rate card row.
  */
 class RateTest {
 
     @Test
-    @DisplayName("the minimum is included and the maximum excluded")
-    void halfOpen() {
+    @DisplayName("both the minimum and the maximum are included")
+    void closedBothEnds() {
         Rate rate = rate("R1", "1.000", "5.000");
 
         assertThat(rate.covers(new BigDecimal("1.000"))).isTrue();
         assertThat(rate.covers(new BigDecimal("4.999"))).isTrue();
-        assertThat(rate.covers(new BigDecimal("5.000"))).isFalse();
+        assertThat(rate.covers(new BigDecimal("5.000"))).isTrue();
+        assertThat(rate.covers(new BigDecimal("5.001"))).isFalse();
         assertThat(rate.covers(new BigDecimal("0.999"))).isFalse();
         assertThat(rate.covers(null)).isFalse();
     }
 
     @Test
-    @DisplayName("exactly adjacent weight ranges do not overlap")
-    void adjacentIsFine() {
+    @DisplayName("weight ranges that share a boundary value still overlap")
+    void sharedBoundaryOverlaps() {
         assertThat(rate("A", "0.000", "1.000").overlapsWeightRange(rate("B", "1.000", "5.000")))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("weight ranges offset by the smallest increment do not overlap")
+    void smallestIncrementOffsetIsFine() {
+        assertThat(rate("A", "0.000", "1.000").overlapsWeightRange(rate("B", "1.001", "5.000")))
                 .isFalse();
     }
 

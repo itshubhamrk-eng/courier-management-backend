@@ -5,7 +5,9 @@ import { WalletResponse, WalletTransaction, formatMoney, prettyToken, subTypeLab
  * is invented — every value is read off the real transaction and wallet. A dedicated backend
  * PDF endpoint can replace this later; until then the client renders exactly what it holds.
  */
-export function downloadReceipt(txn: WalletTransaction, wallet: WalletResponse, appName: string): void {
+export function downloadReceipt(
+  txn: WalletTransaction, wallet: WalletResponse, appName: string, companyLogo: string | null = null
+): void {
   const money = formatMoney(txn.amount, wallet.currency);
   const when = new Date(txn.createdAt).toLocaleString('en-IN');
   const rows: Array<[string, string]> = [
@@ -17,7 +19,8 @@ export function downloadReceipt(txn: WalletTransaction, wallet: WalletResponse, 
     ['Payment Reference', txn.paymentReference || '—'],
     ['Reference', txn.referenceId || '—'],
     ['Status', txn.paymentStatus ? prettyToken(txn.paymentStatus) : '—'],
-    ['Balance After', formatMoney(txn.balanceAfter, wallet.currency)]
+    ['Balance After', formatMoney(txn.balanceAfter, wallet.currency)],
+    ['Created By', txn.createdByName || '—']
   ];
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
   const body = rows.map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}</td></tr>`).join('');
@@ -28,6 +31,7 @@ export function downloadReceipt(txn: WalletTransaction, wallet: WalletResponse, 
   *{box-sizing:border-box} body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;margin:0;padding:40px;background:#f1f5f9}
   .r{max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden}
   .h{padding:24px 28px;background:linear-gradient(135deg,#4f46e5,#4338ca);color:#fff}
+  .h img{max-height:32px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block}
   .h h1{margin:0;font-size:18px} .h p{margin:4px 0 0;opacity:.85;font-size:13px}
   .amt{padding:24px 28px;text-align:center;border-bottom:1px solid #e2e8f0}
   .amt .n{font-size:34px;font-weight:800;letter-spacing:-.02em;color:${txn.transactionType === 'CR' ? '#059669' : '#dc2626'}}
@@ -38,7 +42,7 @@ export function downloadReceipt(txn: WalletTransaction, wallet: WalletResponse, 
   @media print{body{background:#fff;padding:0}.r{border:0}}
 </style></head><body>
   <div class="r">
-    <div class="h"><h1>${esc(appName)}</h1><p>Wallet Transaction Receipt</p></div>
+    <div class="h">${companyLogo ? `<img src="${esc(companyLogo)}" alt="${esc(appName)}">` : ''}<h1>${esc(appName)}</h1><p>Wallet Transaction Receipt</p></div>
     <div class="amt"><div class="n">${sign}${esc(money)}</div><div class="l">${esc(txn.subTransactionTypeLabel || subTypeLabel(txn.subTransactionType))}</div></div>
     <table>${body}</table>
     <div class="f">This is a system-generated receipt. Generated ${new Date().toLocaleString('en-IN')}.</div>

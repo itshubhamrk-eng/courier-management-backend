@@ -481,6 +481,49 @@ Ordered. Top item is always the next thing to build.
       gate is frontend-level by design, deliberately not coupling `ShipmentServiceImpl` to
       the new `pod` module; see the module doc's "Deliberately not built"
 
+## Communication Center  `[x]`  DONE (v0.31.0, `V50`)
+
+> New package `com.courier.modules.communication`. Event-driven WhatsApp/SMS/Email —
+> `ShipmentServiceImpl` publishes plain `ShipmentEvent` records, never sends anything itself.
+> See `MEMORY/modules/communication.md`.
+
+- [x] `communication_template`/`communication_setting`/`communication_log` (all company-owned),
+      `customers` gained `whatsapp_enabled`/`sms_enabled`/`email_enabled` (default `TRUE`)
+- [x] Two deliberately separate on/off switches: `communication_setting.enabled` (channel
+      master switch) vs. `communication_template.status` (per-event-per-channel switch) —
+      resolves a real contradiction between the brief's own DB schema and Default-Events
+      sections
+- [x] `WhatsAppProvider`/`SmsProvider`/`EmailProvider` abstractions, each a `LogOnly*` default
+      + a real implementation (`MetaWhatsAppProvider`/`GenericHttpSmsProvider`/
+      `SmtpEmailProvider`) gated by an explicit `app.communication.<channel>.enabled` property,
+      mirroring `PaymentGatewayConfig`'s own two-explicit-conditions shape
+- [x] `ShipmentEvent` gained six plain-scalar records (`Booked`/`Dispatched`/`ReceivedAtBranch`/
+      `OutForDelivery`/`Delivered`/`Cancelled`), published from `ShipmentServiceImpl`'s six
+      existing call sites; `ShipmentCommunicationListener` (`AFTER_COMMIT`+`REQUIRES_NEW`) is
+      the only place an event becomes a communication attempt
+- [x] `CommunicationDispatchJob` (`@Scheduled`, cross-tenant sweep) — the "ready for Kafka"
+      event abstraction the brief asked for, since no Kafka dependency exists in this repo
+- [x] `ShipmentDirectoryPort`/`CommunicationShipmentDirectoryAdapter` goes straight to
+      repositories, never a `@PreAuthorize`-guarded service method — the dispatch job's
+      scheduler thread carries no authenticated caller
+- [x] Secrets AES-256-GCM via the same `EncryptedStringConverter` `CompanyRazorpayConfig` (V46)
+      already uses; never returned by any API response
+- [x] 14 endpoints across four controllers; RBAC role-based like every module since Ticket
+      Support (no new `PermissionModule`/`PermissionAction` rows)
+- [x] Frontend: Dashboard, Channel Settings, Templates (+ preview/enable-disable dialog), Logs
+      (+ Retry Failed), Shipment Details Communication tab, Customer preference checkboxes
+- [x] 36 new backend unit tests (`mvn test` 835 → 871), 11 new frontend tests (`ng test`
+      134 → 145); verified fully live end to end on real `courier_db` (booking → queue →
+      dispatch → SENT, cancellation → correctly-cancelled-for-no-template, RBAC 403,
+      test-connection, template preview, customer preference defaults)
+- [ ] `RTO_INITIATED`/`RTO_DELIVERED` declared, never published — no return-to-origin flow
+      exists in this codebase yet; a future RTO module publishes into these with no schema
+      change here
+- [ ] `DELIVERED` status modelled, never reached — no provider delivery-receipt webhook exists
+      yet for any channel
+- [ ] A genuine `FAILED`/retry cycle not exercised live — no real vendor credentials in this
+      dev environment to force a provider failure; covered by unit tests instead
+
 ## Phase 4 — Organization Structure: Hub, Serviceability  `[ ]`  <- **NEXT**
 
 > Takes migration **`V17`+** (`V16` used by Rate Master). Hub is almost certainly the

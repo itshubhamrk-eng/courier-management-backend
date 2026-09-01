@@ -152,7 +152,7 @@ class CustomerServiceImplTest {
 
         UpdateCustomerCommand update = new UpdateCustomerCommand(
                 CustomerType.INDIVIDUAL, null, "Asha", null, "Shah",
-                "9876500000", null, null, null, null, 1L);
+                "9876500000", null, null, null, null, true, true, true, 1L);
 
         assertThatThrownBy(() -> service.update(existing.getId(), update))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
@@ -167,7 +167,7 @@ class CustomerServiceImplTest {
 
         UpdateCustomerCommand update = new UpdateCustomerCommand(
                 CustomerType.INDIVIDUAL, null, "Asha", null, "Shah",
-                "9876500000", null, null, null, null, 2L);
+                "9876500000", null, null, null, null, true, true, true, 2L);
 
         Customer updated = service.update(existing.getId(), update);
 
@@ -261,7 +261,7 @@ class CustomerServiceImplTest {
 
     private static CreateCustomerCommand command(String code, CustomerType type, String mobile, String gst) {
         return new CreateCustomerCommand(code, type, null, "Asha", null, "Shah",
-                mobile, null, null, gst, null);
+                mobile, null, null, gst, null, null, null, null);
     }
 
     private static Customer existing(String code, String mobile) {

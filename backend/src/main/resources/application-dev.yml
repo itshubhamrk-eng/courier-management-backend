@@ -9,6 +9,11 @@ app:
   cors:
     allowed-origins:
       - https://app-dev.courier.example
+      - https://skra.in
+      - https://app.skra.in
+      - https://admin.skra.in
+      - https://amazing.skra.in
+      - https://vendor.amazinglpl.com
 
 logging:
   level:

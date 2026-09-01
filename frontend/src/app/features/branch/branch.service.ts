@@ -11,6 +11,11 @@ import { PageQuery } from '@core/models/page.model';
 /** A resolved id → label pair, for the manager dropdown and the id→name map. */
 export interface Lookup { id: string; label: string; hint?: string; }
 
+/** A geography row, reduced to what the cascading Country/State/District/City picker needs. */
+export interface GeographyOption { id: string; name: string; }
+
+interface GeographyRow { id: string; code: string; name: string; }
+
 /**
  * Branch administration — talks to /api/v1/branches via ApiService, mirroring the backend
  * endpoints one-to-one; no mock data. The optimistic-lock `version` travels in the PUT
@@ -46,5 +51,17 @@ export class BranchService {
       .pipe(map((p): Lookup[] => p.content.map((u) => ({
         id: u.id, label: u.displayName, hint: u.designation || u.email
       }))));
+  }
+
+  // ---- geography pickers (global masters, cascading) --------------------------
+  countries() { return this.geography('countries'); }
+  states(countryId: string) { return this.geography('states', { countryId }); }
+  districts(stateId: string) { return this.geography('districts', { stateId }); }
+  cities(districtId: string) { return this.geography('cities', { districtId }); }
+
+  private geography(path: string, filter?: Record<string, string>) {
+    return this.api
+      .page<GeographyRow>(`${API.globalMasters}/${path}`, { page: 0, size: 200, status: 'ACTIVE', ...filter })
+      .pipe(map((p): GeographyOption[] => p.content.map((r) => ({ id: r.id, name: `${r.name} (${r.code})` }))));
   }
 }

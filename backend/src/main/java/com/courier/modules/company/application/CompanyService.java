@@ -57,6 +57,15 @@ public interface CompanyService {
 
     Company expire(UUID id);
 
+    /**
+     * Uploads a logo or favicon image and returns where it landed. Not tied to any one
+     * company: the create form has no company id yet, and the edit form still writes the
+     * URL through the ordinary {@link #update} call — this only stores bytes.
+     *
+     * @param kind {@code LOGO} or {@code FAVICON}
+     */
+    String uploadBranding(String kind, byte[] content, String filename, String contentType);
+
     // ------------------------------------------------------------- subscription
 
     /**

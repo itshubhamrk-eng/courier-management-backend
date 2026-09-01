@@ -39,12 +39,15 @@ import java.util.UUID;
  * than a physical FK. Same treatment {@code customer_addresses}' geography ids and
  * {@code branches.manager_id} already get.
  *
- * <p><b>Weight slabs are half-open, {@code [minimumWeight, maximumWeight)}</b> — see
- * {@link #covers(BigDecimal)} and {@link #overlapsWeightRange(Rate)} — the same convention
- * {@code master.domain.WeightSlab} uses. No two <i>active</i> rates for the same Route +
- * Service Type + Package Type + Payment Mode may cover the same weight; that rule cannot
- * live in a database constraint (MySQL has no exclusion constraint), so it lives in
- * {@code RateServiceImpl} and runs on activation too, not only on save.
+ * <p><b>Weight slabs are closed on both ends, {@code [minimumWeight, maximumWeight]}</b> —
+ * see {@link #covers(BigDecimal)} and {@link #overlapsWeightRange(Rate)}. A boundary value
+ * belongs to whichever slab's maximum it hits, but two slabs that merely touch at that
+ * value still count as overlapping — adjacent slabs must be offset by the smallest
+ * representable increment (e.g. {@code 10.000}/{@code 10.001}), not share the boundary.
+ * No two <i>active</i> rates for the same Route + Service Type + Package Type + Payment
+ * Mode may cover the same weight; that rule cannot live in a database constraint (MySQL
+ * has no exclusion constraint), so it lives in {@code RateServiceImpl} and runs on
+ * activation too, not only on save.
  */
 @Entity
 @Getter
@@ -171,25 +174,25 @@ public class Rate extends CompanyOwnedEntity {
         this.status = RateStatus.INACTIVE;
     }
 
-    /** True when {@code weight} falls in {@code [minimumWeight, maximumWeight)}. */
+    /** True when {@code weight} falls in {@code [minimumWeight, maximumWeight]}. */
     public boolean covers(BigDecimal weight) {
         return weight != null
                 && weight.compareTo(minimumWeight) >= 0
-                && weight.compareTo(maximumWeight) < 0;
+                && weight.compareTo(maximumWeight) <= 0;
     }
 
     /**
      * True when this rate and {@code other} price the same weight, within the same unit.
-     * Half-open on both sides: a 0-1 slab and a 1-5 slab do not overlap, they are exactly
-     * adjacent. Does not compare Route / Service Type / Package Type / Payment Mode — the
-     * caller narrows to one combination first, the same split
-     * {@code WeightSlab.overlaps} draws.
+     * Closed on both sides: a 0-10 slab and a 10-20 slab <b>do</b> overlap — both would
+     * match weight 10 — so adjacent slabs must be offset by the smallest representable
+     * increment instead of sharing the boundary. Does not compare Route / Service Type /
+     * Package Type / Payment Mode — the caller narrows to one combination first.
      */
     public boolean overlapsWeightRange(Rate other) {
         return other != null
                 && weightUnit == other.weightUnit
-                && minimumWeight.compareTo(other.maximumWeight) < 0
-                && other.minimumWeight.compareTo(maximumWeight) < 0;
+                && minimumWeight.compareTo(other.maximumWeight) <= 0
+                && other.minimumWeight.compareTo(maximumWeight) <= 0;
     }
 
     /** True when {@code date} falls within {@link #effectiveFrom}/{@link #effectiveTo}. */
@@ -228,7 +231,7 @@ public class Rate extends CompanyOwnedEntity {
         }
         if (maximumWeight.compareTo(minimumWeight) <= 0) {
             throw new BusinessRuleException(
-                    "Maximum weight must be greater than the minimum (the slab is [min, max)).");
+                    "Maximum weight must be greater than the minimum (the slab is [min, max]).");
         }
         if (weightUnit == null) {
             this.weightUnit = WeightUnit.KG;

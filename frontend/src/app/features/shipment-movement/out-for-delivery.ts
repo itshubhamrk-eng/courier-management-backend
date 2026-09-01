@@ -243,6 +243,8 @@ export class OutForDelivery implements OnInit {
     if (!rows.length) return;
     const win = window.open('', '_blank', 'width=800,height=900');
     if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the DRS.'); return; }
+    const companyName = this.esc(this.auth.companyName() ?? '');
+    const companyLogo = this.auth.companyLogo();
     const collectIds = this.collectAtDeliveryModeIds();
     const collectAmount = (s: Shipment): number | null => collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
     const totalAmount = rows.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
@@ -257,6 +259,9 @@ export class OutForDelivery implements OnInit {
     win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
       <style>
         body { font-family: sans-serif; padding: 24px; color: #111; }
+        .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .brand img { max-height: 44px; max-width: 220px; object-fit: contain; }
+        .brand span { font-size: 16px; font-weight: 700; }
         h1 { font-size: 18px; margin: 0 0 4px; }
         .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
         .meta { display: flex; gap: 32px; margin-bottom: 20px; font-size: 13px; }
@@ -275,6 +280,7 @@ export class OutForDelivery implements OnInit {
         <button class="print" onclick="window.print()">Print</button>
         <button class="pdf" onclick="window.print()">Download PDF</button>
       </div>
+      <div class="brand">${companyLogo ? `<img src="${this.esc(companyLogo)}" alt="${companyName}">` : ''}${companyName ? `<span>${companyName}</span>` : ''}</div>
       <h1>Delivery Run Sheet (DRS)</h1>
       <div class="sub">${this.esc(this.branchLabel())}</div>
       <div class="meta">

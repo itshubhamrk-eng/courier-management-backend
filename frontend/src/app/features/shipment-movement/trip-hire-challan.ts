@@ -345,7 +345,7 @@ export class TripHireChallan implements OnInit {
   }
 
   /** Mirrors the branded KTC-style Trip Hire Challan layout, trimmed to the columns this
-   *  data model actually carries — no place/route/qty/logo/GST, since a shipment has no
+   *  data model actually carries — no place/route/qty/GST, since a shipment has no
    *  such fields and nothing here should be invented. TO PAY FREIGHT only carries a figure
    *  for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's doc. */
   private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
@@ -366,6 +366,7 @@ export class TripHireChallan implements OnInit {
     const dispatched = m.departureTime ?? m.dispatchedAt;
     const dispatchedDate = dispatched ? new Date(dispatched) : null;
     const companyName = this.esc(this.auth.companyName() ?? 'Trip Hire Challan');
+    const companyLogo = this.auth.companyLogo();
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
       <style>
@@ -378,6 +379,7 @@ export class TripHireChallan implements OnInit {
         .header { display: grid; grid-template-columns: 1fr 230px; border-bottom: 1px solid #777; }
         .company-info { text-align: center; padding: 10px; line-height: 15px; }
         .company-info .big { font-size: 13px; font-weight: bold; }
+        .company-info .mark { max-width: 100%; max-height: 40px; object-fit: contain; }
         .challan-box { border-left: 1px solid #777; padding: 10px; text-align: center; }
         .challan-number { font-size: 12px; font-weight: bold; }
         .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #777; }
@@ -416,7 +418,7 @@ export class TripHireChallan implements OnInit {
         <div class="title">TRIP HIRE CHALLAN</div>
 
         <div class="header">
-          <div class="company-info"><span class="big">${companyName}</span></div>
+          <div class="company-info">${companyLogo ? `<img class="mark" src="${this.esc(companyLogo)}" alt="${companyName}">` : `<span class="big">${companyName}</span>`}</div>
           <div class="challan-box">
             <div class="challan-number">${this.esc(m.manifestNumber)}</div>
           </div>

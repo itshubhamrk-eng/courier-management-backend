@@ -1,11 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { UiInput } from '@shared/components/ui-input/ui-input';
+import { CompanyService } from '../company.service';
+import { NotificationService } from '@core/services/notification.service';
 
 /**
  * Branding block — logo and favicon. The backend stores each as a URL string (max 500
- * chars), so the URL is the source of truth; a picked file is previewed locally only.
+ * chars), so the URL is the source of truth. Picking a file shows a local preview
+ * immediately, then uploads it via `CompanyService.uploadBranding` and writes the
+ * returned URL into the bound control once it lands — the control's value is what
+ * actually gets submitted, same as pasting a URL by hand.
  * View mode renders the marks; edit mode exposes the URL controls plus a file picker.
  */
 @Component({
@@ -27,10 +32,10 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
           <span class="brand__label">Logo</span>
           @if (editable()) {
             <app-input [control]="logoControl()" placeholder="https://…/logo.png" icon="link" [maxLength]="500" />
-            <button type="button" class="brand__file" (click)="logoFile.click()">
-              <mat-icon>upload</mat-icon> Choose file
+            <button type="button" class="brand__file" [disabled]="logoUploading()" (click)="logoFile.click()">
+              <mat-icon>upload</mat-icon> {{ logoUploading() ? 'Uploading…' : 'Choose file' }}
             </button>
-            <input #logoFile type="file" accept="image/*" hidden (change)="onFile($event, 'logo')" />
+            <input #logoFile type="file" accept="image/*" hidden (change)="onFile($event, 'LOGO')" />
           } @else {
             <span class="brand__hint">{{ logoUrl() || 'No logo set' }}</span>
           }
@@ -49,10 +54,10 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
           <span class="brand__label">Favicon</span>
           @if (editable()) {
             <app-input [control]="faviconControl()" placeholder="https://…/favicon.ico" icon="link" [maxLength]="500" />
-            <button type="button" class="brand__file" (click)="favFile.click()">
-              <mat-icon>upload</mat-icon> Choose file
+            <button type="button" class="brand__file" [disabled]="favUploading()" (click)="favFile.click()">
+              <mat-icon>upload</mat-icon> {{ favUploading() ? 'Uploading…' : 'Choose file' }}
             </button>
-            <input #favFile type="file" accept="image/*" hidden (change)="onFile($event, 'favicon')" />
+            <input #favFile type="file" accept="image/*" hidden (change)="onFile($event, 'FAVICON')" />
           } @else {
             <span class="brand__hint">{{ faviconUrl() || 'No favicon set' }}</span>
           }
@@ -89,11 +94,16 @@ export class CompanyLogo {
   readonly logoControl = input<FormControl>(new FormControl(''));
   readonly faviconControl = input<FormControl>(new FormControl(''));
 
-  /** Emits a local object-URL when a file is picked, so the parent can preview it. */
+  /** Emits once the uploaded file's real URL has been written into the control. */
   readonly filePicked = output<{ kind: 'logo' | 'favicon'; url: string }>();
+
+  private readonly companyService = inject(CompanyService);
+  private readonly notify = inject(NotificationService);
 
   protected readonly logoBroken = signal(false);
   protected readonly favBroken = signal(false);
+  protected readonly logoUploading = signal(false);
+  protected readonly favUploading = signal(false);
   private readonly logoLocal = signal<string | null>(null);
   private readonly favLocal = signal<string | null>(null);
 
@@ -102,12 +112,34 @@ export class CompanyLogo {
   protected readonly faviconPreview = computed(() =>
     this.favBroken() ? null : this.favLocal() ?? (this.editable() ? this.faviconControl().value : this.faviconUrl()));
 
-  onFile(event: Event, kind: 'logo' | 'favicon'): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
+  onFile(event: Event, kind: 'LOGO' | 'FAVICON'): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    if (kind === 'logo') { this.logoLocal.set(url); this.logoBroken.set(false); }
-    else { this.favLocal.set(url); this.favBroken.set(false); }
-    this.filePicked.emit({ kind, url });
+
+    const localUrl = URL.createObjectURL(file);
+    const local = kind === 'LOGO' ? this.logoLocal : this.favLocal;
+    const broken = kind === 'LOGO' ? this.logoBroken : this.favBroken;
+    const uploading = kind === 'LOGO' ? this.logoUploading : this.favUploading;
+    local.set(localUrl);
+    broken.set(false);
+    uploading.set(true);
+
+    this.companyService.uploadBranding(kind, file).subscribe({
+      next: (res) => {
+        uploading.set(false);
+        const control = kind === 'LOGO' ? this.logoControl() : this.faviconControl();
+        control.setValue(res.url);
+        control.markAsDirty();
+        this.filePicked.emit({ kind: kind === 'LOGO' ? 'logo' : 'favicon', url: res.url });
+      },
+      error: () => {
+        uploading.set(false);
+        local.set(null);
+        this.notify.error(`The ${kind === 'LOGO' ? 'logo' : 'favicon'} could not be uploaded. Please retry.`);
+      }
+    });
+
+    input.value = '';
   }
 }

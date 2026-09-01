@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { environment } from '@env/environment';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
+import { AuthService } from '@core/auth/auth.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
 import { WalletResponse, WalletTransaction, RechargeOrderResponse, formatMoney } from '@core/models/wallet.model';
@@ -157,6 +158,7 @@ export class WalletRecharge implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
@@ -233,7 +235,7 @@ export class WalletRecharge implements OnInit {
 
   receipt(): void {
     const w = this.wallet(); const t = this.settled();
-    if (w && t) downloadReceipt(t, w, environment.appName);
+    if (w && t) downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
   }
 
   pay(): void {

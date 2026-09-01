@@ -47,6 +47,7 @@ public record WalletTransactionResponse(
         PaymentStatus paymentStatus,
 
         UUID createdBy,
+        String createdByName,
         Instant createdAt
 ) {
 }

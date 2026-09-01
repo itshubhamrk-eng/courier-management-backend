@@ -48,6 +48,16 @@ public class CompanyBranchDirectory implements BranchDirectoryPort {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<UserRef> findUser(UUID userId, UUID companyId) {
+        if (userId == null || companyId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findByIdWithinCompany(userId, companyId)
+                .map(u -> new UserRef(u.getId(), u.getCompanyId(), u.effectiveDisplayName()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<UUID> branchOfUser(UUID userId, UUID companyId) {
         if (userId == null || companyId == null) {
             return Optional.empty();

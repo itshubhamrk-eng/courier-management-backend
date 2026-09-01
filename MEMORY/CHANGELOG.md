@@ -8,6 +8,182 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — Consignment print: "ToPay" label wrong on Paid orders
+
+Direct bug report ("paid order receipt getting topay name on receipt"). 0.30.2's own
+per-copy amount rules were themselves wrong for Paid orders: `consignment-print.util.ts`'s
+Customer/Office copy printed a literal "ToPay" row + "To Pay" words-line even when
+`paymentModeLabel.includes('(PAID)')` was true — the opposite of what Paid should show.
+`amountMode`'s `'hidden'` branch renamed to `'paid'`: now renders "Total Paid" +
+the real `total` amount, words-line reads `<amount in words> (Paid)`. Driver copy (still
+omits the amount block entirely on Paid) and Delivery copy (still shows the ToPay-to-collect
+figure, 0.00 on Paid) untouched — scoped via `AskUserQuestion` to just the Customer/Office
+label. `tsc --noEmit -p tsconfig.app.json` clean. Not verified live this session — no
+browser click-through, code fix only.
+
+## [Unreleased] — 2026-09-02 — Real 30-minute idle-timeout logout
+
+`session-expired.ts`'s copy ("signed out after a period of inactivity") was aspirational —
+no idle tracking existed. Token lifecycle was purely reactive (access 15 min, refresh 7 days
+*sliding* — `TokenIssuer.issue` sets `expiresAt = now + refreshTtl` on every rotation, so a
+session already lived indefinitely as long as *any* API call happened within a 7-day window,
+active or not).
+
+New `frontend/src/app/core/auth/idle-timeout.service.ts` (`IdleTimeoutService`): a plain
+`setTimeout` restarted on `mousedown`/`keydown`/`wheel`/`touchstart`/`scroll` at `document`
+level, independent of the token/API lifecycle — genuine activity resets the clock regardless
+of whether any request fired. On expiry: best-effort `AuthService.logout()` (revokes the
+refresh token server-side) then `/session-expired`. New `environment.idleTimeoutMinutes: 30`
+(both environment files). Started/stopped from `AdminLayout`'s constructor/`DestroyRef` — the
+authenticated shell behind `authGuard` — so it only ever runs while signed in.
+
+Verified locally by dropping the threshold to 6s (pure-idle case: confirmed auto-logout) and
+to 60s (sustained-activity case: clicks every 10s across 60s+ never expired) before reverting
+to 30.
+
+## [Unreleased] — 2026-09-01 — Frontend build config split from backend's SPRING_PROFILES_ACTIVE
+
+`frontend/Dockerfile` took `--configuration=development` unconditionally (hardcoded, comment
+said "point this at prod config only when this Dockerfile starts building an actual production
+image" — that day arrived for the customer-facing box). Now `ARG BUILD_CONFIGURATION=development`,
+wired through `docker-compose.yml`'s new `frontend.build.args.BUILD_CONFIGURATION:
+${FRONTEND_BUILD_CONFIGURATION:-development}`. Default unchanged (dev box at 100.25.82.18 keeps
+its quick-fill buttons); the customer-facing prod box (35.154.220.116, vendor.amazinglpl.com)
+now has `FRONTEND_BUILD_CONFIGURATION=production` in its own `.env` — set directly on that host,
+not committed. `Login` (`frontend/src/app/features/auth/login.ts`) also now hides the manual
+Company code field itself behind the existing `devMode` flag (was: always visible, just
+disabled+prefilled when the hostname matched); the dev quick-fill block was already gated the
+same way, so switching that one env var was enough to strip both live. Verified by serving the
+actual `--configuration=production` dist locally, then confirmed again on `vendor.amazinglpl.com`
+itself post-deploy (session-expired flow → login page, field and quick-fill both absent).
+
+**Note:** an SSH `tail` while editing prod's `.env` briefly printed its AWS access key/secret
+into a Claude Code session transcript — flagged to rotate those keys.
+
+## [Unreleased] — 2026-09-01 — Branch create: Country/State/District/City as cascading dropdowns
+
+`BranchForm` (create mode only — edit keeps the plain text fields, since existing branches
+have only free-text names, no master ids to reverse-resolve): four `app-select` pickers
+(Country → State → District → City) backed by new `BranchService` geography methods
+(`countries/states/districts/cities`, same `/global-masters/...` cascade `CustomerService`
+and `CompanyService` already use). Picking a level clears+reloads the ones beneath it;
+the resolved *name* (not the id) is written into the existing `country`/`state`/`district`/
+`city` string controls via `valueChanges`, so `submit()`'s payload mapping is untouched —
+`CreateBranchRequest` still gets plain strings, no backend/DB change. Added
+`provideHttpClient()`/`provideHttpClientTesting()` to `branch-form.spec.ts` (its `BranchForm`
+now injects `BranchService` unconditionally in create mode, which needs `HttpClient`).
+
+## [Unreleased] — 2026-09-01 — Login: company code auto-fill by hostname
+
+New `frontend/src/app/core/config/company-domain-map.ts`: static hostname -> companyCode map
+(`COMPANY_DOMAIN_MAP`), one entry per company domain (`vendor.amazinglpl.com` ->
+`AMAZING_LOGISTICS` so far). `Login`'s constructor looks up `window.location.hostname`; on a
+match it sets and disables the `companyCode` control (still included in `submit()`'s
+`getRawValue()`). No infra change needed — `frontend/nginx.conf` already serves the same build
+to every hostname (`server_name _`), and these domains already sit in
+`application-dev.yml`'s CORS `allowed-origins`. Add more hostnames to the map as domains are
+provisioned; unmapped hostnames (e.g. bare `skra.in`) keep today's manual-entry behavior.
+
+## [0.31.0] — 2026-08-21 — Communication Center module, COMPLETE end-to-end
+
+New package `com.courier.modules.communication`, migration `V50`. Event-driven multi-channel
+(WhatsApp/SMS/Email) customer notifications, on direct full-spec request. Business modules
+never send messages themselves — `ShipmentServiceImpl` (still the only writer of Shipment
+Booking/Movement state) publishes six new plain-scalar `ShipmentEvent` records (`Booked`/
+`Dispatched`/`ReceivedAtBranch`/`OutForDelivery`/`Delivered`/`Cancelled`) at its six existing
+call sites; a new `ShipmentCommunicationListener` (`AFTER_COMMIT`+`REQUIRES_NEW`, same
+discipline `ShipmentBookingWalletListener` already set) is the only place an event turns into
+an actual send.
+
+**Flow**: `CommunicationOrchestrator` finds enabled channels -> loads the active template ->
+queues one `communication_log` row per channel (`PENDING` or `CANCELLED` with a stated reason)
+— a fast DB insert, never a network call on the listener thread. A new `CommunicationDispatchJob`
+(`@Scheduled`, this codebase's outbox-plus-sweep answer to "use Kafka if available, otherwise
+an event abstraction ready for it" — no Kafka dependency exists in this repo) picks up due rows
+cross-tenant (same `CompanyContext`-unbound sweep shape `TicketSlaSweepJob`/`ShipmentSlaSweepJob`
+already use) and `CommunicationSendService` renders the template and calls the right provider.
+
+**Two deliberately separate on/off switches**, resolving a real contradiction between the
+brief's own DB-schema section (channel-grain only) and its Default-Events section
+(event+channel-grain "enable/disable each channel per event"): `communication_setting.enabled`
+is the channel-level master switch per company; `communication_template.status`
+(`ACTIVE`/`INACTIVE`) is the actual per-event-per-channel switch. The four default events
+(`SHIPMENT_BOOKED`/`SHIPMENT_DISPATCHED`/`OUT_FOR_DELIVERY`/`SHIPMENT_DELIVERED`) x three
+channels seed lazily (get-or-create, like `CompanySettings`) the first time a company's
+templates are read.
+
+**Providers**: `WhatsAppProvider`/`SmsProvider`/`EmailProvider` interfaces, each with a
+`LogOnly*` default (no dev-environment vendor account exists) and a real implementation gated
+by an explicit `app.communication.<channel>.enabled` property (`@ConditionalOnProperty`, no
+`@ConditionalOnMissingBean`, mirrors `PaymentGatewayConfig`'s own reasoning): `MetaWhatsAppProvider`
+(Meta Cloud API, plain `RestClient`, no SDK, approved-template sends only), `GenericHttpSmsProvider`
+(POSTs to whatever `apiUrl` a company configures — no hardcoded vendor), `SmtpEmailProvider`
+(new `spring-boot-starter-mail` dependency, platform-level `spring.mail.*`, a company only sets
+its own from-name/from-email identity). WhatsApp/SMS credentials are genuinely per-company and
+live encrypted in `communication_setting.secret` (column `secret_encrypted`) via the same
+`EncryptedStringConverter` `CompanyRazorpayConfig` (V46) already uses — never returned by any
+API response.
+
+**RTO_INITIATED/RTO_DELIVERED are declared, never published** — no return-to-origin flow exists
+in this codebase yet (`ShipmentStatus.RETURNED` is a generic terminal state nothing writes). A
+future RTO module can start publishing into these two rows with zero schema/enum change here.
+
+**Backend**: `communication_template`/`communication_setting`/`communication_log` (all
+company-owned); `customers` gained `whatsapp_enabled`/`sms_enabled`/`email_enabled` (default
+`TRUE`, opt-out not opt-in) threaded through the customer create/update commands, DTOs, mapper
+and service. `ShipmentDirectoryPort` (owned by `communication`, implemented by
+`shipment.infrastructure.CommunicationShipmentDirectoryAdapter`) goes straight to repositories,
+never a `@PreAuthorize`-guarded service method — the dispatch job's scheduler thread carries no
+authenticated caller, the same reason `TicketDirectory`/`AuthBranchDirectory` do the same (a
+real early-draft bug: calling `CustomerService.findOrCreateForBooking`/`BranchService.getById`
+directly `AccessDeniedException`'d on that thread, caught before shipping). 14 endpoints across
+four controllers. RBAC role-based like every module since Ticket Support (no new
+`PermissionModule`/`PermissionAction` rows) — settings/template writes `COMPANY_ADMIN`-only,
+dashboard/logs/retry `COMPANY_ADMIN`+`BRANCH_MANAGER`. 36 new backend unit tests (`mvn test`
+835 → 871).
+
+**Frontend**: `features/communication/` — Dashboard (Sent/Delivered/Failed/Pending, `Sent`
+folds in `Delivered` per the brief's own worked example), Channel Settings (one card per
+channel, secrets never round-tripped), Templates (list + edit dialog with Enable/Disable,
+variable-insert chips, live Preview), Logs (filter/paginate/Retry Failed). New
+`ShipmentCommunicationCard` embedded in Shipment Details ("SHIPMENT_BOOKED ✓ WhatsApp Sent ✓
+SMS Sent ✗ Email Sent" per the brief's own example). Customer create/edit gained a
+"Communication Preferences" card (`mat-checkbox` x3). New nav section "Communication Center".
+11 new frontend tests (`ng test` 134 → 145, the one pre-existing `reports-dashboard` nav
+failure untouched), `tsc --noEmit`/`ng build --configuration production` both clean.
+
+**Verified fully live** on throwaway `:8083` (`:8100`/`:4200` untouched; a concurrent session's
+own `:8082`/`:4300` also live throughout, untouched) against real `courier_db`: `V50` applied
+cleanly; settings/templates lazy-seed exactly 3/12 rows; a fresh test shipment (`PUNE-000019`,
+own fixture) booked and its `SHIPMENT_BOOKED` event queued 3 log rows — WhatsApp/SMS picked up
+by the dispatch sweep and marked `SENT` with a synthetic `providerMessageId`, Email correctly
+`CANCELLED` ("No EMAIL address on file"); dashboard aggregation matched exactly; cancelling
+that same shipment queued `SHIPMENT_CANCELLED` rows correctly `CANCELLED` ("No active
+template" — proving the seed-only-four-events design live); `test-connection` correctly
+reported missing WhatsApp credentials; a `BRANCH_MANAGER` token correctly 403'd on
+`PUT /communication/settings/WHATSAPP`; template preview rendered correctly; the auto-created
+test `Customer` row carried the expected preference defaults. **Not verified live**: a genuine
+`FAILED`/retry cycle (no real vendor credentials to force a failure) and the `DELIVERED` status
+(no provider delivery-receipt webhook exists yet for any channel) — both covered by unit tests
+instead.
+
+**Same-day "test it live" follow-up**: full Chrome click-through found and fixed two real UI
+bugs — Chrome autofill silently overwriting Channel Settings' text/secret fields with the
+signed-in admin's own saved credentials (`autocomplete="new-password"` on the secret field
+fixes it, `autocomplete="off"` alone does not), and the Customer form's sticky action bar
+painting over the new Communication Preferences checkboxes once that card pushed the form
+past a height threshold (`padding-bottom` on the form container fixes it structurally, for
+any future card too). Every other page/action verified clean: settings save/test-connection,
+template edit/preview, logs+filters, the Shipment Details Communication tab, a real Customer
+create with a deliberately-unchecked preference persisting correctly. Full detail in
+`MEMORY/modules/communication.md`.
+
+This working tree's `MEMORY/AI_CONTEXT.md` had not been updated for the prior two entries
+below (0.30.2/0.30.3, from a concurrent session) when this task started — reconstructed brief
+stub entries there from this file, noted as such.
+
+---
+
 ## [0.30.3] — 2026-08-20 — Manual ODA Charge override at booking
 
 ODA Charge row moved below Other Charges in the booking summary (`charge-summary.ts`) and

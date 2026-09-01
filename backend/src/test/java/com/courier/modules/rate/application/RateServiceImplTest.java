@@ -166,9 +166,26 @@ class RateServiceImplTest {
     }
 
     @Test
-    @DisplayName("adjacent (non-overlapping) slabs for the same combination are accepted")
-    void adjacentSlabsAccepted() {
+    @DisplayName("slabs sharing a boundary value are refused — both would match that weight")
+    void touchingSlabsRejected() {
         Rate existing = existingRate("OTHER", "5.000", "8.000");
+        when(repository
+                .findByCompanyIdAndRouteIdAndServiceTypeIdAndPackageTypeIdAndPaymentModeIdAndStatus(
+                        eq(COMPANY), eq(ROUTE), eq(SERVICE_TYPE), eq(PACKAGE_TYPE), eq(PAYMENT_MODE),
+                        eq(RateStatus.ACTIVE)))
+                .thenReturn(List.of(existing));
+
+        assertThatThrownBy(() -> service.create(createCommand("RATE1", "0.000", "5.000")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("overlaps");
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("slabs offset by the smallest increment for the same combination are accepted")
+    void adjacentSlabsAccepted() {
+        Rate existing = existingRate("OTHER", "5.001", "8.000");
         when(repository
                 .findByCompanyIdAndRouteIdAndServiceTypeIdAndPackageTypeIdAndPaymentModeIdAndStatus(
                         eq(COMPANY), eq(ROUTE), eq(SERVICE_TYPE), eq(PACKAGE_TYPE), eq(PAYMENT_MODE),

@@ -1,6 +1,7 @@
 package com.courier.modules.company.api;
 
 import com.courier.modules.company.api.dto.AssignSubscriptionRequest;
+import com.courier.modules.company.api.dto.CompanyBrandingUploadResponse;
 import com.courier.modules.company.api.dto.CompanyResponse;
 import com.courier.modules.company.api.dto.CompanySearchRequest;
 import com.courier.modules.company.api.dto.CompanyStatisticsResponse;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,9 +41,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -131,6 +136,24 @@ public class CompanyController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/companies/{id}")
                         .buildAndExpand(created.company().getId()).toUri())
                 .body(ApiResponse.success(body, "Company created"));
+    }
+
+    @PostMapping(value = "/branding-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload a company logo or favicon",
+            description = "PNG/JPEG/SVG/WEBP/ICO only. Not tied to a company id — the create "
+                    + "form has none yet — so this only stores the file and returns its URL; "
+                    + "the caller writes that URL into the company record itself via create "
+                    + "or update.")
+    public ApiResponse<CompanyBrandingUploadResponse> uploadBranding(
+            @RequestParam("kind") String kind, @RequestParam("file") MultipartFile file) {
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new BusinessRuleException("The uploaded file could not be read. Please retry.");
+        }
+        String url = service.uploadBranding(kind, content, file.getOriginalFilename(), file.getContentType());
+        return ApiResponse.success(new CompanyBrandingUploadResponse(url), "File uploaded");
     }
 
     @PutMapping("/{id}")

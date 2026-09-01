@@ -68,6 +68,11 @@ export interface CustomerResponse {
   email?: string | null;
   gstNumber?: string | null;
   panNumber?: string | null;
+  /** Communication Center preferences — see MEMORY/modules/communication.md. Opt-out,
+   *  not opt-in: a new customer starts with all three enabled. */
+  whatsappEnabled: boolean;
+  smsEnabled: boolean;
+  emailEnabled: boolean;
   status: CustomerStatus;
   createdBy?: string | null;
   createdDate?: string | null;
@@ -95,6 +100,10 @@ export interface CreateCustomerRequest {
   email?: string | null;
   gstNumber?: string | null;
   panNumber?: string | null;
+  /** Defaults to true server-side when omitted. */
+  whatsappEnabled?: boolean;
+  smsEnabled?: boolean;
+  emailEnabled?: boolean;
 }
 
 /**
@@ -113,6 +122,9 @@ export interface UpdateCustomerRequest {
   email?: string | null;
   gstNumber?: string | null;
   panNumber?: string | null;
+  whatsappEnabled: boolean;
+  smsEnabled: boolean;
+  emailEnabled: boolean;
   version: number;
 }
 

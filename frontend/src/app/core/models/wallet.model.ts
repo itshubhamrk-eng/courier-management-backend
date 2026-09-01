@@ -111,6 +111,7 @@ export interface WalletTransaction {
   paymentReference?: string | null;
   paymentStatus?: PaymentStatus | null;
   createdBy?: string | null;
+  createdByName?: string | null;
   createdAt: string;
 }
 
