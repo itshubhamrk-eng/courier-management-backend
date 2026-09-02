@@ -62,6 +62,7 @@ services:
       DB_NAME: ${DB_NAME:-courier_db}
       DB_USERNAME: ${DB_USERNAME:-courier}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set - see .env.example}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
       # No default: the app must not start with a guessable signing key.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
       # No default: unset only bites when a company saves its own Razorpay key secret
