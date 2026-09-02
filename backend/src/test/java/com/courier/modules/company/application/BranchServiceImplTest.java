@@ -333,7 +333,7 @@ class BranchServiceImplTest {
     // ------------------------------------------------------------------- update
 
     private UpdateBranchCommand updateCommand(String name, Long version) {
-        return new UpdateBranchCommand(name, BranchType.BOOKING_DELIVERY_BRANCH,
+        return new UpdateBranchCommand("PUNE_MAIN", name, BranchType.BOOKING_DELIVERY_BRANCH,
                 null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
                 null, null, null, null, null,
                 null, null, null, null, null, null, null, null,
@@ -376,7 +376,7 @@ class BranchServiceImplTest {
         when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
 
         UpdateBranchCommand command = new UpdateBranchCommand(
-                "Pune Central", BranchType.BOOKING_DELIVERY_BRANCH,
+                "PUNE_MAIN", "Pune Central", BranchType.BOOKING_DELIVERY_BRANCH,
                 null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
                 new BigDecimal("21.0"), new BigDecimal("79.0"), null, null, null,
                 null, null, null, null, null, null, null, null,
