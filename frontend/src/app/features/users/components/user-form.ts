@@ -168,6 +168,16 @@ export class UserForm {
 
   constructor() {
     effect(() => { const u = this.user(); if (u && this.mode() === 'edit') this.hydrate(u); });
+    effect(() => {
+      if (this.mode() !== 'edit') return;
+      // Identity/security fields are create-only and not rendered in edit mode — their
+      // create-mode validators (email is required) must not block an edit-mode save.
+      for (const name of ['employeeCode', 'email', 'username', 'password', 'roleIds']) {
+        const control = this.form.get(name)!;
+        control.clearValidators();
+        control.updateValueAndValidity({ emitEvent: false });
+      }
+    });
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }

@@ -1085,7 +1085,8 @@ export class ShipmentCreate implements OnInit {
               + this.odaChargeDelta() + this.gstOnOdaChargeDelta()
           },
           otherCharges: this.otherCharges(),
-          remarks: v.remarks || null
+          remarks: v.remarks || null,
+          createdByName: s.createdByName ?? null
         });
         const image = this.selectedImageFile();
         if (image) {

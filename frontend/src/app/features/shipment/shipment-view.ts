@@ -364,7 +364,8 @@ export class ShipmentView implements OnInit {
         roundOff: c.roundOff, netAmount: c.netAmount
       },
       otherCharges: c.otherCharges,
-      remarks: s.remarks ?? null
+      remarks: s.remarks ?? null,
+      createdByName: s.createdByName ?? null
     });
   }
 

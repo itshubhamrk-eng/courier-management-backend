@@ -122,6 +122,7 @@ export interface ShipmentResponse {
   /** The shipment's current E-Way Bill, if it has ever had one. */
   ewayBill?: ShipmentEwayBillInfo | null;
   createdBy?: string | null;
+  createdByName?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
   updatedDate?: string | null;

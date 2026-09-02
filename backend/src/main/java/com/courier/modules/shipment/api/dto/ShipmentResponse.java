@@ -32,7 +32,7 @@ public record ShipmentResponse(
         String remarks,
         Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
         BigDecimal invoiceValue, boolean ewayBillRequired, EwayBillInfo ewayBill,
-        UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
+        UUID createdBy, String createdByName, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
         List<ShipmentItemResponse> items
 ) {
     /** The shipment's current E-Way Bill, read-only — plain fields only (no enum type),

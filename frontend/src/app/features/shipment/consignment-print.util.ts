@@ -35,6 +35,9 @@ export interface ConsignmentPrintData {
   otherCharges: number;
   /** Booking form's remarks field — printed as the LR's "Special Instruction" line. */
   remarks: string | null;
+  /** Booked-by user's name — `ShipmentResponse.createdByName`, absent if the booking user
+   *  no longer resolves (deleted, cross-tenant). */
+  createdByName: string | null;
 }
 
 const esc = (s: string): string =>
@@ -109,8 +112,14 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   // amount as already Paid (not a "ToPay" figure), the Driver copy drops the amount block
   // entirely (nothing to collect), and the Delivery copy always shows the ToPay-to-collect
   // figure, which is 0 once the order was Paid at booking.
+  //
+  // ToPay orders print this document at booking time, before delivery — the collectible
+  // amount isn't disclosed on any copy yet, only at actual delivery, so every copy omits
+  // the amount block for ToPay regardless of label.
   const isPaid = d.paymentModeLabel.includes('(PAID)');
+  const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
   const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
+    isToPay ? 'omitted' :
     label === 'Driver Copy' ? (isPaid ? 'omitted' : 'normal') :
     label === 'Delivery Copy' ? 'collect' :
     isPaid ? 'paid' : 'normal';
@@ -205,6 +214,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
             <tr><td colspan="2">Special Instruction :&nbsp; ${esc(d.remarks ?? '—')}</td></tr>
             <tr><td colspan="2">Consignee GST Number :&nbsp; —</td></tr>
             <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
+            <tr><td colspan="2">Created By :&nbsp; ${esc(d.createdByName ?? '—')}</td></tr>
           </table>
         </div>
         <div class="right">${amountSection}

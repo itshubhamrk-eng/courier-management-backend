@@ -11,8 +11,7 @@ import { RouterOutlet } from '@angular/router';
     <div class="auth">
       <aside class="auth__brand">
         <div class="auth__brand-top">
-          <div class="auth__logo"><span>CS</span></div>
-          <h1 class="auth__title">Courier SaaS</h1>
+          <img src="assets/images/skara-tech-logo.png" alt="Skara Tech" class="auth__logo-img" />
         </div>
         <div class="auth__illustration">
           <img src="assets/images/login-hero.png" alt="" class="auth__hero-img" />
@@ -32,9 +31,7 @@ import { RouterOutlet } from '@angular/router';
       background:radial-gradient(1200px 600px at -10% -10%, var(--sidebar-hover), var(--sidebar-bg));
       display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; }
     .auth__brand-top { display:flex; align-items:center; gap:12px; }
-    .auth__logo { width:44px; height:44px; border-radius:16px; background:linear-gradient(155deg, var(--brand-400), var(--brand-600));
-      display:grid; place-items:center; font:800 16px var(--font-display); color:#fff; box-shadow:var(--shadow-clay-sm); }
-    .auth__title { font:700 20px var(--font-display); color:var(--sidebar-fg-strong); margin:0; }
+    .auth__logo-img { height:56px; width:auto; border-radius:12px; background:#fff; padding:6px 14px; box-shadow:var(--shadow-clay-sm); }
     .auth__illustration { margin:8px 0; display:grid; place-items:center; }
     .auth__hero-img { width:100%; max-width:520px; height:auto; filter:drop-shadow(0 20px 30px rgba(0,0,0,.35)); }
     .auth__pitch h2 { font:700 34px/1.15 var(--font-display); letter-spacing:-.02em; color:var(--sidebar-fg-strong); max-width:16ch; }

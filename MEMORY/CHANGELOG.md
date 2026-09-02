@@ -8,6 +8,57 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — Consignment print shows the booking user's name
+
+`ShipmentResponse` gained `createdByName`: new `UserLookupPort` (backend by
+`CompanyShipmentUserDirectory`, `shipment` module's own directory-port seam, same shape as
+`ShipmentDirectoryPort`/`AuthBranchDirectory` elsewhere in this codebase) resolves
+`Shipment.createdBy` to a display name, `null` if the user no longer resolves (deleted,
+cross-tenant) rather than guessing. `ShipmentMapper.toResponse` wires it in.
+`consignment-print.util.ts` prints a new "Created By" line on the LR; `shipment-create.ts`/
+`shipment-view.ts` pass `createdByName` through to the print payload. Verified against the
+actual production `renderConsignmentHtml` function (rendered in Node via `esbuild`+`jsdom`,
+same technique 0.28.9 used): synthetic data with `createdByName: 'Pune User'` renders
+correctly on all copies. `tsc --noEmit` clean.
+
+## [Unreleased] — 2026-09-02 — Edit User always showed "Fix the highlighted fields", could never save
+
+Direct bug report: "not able to update user getting Fix the highlighted fields before saving."
+`user-form.ts`'s reactive form is shared between create and edit, but `email`/`username`/
+`employeeCode`/`password`/`roleIds` keep their create-mode validators (`email` is `required`)
+in both modes — the edit-mode template never renders or hydrates those controls (identity
+fields show read-only, password/roles aren't part of `UpdateUserRequest`), so `email` stayed
+`''` and `Validators.required` failed permanently, making the form unconditionally invalid in
+edit mode. Fixed with a `mode === 'edit'` effect in the constructor that clears those controls'
+validators. Verified live on throwaway `:8082`/`:4300` (real `:8100`/`:4200` untouched): edited
+a real user (Ganesh Waghmare, Middle Name → "K"), save succeeded with "User updated." toast, no
+validation block. `tsc --noEmit` clean.
+
+## [Unreleased] — 2026-09-02 — Skara Tech branding: favicon + login logo
+
+Rebranded, no functional change. Added `favicon-32.png`/`favicon-256.png` (SK app-icon mark)
+to `src/assets/images/`, wired via `<link rel="icon">`/`apple-touch-icon` in `index.html` —
+the app previously shipped no favicon at all. `auth-layout.ts`'s brand panel swapped its
+placeholder "CS" text badge for the full "SKARA TECH" logo image (`skara-tech-logo.png`,
+white background card so it reads against the dark sidebar gradient). Source PNGs came from
+the user's Downloads (ChatGPT-generated), resized with `sips` before landing in the repo —
+originals were ~1MB/1.7MB, too heavy for a favicon/small brand mark. Verified visually on a
+throwaway `:4301` dev server (`:4200`/`:4300` untouched) — logo renders correctly on `/login`,
+both image assets 200 from the dev server.
+
+## [Unreleased] — 2026-09-02 — ToPay booking print was disclosing the collectible amount early
+
+`consignment-print.util.ts`'s `copy()` only ever branched amount display on `isPaid`
+(label contains `(PAID)`) — ToPay, COD, and TBB all fell into the same `'normal'` charge-
+breakup rendering, and the Delivery Copy always printed the ToPay collect figure. Since this
+print fires immediately on booking (`shipment-create.ts`, right after `service.create`
+succeeds), a ToPay order's Customer/Office copies showed the full charge total and the
+Delivery Copy showed the amount to collect — all before the shipment ever reached delivery.
+Added `isToPay` (label contains `(TO_PAY)`) forcing `amountMode = 'omitted'` on all four
+copies for ToPay, same mechanism already used to blank the Driver Copy for Paid orders. Net:
+ToPay's booking-time printout is now a plain booking receipt with no amount anywhere; COD/TBB
+behavior unchanged.
+
 ## [Unreleased] — 2026-09-02 — SUPER_ADMIN login 500 on a company-mismatch bookkeeping race
 
 Found live on prod right after the company-domain-map deploy: SUPER_ADMIN signing in on

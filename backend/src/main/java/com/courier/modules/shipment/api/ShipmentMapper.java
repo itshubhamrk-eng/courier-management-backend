@@ -32,6 +32,8 @@ import com.courier.modules.shipment.domain.ShipmentCriteria;
 import com.courier.modules.shipment.domain.ShipmentDocument;
 import com.courier.modules.shipment.domain.ShipmentItem;
 import com.courier.modules.shipment.domain.ShipmentStatusHistory;
+import com.courier.modules.shipment.domain.UserLookupPort;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -40,7 +42,10 @@ import java.util.List;
 
 /** Wire contract <-> application/domain types for Shipment Booking. */
 @Component
+@RequiredArgsConstructor
 public class ShipmentMapper {
+
+    private final UserLookupPort userLookup;
 
     public CreateShipmentCommand toCommand(CreateShipmentRequest r) {
         return new CreateShipmentCommand(
@@ -126,8 +131,14 @@ public class ShipmentMapper {
                 latestAssetUrl(assets, ShipmentAssetType.POD, "SIGNATURE"),
                 latestAssetUrl(assets, ShipmentAssetType.BOOKING, "PHOTO"),
                 s.getInvoiceValue(), s.isEwayBillRequired(), toEwayBillInfo(ewayBill),
-                s.getCreatedBy(), s.getCreatedAt(), s.getUpdatedBy(), s.getUpdatedAt(), s.getVersion(),
+                s.getCreatedBy(), createdByName(s), s.getCreatedAt(), s.getUpdatedBy(), s.getUpdatedAt(), s.getVersion(),
                 items.stream().map(this::toResponse).toList());
+    }
+
+    private String createdByName(Shipment s) {
+        return userLookup.findUser(s.getCreatedBy(), s.getCompanyId())
+                .map(UserLookupPort.UserRef::fullName)
+                .orElse(null);
     }
 
     private ShipmentResponse.EwayBillInfo toEwayBillInfo(EwayBillService.EwayBillSnapshot s) {
