@@ -309,8 +309,65 @@ public class WalletServiceImpl implements WalletService {
                 new PaymentGatewayPort.PaymentConfirmation(orderId, paymentId, signature));
 
         // 2. What was actually paid, according to the gateway — not according to the
-        //    client. Verifying a signature proves the pair is genuine; it says nothing
-        //    about the amount the browser claims alongside it.
+        //    client — and post it. Shared with the webhook path below, whose own
+        //    authenticity check (the whole-payload webhook signature) happens before this
+        //    is ever called, not via a per-payment HMAC.
+        return settlePayment(companyId, branchId, paymentGateway, orderId, paymentId,
+                command.remarks(), currentActor());
+    }
+
+    /**
+     * Settles a recharge from a Razorpay webhook — the case {@link #completeRecharge} exists
+     * to cover but cannot reach on its own: a browser tab closed after the gateway captured
+     * the payment but before the confirmation call landed. The money is real and sitting at
+     * the gateway either way; without this it is never credited until someone notices and
+     * credits it by hand.
+     *
+     * <p>No {@code @PreAuthorize} — a gateway webhook carries no authenticated user, so the
+     * ordinary per-method role gate has nothing to check. Safety instead comes from the
+     * caller: {@code RazorpayWebhookController} verifies the whole-payload webhook signature
+     * (a secret this method never sees) before calling this, and binds {@code companyId}
+     * via {@link com.courier.shared.company.CompanyContext#runAs} from the order's own
+     * {@code notes} — the same notes {@link #openRecharge} wrote, not anything the webhook
+     * body claims about itself. This method must never be reachable from a normal
+     * authenticated request.
+     *
+     * <p>Idempotent exactly like {@link #completeRecharge}: if the browser already settled
+     * this payment, {@code settlePayment}'s lookup returns that entry unchanged.
+     */
+    @Override
+    @Transactional
+    public WalletTransaction settleFromWebhook(UUID companyId, UUID branchId,
+                                               String gatewayOrderId, String paymentId) {
+        PaymentGatewayPort paymentGateway = paymentGatewayResolver.resolve(companyId);
+        return settlePayment(companyId, branchId, paymentGateway, gatewayOrderId, paymentId,
+                "Settled via gateway webhook — browser did not confirm", "webhook");
+    }
+
+    /**
+     * What was actually paid, according to the gateway — not according to any client — then
+     * posted to the ledger. Idempotent on {@code paymentId}: a retry, a double submit and a
+     * webhook that fires after (or before) the browser confirmation all credit the wallet
+     * exactly once, whichever caller gets there first.
+     */
+    private WalletTransaction settlePayment(UUID companyId, UUID branchId,
+                                            PaymentGatewayPort paymentGateway,
+                                            String orderId, String paymentId,
+                                            String remarks, String actor) {
+        Optional<WalletTransaction> already =
+                transactionRepository.findByPaymentReferenceWithinCompany(paymentId, companyId);
+        if (already.isPresent()) {
+            log.info("Recharge {} already recorded as {}; returning it unchanged",
+                    paymentId, already.get().getTransactionNo());
+            return already.get();
+        }
+        // Not ours, but recorded by someone. Refuse flatly rather than saying whose it is.
+        if (transactionRepository.isPaymentReferenceRecorded(paymentId)) {
+            log.warn("Payment {} was presented by company {} but is already recorded elsewhere",
+                    paymentId, companyId);
+            throw new BusinessRuleException("This payment has already been recorded.");
+        }
+
         PaymentGatewayPort.GatewayPayment payment = paymentGateway.fetchPayment(paymentId);
         if (!payment.captured()) {
             throw new BusinessRuleException(
@@ -332,12 +389,12 @@ public class WalletServiceImpl implements WalletService {
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR,
                 SubTransactionType.WRC, payment.amount(),
-                ReferenceType.PAYMENT, orderId, command.remarks(),
+                ReferenceType.PAYMENT, orderId, remarks,
                 payment.gateway(), paymentId, PaymentStatus.SUCCESS);
 
         log.info("Wallet {} recharged {} {} via {} ({}) by {}",
                 wallet.getWalletNumber(), wallet.getCurrency(),
-                payment.amount().toPlainString(), payment.gateway(), paymentId, currentActor());
+                payment.amount().toPlainString(), payment.gateway(), paymentId, actor);
         auditService.record(AuditAction.WALLET_RECHARGED, ENTITY, wallet.getId(),
                 Map.of("walletNumber", wallet.getWalletNumber(),
                         "transactionNo", entry.getTransactionNo(),

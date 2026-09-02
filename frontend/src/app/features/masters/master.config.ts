@@ -125,6 +125,10 @@ export interface MasterDefinition {
   exportColumns: string[];
   /** Whether `POST /master/bootstrap` seeds this list with a standard set. */
   seeded?: boolean;
+  /** Sort the list opens on, before the operator clicks a column header. Most lists are
+   *  fine reading in whatever order the backend returns; a few (Pincode) read oddly any
+   *  other way. `field` must be one of the backend's own allowed sort keys. */
+  defaultSort?: { field: string; direction: 'asc' | 'desc' };
 }
 
 const text = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
@@ -279,6 +283,7 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
     apiPath: '/global-masters/pincodes', singular: 'Pincode', plural: 'Pincodes',
     icon: 'markunread_mailbox', group: 'Geography',
     description: 'Postal codes, each belonging to one area. The code is the pincode itself.',
+    defaultSort: { field: 'code', direction: 'asc' },
     parent: { field: 'areaId', nameField: 'areaName', master: 'areas', label: 'Area' },
     columns: [
       { key: 'code', header: 'Pincode', sortable: true, width: '120px' },
@@ -287,6 +292,7 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
       { key: 'zone', header: 'Zone', width: '100px', value: (r) => text(r['zone']) },
       { key: 'serviceable', header: 'Serviceable', kind: 'boolean', width: '120px', value: (r) => yesNo(r['serviceable']) },
       { key: 'codAvailable', header: 'COD', kind: 'boolean', width: '80px', value: (r) => yesNo(r['codAvailable']) },
+      { key: 'odaApplicable', header: 'ODA', kind: 'boolean', width: '80px', value: (r) => yesNo(r['odaApplicable']) },
       STATUS_COLUMN
     ],
     fields: [
@@ -301,14 +307,16 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
       { key: 'codAvailable', label: 'Cash on delivery', kind: 'boolean', initial: true, group: 'Availability' },
       { key: 'prepaidAvailable', label: 'Prepaid', kind: 'boolean', initial: true, group: 'Availability' },
       { key: 'pickupAvailable', label: 'Pickup', kind: 'boolean', initial: true, group: 'Availability' },
-      { key: 'zone', label: 'Delivery zone', kind: 'text', maxLength: 20, placeholder: 'LOCAL', group: 'Availability' }
+      { key: 'odaApplicable', label: 'ODA applicable', kind: 'boolean', initial: false, group: 'Availability',
+        hint: 'Out-of-Delivery-Area — still served, just not on the standard network.' }
     ],
     filters: [
       { key: 'areaId', label: 'Area', kind: 'lookup', lookup: 'areas' },
       { key: 'serviceable', label: 'Serviceable only', kind: 'boolean' },
+      { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' },
       { key: 'zone', label: 'Zone', kind: 'text', maxLength: 20 }
     ],
-    exportColumns: ['code', 'name', 'areaName', 'zone', 'serviceable', 'codAvailable', 'prepaidAvailable', 'status']
+    exportColumns: ['code', 'name', 'areaName', 'zone', 'serviceable', 'codAvailable', 'prepaidAvailable', 'odaApplicable', 'status']
   },
 
   'vehicle-types': {

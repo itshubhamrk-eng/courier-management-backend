@@ -207,6 +207,14 @@ export const routes: Routes = [
         path: 'branches/:id/edit', title: 'Edit Branch', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/branch/branch-edit').then((m) => m.BranchEdit)
       },
+      // Declared before 'masters/:master' (below) so the literal segment is not swallowed
+      // by that generic route's parameter.
+      {
+        path: 'masters/pincode-branch-mapping', title: 'Pincode Branch Mapping',
+        canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () =>
+          import('@features/branch/branch-pincode-mapping').then((m) => m.BranchPincodeMapping)
+      },
       // Customers — reusable master data, independent of Shipment Order. Any
       // authenticated company user reads (no roles restriction admits everyone signed
       // in, same as the backend's isAuthenticated() read policy); 'new'/'edit' are

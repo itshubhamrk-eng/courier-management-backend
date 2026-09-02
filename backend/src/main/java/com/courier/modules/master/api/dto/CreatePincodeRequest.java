@@ -32,6 +32,8 @@ public record CreatePincodeRequest(
         Boolean codAvailable,
         Boolean prepaidAvailable,
         Boolean pickupAvailable,
-        @Size(max = 20) @Schema(example = "LOCAL") String zone
+        @Size(max = 20) @Schema(example = "LOCAL") String zone,
+        @Schema(description = "Out-of-Delivery-Area — still served, priced differently.")
+        Boolean odaApplicable
 ) {
 }

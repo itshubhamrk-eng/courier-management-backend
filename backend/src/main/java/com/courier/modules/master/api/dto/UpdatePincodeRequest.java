@@ -20,6 +20,7 @@ public record UpdatePincodeRequest(
         Boolean prepaidAvailable,
         Boolean pickupAvailable,
         @Size(max = 20) String zone,
+        Boolean odaApplicable,
         @NotNull @PositiveOrZero Long version
 ) {
 }

@@ -199,6 +199,11 @@ app:
       enabled: ${RAZORPAY_ENABLED:false}
       key-id: ${RAZORPAY_KEY_ID:}
       key-secret: ${RAZORPAY_KEY_SECRET:}
+      # Separate secret from the Razorpay dashboard's own Webhooks screen, not key-secret.
+      # Blank means the webhook endpoint verifies nothing and refuses every event — so a
+      # tab-closed-mid-payment recharge stays uncredited until this is set, same fail-closed
+      # shape as the rest of this block.
+      webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
       api-base-url: ${RAZORPAY_API_URL:https://api.razorpay.com/v1}
       merchant-name: ${RAZORPAY_MERCHANT_NAME:Courier SaaS}
       connect-timeout: 5s
@@ -224,6 +229,14 @@ app:
     # {trackingNumber} is substituted — the public tracking page this frontend already
     # serves at /track/:awb.
     tracking-url-template: ${COMMUNICATION_TRACKING_URL_TEMPLATE:http://localhost:4200/track/{trackingNumber}}
+
+  master:
+    pincode-lookup:
+      # India Post's free public directory, no key needed — on by default, unlike every
+      # other provider flag in this file. Set false to opt a deployment out (offline dev
+      # box, a network policy blocking the call); the create form falls back to the
+      # manual Area picker.
+      enabled: ${MASTER_PINCODE_LOOKUP_ENABLED:true}
 
   cors:
     allowed-origins:

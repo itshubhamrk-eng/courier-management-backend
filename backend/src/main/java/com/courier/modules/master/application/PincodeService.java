@@ -14,4 +14,13 @@ public interface PincodeService extends MasterDataService<Pincode, PincodeComman
      * @throws com.courier.shared.exception.ResourceNotFoundException no such pincode
      */
     Pincode findByCode(String code);
+
+    /**
+     * Resolves the Area a raw pincode belongs to via the postal directory, auto-creating
+     * whatever State/District/City/Area rows are missing. Same write audience as
+     * {@link #create}, not the read one — this can create master rows.
+     *
+     * @return empty when the directory has no record of this pincode
+     */
+    java.util.Optional<PincodeAreaLookupResult> lookupPostalArea(String pincode);
 }

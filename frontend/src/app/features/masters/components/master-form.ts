@@ -1,11 +1,17 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { catchError, debounceTime, distinctUntilChanged, filter, of, switchMap } from 'rxjs';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
-import { MasterOption, MasterRecord } from '@core/models/master.model';
+import { MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaPreview } from '@core/models/master.model';
 import { MasterDataService } from '../master-data.service';
 import { LookupSource, MasterDefinition, MasterField } from '../master.config';
 import { MasterFieldControl } from './master-field-control';
+
+type PincodeLookupState =
+  | { status: 'idle' | 'loading' | 'not-found' | 'error' }
+  | { status: 'matched'; message: string };
 
 /**
  * The create and edit form for every master list.
@@ -32,8 +38,38 @@ import { MasterFieldControl } from './master-field-control';
             @for (field of group.fields; track field.key) {
               <app-master-field [field]="field" [control]="controlFor(field.key)"
                                 [options]="optionsFor(field)" />
+              @if (isPincodeCodeField(field)) {
+                <div class="mform__lookup">
+                  @switch (pincodeLookup().status) {
+                    @case ('loading') { <span class="mform__lookup--pending">Looking up area…</span> }
+                    @case ('matched') { <span class="mform__lookup--ok">{{ lookupMessage() }}</span> }
+                    @case ('not-found') { <span class="mform__lookup--warn">No postal record for this pincode — an Area could not be resolved, so it cannot be created yet. Try a different pincode.</span> }
+                    @case ('error') { <span class="mform__lookup--warn">Area lookup failed — try again in a moment.</span> }
+                  }
+                </div>
+              }
             }
           </div>
+        </app-card>
+      }
+
+      @if (def().key === 'pincodes' && !record() && pincodeAreaPreview().length) {
+        <app-card title="Areas served by this pincode">
+          <div class="mform__areas-wrap">
+            <table class="mform__areas">
+              <thead><tr><th>Area</th><th>City</th><th></th></tr></thead>
+              <tbody>
+                @for (row of pincodeAreaPreview(); track row.areaId) {
+                  <tr>
+                    <td>{{ row.areaName ?? '—' }}</td>
+                    <td>{{ row.cityName ?? '—' }}</td>
+                    <td>@if (row.primary) { <span class="mform__areas-badge">Primary</span> }</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="mform__areas-hint">ODA can be set per area once this pincode is created.</p>
         </app-card>
       }
 
@@ -49,11 +85,40 @@ import { MasterFieldControl } from './master-field-control';
     .mform { display:flex; flex-direction:column; gap:16px; }
     .mform__grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
     .mform__actions { display:flex; justify-content:flex-end; gap:8px; }
+    .mform__lookup { grid-column:1 / -1; margin-top:-8px; font:400 12px var(--font-sans); }
+    .mform__lookup--pending { color:var(--content-muted); }
+    .mform__lookup--ok { color:var(--success, #2e7d32); }
+    .mform__lookup--warn { color:var(--content-muted); }
+    .mform__areas-wrap { overflow-x:auto; }
+    .mform__areas { width:100%; border-collapse:collapse; font:400 14px var(--font-sans); }
+    .mform__areas th { text-align:left; font:500 12px var(--font-sans); color:var(--content-muted);
+      text-transform:uppercase; letter-spacing:.04em; padding:0 12px 8px; }
+    .mform__areas td { padding:10px 12px; border-top:1px solid var(--surface-border); color:var(--content-fg); }
+    .mform__areas-badge { font:600 11px var(--font-sans); color:var(--brand-600, #4f46e5);
+      background:var(--brand-100, #eef2ff); border-radius:999px; padding:2px 8px; }
+    .mform__areas-hint { font:400 12px var(--font-sans); color:var(--content-muted); margin:10px 0 0; }
   `]
 })
 export class MasterForm implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(MasterDataService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Pincode-only: fetching the Area on pincode entry (create only — an edit's code is
+   * fixed and its area already set). Keyed off `def().key` here rather than a generic
+   * field flag in `master.config.ts`, since the postal directory is specific to this one
+   * list, not a shape every master could reuse.
+   */
+  readonly pincodeLookup = signal<PincodeLookupState>({ status: 'idle' });
+  readonly lookupMessage = computed(() => {
+    const state = this.pincodeLookup();
+    return state.status === 'matched' ? state.message : '';
+  });
+  /** Preview of every Area this pincode will link once saved — same rows the detail
+   *  page's "Areas served" card shows after creation, primary first. Nothing here is
+   *  saved until the pincode itself is; ODA is only ever set from the detail page. */
+  readonly pincodeAreaPreview = signal<PincodeAreaPreview[]>([]);
 
   readonly def = input.required<MasterDefinition>();
   /** The row being edited, or null when creating. */
@@ -67,10 +132,17 @@ export class MasterForm implements OnInit {
 
   private readonly lookupOptions = signal<Record<string, MasterOption[]>>({});
 
-  /** Fields laid out by their `group`, in declaration order. */
+  /**
+   * Fields laid out by their `group`, in declaration order. Pincode's `areaId` is
+   * excluded here — auto-fetch is the only way it's ever set now, so it stays a real,
+   * validated form control (see `buildControl`/`payload`) with nothing rendered for it;
+   * a group left with zero visible fields (Pincode's old "Placement" card, now that
+   * `areaId` was its only field) is dropped rather than shown as an empty card.
+   */
   readonly groups = computed(() => {
     const ordered: { name: string; fields: MasterField[] }[] = [];
     for (const field of this.def().fields) {
+      if (this.isHiddenField(field)) continue;
       const name = field.group ?? 'Details';
       const existing = ordered.find((g) => g.name === name);
       if (existing) existing.fields.push(field);
@@ -78,6 +150,10 @@ export class MasterForm implements OnInit {
     }
     return ordered;
   });
+
+  private isHiddenField(field: MasterField): boolean {
+    return this.def().key === 'pincodes' && field.key === 'areaId';
+  }
 
   constructor() {
     // The record arrives after the form is built (the page fetches it), so patch when it lands.
@@ -106,6 +182,68 @@ export class MasterForm implements OnInit {
         error: () => this.lookupOptions.update((c) => ({ ...c, [source]: [] }))
       });
     }
+
+    if (this.def().key === 'pincodes' && !this.record()) {
+      this.watchPincodeForAreaLookup();
+    }
+  }
+
+  /**
+   * As the operator finishes typing a pincode, fetch the real post office from India's
+   * postal directory and auto-select (creating if needed) the matching Area — the whole
+   * point being that nobody has to go hunt for one by hand.
+   */
+  private watchPincodeForAreaLookup(): void {
+    this.controlFor('code').valueChanges.pipe(
+      debounceTime(500),
+      distinctUntilChanged(),
+      filter((v): v is string => !!v && /^[0-9]{4,10}$/.test(v)),
+      switchMap((code) => {
+        this.pincodeLookup.set({ status: 'loading' });
+        return this.service.lookupPincodeArea(code).pipe(
+          catchError(() => of(null as PincodeAreaLookup | null))
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((result) => this.applyPincodeLookupResult(result));
+  }
+
+  private applyPincodeLookupResult(result: PincodeAreaLookup | null): void {
+    if (!result) {
+      this.pincodeLookup.set({ status: 'error' });
+      this.pincodeAreaPreview.set([]);
+      return;
+    }
+    if (!result.matched || !result.areaId) {
+      this.pincodeLookup.set({ status: 'not-found' });
+      this.pincodeAreaPreview.set([]);
+      return;
+    }
+    this.pincodeAreaPreview.set(result.areas ?? []);
+
+    this.controlFor('areaId').setValue(result.areaId);
+
+    // Post office / locality auto-fills from the same match. `pristine`, not "empty" —
+    // an empty check would let one auto-fill permanently block every later one (retyping
+    // the pincode after an auto-fill already landed would leave the *first* match's name
+    // stuck, since the field would no longer read as empty). `pristine` survives our own
+    // `setValue` (immediately re-marked below) but flips false the moment the operator
+    // actually types into the field themselves, which is the real signal to stop.
+    const nameControl = this.controlFor('name');
+    if (nameControl.pristine && result.postOfficeName) {
+      nameControl.setValue(result.postOfficeName);
+      nameControl.markAsPristine();
+    }
+
+    const path = [result.areaName, result.cityName, result.districtName, result.stateName]
+      .filter((v): v is string => !!v).join(', ');
+    const alternates = result.alternateCount > 1
+      ? ` (1 of ${result.alternateCount} post offices sharing this pincode)` : '';
+    this.pincodeLookup.set({ status: 'matched', message: `Matched to ${path}${alternates}.` });
+  }
+
+  isPincodeCodeField(field: MasterField): boolean {
+    return this.def().key === 'pincodes' && field.key === 'code' && !this.record();
   }
 
   controlFor(key: string): FormControl {

@@ -18,6 +18,7 @@ public record PincodeCommand(
         Boolean prepaidAvailable,
         Boolean pickupAvailable,
         String zone,
+        Boolean odaApplicable,
         Long expectedVersion
 ) {
 }

@@ -3,7 +3,8 @@ import { map } from 'rxjs/operators';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import {
-  Branch, BranchResponse, CreateBranchRequest, UpdateBranchRequest
+  AddBranchPincodesResult, Branch, BranchPincode, BranchResponse, CreateBranchRequest,
+  UpdateBranchRequest
 } from '@core/models/branch.model';
 import { AppUser } from '@core/models/user.model';
 import { PageQuery } from '@core/models/page.model';
@@ -51,6 +52,15 @@ export class BranchService {
       .pipe(map((p): Lookup[] => p.content.map((u) => ({
         id: u.id, label: u.displayName, hint: u.designation || u.email
       }))));
+  }
+
+  // ---- pincode mapping (own endpoints) ---------------------------------------
+  branchPincodes(id: string) { return this.api.get<BranchPincode[]>(`${API.branches}/${id}/pincodes`); }
+  addBranchPincodes(id: string, pincodeIds: string[]) {
+    return this.api.post<AddBranchPincodesResult>(`${API.branches}/${id}/pincodes`, { pincodeIds });
+  }
+  removeBranchPincode(id: string, mappingId: string) {
+    return this.api.delete<void>(`${API.branches}/${id}/pincodes/${mappingId}`);
   }
 
   // ---- geography pickers (global masters, cascading) --------------------------

@@ -19,7 +19,7 @@ import { BranchService, Lookup } from './branch.service';
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Edit Branch</h1><p class="text-caption">Update the branch. Code is immutable; status and manager have their own actions.</p></div>
+        <div><h1 class="text-h1">Edit Branch</h1><p class="text-caption">Update the branch. Status and manager have their own actions.</p></div>
       </header>
       @if (loading()) {
         <app-loader [minHeight]="280" caption="Loading…" />

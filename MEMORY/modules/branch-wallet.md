@@ -343,8 +343,19 @@ runtime evidence**. Provision an active `RIVAL_CO` admin and a rival branch, the
       is unchanged — still happens at booking, only commission's timing moved. `mvn test`
       719/719. **Not yet verified live** — no local MySQL session this task. See
       `MEMORY/modules/shipment-booking.md`/`shipment-movement.md`.
-- [ ] Razorpay **webhook** endpoint (`payment.captured`), so a closed browser still settles.
-      `PaymentStatus.PENDING`/`FAILED` exist for it.
+- [x] Razorpay **webhook** endpoint (`payment.captured`), so a closed browser still settles —
+      closed 2026-09-02, direct bug report ("tab closed while payment process"). New
+      `RazorpayWebhookController` (`POST /api/v1/branch-wallet/webhook/razorpay`, public — see
+      `SecurityConfig.PUBLIC_ENDPOINTS` — whole-payload HMAC via `RAZORPAY_WEBHOOK_SECRET`,
+      distinct from `RAZORPAY_KEY_SECRET`) + `WalletService.settleFromWebhook` (no
+      `@PreAuthorize`, `companyId`/`branchId` read from the order's own `notes`, bound via
+      `CompanyContext.runAs`). `completeRecharge` and `settleFromWebhook` now share a
+      `settlePayment` helper — same idempotency/gateway-authoritative-amount guarantees either
+      path arrives first. **Gap:** only the platform-wide gateway is covered — a company's own
+      `CompanyRazorpayConfig` account has no webhook-secret field yet, so its own dashboard
+      webhook fails signature verification (silently ack'd). Verified live on :8082 against
+      real `courier_db` — signature checks (400/401), routing, notes extraction and refusal
+      path all confirmed; actual credit not exercisable — no real Razorpay sandbox account.
 - [ ] Refunds — a `SRF`/`REFUNDED` reversal path.
 - [ ] Low-balance threshold + alert, on `WalletDebited`.
 - [ ] **The frontend contract does not match this module** (`features/branch-wallet`, UI-11):

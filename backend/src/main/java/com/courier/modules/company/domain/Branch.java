@@ -28,7 +28,8 @@ import java.util.UUID;
  *
  * <p>Company-owned. {@code branchCode} and {@code branchName} are unique within the
  * company (never globally — two couriers may both have a "MAIN" branch). The code is
- * uppercased and immutable: shipments, manifests and reports will reference it.
+ * uppercased and editable; shipments, manifests and reports reference the branch by id,
+ * not by code, so renumbering it does not orphan historical data.
  *
  * <p>{@code managerId} is a user of the same company — validated in the service, not by a
  * database FK. The FK to {@code users} is deferred for the same reason the
@@ -64,7 +65,7 @@ import java.util.UUID;
 @SQLRestriction("deleted = false")
 public class Branch extends CompanyOwnedEntity {
 
-    @Column(name = "branch_code", nullable = false, updatable = false, length = 50)
+    @Column(name = "branch_code", nullable = false, length = 50)
     private String branchCode;
 
     @Column(name = "branch_name", nullable = false, length = 150)

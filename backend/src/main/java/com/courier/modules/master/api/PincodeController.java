@@ -1,9 +1,18 @@
 package com.courier.modules.master.api;
 
+import com.courier.modules.master.api.dto.BulkImportPincodesRequest;
+import com.courier.modules.master.api.dto.BulkImportPincodesResponse;
 import com.courier.modules.master.api.dto.CreatePincodeRequest;
 import com.courier.modules.master.api.dto.MasterSearchRequest;
+import com.courier.modules.master.api.dto.PincodeAreaLookupResponse;
+import com.courier.modules.master.api.dto.PincodeAreaResponse;
 import com.courier.modules.master.api.dto.PincodeResponse;
+import com.courier.modules.master.api.dto.UpdatePincodeAreaRequest;
 import com.courier.modules.master.api.dto.UpdatePincodeRequest;
+import com.courier.modules.master.application.PincodeAreaLookupResult;
+import com.courier.modules.master.application.PincodeAreaService;
+import com.courier.modules.master.application.PincodeBulkImportResult;
+import com.courier.modules.master.application.PincodeBulkImportService;
 import com.courier.modules.master.application.PincodeService;
 import com.courier.modules.master.domain.Pincode;
 import com.courier.modules.master.domain.MasterDataCriteria;
@@ -31,6 +40,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -52,6 +63,8 @@ public class PincodeController {
     private final PincodeService service;
     private final PincodeMasterMapper mapper;
     private final MasterCriteriaMapper criteriaMapper;
+    private final PincodeBulkImportService bulkImportService;
+    private final PincodeAreaService pincodeAreaService;
 
     @PostMapping
     @Operation(summary = "Create a pincode",
@@ -63,6 +76,88 @@ public class PincodeController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/master/pincodes/{id}")
                         .buildAndExpand(created.getId()).toUri())
                 .body(ApiResponse.success(mapper.toResponse(created), "Pincode created"));
+    }
+
+    @GetMapping("/lookup/{code}")
+    @Operation(summary = "Resolve the Area for a raw pincode",
+            description = """
+                    Looks the pincode up in India's postal directory and resolves (auto-
+                    creating if missing) the matching State/District/City/Area chain. Same
+                    write audience as create — a match can create master rows. `matched`
+                    is false, not an error, when the directory has no record of this
+                    pincode; the create form falls back to the manual Area picker.
+                    """)
+    public ApiResponse<PincodeAreaLookupResponse> lookupArea(@PathVariable String code) {
+        return ApiResponse.success(service.lookupPostalArea(code)
+                .map(this::toLookupResponse)
+                .orElseGet(PincodeAreaLookupResponse::notFound));
+    }
+
+    private PincodeAreaLookupResponse toLookupResponse(PincodeAreaLookupResult r) {
+        List<PincodeAreaLookupResponse.PincodeAreaPreview> areas = new ArrayList<>();
+        for (int i = 0; i < r.allMatches().size(); i++) {
+            var match = r.allMatches().get(i);
+            areas.add(new PincodeAreaLookupResponse.PincodeAreaPreview(
+                    match.area().getId(), match.area().getName(), match.city().getName(), i == 0));
+        }
+        return new PincodeAreaLookupResponse(true,
+                r.area().getId(), r.area().getName(),
+                r.city().getName(), r.district().getName(), r.state().getName(), r.country().getName(),
+                r.postOfficeName(), r.alternateCount(), areas);
+    }
+
+    @PostMapping("/bulk-import")
+    @Operation(summary = "Bulk-import pincodes across numeric ranges",
+            description = """
+                    Same write audience as create. Probes every code in each range against
+                    the postal directory and creates the ones that resolve to a real post
+                    office (auto-creating the State/District/City/Area chain, same as the
+                    single-pincode lookup). Safe to re-run the same range — a code already
+                    on file is skipped, not duplicated. Synchronous: a large range may take
+                    a long time (one HTTP round trip to the postal directory per candidate
+                    code), so keep ranges to real, dense blocks rather than scanning an
+                    entire numeric span blind.
+                    """)
+    public ApiResponse<BulkImportPincodesResponse> bulkImport(
+            @Valid @RequestBody BulkImportPincodesRequest request) {
+        PincodeBulkImportResult result = bulkImportService.importRanges(
+                request.ranges().stream()
+                        .map(r -> new PincodeBulkImportService.Range(r.fromCode(), r.toCode()))
+                        .toList());
+        return ApiResponse.success(new BulkImportPincodesResponse(result.probed(), result.created(),
+                        result.alreadyExisted(), result.noPostalMatch(), result.failed()),
+                "Bulk import: %d created, %d already existed, %d no match, %d failed (of %d probed)"
+                        .formatted(result.created(), result.alreadyExisted(), result.noPostalMatch(),
+                                result.failed(), result.probed()));
+    }
+
+    @GetMapping("/{id}/areas")
+    @Operation(summary = "Every Area this pincode's postal record names",
+            description = """
+                    A pincode routinely maps to several real post offices — this lists
+                    every one this platform has discovered for it (the row matching the
+                    pincode's own `areaId` first), each with its own ODA setting. Any
+                    authenticated company user reads it.
+                    """)
+    public ApiResponse<List<PincodeAreaResponse>> areas(@PathVariable UUID id) {
+        return ApiResponse.success(pincodeAreaService.list(id).stream()
+                .map(this::toAreaResponse)
+                .toList());
+    }
+
+    @PatchMapping("/{id}/areas/{areaLinkId}")
+    @Operation(summary = "Set ODA for one Area of this pincode",
+            description = "Same write audience as create. A fresh 250.00 fills in "
+                    + "server-side the moment `odaApplicable` turns true with no amount given.")
+    public ApiResponse<PincodeAreaResponse> updateArea(@PathVariable UUID id, @PathVariable UUID areaLinkId,
+                                                        @Valid @RequestBody UpdatePincodeAreaRequest request) {
+        return ApiResponse.success(toAreaResponse(
+                pincodeAreaService.updateOda(id, areaLinkId, request.odaApplicable(), request.odaAmount())));
+    }
+
+    private PincodeAreaResponse toAreaResponse(PincodeAreaService.Row row) {
+        return new PincodeAreaResponse(row.link().getId(), row.link().getAreaId(), row.areaName(), row.cityName(),
+                row.link().isPrimary(), row.link().isOdaApplicable(), row.link().getOdaAmount());
     }
 
     @PutMapping("/{id}")

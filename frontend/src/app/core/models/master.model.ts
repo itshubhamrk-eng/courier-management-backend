@@ -74,6 +74,45 @@ export interface Pincode extends MasterRecord {
   prepaidAvailable: boolean;
   pickupAvailable: boolean;
   zone: string | null;
+  odaApplicable: boolean;
+}
+
+/** `GET /global-masters/pincodes/{id}/areas` — one Area a pincode's postal record names,
+ *  with its own ODA setting. `primary` marks the row matching the pincode's own `areaId`. */
+export interface PincodeAreaRow {
+  id: string;
+  areaId: string;
+  areaName: string | null;
+  cityName: string | null;
+  primary: boolean;
+  odaApplicable: boolean;
+  odaAmount: number | null;
+}
+
+/** `GET /global-masters/pincodes/lookup/{code}` — the Area (and its ancestor chain)
+ *  auto-resolved from the postal directory for a raw pincode. `matched: false` means the
+ *  directory has no record of it, not an error. */
+export interface PincodeAreaLookup {
+  matched: boolean;
+  areaId: string | null;
+  areaName: string | null;
+  cityName: string | null;
+  districtName: string | null;
+  stateName: string | null;
+  countryName: string | null;
+  postOfficeName: string | null;
+  alternateCount: number;
+  /** Every Area this pincode will link once saved — the same rows the detail page's
+   *  "Areas served" card shows after creation, primary first. Preview only: nothing here
+   *  is saved until the pincode itself is. */
+  areas: PincodeAreaPreview[];
+}
+
+export interface PincodeAreaPreview {
+  areaId: string;
+  areaName: string | null;
+  cityName: string | null;
+  primary: boolean;
 }
 
 // --- catalogues --------------------------------------------------------------

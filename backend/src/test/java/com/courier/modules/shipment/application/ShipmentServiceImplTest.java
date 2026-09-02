@@ -244,24 +244,129 @@ class ShipmentServiceImplTest {
 
     @Test
     @DisplayName("the commission breakdown is computed from the booking branch's own "
-            + "percentages and stored on the charge row")
+            + "percentages and stored on the charge row — branch commission is taken on "
+            + "freight AFTER the company's service charge is deducted, not the original freight")
     void commissionComputedFromBookingBranchPercentages() {
         // freight 100.00, otherCharges 0; PUNE's default percentages (V25): commission on
         // basic freight 10%, company service charge 10%, commission on other charges 20%
         // (so the branch keeps 80% of other charges — none here).
+        // companyCommissionOnBasicFreight = 100 * 10% = 10
+        // remainingFreight               = 100 - 10 = 90
+        // commissionOnBasicFreight       = 90 * 10% = 9
         Shipment created = service.create(command());
 
         org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
                 org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
         verify(chargeRepository).save(captor.capture());
 
-        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("9.0000");
         assertThat(captor.getValue().getBranchCommissionOnOtherAmount()).isEqualByComparingTo("0.0000");
         assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
-        // totalCommission is every line summed (10 + 0 + 10) — not just the branch's own
+        // totalCommission is every line summed (9 + 0 + 10) — not just the branch's own
         // two, which is the (smaller) amount that actually gets credited to its wallet.
-        assertThat(captor.getValue().getTotalCommission()).isEqualByComparingTo("20.0000");
+        assertThat(captor.getValue().getTotalCommission()).isEqualByComparingTo("19.0000");
         assertThat(created.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
+    }
+
+    @Test
+    @DisplayName("branch commission on freight after company service charge deduction — "
+            + "worked example: freight 100, service charge 10%, branch commission 20% -> "
+            + "company cut 10, remaining 90, branch commission 18")
+    void commissionOnRemainingFreightWorkedExample() {
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
+                .commissionOnBasicFreight(new BigDecimal("20.00"))
+                .companyServiceChargePercentage(new BigDecimal("10.00"))
+                .build());
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("18.0000");
+    }
+
+    @Test
+    @DisplayName("0% company service charge — branch commission is taken on the full, "
+            + "un-deducted freight")
+    void commissionWithZeroServiceCharge() {
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
+                .commissionOnBasicFreight(new BigDecimal("20.00"))
+                .companyServiceChargePercentage(BigDecimal.ZERO)
+                .build());
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("0.0000");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("20.0000");
+    }
+
+    @Test
+    @DisplayName("0% branch commission — company still takes its service charge, branch gets "
+            + "nothing off freight")
+    void commissionWithZeroBranchCommission() {
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
+                .commissionOnBasicFreight(BigDecimal.ZERO)
+                .companyServiceChargePercentage(new BigDecimal("10.00"))
+                .build());
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("0.0000");
+    }
+
+    @Test
+    @DisplayName("a different freight amount (500) still deducts the company's share first")
+    void commissionWithDifferentFreightAmount() {
+        PricingResult priced = pricingResult(new BigDecimal("500.00"), new BigDecimal("500.00"));
+        when(pricingEngine.calculate(any())).thenReturn(priced);
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
+                .commissionOnBasicFreight(new BigDecimal("20.00"))
+                .companyServiceChargePercentage(new BigDecimal("10.00"))
+                .build());
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        // companyCommissionOnBasicFreight = 500 * 10% = 50; remaining = 450; branch = 450 * 20% = 90
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("50.0000");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("90.0000");
+    }
+
+    @Test
+    @DisplayName("a decimal freight amount rounds the same way through both cuts")
+    void commissionWithDecimalFreightAmount() {
+        PricingResult priced = pricingResult(new BigDecimal("133.33"), new BigDecimal("133.33"));
+        when(pricingEngine.calculate(any())).thenReturn(priced);
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
+                .commissionOnBasicFreight(new BigDecimal("15.00"))
+                .companyServiceChargePercentage(new BigDecimal("7.50"))
+                .build());
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        // companyCommissionOnBasicFreight = 133.33 * 7.5% = 9.99975 -> 9.9998 (HALF_UP, 4dp)
+        // remaining = 133.33 - 9.9998 = 123.3302; branch = 123.3302 * 15% = 18.49953 -> 18.4995
+        assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("9.9998");
+        assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("18.4995");
     }
 
     @Test
@@ -638,6 +743,10 @@ class ShipmentServiceImplTest {
     }
 
     private static PricingResult pricingResult(BigDecimal netAmount) {
+        return pricingResult(new BigDecimal("100.00"), netAmount);
+    }
+
+    private static PricingResult pricingResult(BigDecimal freight, BigDecimal netAmount) {
         Route route = mock(Route.class);
         when(route.getId()).thenReturn(UUID.randomUUID());
         when(route.getCode()).thenReturn("PNQ_BOM");
@@ -646,7 +755,7 @@ class ShipmentServiceImplTest {
         when(rate.getRateCode()).thenReturn("RATE-PNQ-BOM-STD");
 
         return new PricingResult(route, rate, new BigDecimal("5.000"), BigDecimal.ZERO,
-                new BigDecimal("5.000"), new BigDecimal("100.00"), new BigDecimal("10.00"),
+                new BigDecimal("5.000"), freight, new BigDecimal("10.00"),
                 new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("20.70"),
                 BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
     }

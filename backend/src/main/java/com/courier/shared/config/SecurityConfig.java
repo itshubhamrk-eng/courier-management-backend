@@ -59,6 +59,9 @@ public class SecurityConfig {
             "/api/v1/auth/verify-email",
             "/api/v1/companies/register",
             "/api/v1/track/**",          // public parcel tracking, returns a redacted projection
+            "/api/v1/branch-wallet/webhook/**", // Razorpay calls this with no bearer token;
+                                                 // authenticity is a whole-payload HMAC, not a JWT —
+                                                 // see RazorpayWebhookController
             "/actuator/health/**",
             "/actuator/info",
             "/v3/api-docs/**",

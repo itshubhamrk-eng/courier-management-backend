@@ -143,9 +143,15 @@ export class MasterList {
       this.breadcrumb.set([{ label: 'Masters' }, { label: def.group }, { label: def.plural }]);
       // A different master means different filters and a different sort; start clean
       // rather than carrying a filter that does not exist on the new list.
-      this.query = { page: 0, size: 20 };
+      const initialSort = def.defaultSort
+        ? { active: def.defaultSort.field, direction: def.defaultSort.direction }
+        : null;
+      this.query = {
+        page: 0, size: 20,
+        ...(def.defaultSort ? { sort: `${def.defaultSort.field},${def.defaultSort.direction}` } : {})
+      };
       this.filters.set({});
-      this.sort.set(null);
+      this.sort.set(initialSort);
       this.load();
     });
   }

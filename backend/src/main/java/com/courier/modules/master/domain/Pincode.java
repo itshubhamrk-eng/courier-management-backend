@@ -67,6 +67,14 @@ public class Pincode extends MasterDataEntity {
     @Column(name = "zone", length = 20)
     private String zone;
 
+    /**
+     * Out-of-Delivery-Area: still served, just not on the standard network — booking
+     * prices it differently (ODA surcharge). Independent of {@code serviceable}, which
+     * this flag does not fold or get folded by.
+     */
+    @Column(name = "oda_applicable", nullable = false)
+    private boolean odaApplicable = false;
+
     @Override
     protected void applySpecificInvariants() {
         if (areaId == null) {

@@ -93,6 +93,8 @@ public enum AuditAction {
     BRANCH_DEACTIVATED,
     BRANCH_MANAGER_ASSIGNED,
     BRANCH_USERS_ASSIGNED,
+    BRANCH_PINCODES_MAPPED,
+    BRANCH_PINCODE_UNMAPPED,
 
     // --- customer management (Phase 7, COMPANY_ADMIN / BRANCH_MANAGER / OPERATOR).
     // Reusable master data, independent of Shipment Order.

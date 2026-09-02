@@ -1398,19 +1398,23 @@ public class ShipmentServiceImpl implements ShipmentService {
      *
      * <p>The commission breakdown (V28) is computed here from the <b>booking</b> branch's
      * own percentages (V25) — "use this percentage from login branch config", each branch
-     * carries its own rate:
+     * carries its own rate. The branch's commission is taken on freight <b>after</b> the
+     * company's service charge is deducted, not on the original freight:
      * <ul>
-     *   <li>{@code commissionOnBasicFreight = freight * commissionOnBasicFreight%}</li>
+     *   <li>{@code companyCommissionOnBasicFreight = freight *
+     *       companyServiceChargePercentage%} — company's cut, off the original freight</li>
+     *   <li>{@code remainingFreight = freight - companyCommissionOnBasicFreight}</li>
+     *   <li>{@code commissionOnBasicFreight = remainingFreight *
+     *       commissionOnBasicFreight%} — branch's cut, off what's left after the company's</li>
      *   <li>{@code branchCommissionOnOtherAmount = otherCharges * (100 -
      *       commissionOnOtherCharges)%} — the branch's remainder after the company's cut</li>
-     *   <li>{@code companyCommissionOnBasicFreight = freight *
-     *       companyServiceChargePercentage%}</li>
      *   <li>{@code totalCommission = commissionOnBasicFreight +
      *       branchCommissionOnOtherAmount + companyCommissionOnBasicFreight} — every
      *       commission line on this shipment, summed and stored rather than re-derived on
      *       every report</li>
      * </ul>
-     * The remaining freight share is company/head-office revenue, not stored separately.
+     * The remaining freight share (after both cuts) is company/head-office revenue, not
+     * stored separately.
      *
      * <p>{@code odaCharge} is an optional override of the Pricing Engine's own {@code
      * priced.odaCharge()} — same manual-at-booking-time idea as {@code otherCharges}, except
@@ -1431,10 +1435,12 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         BigDecimal branchShareOfOtherCharges = BigDecimal.valueOf(100)
                 .subtract(bookingBranch.getCommissionOnOtherCharges());
-        BigDecimal commissionOnBasicFreight = percentOf(freight, bookingBranch.getCommissionOnBasicFreight());
-        BigDecimal branchCommissionOnOtherAmount = percentOf(safeOtherCharges, branchShareOfOtherCharges);
         BigDecimal companyCommissionOnBasicFreight =
                 percentOf(freight, bookingBranch.getCompanyServiceChargePercentage());
+        BigDecimal remainingFreight = freight.subtract(companyCommissionOnBasicFreight);
+        BigDecimal commissionOnBasicFreight =
+                percentOf(remainingFreight, bookingBranch.getCommissionOnBasicFreight());
+        BigDecimal branchCommissionOnOtherAmount = percentOf(safeOtherCharges, branchShareOfOtherCharges);
         BigDecimal totalCommission = commissionOnBasicFreight
                 .add(branchCommissionOnOtherAmount)
                 .add(companyCommissionOnBasicFreight);

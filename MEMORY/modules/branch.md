@@ -214,8 +214,9 @@ cross-entity FK until the data is stable:
 
 `Branch` extends `CompanyOwnedEntity` (`@Filter`, `@SQLRestriction("deleted = false")`).
 
-- **Identity** — `branchCode` (unique per company, UPPER, spaces→underscores, immutable),
-  `branchName` (unique per company, case-insensitive).
+- **Identity** — `branchCode` (unique per company, UPPER, spaces→underscores, editable —
+  no other table FKs it, everything references the branch by id), `branchName` (unique
+  per company, case-insensitive).
 - **Classification** — `branchType` (`HEAD_OFFICE | REGIONAL_OFFICE | BOOKING_BRANCH |
   DELIVERY_BRANCH | BOOKING_DELIVERY_BRANCH`), `status` (`ACTIVE | INACTIVE`).
 - **Contact** — email (lowercased), mobile, alternateMobile, managerId.
@@ -372,5 +373,52 @@ Against MySQL 8.0.46, `LEGACY_CO`, backend on :8081:
       is spoken for). The generated password is therefore permanent until someone resets it.
 - [ ] `users.branch_id` and `branches.manager_id` FKs once the dev orphan rows are
       reconciled.
-- [ ] Serviceability (pincode → branch) and rate cards, consumed by Shipment.
+- [x] ~~Serviceability (pincode → branch)~~ — **done 2026-09-02**, see *Pincode Branch
+      Mapping* below. Rate cards still open.
 - [ ] Enforce one HEAD_OFFICE per company if the product requires it.
+
+## Pincode Branch Mapping (2026-09-02)
+
+Which branch owns delivery/service for a pincode. Direct request: "new menu as pincode
+branch mapping ... map branch to multiple pincode." A branch serves many pincodes; a
+pincode is served by **exactly one** branch per company (real-world routing would be
+ambiguous otherwise) — scoped via `AskUserQuestion` before writing anything, since this is
+a real, hard-to-reverse-later business rule, not an obvious default.
+
+New table `branch_pincode_mapping` (`V53`), `UNIQUE (company_id, pincode_id)` **alone**
+(not the `(branch_id, pincode_id)` pair) is what enforces the one-branch rule. Deliberately
+**company-owned for real** — unlike `master_pincode_areas` (V52, see `MEMORY/AI_CONTEXT.md`
+0.32.2), this table binds the caller's own real `CompanyContext`, never
+`GlobalMasters.PLATFORM_COMPANY_ID`, because a Branch genuinely belongs to one company.
+`Pincode` itself is still the global master, so `BranchPincodeMappingService` (new, in
+`com.courier.modules.company.application`) crosses into the platform binding only for the
+duration of a pincode lookup/display (`CompanyContext.runAs`), the mirror image of how
+`PincodeAreaService` reaches for `Branch` via `BranchLookupPort` from the master side.
+
+Three endpoints nested onto the existing `BranchController`: `GET/POST/DELETE
+/branches/{id}/pincodes` — same nested-action shape as `assign-manager`/`assign-users`.
+`POST` is a **batch** add (the brief's own "map to multiple pincode"): pincodes already on
+this branch come back in `alreadyMapped`, not re-applied; a pincode already owned by a
+*different* branch comes back in `conflicts` (naming that branch) — **never silently
+moved**, removing it from the other branch first is a separate, deliberate call. Role-based
+gating, same posture as every module since Ticket Support (no new `PermissionModule`
+catalogue rows): `COMPANY_ADMIN`-only writes; reads reuse `BranchService.getById`'s own
+branch-visibility rule, so a `BRANCH_MANAGER` sees only their own branch's mapping (a
+foreign branch id 404s, same as `GET /branches/{id}` itself).
+
+Frontend: new nav leaf "Pincode Branch Mapping" under Masters (`COMPANY_ADMIN`-only,
+`/masters/pincode-branch-mapping`, declared ahead of the generic `masters/:master` route).
+New standalone page `features/branch/branch-pincode-mapping.ts` — a branch dropdown
+(`MasterDataService.branchDirectory()`), debounced pincode search rendered as a tick-list
+so several can be queued and added in one request, and a mapped-pincodes table with a
+per-row Remove. Not folded into `branch-view.ts`'s own detail page — the user explicitly
+asked for a *new menu*, confirmed via `AskUserQuestion`.
+
+**Verified live** on throwaway `:8082` (`:8100`/`:4200` untouched) against real
+`courier_db`, `V53` applied: add/already-mapped/conflict/remove all confirmed with real
+branches and pincodes; `BRANCH_MANAGER` correctly 404'd (visibility, foreign branch) and
+403'd (write). See `CHANGELOG.md` Unreleased 2026-09-02 for the full write-up, including a
+real concurrent-session race caught live (two sessions independently mapping the same
+first-listed pincode to the same branch within the same minute — the `alreadyMapped`
+path handling it correctly, not a bug). 6 new `BranchPincodeMappingServiceTest` cases,
+`mvn test` 876 → 882.

@@ -139,6 +139,10 @@ export const NAVIGATION: NavNode[] = [
       { id: 'global-cities', title: 'City', icon: 'location_city', route: '/masters/cities', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
       { id: 'global-areas', title: 'Area', icon: 'pin_drop', route: '/masters/areas', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
       { id: 'global-pincodes', title: 'Pincode', icon: 'markunread_mailbox', route: '/masters/pincodes', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
+      // Which branch serves which pincode — company-owned (a branch is the company's own),
+      // unlike the shared geography list above it. COMPANY_ADMIN only, same tier as the
+      // company's own six catalogues below.
+      { id: 'branch-pincode-mapping', title: 'Pincode Branch Mapping', icon: 'pin_drop', route: '/masters/pincode-branch-mapping', roles: COMPANY_ONLY },
       // The company's own six catalogues — COMPANY_ADMIN only, both read and write.
       { id: 'vehicle-types', title: 'Vehicle Type', icon: 'local_shipping', route: '/masters/vehicle-types', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
       // The fleet itself (registration, class, ownership dates, statutory document

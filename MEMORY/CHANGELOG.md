@@ -8,6 +8,352 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — Branch code made editable
+
+Direct request: "Branch code should be editable." `branchCode` was previously immutable
+after create (`@Column(updatable = false)` on `Branch`, absent from `UpdateBranchCommand`/
+`UpdateBranchRequest`, disabled in the edit form). Confirmed no other table stores
+`branch_code` as a foreign key — every cross-module reference (`BranchRef`, audit logs,
+event payloads) carries the branch by UUID, not by code — so renumbering a branch orphans
+nothing. Changes: dropped `updatable = false`; `update()` now normalises the new code the
+same way `create()` does and runs it through the existing `requireCodeAvailable` duplicate
+check (still unique per company); `UpdateBranchCommand`/`UpdateBranchRequest` carry
+`branchCode`; the edit form's Branch Code field is no longer disabled/read-only and
+`branch-edit.ts`'s "Code is immutable" caption is gone.
+
+---
+
+## [Unreleased] — 2026-09-02 — Pincode Branch Mapping: new menu, map a branch to many pincodes
+
+Direct request: "there should be new menu as pincode branch mapping and should be option for
+map branch to multiple pincode." Scoped via `AskUserQuestion`: a pincode is served by
+exactly one branch per company (one branch, many pincodes; a pincode can't sit under two
+branches at once — real-world delivery routing), and it's a standalone page under Masters
+with a branch picker, not just an action bolted onto Branch's own detail page.
+
+**Backend**: new `V53__branch_pincode_mapping.sql` — `branch_pincode_mapping(id, company_id,
+branch_id, pincode_id, ...)`, `UNIQUE (company_id, pincode_id)` **alone** (not the pair) is
+what enforces "one branch per pincode." Company-owned for real, unlike `master_pincode_areas`
+(V52) — a Branch is a genuine per-company entity, so this table binds to the caller's own
+`CompanyContext`, never the platform reserved id; `Pincode` itself is still the global
+master, so `BranchPincodeMappingService` crosses into `GlobalMasters.PLATFORM_COMPANY_ID`
+only for the duration of a pincode lookup (`CompanyContext.runAs`), mirroring
+`PincodeAreaService`'s own pattern from the opposite direction. New `BranchPincodeMapping`
+entity/repo/service in `com.courier.modules.company` (mirrors `PincodeArea`'s shape); three
+endpoints nested onto the existing `BranchController` (`GET/POST/DELETE
+/branches/{id}/pincodes`), matching the `assign-manager`/`assign-users` nested-action
+convention already there. `addPincodes` is a batch call: pincodes already on this branch come
+back in `alreadyMapped` (not re-applied), pincodes owned by a *different* branch come back in
+`conflicts` naming that branch (never silently moved — removing them there first is a
+separate, deliberate action). Role-based like every module since Ticket Support — no new
+`PermissionModule` catalogue rows; `COMPANY_ADMIN`-only writes, branch-visibility-scoped
+reads (reuses `BranchService.getById`'s own "your branch or none" rule for a non-admin, so a
+`BRANCH_MANAGER` sees only their own branch's mapping, same visibility `GET /branches/{id}`
+already gives them). Two new `AuditAction` rows (`BRANCH_PINCODES_MAPPED`/
+`BRANCH_PINCODE_UNMAPPED`). 6 new `BranchPincodeMappingServiceTest` cases (map/already-
+mapped/conflict/unknown-pincode/remove/unknown-mapping), `mvn test` 876 → 882.
+
+**Frontend**: new nav leaf "Pincode Branch Mapping" under Masters (`COMPANY_ADMIN`-only,
+`/masters/pincode-branch-mapping`, declared ahead of the generic `masters/:master` route so
+the literal path isn't swallowed by that route's parameter). New standalone page
+`features/branch/branch-pincode-mapping.ts` — branch dropdown (reuses
+`MasterDataService.branchDirectory()`), a debounced pincode search (raw
+`/global-masters/pincodes?search=`, no new master-config entry needed) rendered as a tick-list
+so several pincodes can be queued and added in one request, a mapped-pincodes table with a
+per-row Remove. Conflicts surface inline (`"<code> is already mapped to <branchCode>"`) rather
+than failing the whole batch silently. `BranchService` gained `branchPincodes`/
+`addBranchPincodes`/`removeBranchPincode`; new `BranchPincode`/`AddBranchPincodesResult`
+models. `tsc --noEmit`/`ng build --configuration production` both clean.
+
+**Verified live** on a throwaway `:8082` (`:8100`/`:4200`, both already running a concurrent
+session's own work throughout, untouched — confirmed listening on the same ports before and
+after) against the real `courier_db`, `V53` applied (schema now at 53, applied by a
+concurrent session that rebuilt+restarted 8100 with this same code before this task's own
+verification pass ran — confirmed via `flyway_schema_history` and a direct env-var read off
+the running process, not guessed): the real 8100 process itself does *not* yet run this code
+(`GET /branches/{id}/pincodes` 404'd there — "Endpoint not found" — confirming it was only
+the migration, not a full rebuild, that landed there), so verification ran end-to-end against
+the throwaway instead. As `first.admin@gmail.com` (`COMPANY_ADMIN`): mapping two real pincodes
+onto a real branch (`CAVETEST1`) correctly reported `alreadyMapped` (a concurrent session's own
+live-verification pass had already mapped the same first-listed pincodes to the same branch
+moments earlier — both sessions independently exercising the identical batch endpoint against
+shared real data, not a bug); mapping one of those same pincodes onto a *second* real branch
+correctly reported a `conflicts` entry naming the first branch's code, never moved it; removing
+a mapping worked and the list reflected it immediately; as `pune@gmail.com` (`BRANCH_MANAGER`,
+not assigned to `CAVETEST1`) `GET` correctly 404'd (branch-visibility, matching `GET
+/branches/{id}`'s own rule) and `POST` correctly 403'd. Test data left in place per
+[[keep-test-data-in-dev-db]] — one real mapping (`CAVETEST1` → pincode `400029`) is now a
+fixture for the next module.
+
+**Same-day browser click-through** (user asked to "test live"), same throwaway `:8082`
+plus a throwaway frontend on `:5173` (proxying to `:8082`; `:4200`'s own proxy targets the
+real `:8100`, so a second frontend was needed rather than risking pointing the real one at
+a throwaway backend — `:5173` chosen since it's already in `app.cors.allowed-origins`
+alongside `:4200`, no config edit needed). Signed in as `first.admin@gmail.com` via the
+login page's own dev quick-fill. Nav leaf, branch picker, pincode search/tick-list, chips,
+batch add, and the conflict toast (`"400029 is already mapped to CAVETEST1"`, the exact
+fixture row from the pass above) all rendered and worked correctly end to end in the real
+UI. **Found and fixed in passing**: the throwaway JVM intermittently 500'd on `POST`/`DELETE`
+with an empty body (`NoClassDefFoundError:
+org/springframework/web/servlet/ModelAndViewDefiningException` deep in Tomcat's own
+error-page dispatch, not this module's code) — reproduced twice across separate `mvn clean
+package` rebuilds, each time with the underlying data change (confirmed correct via a direct
+`GET` immediately after) landing fine despite the HTTP response itself failing to render.
+Consistent with local `~/.m2` jar/classpath corruption on this machine rather than a defect
+in this feature — the browser extension also disconnected mid-session on the same pass, cutting
+the click-through short before the Remove action could be demonstrated visually (verified via
+curl instead: delete 200'd on retry, list dropped from 3 to 2 correctly). Real `:8100`/`:4200`
+confirmed untouched before and after. Branch `PUNE` now additionally carries two real mappings
+(`440012`, `440016`) as further fixtures.
+
+**Second "test live" pass, same day, completed the click-through the disconnect cut short.**
+Fresh throwaway `:8082`/`:5173` pair, same setup. This time the batch add (`440012`+`440016`
+onto `PUNE`) and the Remove action — the one step cut short earlier — both worked cleanly in
+the real UI with no 500s: search → tick → chips → "Add 2 pincode(s)" → list updated; Remove
+→ real confirm dialog ("'440012' will no longer be served by this branch") → confirm → list
+dropped from 2 to 1 live, network tab showed a clean `DELETE .../pincodes/{id}` → `200`. The
+`~/.m2`/classpath glitch from the earlier pass did not recur on this fresh jar — treated as
+resolved by the rebuild, not chased further. `:8100`/`:4200` confirmed untouched again before
+and after. `PUNE` now carries one real mapping (`440016`) as the final fixture from this task.
+
+---
+
+## [Unreleased] — 2026-09-02 — Pincode create form: full area preview, auto-filled post office, Placement/zone dropped, list sorted by code
+
+Same-day follow-ups on the Pincode master feature set: "Post office / locality should be
+auto fill", "remove placement card, and delivery option" (scoped via `AskUserQuestion` —
+user chose to drop Area picking from the UI entirely, not just hide the card, and confirmed
+"delivery option" meant the Delivery zone field, not Pickup), "pincode list should be order
+by pincode", and "while adding if pincode enter then show area all pincode area name list
+same as view page."
+
+**Backend**: `PincodeServiceImpl.lookupPostalArea` now resolves *every* postal match via
+`GeographyAutoResolver`, not just the first — `PincodeAreaLookupResult` gained `allMatches`,
+`PincodeAreaLookupResponse` gained an `areas` list (`PincodeAreaPreview{areaId, areaName,
+cityName, primary}`). This is the exact same resolution `PincodeAreaService.syncAreas` would
+do once the pincode is actually saved, just run one save earlier — the create form's own
+preview of what it will get, matching the detail page's "Areas served" card.
+
+**Frontend, `master.config.ts`/`master-form.ts`/`master-view.ts`**: `zone` field dropped
+from pincode's `fields[]` entirely (create/edit/view all read from the same array). Pincode's
+`areaId` field kept in `fields[]` (still a real, validated form control — payload
+correctness and the required-field block on no-match depend on it) but excluded from
+`groups()`'s output in both `MasterForm` and `MasterView` when `key === 'pincodes'`, so no
+"Placement" card renders and no manual Area picker exists — Area is now *only* ever set by
+auto-fetch; a `not-found`/`error` lookup state leaves the required `areaId` control empty,
+which `Validators.required` already blocks submission on (no new guard code needed, just
+updated hint wording since "pick an Area below" no longer describes anything real). New
+`defaultSort` on `MasterDefinition` (`{field, direction}`), set to `code`/`asc` for pincodes
+only, applied in `MasterList`'s initial query/sort-state before the operator ever clicks a
+column header. New "Areas served by this pincode" card mounted in `MasterForm` itself
+(create-only, pincode-only) rendering the full `areas` preview list — same visual shape as
+the existing `PincodeAreasCard` on the detail page, minus ODA controls (nothing to toggle
+before the row exists).
+
+**A real bug found and fixed via live re-testing, not the first pass**: Post office/locality
+auto-fill's first implementation guarded on "only fill if currently empty" — which let one
+auto-fill permanently block every later one, since the field would never read as empty
+again. Retyping a pincode after a first match had already landed left the *first* match's
+post-office name stuck while the hint text (never guarded) correctly updated to the new
+match — reproduced live by retyping `416002` → `416101` quickly. Fixed by tracking
+Angular's own `pristine` flag instead of emptiness: programmatic `setValue` doesn't dirty a
+control, only a real keystroke does (via the forms directive's own DOM listener, not
+`setValue` itself), so `pristine` distinguishes "we auto-filled this" from "the operator
+typed their own label" correctly across any number of pincode retypes, and stops the moment
+a real edit happens. Re-verified live with the identical retype sequence that broke the
+first version.
+
+**Verified live** on real `:4200`/`:8100` throughout (backend rebuilt+restarted once for the
+`allMatches` DTO change — rotated `JWT_SECRET` again, re-login needed, same now-documented
+gotcha): Pincodes list opens sorted `400001, 400002, 400003…` with the sort arrow on the
+PINCODE column; typing `416101` into a fresh create form showed "Matched to Chipri, Kolhapur…
+(1 of 9 post offices)" with Post office/locality auto-filled `Chipri` (confirmed consistent
+even under the exact race that broke the pre-fix version) and a full 9-row "Areas served by
+this pincode" preview (Chipri primary + Danoli/Jaisingpur R.S./Jaysingpur/Kothali/
+Nimshirgaon/Tamadalage/Udgaon/Umalwad) with no ODA controls; submitted, landed on the detail
+page, and its own real "Areas served" card showed the identical 9 rows now with live
+ODA toggles/amounts — preview and saved reality matched exactly. No Placement card, no
+Delivery zone field anywhere in create/edit/view. `mvn test`/`tsc --noEmit`/`ng test` (50
+masters tests)/`ng build --configuration production` all clean, no new unit tests
+(verify-live, same precedent as every Pincode addition this session). Full detail in
+`MEMORY/modules/master-data.md`.
+
+---
+
+## [Unreleased] — 2026-09-02 — Pincode-Area links: every Area a pincode names, ODA + amount per area
+
+Direct follow-up: "some pincode have multiple city or area name" — a pincode was routing to
+exactly one Area (`master_pincodes.area_id`), but India Post's own directory routinely lists
+several real post offices for one code, and the earlier ODA toggle was per-pincode, not
+per-locality. Scoped via `AskUserQuestion`; user asked for a real new table, not a read-only
+list — "create new table and store pincode-area... every area should have toggle as is ODA
+and if yes then able to enter amount for that oda location default 250."
+
+New `master_pincode_areas` (`V52`, company-owned/global like `master_pincodes`/
+`master_areas`): `pincode_id`, `area_id`, `is_primary`, `oda_applicable`, `oda_amount`
+(`DECIMAL(10,2)`, folds to `NULL` when `oda_applicable` is false, defaults to 250.00 the
+moment it turns true with none given — `PincodeArea.applyInvariants()`). New
+`PincodeAreaService`: `list`/`updateOda` (controller-facing, same `READ`/`WRITE` audience as
+Pincode itself) and `syncAreas` (internal — called from `PincodeServiceImpl.create`/`update`,
+never throws: upserts the primary row directly, then best-effort re-probes the postal
+directory for every other post office sharing the code and links those too, skipping ones
+already linked). `master_pincodes.area_id`/`oda_applicable` are unchanged — this is additive,
+not a replacement; the single fields still drive the create form and list column, the new
+table is the detailed per-area view. New `GET/PATCH /global-masters/pincodes/{id}/areas[/{linkId}]`.
+
+Frontend: new `PincodeAreasCard` (pincode-only, mounted by `master-view.ts` when `def.key
+=== 'pincodes'`) — a per-row editable table outside the twelve-list shared-component
+architecture on purpose (a nested editable sub-list isn't a flat field descriptor
+`MasterFieldControl` can render generically). Toggle flips PATCH immediately; the amount
+input appears only when ODA is on, pre-filled with whatever the server just defaulted or
+saved.
+
+**Verified live** on real `:4200`/`:8100` (backend rebuilt+restarted for `V52`, migration
+applied cleanly to schema 52; the restart rotated `JWT_SECRET` again — re-login needed, per
+`[[local-dev-environment]]`'s now-documented gotcha): real pincode `416013` (Kolhapur) has 3
+post offices upstream — created it, `GET .../areas` returned Girgaon (primary) + Pachgaon +
+R K Nagar auto-linked; PATCH toggled Pachgaon's ODA on with no amount → defaulted `250.00`;
+set a custom `400`; toggled off → amount cleared to `null` — all three confirmed via curl
+before the UI pass. `BRANCH_MANAGER` read the area list (200) but 403'd on the PATCH.
+Clicked through the real running UI: pincode detail page's new "Areas served by this
+pincode" card rendered all three rows live, toggling Pachgaon's ODA saved via PATCH and
+revealed the amount input pre-filled `250`. `mvn test` green, `tsc --noEmit`/`ng test`
+(50 masters tests)/`ng build --configuration production` all clean, no new unit tests
+(verify-live, same precedent as the parent Pincode features this session). Full detail in
+`MEMORY/modules/master-data.md`.
+
+---
+
+## [Unreleased] — 2026-09-02 — Pincode bulk-import (numeric ranges), seeded 152 real Maharashtra pincodes
+
+Direct follow-up to the same-day Pincode postal-lookup/ODA feature: "add all maharashtra all
+pincode with all area." Scoped via `AskUserQuestion` first — full Maharashtra brute force is
+~45,000 candidate codes (400001-445402) against ~7,000 real ones, hours of sequential calls
+against a free public API with no documented rate limit and no bulk-by-state endpoint; user
+chose a representative sample now (major-city blocks) plus a real reusable backend endpoint
+(`MASTER_DATA_IMPORT` has sat in the permission catalogue since Master Data shipped with no
+endpoint behind it — this is that endpoint) over a one-off script.
+
+New `POST /api/v1/global-masters/pincodes/bulk-import` (`BulkImportPincodesRequest{ranges:
+[{fromCode,toCode}]}`), same `WRITE` audience as `create`. New `PincodeBulkImportService`
+probes every code in each range through the existing `PincodePostalLookupProvider` +
+`GeographyAutoResolver` pipeline the single-pincode auto-fetch already uses, and calls
+`PincodeService.create` (the real proxied bean, not duplicated logic) for each match — a
+cross-bean call, so `create`'s own `@Transactional` gives every row its own transaction rather
+than one multi-thousand-row transaction holding locks for the run's duration. A candidate
+already on file is inferred from `create`'s own `DuplicateResourceException` and skipped, not
+re-fetched — makes the endpoint safe to re-run over an overlapping range (idempotent, verified:
+re-running 100 already-imported candidates → 0 created, 85 correctly skipped, 0 duplicates).
+
+**Verified live** on the same throwaway `:8082`/`:4200` pair as the earlier feature (real
+backend/frontend confirmed not running before use, both stopped after): seven ranges covering
+Mumbai/Pune/Nagpur/Nashik/Aurangabad/Kolhapur/Solapur (180 candidates) → 152 real pincodes
+created (real India Post locality names — Bazargate, Kalbadevi, Malabar Hill, etc — 157 distinct
+Areas auto-created), 2 already existed, 26 no postal record, 0 failed, ~77s; `BRANCH_MANAGER`
+correctly 403'd; the actual Pincodes list page rendered all 158 rows with resolved Area/Serviceable
+/COD/ODA columns. `mvn test` green throughout, no new unit tests (verify-live, same precedent
+as the parent feature). Full design reasoning in `MEMORY/modules/master-data.md`.
+
+---
+
+## [Unreleased] — 2026-09-02 — Pincode master: auto-fetch Area from a real postal directory, plus an ODA toggle
+
+Direct request: "for pincode master when add pincode then after pincode add fetch area of that
+pincode and option should be there add on more option as ODA applicble toggle do it in existing
+flow." Both landed inside the existing Pincode Master create/edit flow — no new screen, no new
+module.
+
+**ODA toggle**: `master_pincodes` gained `oda_applicable` (`V51__pincode_oda.sql`, `NOT NULL
+DEFAULT FALSE`) — Out-of-Delivery-Area, independent of `serviceable`/`codAvailable`/etc (does
+not fold or get folded by them, unlike the COD/prepaid/pickup trio). Threaded through
+`PincodeCommand`/`Create`+`UpdatePincodeRequest`/`PincodeResponse`/`PincodeMasterMapper`, default
+false on create when omitted (opposite default from the other flags — most pincodes are not
+ODA). Frontend: one more `boolean` field + table column in `master.config.ts`'s `pincodes`
+definition — the four shared master components needed no change.
+
+**Area auto-fetch**: scoped via `AskUserQuestion` first — free public India Post directory
+(`api.postalpincode.in`, no key needed) over matching only existing local rows, and
+auto-creating the full missing State/District/City/Area chain over leaving Area empty with a
+hint. New `PincodePostalLookupProvider` port (`IndiaPostPincodeLookupProvider` real impl,
+`DisabledPincodePostalLookupProvider` fallback, `app.master.pincode-lookup.enabled` flag
+defaulting **true** — unlike every other provider flag in this codebase, this one needs no
+vendor credential, so there's nothing to be missing in a fresh environment) and new
+`GeographyAutoResolver`, which finds-or-creates Country/State/District/City/Area by name within
+parent, deliberately going straight through the repositories rather than through
+`CountryService`/`StateService`/etc — those are `SUPER_ADMIN`-only writers and this must also
+work for the `COMPANY_ADMIN` caller `PincodeServiceImpl.create` already allows, one level
+further up the chain than that class's own doc already justifies for Pincode itself. Codes are
+derived from the matched name, de-duplicated against `(company_id, code)` with a numeric suffix
+loop, the same shape a human retyping a collision would produce. New `GET
+/global-masters/pincodes/lookup/{code}` (`PincodeService.lookupPostalArea`, same
+`COMPANY_ADMIN`/`SUPER_ADMIN` write gate as `create` — a match can create master rows, so it is
+not a plain read), idempotent (a second lookup of the same pincode returns the same `areaId`,
+confirmed live). Frontend: `MasterForm` debounces the Pincode field (create only, keyed off
+`def().key === 'pincodes'` rather than a new generic field flag — the postal directory is
+specific to this one list), calls the endpoint, auto-selects the resolved Area (injecting it
+into the picker options if it was just created and isn't in the already-cached active list),
+and shows a "Matched to X, Y, Z (1 of N post offices sharing this pincode)" line under the
+Pincode field; a `not-found`/`error` state falls back to the existing manual Area picker,
+never blocks the form.
+
+**A real bug found and fixed via live verification, not guessed**: the JDK `HttpClient`'s
+default User-Agent (`Java-http-client/…`) is silently connection-reset by this upstream's own
+front end — confirmed by reproducing with `curl` (identical request succeeds with any other
+User-Agent, including a blank one) before concluding it wasn't this deployment's outbound
+network being blocked. Fixed with one explicit `User-Agent` header on the request; no HTTP
+version pinning needed (a first fix attempt forcing HTTP/1.1 was tried, ruled out by more
+`curl` reproduction, and reverted — the block was UA-based, not a protocol interop issue).
+
+**Verified live** on a throwaway backend `:8082` + frontend `:4200` (the real backend was not
+running at the time; confirmed free before use, and both throwaway processes were stopped
+afterward) against real `courier_db`, `V51` applied cleanly (schema now at 51): `mvn test`
+green throughout (no new unit tests added — this module's own precedent for a provider/resolver
+pair is verify-live, matching `commissionSummary`/`summaryStats`); real pincode `411001`
+resolved to `C D A (O), Pune City East, Pune, Maharashtra` from the actual India Post directory,
+auto-creating that State/District/City/Area chain; a second lookup of the same pincode returned
+the identical `areaId` (idempotent, no duplicate rows); a `BRANCH_MANAGER` caller correctly
+403'd on the lookup endpoint; created a real pincode through the actual UI form end to end —
+auto-filled Area, ODA toggle on, saved, detail view showed `ODA APPLICABLE: Yes`. `tsc --noEmit`/
+`ng build --configuration production` both clean, existing `ng test` masters suite (50 tests)
+unaffected.
+
+---
+
+## [Unreleased] — 2026-09-02 — Wallet recharge left uncredited if the tab closed mid-payment
+
+Direct bug report: "while wallet recharge tab closed while payment process". Root cause: the
+recharge flow is two client calls — `POST /recharge/order` opens the Razorpay order,
+`POST /recharge` settles it after checkout succeeds — and nothing credited the wallet if the
+browser never reached the second call (tab closed, network dropped, app backgrounded on mobile).
+The money was captured at Razorpay; the platform just never found out. Known gap, was already on
+`MEMORY/BACKLOG.md`.
+
+Fixed with the other half of the flow: a Razorpay webhook. `RazorpayWebhookController`
+(`POST /api/v1/branch-wallet/webhook/razorpay`, listed in `SecurityConfig.PUBLIC_ENDPOINTS` — no
+JWT, authenticity is a whole-payload HMAC over `X-Razorpay-Signature` against a new
+`RAZORPAY_WEBHOOK_SECRET`, separate from `RAZORPAY_KEY_SECRET`) receives `payment.captured`,
+reads `companyId`/`branchId` from the order's own `notes` (written by `openRecharge`, never
+trusted from the webhook body itself), and calls new `WalletService.settleFromWebhook` — no
+`@PreAuthorize` (a webhook carries no authenticated user), bound to the right company via
+`CompanyContext.runAs`. `WalletServiceImpl.completeRecharge` and `settleFromWebhook` now share a
+`settlePayment` helper: same idempotency-on-`paymentId`, gateway-authoritative-amount and
+currency checks either way, so browser confirmation and webhook can arrive in either order (or
+both) and the wallet is credited exactly once.
+
+Gap: only the platform-wide gateway's webhook is covered. A company using its own Razorpay
+account (`CompanyRazorpayConfig`) has no webhook-secret field yet, so a webhook registered on
+that company's own Razorpay dashboard fails signature verification (silently, ack'd 200) — see
+`MEMORY/BACKLOG.md`.
+
+Verified live on a throwaway :8082 boot against real `courier_db` (COMPANY-C1/Pune, real
+companyId/branchId from `GET /branch-wallet`): no signature → 400, wrong signature → 401,
+valid signature + `payment.captured` + real notes → reached `settleFromWebhook`, correctly
+refused (`UnconfiguredPaymentGateway`, no real Razorpay account in this dev env) with the
+wallet balance/version untouched, non-`payment.captured` event → 200 no-op, missing notes →
+200 ack+logged. The one thing not exercised live is an actual credit landing — no real
+Razorpay sandbox account exists in this dev environment to produce a genuine `payment.captured`
+callback.
+
 ## [Unreleased] — 2026-09-02 — Branch dashboard KPIs/charts/recent-activity were company-wide, not branch-wide
 
 Direct bug report: "dashboard count wrong for branch it showing all branches data" — This

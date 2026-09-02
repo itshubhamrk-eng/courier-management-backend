@@ -287,11 +287,14 @@ public class BranchServiceImpl implements BranchService {
         requireManageable(branch);
         requireCurrentVersion(branch, command.expectedVersion());
 
+        String code = Branch.normaliseCode(command.branchCode());
         String name = command.branchName() == null ? null : command.branchName().trim();
+        requireCodeAvailable(companyId, code, id);
         requireNameAvailable(companyId, name, id);
 
         Map<String, Object> before = snapshot(branch);
 
+        branch.setBranchCode(code);
         branch.setBranchName(name);
         branch.setBranchType(command.branchType());
         branch.setEmail(command.email());

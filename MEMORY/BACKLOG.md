@@ -214,7 +214,11 @@ Ordered. Top item is always the next thing to build.
 - [ ] `holdBalance` has no writer yet — `applyHold`/`releaseHold` land with Shipment
 - [x] Internal booking-debit seam for Shipment (not `COMPANY_ADMIN`-gated) —
       `WalletService.debitForBooking(BookingDebitCommand)`, built with Shipment Booking
-- [ ] Razorpay webhook (`payment.captured`) so a closed browser still settles
+- [x] Razorpay webhook (`payment.captured`) so a closed browser still settles — `RazorpayWebhookController`
+      + `WalletService.settleFromWebhook`, `RAZORPAY_WEBHOOK_SECRET` (2026-09-02). Platform gateway
+      only; a company's own `CompanyRazorpayConfig` account has no webhook secret field yet, so its
+      webhook events fail signature verification silently (ack'd 200, nothing settled) — same gap as
+      before for that path only
 - [ ] Refund/reversal path; low-balance threshold + alert on `WalletDebited`
 - [ ] Realign the UI-11 frontend, which was built against a guessed contract
       (`/branch-wallets/{id}`, `CREDIT`/`DEBIT`, long sub-type names)

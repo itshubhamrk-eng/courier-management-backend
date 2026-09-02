@@ -27,13 +27,13 @@ public class PincodeMasterMapper {
     public PincodeCommand toCommand(CreatePincodeRequest r) {
         return new PincodeCommand(r.code(), r.name(), r.description(), r.displayOrder(),
                 r.areaId(), r.serviceable(), r.codAvailable(), r.prepaidAvailable(),
-                r.pickupAvailable(), r.zone(), null);
+                r.pickupAvailable(), r.zone(), r.odaApplicable(), null);
     }
 
     public PincodeCommand toCommand(UpdatePincodeRequest r) {
         return new PincodeCommand(null, r.name(), r.description(), r.displayOrder(),
                 r.areaId(), r.serviceable(), r.codAvailable(), r.prepaidAvailable(),
-                r.pickupAvailable(), r.zone(), r.version());
+                r.pickupAvailable(), r.zone(), r.odaApplicable(), r.version());
     }
 
     public PincodeResponse toResponse(Pincode p) {
@@ -45,7 +45,7 @@ public class PincodeMasterMapper {
                 p.getDescription(), p.getStatus(), p.getDisplayOrder(),
                 p.getAreaId(), areaNames.get(p.getAreaId()),
                 p.isServiceable(), p.isCodAvailable(), p.isPrepaidAvailable(),
-                p.isPickupAvailable(), p.getZone(),
+                p.isPickupAvailable(), p.getZone(), p.isOdaApplicable(),
                 p.getCreatedBy(), p.getCreatedAt(), p.getUpdatedBy(), p.getUpdatedAt(), p.getVersion());
     }
 

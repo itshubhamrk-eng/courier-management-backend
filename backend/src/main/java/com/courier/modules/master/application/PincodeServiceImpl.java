@@ -1,5 +1,6 @@
 package com.courier.modules.master.application;
 
+import com.courier.modules.master.application.port.PincodePostalLookupProvider;
 import com.courier.modules.master.application.command.PincodeCommand;
 import com.courier.modules.master.domain.Area;
 import com.courier.modules.master.domain.AreaRepository;
@@ -21,8 +22,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -54,13 +57,23 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
     private static final String READ = "isAuthenticated()";
 
     private final AreaRepository areas;
+    private final PincodePostalLookupProvider postalLookup;
+    private final GeographyAutoResolver geographyResolver;
+
+    private final PincodeAreaService pincodeAreaService;
 
     public PincodeServiceImpl(PincodeRepository pincodes,
                               AreaRepository areas,
                               MasterUniquenessChecker uniqueness,
-                              AuditService auditService) {
+                              AuditService auditService,
+                              PincodePostalLookupProvider postalLookup,
+                              GeographyAutoResolver geographyResolver,
+                              PincodeAreaService pincodeAreaService) {
         super(pincodes, uniqueness, auditService, "Pincode", MasterTable.PINCODES);
         this.areas = areas;
+        this.postalLookup = postalLookup;
+        this.geographyResolver = geographyResolver;
+        this.pincodeAreaService = pincodeAreaService;
     }
 
     @Override
@@ -89,7 +102,9 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
                     command.displayOrder());
             pincode.setAreaId(command.areaId());
             applyFlags(pincode, command);
-            return createEntity(pincode);
+            Pincode saved = createEntity(pincode);
+            pincodeAreaService.syncAreas(saved);
+            return saved;
         });
     }
 
@@ -98,7 +113,7 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
     @PreAuthorize(WRITE)
     public Pincode update(UUID id, PincodeCommand command) {
         UUID companyId = requireCompany();
-        return updateEntity(id, command.expectedVersion(), pincode -> {
+        Pincode saved = updateEntity(id, command.expectedVersion(), pincode -> {
             boolean reparented = !Objects.equals(pincode.getAreaId(), command.areaId());
             requireArea(command.areaId(), companyId, reparented);
 
@@ -107,6 +122,8 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
             pincode.setAreaId(command.areaId());
             applyFlags(pincode, command);
         });
+        pincodeAreaService.syncAreas(saved);
+        return saved;
     }
 
     @Override
@@ -130,6 +147,35 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
         return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID,
                 () -> repository.findByCodeWithinCompany(code, GlobalMasters.PLATFORM_COMPANY_ID)
                         .orElseThrow(() -> new ResourceNotFoundException("Pincode", code)));
+    }
+
+    /**
+     * Same write audience as {@link #create}: a match can create State/District/City/Area
+     * rows, which is exactly the "onboarding needs a row the platform catalogue does not
+     * have yet" case {@link #create}'s own doc explains for Pincode itself — extended one
+     * step further up the chain by {@link GeographyAutoResolver}.
+     */
+    @Override
+    @Transactional
+    @PreAuthorize(WRITE)
+    public Optional<PincodeAreaLookupResult> lookupPostalArea(String pincode) {
+        if (pincode == null || !pincode.matches("^[0-9]{4,10}$")) {
+            throw new BusinessRuleException("Enter a valid pincode (4 to 10 digits) before looking up its area.");
+        }
+        List<PincodePostalLookupProvider.PostOffice> matches = postalLookup.lookup(pincode);
+        if (matches.isEmpty()) {
+            return Optional.empty();
+        }
+        // Every match resolved up front — the create form's own preview of the full area
+        // list needs all of them, not just the primary; this is the same resolution
+        // syncAreas would do once the pincode is actually saved, just run one save earlier.
+        List<GeographyAutoResolver.GeographyMatch> resolvedAll = matches.stream()
+                .map(geographyResolver::resolveArea)
+                .toList();
+        GeographyAutoResolver.GeographyMatch primary = resolvedAll.get(0);
+        return Optional.of(new PincodeAreaLookupResult(primary.area(), primary.city(),
+                primary.district(), primary.state(), primary.country(),
+                matches.get(0).name(), matches.size(), resolvedAll));
     }
 
     @Override
@@ -169,13 +215,15 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
         values.put("prepaidAvailable", pincode.isPrepaidAvailable());
         values.put("pickupAvailable", pincode.isPickupAvailable());
         values.put("zone", pincode.getZone());
+        values.put("odaApplicable", pincode.isOdaApplicable());
         return values;
     }
 
     /**
      * Absent flags default to <i>enabled</i>, matching the "a pincode we bothered to add
      * is one we serve" reading, except that {@code serviceable=false} folds the rest down
-     * in {@link Pincode#applySpecificInvariants()}.
+     * in {@link Pincode#applySpecificInvariants()}. ODA is the opposite default — most
+     * pincodes are not out-of-delivery-area, so absent means false, not true.
      */
     private void applyFlags(Pincode pincode, PincodeCommand command) {
         pincode.setServiceable(orTrue(command.serviceable()));
@@ -183,6 +231,7 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
         pincode.setPrepaidAvailable(orTrue(command.prepaidAvailable()));
         pincode.setPickupAvailable(orTrue(command.pickupAvailable()));
         pincode.setZone(command.zone());
+        pincode.setOdaApplicable(Boolean.TRUE.equals(command.odaApplicable()));
     }
 
     private static boolean orTrue(Boolean value) {

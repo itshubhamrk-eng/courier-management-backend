@@ -139,6 +139,10 @@ export interface CreateBranchRequest {
   district?: string | null;
   taluka?: string | null;
   postalCode?: string | null;
+  /** Optional manual override; left null the backend geocodes the address on save. */
+  latitude?: number | null;
+  /** Optional manual override; left null the backend geocodes the address on save. */
+  longitude?: number | null;
   openingTime?: string | null;
   closingTime?: string | null;
   workingDays?: string | null;
@@ -167,10 +171,11 @@ export interface CreateBranchRequest {
 
 /**
  * Body of PUT /branches/{id} — mirrors backend `UpdateBranchRequest`. Full replacement of
- * the editable fields; carries `version`. `branchCode` is immutable and omitted; `status`
- * and `managerId` are changed through their own endpoints, not here.
+ * the editable fields; carries `version`. `status` and `managerId` are changed through
+ * their own endpoints, not here.
  */
 export interface UpdateBranchRequest {
+  branchCode: string;
   branchName: string;
   branchType: BranchType;
   email?: string | null;
@@ -184,6 +189,10 @@ export interface UpdateBranchRequest {
   district?: string | null;
   taluka?: string | null;
   postalCode?: string | null;
+  /** Optional manual override; left null the backend geocodes the address on save. */
+  latitude?: number | null;
+  /** Optional manual override; left null the backend geocodes the address on save. */
+  longitude?: number | null;
   openingTime?: string | null;
   closingTime?: string | null;
   workingDays?: string | null;
@@ -215,4 +224,29 @@ export interface BranchSearchRequest {
   allowDelivery?: boolean;
   allowPickup?: boolean;
   search?: string;
+}
+
+/**
+ * Pincode Branch Mapping — mirrors backend `BranchPincodeResponse`/`AddBranchPincodesResponse`
+ * (GET/POST/DELETE `/branches/{id}/pincodes`). A pincode is served by exactly one branch per
+ * company, enforced server-side; `conflicts` names the branch already holding it.
+ */
+export interface BranchPincode {
+  id: string;
+  pincodeId: string;
+  pincodeCode: string;
+  pincodeName?: string | null;
+}
+
+export interface BranchPincodeConflict {
+  pincodeId: string;
+  pincodeCode: string;
+  branchId: string;
+  branchCode: string;
+}
+
+export interface AddBranchPincodesResult {
+  added: BranchPincode[];
+  alreadyMapped: string[];
+  conflicts: BranchPincodeConflict[];
 }

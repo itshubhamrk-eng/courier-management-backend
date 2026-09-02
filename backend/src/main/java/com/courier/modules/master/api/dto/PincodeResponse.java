@@ -15,7 +15,7 @@ public record PincodeResponse(
         MasterStatus status, Integer displayOrder,
         UUID areaId, String areaName,
         boolean serviceable, boolean codAvailable, boolean prepaidAvailable,
-        boolean pickupAvailable, String zone,
+        boolean pickupAvailable, String zone, boolean odaApplicable,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version
 ) {
 }

@@ -31,6 +31,16 @@ public class RazorpayProperties {
     /** Signing secret. Env-only. */
     private String keySecret;
 
+    /**
+     * Separate secret configured on the Razorpay dashboard's webhook, not {@link #keySecret}.
+     * Signs the whole webhook payload; without it {@code payment.captured} events cannot be
+     * verified and {@code RazorpayWebhookController} refuses everything. Only covers the
+     * platform-wide gateway — a company using its own Razorpay account
+     * ({@code CompanyRazorpayConfig}) would need its own webhook registered with its own
+     * secret, which is not yet wired up.
+     */
+    private String webhookSecret;
+
     private String apiBaseUrl = "https://api.razorpay.com/v1";
 
     /** Shown on the checkout dialog. */

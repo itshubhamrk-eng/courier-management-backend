@@ -3,7 +3,7 @@ import { Observable, of, shareReplay } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from '@core/services/api.service';
 import { Page, PageQuery } from '@core/models/page.model';
-import { MasterBootstrapResult, MasterOption, MasterRecord } from '@core/models/master.model';
+import { MasterBootstrapResult, MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaRow } from '@core/models/master.model';
 import { LookupSource, MASTER_DEFINITIONS, MasterDefinition, MasterKey } from './master.config';
 
 /** The branch fields this module reads — the two ends of a route, the postal code a
@@ -74,6 +74,29 @@ export class MasterDataService {
   /** Seeds the standard catalogues. Idempotent — a second run reports everything skipped. */
   bootstrap(): Observable<MasterBootstrapResult> {
     return this.tap(this.api.post<MasterBootstrapResult>('/master/bootstrap', {}));
+  }
+
+  /**
+   * Resolves the Area for a raw pincode via the postal directory, auto-creating whatever
+   * State/District/City/Area rows are missing — so a possibly-new Area needs the same
+   * cache invalidation a write does, not just the geography options being stale.
+   */
+  lookupPincodeArea(code: string): Observable<PincodeAreaLookup> {
+    return this.tap(this.api.get<PincodeAreaLookup>(`/global-masters/pincodes/lookup/${code}`));
+  }
+
+  /** Every Area a pincode's postal record names, primary row first — the detail page's
+   *  own list, not the picker cache above. */
+  pincodeAreas(pincodeId: string): Observable<PincodeAreaRow[]> {
+    return this.api.get<PincodeAreaRow[]>(`/global-masters/pincodes/${pincodeId}/areas`);
+  }
+
+  /** Sets ODA (and/or its amount) for one Area of one pincode. Both fields optional and
+   *  independent — send only what changed. */
+  updatePincodeAreaOda(
+    pincodeId: string, areaLinkId: string, body: { odaApplicable?: boolean; odaAmount?: number | null }
+  ): Observable<PincodeAreaRow> {
+    return this.api.patch<PincodeAreaRow>(`/global-masters/pincodes/${pincodeId}/areas/${areaLinkId}`, body);
   }
 
   // ------------------------------------------------------------------- lookups

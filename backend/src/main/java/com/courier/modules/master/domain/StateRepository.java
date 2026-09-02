@@ -1,6 +1,7 @@
 package com.courier.modules.master.domain;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -15,4 +16,7 @@ public interface StateRepository extends MasterDataRepository<State> {
     long countByCompanyIdAndCountryId(UUID companyId, UUID countryId);
 
     List<State> findByCompanyIdAndCountryIdOrderByDisplayOrderAscNameAsc(UUID companyId, UUID countryId);
+
+    /** Used by the postal-lookup auto-resolver, scoped to the parent country. */
+    Optional<State> findByCompanyIdAndCountryIdAndNameIgnoreCase(UUID companyId, UUID countryId, String name);
 }

@@ -41,7 +41,7 @@ public class BranchMapper {
 
     public UpdateBranchCommand toCommand(UpdateBranchRequest r) {
         return new UpdateBranchCommand(
-                r.branchName(), r.branchType(),
+                r.branchCode(), r.branchName(), r.branchType(),
                 r.email(), r.mobile(), r.alternateMobile(),
                 r.addressLine1(), r.addressLine2(), r.country(), r.state(), r.city(),
                 r.district(), r.taluka(), r.postalCode(), r.latitude(), r.longitude(),

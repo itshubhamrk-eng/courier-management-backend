@@ -70,6 +70,18 @@ public interface WalletService {
      */
     WalletTransaction completeRecharge(RechargeCommand command);
 
+    /**
+     * Same settlement as {@link #completeRecharge}, reached from a Razorpay webhook instead
+     * of the browser — covers a tab closed after the gateway captured the payment but before
+     * the browser confirmed it. No {@code @PreAuthorize}: a webhook carries no authenticated
+     * user, so the caller ({@code RazorpayWebhookController}) must already have verified the
+     * webhook signature and resolved {@code companyId}/{@code branchId} from the order's own
+     * notes before calling this — never from anything the webhook body claims about itself.
+     * Idempotent on the gateway payment id, same as {@link #completeRecharge}.
+     */
+    WalletTransaction settleFromWebhook(UUID companyId, UUID branchId, String gatewayOrderId,
+                                        String paymentId);
+
     /** Manual credit by a company admin. */
     WalletTransaction credit(CreditCommand command);
 

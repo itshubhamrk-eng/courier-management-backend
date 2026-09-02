@@ -1,13 +1,17 @@
 package com.courier.modules.company.api;
 
+import com.courier.modules.company.api.dto.AddBranchPincodesRequest;
+import com.courier.modules.company.api.dto.AddBranchPincodesResponse;
 import com.courier.modules.company.api.dto.AssignManagerRequest;
 import com.courier.modules.company.api.dto.AssignUsersRequest;
 import com.courier.modules.company.api.dto.AssignUsersResponse;
+import com.courier.modules.company.api.dto.BranchPincodeResponse;
 import com.courier.modules.company.api.dto.BranchResponse;
 import com.courier.modules.company.api.dto.BranchSearchRequest;
 import com.courier.modules.company.api.dto.BranchSummaryResponse;
 import com.courier.modules.company.api.dto.CreateBranchRequest;
 import com.courier.modules.company.api.dto.UpdateBranchRequest;
+import com.courier.modules.company.application.BranchPincodeMappingService;
 import com.courier.modules.company.application.BranchService;
 import com.courier.modules.company.domain.Branch;
 import com.courier.shared.api.ApiResponse;
@@ -78,6 +82,7 @@ public class BranchController {
 
     private final BranchService service;
     private final BranchMapper mapper;
+    private final BranchPincodeMappingService pincodeMappingService;
 
     @PostMapping
     @Operation(summary = "Create a branch, its user and its wallet",
@@ -109,8 +114,8 @@ public class BranchController {
     @PutMapping("/{id}")
     @Operation(summary = "Update a branch",
             description = "Full replacement. `COMPANY_ADMIN` (any branch) or `BRANCH_MANAGER` "
-                    + "(their own). `version` required; a stale value returns 409. Code is "
-                    + "immutable; status and manager have their own endpoints.")
+                    + "(their own). `version` required; a stale value returns 409. Status and "
+                    + "manager have their own endpoints.")
     public ApiResponse<BranchResponse> update(@PathVariable UUID id,
                                               @Valid @RequestBody UpdateBranchRequest request) {
         return ApiResponse.success(
@@ -200,6 +205,38 @@ public class BranchController {
         return ApiResponse.success(
                 new AssignUsersResponse(result.assigned(), result.skipped(), result.rejected()),
                 "Users assigned");
+    }
+
+    // ------------------------------------------------------------ pincode mapping
+
+    @GetMapping("/{id}/pincodes")
+    @Operation(summary = "List the pincodes mapped to this branch",
+            description = "Every pincode this branch serves. Same read visibility as "
+                    + "`GET /branches/{id}`.")
+    public ApiResponse<List<BranchPincodeResponse>> listPincodes(@PathVariable UUID id) {
+        return ApiResponse.success(pincodeMappingService.list(id));
+    }
+
+    @PostMapping("/{id}/pincodes")
+    @Operation(summary = "Map pincodes to this branch",
+            description = "`COMPANY_ADMIN` only. A pincode already mapped to a *different* "
+                    + "branch of the same company is reported in `conflicts`, not moved — "
+                    + "remove it from that branch first. One already mapped to this branch is "
+                    + "reported in `alreadyMapped`, not re-applied.")
+    public ApiResponse<AddBranchPincodesResponse> addPincodes(@PathVariable UUID id,
+                                                              @Valid @RequestBody AddBranchPincodesRequest request) {
+        return ApiResponse.success(
+                pincodeMappingService.addPincodes(id, request.pincodeIds()), "Pincodes mapped");
+    }
+
+    @DeleteMapping("/{id}/pincodes/{mappingId}")
+    @Operation(summary = "Remove a pincode from this branch",
+            description = "`COMPANY_ADMIN` only. Soft delete of the mapping row only — the "
+                    + "branch and the pincode itself are untouched.")
+    public ResponseEntity<ApiResponse<Void>> removePincode(@PathVariable UUID id,
+                                                            @PathVariable UUID mappingId) {
+        pincodeMappingService.removePincode(id, mappingId);
+        return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.success("Pincode unmapped"));
     }
 
     // -------------------------------------------------------------------- helpers

@@ -12,6 +12,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
+import { PincodeAreasCard } from './components/pincode-areas-card';
 import { MasterDataService } from './master-data.service';
 import {
   MASTER_PERMISSIONS, MASTER_WRITERS, MasterDefinition, writeAccessFor, readAccessFor, MasterField, findMaster
@@ -32,7 +33,7 @@ import {
   selector: 'app-master-view',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, UiButton, UiCard, UiLoader, StatusBadge],
+  imports: [DatePipe, UiButton, UiCard, UiLoader, StatusBadge, PincodeAreasCard],
   template: `
     @if (def(); as d) {
       <div class="page">
@@ -72,6 +73,10 @@ import {
                 }
               </dl>
             </app-card>
+          }
+
+          @if (d.key === 'pincodes') {
+            <app-pincode-areas-card [pincodeId]="r.id" [canWrite]="can().update" />
           }
 
           <app-card title="Audit">
@@ -128,11 +133,17 @@ export class MasterView {
     };
   });
 
+  /**
+   * Pincode's own `areaId` is skipped here — the "Areas served by this pincode" card
+   * below already shows it (with a Primary badge, city and ODA), a plain "Placement"
+   * card would just repeat it. A group left with zero fields is dropped, not shown empty.
+   */
   readonly groups = computed(() => {
     const def = this.def();
     if (!def) return [];
     const ordered: { name: string; fields: MasterField[] }[] = [];
     for (const field of def.fields) {
+      if (def.key === 'pincodes' && field.key === 'areaId') continue;
       const name = field.group ?? 'Details';
       const existing = ordered.find((g) => g.name === name);
       if (existing) existing.fields.push(field);

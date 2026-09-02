@@ -2,8 +2,11 @@
 
 **Status:** COMPLETE and verified by running it (2026-07-28). **Amended 2026-07-29
 (v0.12.0): the six geography lists are now global** — one catalogue shared by every
-company, `SUPER_ADMIN`-written, served from `/api/v1/global-masters/**`. `V12` is written
-but **not yet applied**. See *Global masters* at the end of this file.
+company, `SUPER_ADMIN`-written, served from `/api/v1/global-masters/**`. `V12` **is now
+applied** to the real dev DB (confirmed live 2026-09-02, schema at v51 by then — this
+memory's own "not yet applied"/"Verification status: Not run" notes further down were
+stale by that point; corrected there too). See *Global masters* at the end of this file,
+and *Pincode postal auto-fetch + ODA (2026-09-02)* for the latest addition.
 **Package:** `com.courier.modules.master` — a new module, sibling of `company` and `finance`.
 **Migration:** `V11__master_data.sql` (12 tables + 13 permission rows).
 **Frontend:** `frontend/src/app/features/masters` (UI-12).
@@ -309,9 +312,9 @@ Transit column now shows `"1d 8h"` style). Full entry in `CHANGELOG.md` 0.13.1.
 
 ## Still open
 
-- **Bulk import.** `MASTER_DATA_IMPORT` is in the catalogue because a pincode upload is
-  obviously coming; the endpoint is not. A right is cheap to seed and expensive to rename
-  after customers hold it.
+- ~~**Bulk import.**~~ Built 2026-09-02 — `POST /global-masters/pincodes/bulk-import`, see
+  *Pincode bulk-import* below. Range-probe only (no file upload); a synchronous endpoint, no
+  async/resumable job status yet — fine for a sample, not yet exercised at full-state scale.
 - **Cross-company runtime check** — needs an active `RIVAL_CO` user.
 - Rate Master will consume `weight-slabs`, `cities` (tier) and `pincodes` (zone); Shipment
   Booking will consume `service-types`, `package-types`, `payment-modes` and `routes`;
@@ -406,5 +409,252 @@ could have clicked them and been unable to save, which is a trap.
 
 ## Verification status
 
-**Not run.** `V12` has never touched MySQL. The merge is the destructive part and is the
-first thing to check: row counts before and after, and no dangling `state.country_id`.
+**Applied.** Confirmed live 2026-09-02 while verifying the Pincode postal-lookup feature
+below: `courier_db` schema was already at v51 (past `V12`) with real global geography rows
+present (country/state/district/city/area counts all non-trivial) and pincode create/lookup
+against `/api/v1/global-masters/pincodes` working end to end. Which session actually applied
+`V12` and ran the merge is not recorded here — this note only corrects the stale "not yet
+applied" claim above, not the full history.
+
+---
+
+## Pincode postal auto-fetch + ODA (2026-09-02 extension)
+
+Direct request, inside the existing Pincode Master create/edit flow (no new screen): auto-fetch
+the Area once a pincode is typed, plus an "ODA applicable" (Out-of-Delivery-Area) toggle.
+Scoped via `AskUserQuestion` first — real India Post directory over local-only matching, and
+auto-creating the missing geography chain over leaving Area blank with a hint.
+
+**ODA**: `master_pincodes.oda_applicable` (`V51`, `NOT NULL DEFAULT FALSE`) — independent of
+`serviceable`/`codAvailable`/`prepaidAvailable`/`pickupAvailable`; does not fold or get folded
+by them. Threaded through the command/DTOs/mapper/entity the same way every other pincode flag
+already was.
+
+**Postal lookup**: new `application.port.PincodePostalLookupProvider` (`List<PostOffice>
+lookup(String pincode)`), real implementation `infrastructure.IndiaPostPincodeLookupProvider`
+calling `api.postalpincode.in` (free, no key) via `RestClient`, `DisabledPincodePostalLookupProvider`
+fallback behind `app.master.pincode-lookup.enabled` (default **true** — the one provider flag
+in this codebase that defaults on, since there's no vendor credential to be missing). New
+`application.GeographyAutoResolver` resolves the matched post office to a real Area,
+find-or-creating State/District/City/Area by name within parent — **deliberately calling the
+repositories directly, not `CountryService`/`StateService`/etc**, because those are
+`SUPER_ADMIN`-only writers (`WRITE = hasRole(SUPER_ADMIN)` on every geography service) and this
+must work for the `COMPANY_ADMIN` caller `PincodeServiceImpl.create` already allows to write
+Pincode itself — the resolver is reached only from `PincodeService.lookupPostalArea`, which
+carries `PincodeServiceImpl`'s own `WRITE` gate, so the bypass is scoped, not a hole. Codes for
+auto-created rows are derived from the matched name (`MasterDataEntity.normaliseCode`),
+de-duplicated against `(company_id, code)` with a numeric-suffix retry loop — the same shape a
+human hitting a collision would produce by hand. New endpoint: `GET
+/api/v1/global-masters/pincodes/lookup/{code}` (`PincodeController.lookupArea`), same write
+audience as `create` — a match can create master rows, so this is not read-only despite the verb.
+
+**A real bug found and fixed via live verification**: the JDK `HttpClient`'s default
+`User-Agent` (`Java-http-client/…`) gets silently connection-reset by `api.postalpincode.in`'s
+own front end — reproduced with `curl` (identical request succeeds with any other User-Agent,
+even blank) before concluding this wasn't the deployment's own outbound access being blocked.
+An HTTP/1.1 pin was tried first (based on the first symptom, "RST_STREAM: Stream cancelled")
+and ruled out by further `curl` reproduction (HTTP/2 + a normal UA succeeds fine) — reverted in
+favor of the simpler, actually-correct fix: one explicit `User-Agent` header on the request.
+
+**Frontend**: `MasterForm` debounces the Pincode field's `valueChanges` (500ms, create only,
+keyed off `def().key === 'pincodes'` rather than a new generic field-descriptor flag — this
+behavior is specific to one list, not a shape every master could reuse), calls the lookup
+endpoint, auto-selects the resolved Area (injecting `{value, label}` into the cached picker
+options if the Area was just created and isn't in the already-fetched active list yet), and
+shows a "Matched to Area, City, District, State (1 of N post offices sharing this pincode)."
+hint under the Pincode field. `not-found`/`error` states fall back to the pre-existing manual
+Area picker — never blocks the form. `master.config.ts` gained one more `boolean` field +
+table column for `odaApplicable`, no changes to the four shared master components.
+
+**Verified live** on throwaway `:8082`/`:4200` (`:8100`/`:4200` **is** the real pair, but
+neither was running at the time — confirmed free via `lsof` before use, both throwaway
+processes stopped after) against real `courier_db`, `V51` applied cleanly: real pincode
+`411001` resolved via the actual India Post API to `C D A (O), Pune City East, Pune,
+Maharashtra`, auto-creating that State/District/City/Area chain (confirmed in MySQL directly);
+a second lookup of the same pincode returned the identical `areaId` (idempotent, no duplicate
+rows created); a `BRANCH_MANAGER` token correctly 403'd on the lookup endpoint (`WRITE`-gated
+like `create`); a real pincode created through the actual running UI end to end — typed
+`411001`, watched the "Matched to…" hint and Area auto-select live, toggled ODA on, saved, and
+the detail view showed `ODA APPLICABLE: Yes`. `mvn test` green throughout (no new unit tests —
+this module's existing precedent for a provider/resolver pair like this is verify-live, e.g.
+`commissionSummary`/`summaryStats`), `tsc --noEmit`/`ng build --configuration production` both
+clean, the existing masters `ng test` suite (50 tests) unaffected. Full detail in
+`CHANGELOG.md` Unreleased 2026-09-02.
+
+---
+
+## Pincode bulk-import (2026-09-02, same-day follow-up)
+
+Direct request: "add all maharashtra all pincode with all area." Scoped via
+`AskUserQuestion` first — the honest scale check mattered here: full Maharashtra is roughly
+45,000 candidate 6-digit codes (India Post's Maharashtra circle spans 400001-445402) for
+around 7,000 real ones, and there is no "list every pincode in a state" endpoint anywhere in
+the postal directory — only per-pincode lookup, the same one the create form's auto-fetch
+already calls. Brute-forcing the full range would be hours of sequential HTTP calls against a
+free public API with no documented rate limit, and would permanently seed ~7,000 rows into the
+shared dev DB in one sitting. User chose: a representative sample now (major-city blocks, not
+the full range), and a real reusable backend endpoint over a one-off script — which also
+happens to be the endpoint `MASTER_DATA_IMPORT` has sat in the permission catalogue for with
+nothing behind it since Master Data first shipped (see *Still open* above).
+
+**New `POST /api/v1/global-masters/pincodes/bulk-import`**
+(`BulkImportPincodesRequest{ranges: [{fromCode, toCode}]}`, plain numeric-range pairs, same
+digit width each), same `WRITE` audience as `create`. New `PincodeBulkImportService`
+(`application` package, no controller-facing DTO logic of its own) loops each range and, per
+candidate code, calls `PincodePostalLookupProvider.lookup` then `GeographyAutoResolver
+.resolveArea` — the exact pipeline the single-pincode lookup endpoint already exercises — and
+on a match calls `PincodeService.create`.
+
+**Why `create` is called rather than duplicating row-construction**: it is the real,
+Spring-proxied bean (`PincodeBulkImportService` holds it as a normal `@RequiredArgsConstructor`
+dependency, a genuine cross-bean call, not `this.create(...)` self-invocation) — so every rule
+`create` already enforces (`applyInvariants`, the area-must-be-active check, the audit trail)
+applies to a bulk-imported row exactly as it does to one typed by hand, and — the part that
+actually matters at this scale — `create`'s own `@Transactional` opens and closes a fresh
+transaction on *each* call. Looping inside one `@Transactional` method across a range spanning
+an hour or more would hold database locks for the run's entire duration; calling out to a
+separately-transactional bean per row is what avoids that, with zero new transaction-boundary
+code to get wrong.
+
+**Idempotent by construction, not by a pre-check.** A candidate already on file is *not*
+looked up with a separate existence query first — it is inferred from `create`'s own
+`DuplicateResourceException`, thrown by the exact same `(company_id, code)` uniqueness check
+every other Pincode create already goes through. That is what makes the endpoint safe to
+re-run over an overlapping or identical range (the resumability an hours-long full-Maharashtra
+run would eventually need) without a second code path to keep in sync with the first.
+
+**`PincodeBulkImportService` also carries its own `@PreAuthorize(WRITE)`**, checked before any
+network call — not left to `create`'s own check to catch late. Without it, an under-privileged
+caller could still trigger thousands of postal-directory lookups (the network-costing part)
+even though every resulting `create` call would ultimately 403; the outer gate stops that at
+the door.
+
+**Verified live** on the same throwaway `:8082`/`:4200` pair as the parent feature (real
+backend/frontend confirmed not running before use via `lsof`, both stopped after) against real
+`courier_db`: seven ranges covering Mumbai (400001-400050), Pune (411001-411050), Nagpur
+(440001-440035), Nashik (422001-422015), Aurangabad (431001-431010), Kolhapur (416001-416010),
+Solapur (413001-413010) — 180 candidates, 152 created (real India Post locality names —
+Bazargate, Kalbadevi, B.P. Lane, Malabar Hill, Ambewadi, Asvini, Bharat Nagar, Falkland Road,
+Chinchbunder, Dockyard Road, and 142 more — 157 distinct Areas auto-created across the run), 2
+already existed (from the parent feature's own live-verification rows), 26 no postal record,
+0 failed, ~77 seconds. Re-running two of the same ranges (100 candidates) afterward: 0 created,
+85 correctly skipped as already-existing, 0 duplicate rows — confirmed directly in MySQL, not
+just from the response tally. A `BRANCH_MANAGER` token correctly 403'd on the endpoint. The
+actual Pincodes list page (not just the API) rendered all 158 resulting rows with resolved
+Post Office/Area/Serviceable/COD/ODA columns. `mvn test` green throughout — no new unit tests,
+same verify-live precedent the parent feature and `commissionSummary`/`summaryStats` already
+set for this class of provider/orchestrator code. Full detail in `CHANGELOG.md` Unreleased
+2026-09-02.
+
+**Still open**: the full Maharashtra range (or any other state) is not yet run — this session
+deliberately stopped at a representative sample per the user's own scope choice. A true
+full-state run would want an async/background variant (the current endpoint is synchronous,
+blocking the HTTP request for as long as the range takes) and a resumable job-status mechanism,
+neither built here since they weren't asked for.
+
+---
+
+## Pincode-Area links, per-area ODA (2026-09-02, same-day follow-up)
+
+Direct request following the bulk-import: "some pincode have multiple city or area name."
+The gap this closes: `master_pincodes.area_id` names exactly one Area, but India Post's own
+directory routinely lists several real post offices for one pincode (the "1 of N post
+offices sharing this pincode" hint the create form already showed, transiently, and
+discarded) — and 0.32.0's `oda_applicable` was a single flag per pincode, when whether a
+locality is genuinely Out-of-Delivery-Area varies per post office, not per 6-digit code.
+Scoped via `AskUserQuestion` first (a read-only alternates list vs. a real schema change);
+the user asked specifically for a new table, an area list on the view page, and a per-area
+ODA toggle with an amount defaulting 250.
+
+**New `master_pincode_areas` (`V52`)** — company-owned/global exactly like `master_pincodes`/
+`master_areas` (a link row is as global as the two rows it connects): `pincode_id`,
+`area_id`, `is_primary` (kept in sync by the application layer, not derived), `oda_applicable`,
+`oda_amount` (`DECIMAL(10,2)`). `PincodeArea.applyInvariants()` folds `oda_amount` to `null`
+when `oda_applicable` is false, and fills a fresh `DEFAULT_ODA_AMOUNT` (`250.00`) the moment
+it turns true with no amount already given — the same "toggle first, amount defaults" flow
+the request asked for. **Additive, not a replacement**: `master_pincodes.area_id`/
+`oda_applicable` are completely unchanged — they still drive the create form's single Area
+picker and the list table's ODA column; this new table is the detailed per-area layer
+sitting alongside them, reachable from the pincode detail page.
+
+**`PincodeAreaService`** — `list`/`updateOda` are controller-facing (`READ`/`WRITE`, same
+audience as every other Pincode operation); `syncAreas(Pincode)` is internal, called from
+`PincodeServiceImpl.create`/`update` right after the pincode itself saves. It never throws:
+the primary row (`pincode.areaId`, a plain insert, no network) is wrapped in its own
+try/catch, and the alternates discovery (re-probing `PincodePostalLookupProvider.lookup`,
+then `GeographyAutoResolver.resolveArea` per match, same pipeline the single-pincode
+auto-fetch and bulk-import already use) is wrapped in a separate one — a failed or slow
+postal-directory call degrades to "no alternates linked yet," never a failed pincode save.
+Runs inside the same transaction as the pincode write (a cross-bean call with no `@Transactional`
+of its own, so it joins whatever transaction `create`/`update` already opened) — deliberate
+for the primary row's atomicity; the accepted cost is that every `create()` call, including
+each row of a bulk-import run, now does its own postal-directory lookup for alternates on
+top of whatever lookup the caller already did, roughly doubling bulk-import's network calls.
+Not optimized away (e.g. by threading pre-fetched matches through `PincodeCommand`) since it
+wasn't a demonstrated problem at the scale actually run.
+
+**Why alternates aren't resolved through `CountryService`/etc, again**: same reasoning
+`GeographyAutoResolver` itself already documents — those are `SUPER_ADMIN`-only writers, and
+this needs to work for the `COMPANY_ADMIN` caller `PincodeServiceImpl.create` already allows.
+
+**New `GET/PATCH /api/v1/global-masters/pincodes/{id}/areas[/{areaLinkId}]`** on
+`PincodeController`. The PATCH body (`UpdatePincodeAreaRequest`) has both fields optional and
+independent — flip the toggle without touching the amount, or vice versa.
+
+**Frontend**: new `PincodeAreasCard` (`features/masters/components/`), deliberately **not**
+part of the shared four-component master architecture — a per-row editable sub-list (name +
+city + primary badge + ODA toggle + conditional amount input) isn't a flat field descriptor
+`MasterFieldControl` can render generically, the same reasoning that already keeps the
+Pincode auto-fetch hint a bespoke bit of `MasterForm` rather than a config-driven field.
+`master-view.ts` mounts it only when `def().key === 'pincodes'`, passing the record's own
+`id` and the caller's write access. Each toggle/amount edit PATCHes immediately, no separate
+save step — matches the module's existing activate/deactivate pattern (immediate action, not
+a form submit).
+
+**Verified live** on real `:4200`/`:8100` this time (not a throwaway pair) — backend rebuilt
+and restarted for `V52` (schema 51 → 52 applied cleanly), which rotated `JWT_SECRET` again
+and invalidated the existing browser session, same gotcha `[[local-dev-environment]]` now
+documents; re-logged in fresh. Real pincode `416013` (Kolhapur, 3 post offices upstream per
+India Post) created via the API — `GET .../areas` returned Girgaon (`primary: true`) plus
+Pachgaon and R K Nagar auto-linked from the same `syncAreas` call that created the pincode
+itself, no separate step. PATCH sequence confirmed via curl before touching the UI: toggle
+Pachgaon's ODA on with no amount → `250.00`; set a custom `400` → accepted; toggle off →
+`odaAmount` cleared to `null`. `BRANCH_MANAGER` correctly read the list (200) but 403'd on
+the PATCH. Then the actual running UI: pincode detail page's new "Areas served by this
+pincode" card rendered all three rows, clicking Pachgaon's toggle saved via a real PATCH and
+revealed the amount input pre-filled `250` — screenshotted mid-interaction, not just
+API-checked. `mvn test` green throughout, `tsc --noEmit`/the existing masters `ng test` suite
+(50 tests, unaffected)/`ng build --configuration production` all clean — no new unit tests,
+same verify-live precedent every provider/orchestrator addition this session has followed.
+Full detail in `CHANGELOG.md` Unreleased 2026-09-02.
+
+**Still open**: no manual add/remove of an Area from a pincode's list (only what
+`syncAreas` discovers automatically) — not asked for. No backfill for the 158 pincodes
+created before this feature existed (only new creates/updates populate the table going
+forward) — also not asked for; those rows simply show an empty "Areas served" list until
+next edited or re-synced some other way.
+
+---
+
+## Create-form polish: full preview, auto-fill, Placement/zone dropped, code sort (2026-09-02)
+
+Same-day follow-ups after live-testing the two features above. `PincodeServiceImpl
+.lookupPostalArea` resolves every postal match now, not just the primary — reuses the exact
+same `GeographyAutoResolver` call `syncAreas` makes at save time, just run once earlier, so
+the create form can show the *same* "Areas served" list the detail page shows after saving,
+before saving. `areaId` stays a real, required `FormControl` (backend still needs it, and
+`Validators.required` is what blocks Create when no postal match exists) but is excluded
+from `MasterForm`'s/`MasterView`'s rendered field groups for pincodes specifically — the
+user's own choice (`AskUserQuestion`) was to drop manual Area picking from the UI entirely,
+not merely hide the card, accepting that a no-match pincode can no longer be created by hand.
+`zone` (Delivery zone) removed from the field list outright, everywhere that array feeds.
+`MasterDefinition.defaultSort` is new, generic, but only pincodes use it so far.
+
+**Bug found only by retyping the pincode fast, twice, on purpose**: the first post-office
+auto-fill wrote `if (!nameControl.value) { setValue(...) }` — reads clean, breaks the moment
+a second lookup lands, because the first auto-fill already made the field non-empty forever.
+`pristine` (not dirtied by programmatic `setValue`, only by a real keystroke via the forms
+directive) is the correct signal and was verified to survive the same retype that broke the
+naive version.
+
+Full verification detail in `CHANGELOG.md` Unreleased 2026-09-02.

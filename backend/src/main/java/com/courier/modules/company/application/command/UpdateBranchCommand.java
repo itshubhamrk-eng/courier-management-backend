@@ -8,14 +8,13 @@ import java.time.LocalTime;
 /**
  * Input to {@code BranchService.update}. Full replacement of the editable fields.
  *
- * <p>Absent by design: {@code branchCode} (immutable — operational data references it),
- * {@code companyId}, {@code status} (activate/deactivate endpoints) and {@code managerId}
- * (assign-manager endpoint).
+ * <p>Absent by design: {@code companyId}, {@code status} (activate/deactivate endpoints)
+ * and {@code managerId} (assign-manager endpoint).
  *
  * @param expectedVersion the version last read; a stale value is rejected with 409
  */
 public record UpdateBranchCommand(
-        String branchName, BranchType branchType,
+        String branchCode, String branchName, BranchType branchType,
         String email, String mobile, String alternateMobile,
         String addressLine1, String addressLine2, String country, String state, String city,
         String district, String taluka, String postalCode,

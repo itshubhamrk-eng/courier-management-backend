@@ -17,11 +17,16 @@ import java.time.LocalTime;
 
 /**
  * Body of {@code PUT /api/v1/branches/{id}}. Full replacement of the editable fields.
- * {@code branchCode} is immutable, {@code status} and {@code managerId} have their own
- * endpoints. {@code version} is required.
+ * {@code status} and {@code managerId} have their own endpoints. {@code version} is
+ * required.
  */
 @Schema(name = "UpdateBranchRequest", description = "Full replacement of a branch's editable fields")
 public record UpdateBranchRequest(
+
+        @NotBlank @Size(max = 50)
+        @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9_ -]{1,48}[A-Za-z0-9]$",
+                message = "3-50 chars of letters, digits, space, hyphen or underscore")
+        @Schema(example = "PUNE_MAIN") String branchCode,
 
         @NotBlank @Size(max = 150) String branchName,
         @NotNull BranchType branchType,

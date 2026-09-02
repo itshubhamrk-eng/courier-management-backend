@@ -39,8 +39,8 @@ function emailish(control: AbstractControl): ValidationErrors | null {
 
 /**
  * Reactive create/edit editor for a branch. Validators mirror CreateBranchRequest /
- * UpdateBranchRequest so a bad body is rejected before the API. `branchCode` is create-only
- * (immutable, shown read-only in edit). The manager is set on create but changed through
+ * UpdateBranchRequest so a bad body is rejected before the API. `branchCode` is editable in
+ * both modes. The manager is set on create but changed through
  * the assign-manager endpoint afterwards, so in edit it is read-only with a pointer to the
  * dialog; `status` likewise has its own lifecycle endpoints. Edit emits UpdateBranchRequest
  * carrying the last-read `version`.
@@ -64,12 +64,7 @@ function emailish(control: AbstractControl): ValidationErrors | null {
     <form [formGroup]="form" (ngSubmit)="submit()" class="bform">
       <app-card title="Basic Information" subtitle="Identity and classification.">
         <div class="grid">
-          @if (isCreate()) {
-            <app-input [control]="c('branchCode')" label="Branch Code" [required]="true" placeholder="PUNE_MAIN" [maxLength]="50" />
-          } @else {
-            <div class="stat"><span class="stat__l">Branch Code</span>
-              <span class="stat__v mono">{{ branch()?.branchCode || '—' }}</span><span class="stat__h">Immutable</span></div>
-          }
+          <app-input [control]="c('branchCode')" label="Branch Code" [required]="true" placeholder="PUNE_MAIN" [maxLength]="50" />
           <app-input [control]="c('branchName')" label="Branch Name" [required]="true" placeholder="Pune Main Branch" [maxLength]="150" />
           <app-select [control]="c('branchType')" label="Vendor / Branch Type" [options]="types" placeholder="Select a type" />
           @if (isCreate()) {
@@ -111,7 +106,13 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           }
           <app-input [control]="c('taluka')" label="Taluka" placeholder="Haveli" [maxLength]="100" />
           <app-input [control]="c('postalCode')" label="Pincode" placeholder="411005" [maxLength]="20" />
+          <app-input [control]="c('latitude')" label="Latitude" type="number" [step]="0.000001" [min]="-90" [max]="90" placeholder="18.520430" />
+          <app-input [control]="c('longitude')" label="Longitude" type="number" [step]="0.000001" [min]="-180" [max]="180" placeholder="73.856743" />
         </div>
+        <p class="bform__hint">
+          Leave blank to auto-detect from the address above. Set both manually to override or when
+          auto-detection can't resolve this location.
+        </p>
       </app-card>
 
       <app-card title="Working Hours" subtitle="Optional — closing must be after opening.">
@@ -275,18 +276,6 @@ export class BranchForm {
         this.c('city').setValue(this.nameOf(this.cities(), id), { emitEvent: false });
       });
     }
-    effect(() => {
-      const editing = this.mode() === 'edit';
-      const branchCode = this.form.get('branchCode') as FormControl;
-      if (editing) {
-        branchCode.disable({ emitEvent: false });
-        branchCode.clearValidators();
-      } else {
-        branchCode.enable({ emitEvent: false });
-        branchCode.setValidators([Validators.required, Validators.pattern(CODE)]);
-      }
-      branchCode.updateValueAndValidity({ emitEvent: false });
-    });
     effect(() => { const b = this.branch(); if (b && this.mode() === 'edit') this.hydrate(b); });
   }
 
@@ -320,11 +309,12 @@ export class BranchForm {
   private hydrate(b: BranchResponse): void {
     if (this.hydrated()) return;
     this.form.patchValue({
-      branchName: b.branchName ?? '', branchType: b.branchType,
+      branchCode: b.branchCode ?? '', branchName: b.branchName ?? '', branchType: b.branchType,
       email: b.email ?? '', mobile: b.mobile ?? '', alternateMobile: b.alternateMobile ?? '',
       addressLine1: b.addressLine1 ?? '', addressLine2: b.addressLine2 ?? '',
       country: b.country ?? '', state: b.state ?? '', city: b.city ?? '',
       district: b.district ?? '', taluka: b.taluka ?? '', postalCode: b.postalCode ?? '',
+      latitude: b.latitude ?? null, longitude: b.longitude ?? null,
       openingTime: hm(b.openingTime), closingTime: hm(b.closingTime),
       workingDays: b.workingDays ? b.workingDays.split(',').map((d) => d.trim().toUpperCase()).filter(Boolean) : [],
       allowBooking: b.allowBooking, allowDelivery: b.allowDelivery, allowPickup: b.allowPickup,
@@ -361,6 +351,8 @@ export class BranchForm {
       cityId: [null as string | null],
       taluka: ['', Validators.maxLength(100)],
       postalCode: ['', Validators.maxLength(20)],
+      latitude: [null as number | null, [Validators.min(-90), Validators.max(90)]],
+      longitude: [null as number | null, [Validators.min(-180), Validators.max(180)]],
       openingTime: [''],
       closingTime: [''],
       workingDays: [[] as string[]],
@@ -398,6 +390,8 @@ export class BranchForm {
       addressLine1: trim(v.addressLine1), addressLine2: trim(v.addressLine2),
       country: trim(v.country), state: trim(v.state), city: trim(v.city),
       district: trim(v.district), taluka: trim(v.taluka), postalCode: trim(v.postalCode),
+      latitude: v.latitude === null || v.latitude === '' ? null : Number(v.latitude),
+      longitude: v.longitude === null || v.longitude === '' ? null : Number(v.longitude),
       openingTime: trim(v.openingTime), closingTime: trim(v.closingTime),
       workingDays: days.length ? days.join(',') : null,
       allowBooking: !!v.allowBooking, allowDelivery: !!v.allowDelivery, allowPickup: !!v.allowPickup,
@@ -417,7 +411,7 @@ export class BranchForm {
         branchUser: branchUser(v.branchUser, trim)
       });
     } else {
-      this.saved.emit({ ...common, version: this.branch()!.version });
+      this.saved.emit({ branchCode: v.branchCode.trim(), ...common, version: this.branch()!.version });
     }
   }
 }
