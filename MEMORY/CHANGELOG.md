@@ -8,6 +8,22 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — Deploy: pincode mapping + Razorpay webhook to 35.154.220.116
+
+Committed and pushed the pincode-area/branch-pincode-mapping/Razorpay-webhook work below
+(`dec0fe0`), then deployed to the `35.154.220.116` EC2 box. Caught in CI-equivalent before
+prod: `BranchServiceImplTest` had a stale `UpdateBranchCommand` constructor call (missing the
+new `branchCode` first arg from the "Branch code made editable" change) that only surfaces on
+`mvn clean package -DskipTests` (still runs test-compile) — `mvn compile` alone, which is what
+had been checked pre-push, doesn't catch it. Fixed in `62cf946`. Full details on the deploy
+incident (a `docker compose up -d backend frontend` recreating `mysql` as a side effect and
+exposing pre-existing DB-credential drift, recovered via `--skip-grant-tables`, no data lost)
+are in the `prod-ec2-deployment` memory, not repeated here since it's ops not code. Also
+surfaced: `skra.in` DNS still points at the other (`100.25.82.18`) box, not this one — see the
+same memory. Both apps healthy post-deploy, `flyway_schema_history` confirms V51-53 applied.
+
+---
+
 ## [Unreleased] — 2026-09-02 — Branch code made editable
 
 Direct request: "Branch code should be editable." `branchCode` was previously immutable
