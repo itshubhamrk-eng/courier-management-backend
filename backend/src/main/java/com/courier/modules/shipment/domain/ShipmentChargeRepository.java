@@ -42,6 +42,17 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
                                                             @Param("start") LocalDate start,
                                                             @Param("end") LocalDate end);
 
+    /** Backs "This Month's Collection" for a branch-scoped caller (BRANCH_MANAGER/
+     *  BRANCH_OPERATOR) — the company-scoped sibling above leaked whole-company revenue
+     *  to a branch-scoped caller. */
+    @Query("select coalesce(sum(c.netAmount), 0) from ShipmentCharge c "
+            + "where c.companyId = :companyId "
+            + "and c.shipmentId in (select s.id from Shipment s where s.companyId = :companyId "
+            + "and s.bookingBranchId = :bookingBranchId and s.bookingDate between :start and :end)")
+    BigDecimal sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
+            @Param("start") LocalDate start, @Param("end") LocalDate end);
+
     /** Backs the "Revenue Trend" chart for a company-bound caller — one row per day that
      *  had at least one charge; days with none simply don't appear (DashboardServiceImpl
      *  fills the gaps with zero). Theta-join (comma, not a mapped association) against

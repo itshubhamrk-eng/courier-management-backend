@@ -77,6 +77,17 @@ const COMMUNICATION_ADMIN = [AppRole.COMPANY_ADMIN];
  * is code-split. `data.roles` drives permission-based routing via roleGuard.
  */
 export const routes: Routes = [
+  // Public (no-login) info/policy pages linked from the login screen — reachable without
+  // authentication so business/policy info can be reviewed without an account (Razorpay
+  // business verification and general visitors alike). One shared PublicPage component,
+  // content keyed by pageKey — see features/public/public-page.content.ts.
+  ...(['home', 'services', 'pricing', 'about', 'contact', 'terms', 'privacy',
+       'refund-policy', 'shipping-policy', 'payment-policy'] as const).map((pageKey) => ({
+    path: pageKey,
+    title: `Amazing Logistics — ${pageKey}`,
+    data: { pageKey },
+    loadComponent: () => import('@features/public/public-page').then((m) => m.PublicPage)
+  })),
   {
     path: 'login',
     canActivate: [guestGuard],

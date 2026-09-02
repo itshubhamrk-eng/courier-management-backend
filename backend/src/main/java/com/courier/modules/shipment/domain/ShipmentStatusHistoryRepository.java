@@ -25,4 +25,10 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
 
     List<ShipmentStatusHistory> findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
             UUID companyId, ShipmentStatus status);
+
+    /** Branch-scoped sibling for a caller with an own branch (BRANCH_MANAGER/
+     *  BRANCH_OPERATOR) — the company-scoped method above leaked whole-company delivery
+     *  activity to a branch-scoped caller's Recent Activity feed. */
+    List<ShipmentStatusHistory> findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc(
+            UUID companyId, UUID branchId, ShipmentStatus status);
 }

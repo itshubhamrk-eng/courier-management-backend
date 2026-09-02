@@ -8,6 +8,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { HttpErrorResponse } from '@angular/common/http';
 import { environment } from '@env/environment';
 import { companyCodeForHostname } from '@core/config/company-domain-map';
+import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
 
 /** Sign-in. Company slug (company code) is optional — the backend resolves it. */
 @Component({
@@ -16,6 +17,7 @@ import { companyCodeForHostname } from '@core/config/company-domain-map';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, RouterLink, UiInput, UiButton],
   template: `
+    <div class="login-wrap">
     <div class="login app-card">
       <div class="login__head">
         <h1 class="text-h1">Welcome back</h1>
@@ -56,9 +58,21 @@ import { companyCodeForHostname } from '@core/config/company-domain-map';
         </div>
       }
     </div>
+
+    <footer class="login-public">
+      <div class="login-public__brand">Amazing Logistics</div>
+      <nav class="login-public__links">
+        @for (link of publicLinks; track link.key) {
+          <a [routerLink]="'/' + link.key">{{ link.label }}</a>
+        }
+      </nav>
+      <p class="text-caption">© {{ year }} Amazing Logistics. All rights reserved.</p>
+    </footer>
+    </div>
   `,
   styles: [`
-    .login { width:400px; max-width:100%; padding:36px; }
+    .login-wrap { width:400px; max-width:100%; display:flex; flex-direction:column; gap:20px; }
+    .login { padding:36px; }
     .login__head { margin-bottom:24px; }
     .login__form { display:flex; flex-direction:column; gap:16px; }
     .login__row { display:flex; align-items:center; justify-content:space-between; }
@@ -74,6 +88,11 @@ import { companyCodeForHostname } from '@core/config/company-domain-map';
     .login__dev-btn:hover { color:var(--brand-700); }
     .login__unlock { align-self:flex-start; margin-top:-8px; padding:0; border:0; background:none; color:var(--brand-600);
       font:500 12px var(--font-sans); cursor:pointer; text-decoration:underline; }
+    .login-public { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; padding:0 4px; }
+    .login-public__brand { font:700 14px var(--font-display); color:var(--content-fg); letter-spacing:-.01em; }
+    .login-public__links { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 16px; }
+    .login-public__links a { font:500 12px var(--font-sans); color:var(--content-muted); text-decoration:none; }
+    .login-public__links a:hover { color:var(--brand-600); text-decoration:underline; }
   `]
 })
 export class Login {
@@ -93,6 +112,8 @@ export class Login {
    *  has no company and must be able to clear it rather than be silently locked into
    *  whichever company this domain maps to. */
   readonly companyLocked = signal(false);
+  protected readonly publicLinks = PUBLIC_PAGE_LINKS;
+  protected readonly year = new Date().getFullYear();
 
   readonly form = this.fb.nonNullable.group({
     companyCode: ['', Validators.maxLength(50)],

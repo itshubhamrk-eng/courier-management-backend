@@ -143,6 +143,12 @@ public class DashboardServiceImpl implements DashboardService {
         // "no company bound".
         UUID scope = crossTenant ? null : CompanyContext.requireCompanyId();
 
+        // Computed up front (was previously computed after the KPI block below) so the
+        // KPI/chart/recent-activity queries can branch-scope for a caller with an own
+        // branch instead of always running company-wide — see the new branch below.
+        Wallet ownWallet = ownWallet();
+        UUID ownBranchId = ownWallet == null ? null : ownWallet.getBranchId();
+
         LocalDate today = LocalDate.now();
         // "Today's Shipments" / Delivered / In Transit / Pending / Collection are all
         // month-to-date, not literally today — first-of-month through today, inclusive.
@@ -180,6 +186,33 @@ public class DashboardServiceImpl implements DashboardService {
                     shipmentStatusHistoryRepository.findTop5ByStatusOrderByChangedAtDesc(ShipmentStatus.DELIVERED));
             recentWalletTransactions = CompanyContext.<List<WalletTransaction>>runAs(null,
                     () -> walletTransactionRepository.findTop5ByOrderByCreatedAtDesc());
+        } else if (ownBranchId != null) {
+            // Branch-scoped caller (BRANCH_MANAGER/BRANCH_OPERATOR/hub staff with an own
+            // branch wallet): every figure below is this branch's own bookings, not the
+            // whole company's — the company-wide branch below was the real bug report
+            // ("dashboard count wrong for branch, showing all branches data").
+            todayShipments = shipmentRepository.countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                    scope, ownBranchId, monthStart, today);
+            delivered = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
+                    scope, ownBranchId, ShipmentStatus.DELIVERED, monthStart, today);
+            inTransit = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
+                    scope, ownBranchId, IN_TRANSIT, monthStart, today);
+            pending = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
+                    scope, ownBranchId, PENDING, monthStart, today);
+            // Not shown on any branch-scoped profile's tile set (dashboard.roles.ts) —
+            // left company-wide, same as the cross-tenant/company branches' own values.
+            totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
+            todayCollection = shipmentChargeRepository
+                    .sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                            scope, ownBranchId, monthStart, today);
+            recent = shipmentRepository.findTop5ByCompanyIdAndBookingBranchIdOrderByCreatedAtDesc(
+                    scope, ownBranchId);
+            recentDeliveries = shipmentStatusHistoryRepository
+                    .findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc(
+                            scope, ownBranchId, ShipmentStatus.DELIVERED);
+            recentWalletTransactions = walletTransactionRepository.findRecent(
+                    ownWallet.getId(), scope, PageRequest.of(0, 5));
         } else {
             todayShipments = shipmentRepository.countByCompanyIdAndBookingDateBetween(scope, monthStart, today);
             delivered = shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
@@ -198,7 +231,6 @@ public class DashboardServiceImpl implements DashboardService {
             recentWalletTransactions = walletTransactionRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(scope);
         }
 
-        Wallet ownWallet = ownWallet();
         BigDecimal walletBalance = ownWallet == null ? null : ownWallet.getAvailableBalance();
         // No own branch (company/platform admins) means no "Pending Delivery" tile is
         // shown for them either — 0 is a safe, unused default, not a fabricated figure.
@@ -207,7 +239,7 @@ public class DashboardServiceImpl implements DashboardService {
         // company here.
         long pendingDelivery = ownWallet == null ? 0L
                 : shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
-                        scope, ownWallet.getBranchId(), PENDING_DELIVERY);
+                        scope, ownBranchId, PENDING_DELIVERY);
 
         DashboardStatisticsResponse statistics = new DashboardStatisticsResponse(
                 todayShipments, delivered, inTransit, pending, totalRevenue,
@@ -223,12 +255,12 @@ public class DashboardServiceImpl implements DashboardService {
 
         // The exact opposite condition: a caller WITH an own branch gets the branch-scoped
         // sibling instead — never both, the two sections cover mutually exclusive callers.
-        BranchOverviewResponse branchOverview = ownWallet != null
-                ? branchOverview(scope, ownWallet.getBranchId(), pendingDelivery, monthStart, today) : null;
+        BranchOverviewResponse branchOverview = ownBranchId != null
+                ? branchOverview(scope, ownBranchId, pendingDelivery, monthStart, today) : null;
 
         return new DashboardSummaryResponse(statistics, recentShipments(recent),
                 recentActivity(recent, recentDeliveries, recentWalletTransactions, crossTenant, scope),
-                companyOverview, branchOverview, charts(crossTenant, scope, today));
+                companyOverview, branchOverview, charts(crossTenant, scope, ownBranchId, today));
     }
 
     /**
@@ -236,14 +268,17 @@ public class DashboardServiceImpl implements DashboardService {
      * Each grouped query returns only the days that had activity — zero-filled here
      * against a full contiguous date range so the chart's x-axis never skips a day.
      */
-    private DashboardChartsResponse charts(boolean crossTenant, UUID scope, LocalDate today) {
+    private DashboardChartsResponse charts(boolean crossTenant, UUID scope, UUID branchId, LocalDate today) {
         LocalDate trendStart = today.minusDays(TREND_DAYS - 1);
         List<LocalDate> days = trendStart.datesUntil(today.plusDays(1)).toList();
 
         List<ShipmentRepository.DailyCountRow> shipmentRows = crossTenant
                 ? CompanyContext.<List<ShipmentRepository.DailyCountRow>>runAs(null,
                         () -> shipmentRepository.countDailyByBookingDateBetween(trendStart, today))
-                : shipmentRepository.countDailyByCompanyIdAndBookingDateBetween(scope, trendStart, today);
+                : branchId != null
+                        ? shipmentRepository.countDailyByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                                scope, branchId, trendStart, today)
+                        : shipmentRepository.countDailyByCompanyIdAndBookingDateBetween(scope, trendStart, today);
         Map<LocalDate, Long> shipmentByDay = shipmentRows.stream().collect(
                 Collectors.toMap(ShipmentRepository.DailyCountRow::getDay, ShipmentRepository.DailyCountRow::getCount));
         List<ChartSeriesResponse> shipmentTrend = List.of(new ChartSeriesResponse("Bookings",
@@ -254,8 +289,10 @@ public class DashboardServiceImpl implements DashboardService {
         // skip the query entirely rather than run a meaningless whole-platform breakdown.
         List<ChartSeriesResponse> deliveryPerformance = List.of();
         if (!crossTenant) {
-            List<ShipmentRepository.DailyDeliveryPerformanceRow> perfRows = shipmentRepository
-                    .dailyDeliveryPerformanceByCompanyIdAndBookingDateBetween(
+            List<ShipmentRepository.DailyDeliveryPerformanceRow> perfRows = branchId != null
+                    ? shipmentRepository.dailyDeliveryPerformanceByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                            scope, branchId, ShipmentStatus.DELIVERED, IN_TRANSIT, PENDING, trendStart, today)
+                    : shipmentRepository.dailyDeliveryPerformanceByCompanyIdAndBookingDateBetween(
                             scope, ShipmentStatus.DELIVERED, IN_TRANSIT, PENDING, trendStart, today);
             Map<LocalDate, ShipmentRepository.DailyDeliveryPerformanceRow> perfByDay = perfRows.stream()
                     .collect(Collectors.toMap(ShipmentRepository.DailyDeliveryPerformanceRow::getDay, r -> r));

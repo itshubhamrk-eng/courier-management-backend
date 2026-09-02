@@ -158,6 +158,49 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     long countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
             UUID companyId, UUID currentLocationId, Collection<ShipmentStatus> excludedStatuses, LocalDate cutoff);
 
+    // ---------------------------------------------------------- booking-branch-scoped
+    // Backs the dashboard's own KPI tiles/charts/lists for a caller with an own branch
+    // (BRANCH_MANAGER/BRANCH_OPERATOR) — the company-scoped siblings above leaked
+    // whole-company figures to a branch-scoped caller (DashboardServiceImpl.summary()).
+    // Filtered on bookingBranchId, not currentLocationId: these mirror the same
+    // "this scope's own bookings" meaning the company-wide figures already have, just one
+    // scope narrower — unlike Branch Overview's pipeline, which deliberately tracks a
+    // shipment's current physical location instead (see that section's own comment).
+
+    long countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            UUID companyId, UUID bookingBranchId, LocalDate start, LocalDate end);
+
+    long countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
+            UUID companyId, UUID bookingBranchId, ShipmentStatus status, LocalDate start, LocalDate end);
+
+    long countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
+            UUID companyId, UUID bookingBranchId, Collection<ShipmentStatus> statuses, LocalDate start, LocalDate end);
+
+    List<Shipment> findTop5ByCompanyIdAndBookingBranchIdOrderByCreatedAtDesc(
+            UUID companyId, UUID bookingBranchId);
+
+    /** Backs the "Shipment Trend" chart for a branch-scoped caller. */
+    @Query("select s.bookingDate as day, count(s) as count from Shipment s "
+            + "where s.companyId = :companyId and s.bookingBranchId = :bookingBranchId "
+            + "and s.bookingDate between :start and :end group by s.bookingDate")
+    List<DailyCountRow> countDailyByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
+            @Param("start") LocalDate start, @Param("end") LocalDate end);
+
+    /** Backs the "Delivery Performance" chart for a branch-scoped caller. */
+    @Query("select s.bookingDate as day, "
+            + "sum(case when s.status = :delivered then 1L else 0L end) as delivered, "
+            + "sum(case when s.status in :inTransit then 1L else 0L end) as inTransit, "
+            + "sum(case when s.status in :pending then 1L else 0L end) as pending "
+            + "from Shipment s where s.companyId = :companyId and s.bookingBranchId = :bookingBranchId "
+            + "and s.bookingDate between :start and :end group by s.bookingDate")
+    List<DailyDeliveryPerformanceRow> dailyDeliveryPerformanceByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
+            @Param("delivered") ShipmentStatus delivered,
+            @Param("inTransit") Collection<ShipmentStatus> inTransit,
+            @Param("pending") Collection<ShipmentStatus> pending,
+            @Param("start") LocalDate start, @Param("end") LocalDate end);
+
     /** Backs the Company Overview "Top Routes" card: one row per destination branch,
      *  ranked by month-to-date shipment count. Native — {@code Shipment}/{@code
      *  ShipmentCharge} have no ORM association (see {@code ShipmentChargeRepository}'s own

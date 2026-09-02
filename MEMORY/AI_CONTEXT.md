@@ -7,6 +7,30 @@
 
 ## Current Version
 
+`0.31.1` — **Branch dashboard KPIs/charts/recent-activity fixed to be branch-wide, not
+company-wide.** Direct bug report: "dashboard count wrong for branch it showing all branches
+data" for This Month's Bookings/Collection, Shipment Trend, Delivery Performance, Recent
+Activity, Recent Shipment. `DashboardServiceImpl.summary()`'s 2026-08-17 ISSUE-001 fix made
+every query explicit-`companyId`-scoped but never added a further branch predicate for a
+caller with an own branch wallet (only `pendingDelivery`/`branchOverview` were actually
+branch-scoped) — the KPI/chart/recent-activity block ran the same company-wide query for
+every caller. Fixed by branching `summary()`/`charts()` on `ownBranchId` (computed once, up
+front) alongside the existing `crossTenant` branch: new `bookingBranchId`-scoped
+`ShipmentRepository`/`ShipmentChargeRepository` methods (mirroring the company-scoped ones
+one scope narrower), a `ShipmentStatusHistory.branchId`-scoped recent-deliveries query, and
+recent wallet activity via the caller's own `walletId` (reused existing
+`WalletTransactionRepository.findRecent`). `totalShipments`/`totalRevenue` deliberately left
+company-wide — no branch-scoped profile's tile set (`dashboard.roles.ts`) shows either. `mvn
+test` 871 → 876 (extended `DashboardServiceImplTest`'s `BRANCH_MANAGER` case to assert the
+branch-scoped methods are hit and the company-wide ones are never reached). **Verified live**
+on throwaway `:8082` (`:8100`/`:4200` untouched) against real `courier_db` as `pune@gmail.com`
+(`BRANCH_MANAGER`): dashboard returned correctly, recent shipments/Shipment Trend matched this
+branch's own real bookings against a direct DB check (39 company-wide, 29 Pune's own);
+`first.admin@gmail.com` (`COMPANY_ADMIN`, same company) confirmed unaffected — `companyOverview`
+present, no `branchOverview` key. Full detail in `CHANGELOG.md` Unreleased 2026-09-02.
+
+Previously current:
+
 `0.31.0` — **Communication Center module, COMPLETE end-to-end.** Direct full-spec request.
 New package `com.courier.modules.communication`, migration `V50`. Event-driven multi-channel
 (WhatsApp/SMS/Email) customer notifications: business modules never send messages directly —

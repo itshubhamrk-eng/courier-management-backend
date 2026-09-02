@@ -260,22 +260,35 @@ class DashboardServiceImplTest {
         org.mockito.Mockito.reset(walletService);
         when(walletService.getForBranch(null)).thenReturn(ownWallet);
 
-        when(shipmentRepository.countByCompanyIdAndBookingDateBetween(
-                eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
-        when(shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
-                eq(COMPANY), any(ShipmentStatus.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(2L);
-        when(shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
-                eq(COMPANY), any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(3L);
+        when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(ShipmentStatus.class), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(2L);
+        when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(3L);
         when(shipmentRepository.countByCompanyId(COMPANY)).thenReturn(4L);
         when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
-        when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
-                eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(BigDecimal.ONE);
-        when(shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
-        when(shipmentStatusHistoryRepository.findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
-                COMPANY, ShipmentStatus.DELIVERED)).thenReturn(List.of());
-        when(walletTransactionRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
+        when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class))).thenReturn(new BigDecimal("77"));
+        when(shipmentRepository.findTop5ByCompanyIdAndBookingBranchIdOrderByCreatedAtDesc(
+                eq(COMPANY), eq(branch))).thenReturn(List.of());
+        when(shipmentStatusHistoryRepository.findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc(
+                eq(COMPANY), eq(branch), eq(ShipmentStatus.DELIVERED))).thenReturn(List.of());
+        when(walletTransactionRepository.findRecent(any(UUID.class), eq(COMPANY), any())).thenReturn(List.of());
         when(shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
                 eq(COMPANY), eq(branch), any(Collection.class))).thenReturn(9L);
+
+        // Charts — branch-scoped siblings, not the company-wide ones.
+        LocalDate today = LocalDate.now();
+        when(shipmentRepository.countDailyByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyCount(today, 11L)));
+        when(shipmentRepository.dailyDeliveryPerformanceByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                eq(COMPANY), eq(branch), eq(ShipmentStatus.DELIVERED), any(Collection.class), any(Collection.class),
+                any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dailyPerf(today, 3L, 2L, 1L)));
 
         // Branch Overview — computed because this caller has an own branch wallet.
         when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusAndBookingDateBetween(
@@ -298,11 +311,34 @@ class DashboardServiceImplTest {
         assertThat(response.branchOverview().pendingDelivery()).isEqualTo(9L);
         assertThat(response.branchOverview().delayedShipments()).isEqualTo(8L);
 
+        // KPI tiles ("This Month's Bookings"/"Collection") come from the branch-scoped
+        // queries, not the whole-company ones — the actual bug this test now guards.
+        assertThat(response.statistics().todayShipments()).isEqualTo(1L);
+        assertThat(response.statistics().todayCollection()).isEqualByComparingTo("77");
+        assertThat(response.charts().shipmentTrend().get(0).points().get(13).value())
+                .isEqualByComparingTo("11");
+        assertThat(response.charts().deliveryPerformance()).hasSize(3);
+
         // Never the company-wide Company Overview repository calls for a branch-scoped caller.
         verify(manifestRepository, never()).countByCompanyIdAndStatus(any(), any());
         verify(walletRepository, never()).sumAvailableBalanceByCompanyId(any());
         verify(shipmentRepository, never()).findTopRoutesByCompanyIdAndBookingDateBetween(
                 any(), any(), any(), any());
+
+        // The whole point of this fix: a branch-scoped caller must never reach the
+        // whole-company KPI/chart/recent-activity methods either.
+        verify(shipmentRepository, never()).countByCompanyIdAndBookingDateBetween(any(), any(), any());
+        verify(shipmentRepository, never()).countByCompanyIdAndStatusAndBookingDateBetween(any(), any(), any(), any());
+        verify(shipmentRepository, never()).countByCompanyIdAndStatusInAndBookingDateBetween(any(), any(), any(), any());
+        verify(shipmentChargeRepository, never())
+                .sumNetAmountByCompanyIdAndBookingDateBetween(any(), any(), any());
+        verify(shipmentRepository, never()).findTop5ByCompanyIdOrderByCreatedAtDesc(any());
+        verify(shipmentStatusHistoryRepository, never())
+                .findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(any(), any());
+        verify(walletTransactionRepository, never()).findTop5ByCompanyIdOrderByCreatedAtDesc(any());
+        verify(shipmentRepository, never()).countDailyByCompanyIdAndBookingDateBetween(any(), any(), any());
+        verify(shipmentRepository, never()).dailyDeliveryPerformanceByCompanyIdAndBookingDateBetween(
+                any(), any(), any(), any(), any(), any());
     }
 
     private static ShipmentRepository.DailyCountRow dailyCount(LocalDate day, long count) {

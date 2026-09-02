@@ -8,6 +8,46 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-02 — Branch dashboard KPIs/charts/recent-activity were company-wide, not branch-wide
+
+Direct bug report: "dashboard count wrong for branch it showing all branches data" — This
+Month's Bookings/Collection, Shipment Trend, Delivery Performance, Recent Activity, and Recent
+Shipment all showed the whole company's figures to a `BRANCH_MANAGER`/`BRANCH_OPERATOR` caller.
+Root cause: `DashboardServiceImpl.summary()`'s 2026-08-17 fix (ISSUE-001) made every query
+explicitly `companyId`-scoped, but never added a further branch predicate for a caller with an
+own branch wallet — only `pendingDelivery` and the separate `branchOverview` card were actually
+branch-scoped; the KPI/chart/recent-activity block ran the exact same company-wide query
+regardless of caller.
+
+Fixed by branching `summary()`/`charts()` on `ownBranchId` (computed once, up front, from the
+caller's own branch wallet) in addition to the existing `crossTenant` branch: a caller with an
+own branch now gets `bookingBranchId`-scoped counts/sums/lists (new `ShipmentRepository`/
+`ShipmentChargeRepository` methods, mirroring the company-scoped ones exactly one scope
+narrower), a `ShipmentStatusHistory.branchId`-scoped recent-deliveries query (new
+`ShipmentStatusHistoryRepository.findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc`),
+and recent wallet activity via the caller's own `walletId` (reused the existing
+`WalletTransactionRepository.findRecent`, no new method needed). `totalShipments`/`totalRevenue`
+left company-wide deliberately — no branch-scoped profile's tile set (`dashboard.roles.ts`)
+shows either. `mvn test` 871 → 876 (extended the existing `BRANCH_MANAGER` dashboard test to
+assert the branch-scoped methods are hit and the company-wide ones are never called, plus new
+KPI/chart value assertions).
+
+**Verified live** on a throwaway `:8082` (real `:8100`/`:4200` untouched throughout) against
+real `courier_db` as `pune@gmail.com` (`BRANCH_MANAGER`, company "First Company", branch
+`019FB841AE8F7000B7FB647B1F1E43B5`): `GET /dashboard/summary` returned no errors;
+`recentShipments`/Shipment Trend chart matched exactly this branch's own real bookings
+(confirmed against `SELECT ... GROUP BY booking_branch_id` on the real table — this company
+has 3 branches, 39 shipments total, 29 belonging to Pune); `totalShipments` (deliberately left
+company-wide) correctly read `39`, the true cross-branch total, confirming the DB comparison
+itself was sound. `first.admin@gmail.com` (`COMPANY_ADMIN`, same company) confirmed unaffected:
+`companyOverview` present, no `branchOverview` key (Jackson's `non_null` inclusion omits it,
+not merely null) — the two sections' mutual-exclusivity held. **Not constructed**: a
+same-day, multi-branch divergence in the 14-day trend window itself — this dev company's other
+two branches had no bookings in the last 14 days, so the fixed and pre-fix trend values would
+coincide for that specific chart on this specific day; the repository-call-level unit test
+assertions (branch-scoped methods hit, company-wide ones never reached) are the real proof for
+that dimension, not live inspection.
+
 ## [Unreleased] — 2026-09-02 — Consignment print shows the booking user's name
 
 `ShipmentResponse` gained `createdByName`: new `UserLookupPort` (backend by
