@@ -191,21 +191,43 @@ public class FreightFactorServiceImpl implements FreightFactorService {
     @Transactional
     @PreAuthorize(READ)
     public Optional<FreightCalculationResult> tryCalculate(FreightCalculationCommand command) {
-        return tryMatch(command, resolveDistance(command));
+        requirePositiveWeight(command);
+        BigDecimal distanceKm;
+        try {
+            distanceKm = resolveDistanceOnly(command);
+        } catch (BusinessRuleException e) {
+            // Same "not blocking" treatment as a gap in the grid itself (see tryMatch):
+            // a branch pair with no resolved geocode is exactly the kind of incomplete
+            // legacy-grid input a caller with its own way to price the lane (District
+            // Level Freight, a manual override) should not be blocked by.
+            return Optional.empty();
+        }
+        return tryMatch(command, distanceKm);
     }
 
     private BigDecimal resolveDistance(FreightCalculationCommand command) {
+        requirePositiveWeight(command);
+        return resolveDistanceOnly(command);
+    }
+
+    private static void requirePositiveWeight(FreightCalculationCommand command) {
         if (command.weight() == null || command.weight().signum() <= 0) {
             throw new BusinessRuleException("Weight must be greater than zero.");
         }
+    }
+
+    private BigDecimal resolveDistanceOnly(FreightCalculationCommand command) {
         AddressDistance distance = addressDistanceService
                 .resolveBranchDistance(command.fromBranchId(), command.toBranchId());
         return distance.getDistanceKm();
     }
 
     /** No-match is a legitimate outcome here (unlike {@link #calculate}, which treats it as
-     *  an error) — a gap in this legacy grid no longer has to block a caller that has its
-     *  own, independent way to price the lane (District Level Freight, a manual override). */
+     *  an error) — a gap in this legacy grid, or an unresolvable branch-pair distance
+     *  (missing geocode on either branch), no longer has to block a caller that has its
+     *  own, independent way to price the lane (District Level Freight, a manual override).
+     *  {@link #calculate} is unaffected — its own direct callers (the standalone
+     *  calculator) still get a real error rather than a silent zero. */
     private Optional<FreightCalculationResult> tryMatch(FreightCalculationCommand command, BigDecimal distanceKm) {
         UUID companyId = requireCompany();
         BigDecimal weight = command.weight();

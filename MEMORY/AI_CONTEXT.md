@@ -7,6 +7,22 @@
 
 ## Current Version
 
+`0.37.0` — **Ungeocoded branch no longer blocks Shipment Booking.** Direct report of
+"Both addresses need a resolved location before their distance can be calculated..."
+surfacing during booking. `FreightFactorServiceImpl.tryCalculate` — the Freight Factor
+grid's booking-time fallback, now legacy since District Level Freight became the
+authoritative/mandatory freight source in 0.34.0 — resolved the branch pair's road
+distance with no `try`/`catch`, so a branch with no geocoded lat/long threw straight out
+of a method whose own contract (`Optional`, "a gap in this grid no longer blocks a
+caller") already said it shouldn't. Fixed: catches that specific exception and returns
+empty, same as a genuine grid gap; a zero/negative weight is still refused outright,
+validated separately so it isn't swallowed by the same catch. The standalone Freight
+Factor calculator page's own `calculate()` is untouched — still throws for real there.
+`mvn test` 943 -> 945 (2 new), full suite green. Full detail in `CHANGELOG.md`
+Unreleased 2026-09-03 "Ungeocoded branch no longer blocks Shipment Booking".
+
+Previously current:
+
 `0.36.0` — **Branch GST/PAN fields + login displayName-on-reload fix.** Two independent
 fixes. (1) Branches gained `gstNumber`/`panNumber` (`V55`, both optional, GSTIN/PAN format
 validated in `Branch.applyInvariants`, branch-level not company-level since a company can

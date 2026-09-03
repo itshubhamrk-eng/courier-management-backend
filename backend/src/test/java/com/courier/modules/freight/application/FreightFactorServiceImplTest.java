@@ -210,6 +210,31 @@ class FreightFactorServiceImplTest {
                 .hasMessageContaining("greater than zero");
     }
 
+    // ---------------------------------------------------------------- tryCalculate
+
+    @Test
+    @DisplayName("tryCalculate does not block booking when a branch has no resolved geocode")
+    void tryCalculateSwallowsUnresolvedDistance() {
+        when(addressDistanceService.resolveBranchDistance(FROM_BRANCH, TO_BRANCH))
+                .thenThrow(new BusinessRuleException(
+                        "Both addresses need a resolved location before their distance can be calculated."));
+
+        Optional<FreightCalculationResult> result = service.tryCalculate(
+                new FreightCalculationCommand(FROM_BRANCH, TO_BRANCH, new BigDecimal("4.000")));
+
+        assertThat(result).isEmpty();
+        verify(repository, never()).findByCompanyIdAndStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("tryCalculate still refuses a zero or negative weight outright")
+    void tryCalculateZeroWeightStillRejected() {
+        assertThatThrownBy(() -> service.tryCalculate(
+                new FreightCalculationCommand(FROM_BRANCH, TO_BRANCH, BigDecimal.ZERO)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("greater than zero");
+    }
+
     // -------------------------------------------------------------------- helpers
 
     private void signedIn(String role) {

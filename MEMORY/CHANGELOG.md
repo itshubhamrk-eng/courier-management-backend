@@ -8,6 +8,36 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — Ungeocoded branch no longer blocks Shipment Booking
+
+Direct report ("remove this geocode validation while booking shipment") of the error
+"Both addresses need a resolved location before their distance can be calculated. Set
+latitude/longitude directly, or re-save the address so it can be geocoded" surfacing
+during booking.
+
+Root cause: `FreightFactorServiceImpl.tryCalculate` — the Freight Factor grid's
+booking-time fallback path, called from `PricingEngineImpl.priceByDistanceAndWeight` —
+resolved the booking/delivery branch pair's road distance via
+`AddressDistanceService.resolveBranchDistance` with no `try`/`catch` around it, so a
+branch with no geocoded lat/long threw `BusinessRuleException` straight out of a method
+whose own return type (`Optional<...>`) and doc comment already promised "a gap in this
+legacy grid no longer has to block a caller with its own way to price the lane" — that
+promise just didn't cover the geocode-missing case, only a genuine grid gap. Freight
+Factor is legacy/fallback only now — [[shipment-booking]]'s District Level Freight is the
+authoritative, mandatory freight source since 0.34.0 — so this grid's own distance lookup
+failing should never have been able to block a real booking.
+
+Fix: `tryCalculate` now catches `BusinessRuleException` from the distance resolution step
+specifically and returns `Optional.empty()` (same "no match, not an error" treatment as an
+actual gap in the grid), while still refusing a zero/negative weight outright (validated
+separately, ahead of the try/catch, so that real input error isn't accidentally swallowed
+too). The direct-use `calculate()` method (the standalone Freight Factor calculator page)
+is untouched — it still throws a real error on an unresolved distance, since that page has
+no other way to price the lane. Two new tests confirm both halves.
+`mvn test` 943 -> 945 (2 new), full suite still green.
+
+---
+
 ## [Unreleased] — 2026-09-03 — Full booking-to-delivered flow verified live on prod
 
 Direct request to test the complete Booking -> Manifest -> Dispatch -> In Scan -> Out For

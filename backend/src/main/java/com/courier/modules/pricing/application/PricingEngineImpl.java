@@ -110,8 +110,11 @@ public class PricingEngineImpl implements PricingEngine {
      * the call: it prices at freight zero (still GSTed, still net-zero on top) instead of
      * throwing, so a caller with its own way to price the lane (District Level Freight, a
      * manual Other Charges entry) is not blocked by this grid alone being incomplete. An
-     * unresolvable branch-pair distance is a different problem and still fails outright —
-     * see {@code FreightFactorServiceImpl.tryCalculate}.
+     * unresolvable branch-pair distance (a branch with no geocoded lat/long) gets the same
+     * treatment — freight zero, not a thrown error — on direct request: this grid is a
+     * fallback for booking, not the authoritative freight source (District Level Freight
+     * is), so a stale geocode on either branch must never block a real booking. See
+     * {@code FreightFactorServiceImpl.tryCalculate}.
      */
     private PricingResult priceByDistanceAndWeight(PricingCommand command, BigDecimal actualWeight,
                                                     BigDecimal volumetricWeight, BigDecimal chargeableWeight) {
