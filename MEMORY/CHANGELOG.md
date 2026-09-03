@@ -8,6 +8,44 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-04 — Missing indexes for a few real hot query paths (V56)
+
+Direct request ("add indexing in all heavy query in db") after reports of slow pricing/
+booking on prod. Audited the whole schema against real call sites (repository methods and
+Specifications predicates, not guessed) — the schema turned out to already be
+well-indexed; nearly every table carries a `company_id`-leading composite matching its
+actual filter columns (confirmed against the real migration DDL, not just `@Index`
+annotations, which were occasionally out of sync with what the SQL actually has).
+
+Four genuine gaps found and added in `V56`:
+- `shipments (company_id, current_location_id)` — `next_location_id` already had one
+  (V37), `current_location_id` never did, despite Branch Overview's dashboard tiles
+  querying it directly.
+- `delivery_assignment (company_id, assigned_at)` — DRS Report's main query ranges on
+  this; only the branch/user composites (trailing `status`, not `assigned_at`) existed.
+- `delivery_assignment (company_id, delivered_at)` — Delivery Report's date filter, same
+  gap.
+- `manifests (company_id, delivery_branch_id, status)` — only `booking_branch_id` had a
+  composite (V19); `deliveryBranchId` is filtered by `ManifestSpecifications` with none.
+
+**Honesty on root cause**: indexing was very unlikely to be *why* pricing/booking felt
+slow — this is an early-stage account with a handful of rows per table, and direct timing
+from this session (5x each on `/pricing/calculate`, `/district-level-freight/calculate`,
+`/master/service-types`) came back 130-330ms consistently, no sign of query slowness. The
+real, confirmed cause found the same session: the prod EC2 box (`35.154.220.116`) has only
+~909MB RAM total, is actively swapping ~1.4GB, and `dmesg` shows the kernel already
+OOM-killed the backend `java` process once. That's [[prod-ec2-deployment]]'s box, not a
+missing index — flagged to the user directly (upsize vs. tune container memory limits vs.
+defer), who chose to defer it and proceed with indexing only. This migration is real,
+justified maintenance either way, just not expected to fix the reported slowness on its
+own.
+
+`mvn test` still 945/945 (Flyway applies V56 cleanly in the test context; no test exercises
+query plans/timing, so "correct schema change" is what's actually verified here, not a
+performance claim).
+
+---
+
 ## [Unreleased] — 2026-09-04 — Deployed the transaction-propagation fix to prod
 
 Backend-only, no migration. Synced (1 file), built, `docker compose up -d

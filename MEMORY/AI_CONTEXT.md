@@ -7,6 +7,27 @@
 
 ## Current Version
 
+`0.39.0` — **Missing indexes for a few real hot query paths (V56) + prod EC2 found
+memory-starved, already OOM-killed the backend once.** Direct request to add indexing
+after reports of slow pricing/booking on prod. Audited the whole schema against real
+repository/Specification call sites (not guessed) — already well-indexed everywhere;
+found four genuine gaps and added them in `V56`: `shipments(company_id,
+current_location_id)` (next_location_id already had one, current_location_id never did),
+`delivery_assignment(company_id, assigned_at)` and `(company_id, delivered_at)` (DRS/
+Delivery Report date filters, only branch/user composites existed), `manifests(company_id,
+delivery_branch_id, status)` (only booking_branch_id had one). Honesty: indexing was
+unlikely to be the actual cause — this account has a handful of rows per table, and direct
+timing on `/pricing/calculate` etc. came back 130-330ms consistently. The real cause found
+same session: prod EC2 (`35.154.220.116`) has ~909MB RAM total, is actively swapping, and
+`dmesg` shows the kernel already OOM-killed the backend `java` process once — see
+[[prod-ec2-oom-memory-starved]]. Flagged directly to the user (upsize / tune container
+limits / defer); they chose to defer and proceed with indexing only — the RAM issue is
+still unresolved. `mvn test` still 945/945 (schema-correctness check only, not a
+performance claim — no test exercises query plans/timing). Full detail in `CHANGELOG.md`
+Unreleased 2026-09-04 "Missing indexes for a few real hot query paths (V56)".
+
+Previously current:
+
 `0.38.0` — **The 0.37.0 fix didn't actually work — real cause was Spring transaction
 propagation.** Deployed 0.37.0, then immediately got "An unexpected error occurred when
 pincode entered" live from the user. Read the real prod `courier-backend` container logs
