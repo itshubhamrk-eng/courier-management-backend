@@ -8,6 +8,48 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — Deployed to prod (commit bc02c39)
+
+Committed and pushed 0.36.0 (Branch GST/PAN + login displayName-on-reload fix, bundled with
+the already-dev-verified 0.35.0 rate/kg override + area picker work — `V55`), deployed to
+the `35.154.220.116` EC2 box. Pre-push: `mvn test` 943/943, `tsc --noEmit`/`ng build
+--configuration production` clean, `ng test` 147/148 (`reports-dashboard`,
+pre-existing/unrelated).
+
+No transport flakiness this time (unlike the 2026-09-03 0.34.0 deploy) — `git push`,
+`rsync` (backend/frontend, `docker-compose.yml` diffed identical against the server's copy
+and not re-synced, same mysql-recreate-risk avoidance as before), both `docker compose
+build`, and `docker compose up -d --force-recreate backend frontend` all succeeded on the
+first attempt. As documented previously, the `ssh ... docker compose build` command's local
+wrapper still doesn't reliably return when run backgrounded over this connection — worked
+around the same way, by backgrounding the remote build and polling `ps aux`/image
+`CreatedAt` rather than trusting the local command's own exit. Flyway applied `V55` clean
+(54 -> 55, 1.9s). Both containers came up healthy on the first try.
+
+**Verified live**, external and in-product:
+- `vendor.amazinglpl.com` 200, `prod-api.amazinglpl.com/actuator/health/readiness` UP,
+  login endpoint reachable (400 on empty body).
+- **Branch GST/PAN**, via the real `AMAZING_LOGISTICS` company (COMPANY_ADMIN
+  `ashwin@amazinglpl.com`, credentials supplied directly by the user for this test — not
+  looked up; a direct DB query attempt to find a test account was correctly blocked by the
+  auto-mode safety classifier as unattended access to real customer data): `POST
+  /branches` with `gstNumber`/`panNumber` persisted and echoed back correctly; a malformed
+  GSTIN (`"NOTAGST"`) was cleanly rejected 400 with a field-level validation message; a
+  lowercase PAN (`aaaaa0000a`) was correctly uppercased to `AAAAA0000A` on save. Confirmed
+  in the actual UI too — branch view's Charges card and the edit form's new "Tax Details"
+  card both rendered the persisted values correctly.
+- **Login displayName-on-reload fix**: logged in via the real login form (not curl) —
+  dashboard greeted "Good evening, Ashwannikumar Jadhav" and the top-bar chip showed the
+  real name. A full page navigation to the same URL (the hard-reload path `hydrate()`
+  handles, as opposed to in-app Angular routing) kept the real name in the top-bar chip
+  instead of falling back to the email — the exact bug reported ("login getting email id in
+  place of the user name").
+- Both throwaway test branches (`CLAUDE_GSTPAN_TEST`, `CLAUDE_LOWER_TEST`) and the
+  branch-manager accounts + wallets they generated were deleted after verification —
+  unlike dev, real customer data on prod isn't left behind as a fixture.
+
+---
+
 ## [Unreleased] — 2026-09-03 — Branch GST/PAN fields + login displayName-on-reload fix
 
 Two independent, unrelated fixes bundled into the same deploy as the rate/kg + area picker

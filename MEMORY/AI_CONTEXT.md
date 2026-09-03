@@ -25,8 +25,13 @@ restores the real user's name, not the impersonated one's. Adds no new test case
 from; its own changelog claim of "939 -> 942" undercounted by one, confirmed by isolating
 its files and re-running). `tsc --noEmit`/`ng build --configuration production` clean,
 `ng test` 147/148 (the one failure, `reports-dashboard`, pre-existing and unrelated — same
-as every prior release). **Not yet verified live** — no dev-server click-through this
-session; unit/compile-level verification only.
+as every prior release). **Deployed and verified live on prod** (`35.154.220.116`, commit
+`bc02c39`): real GSTIN/PAN persisted and rendered correctly on `AMAZING_LOGISTICS`
+(view page's Charges card and the edit form's Tax Details card both), bad-format GST
+rejected 400, lowercase PAN uppercased on save; login-form sign-in followed by a real hard
+page reload kept the signed-in name in the top-bar chip instead of falling back to the
+email. Full detail in `CHANGELOG.md` Unreleased 2026-09-03 "Deployed to prod (commit
+bc02c39)".
 
 Previously current:
 
