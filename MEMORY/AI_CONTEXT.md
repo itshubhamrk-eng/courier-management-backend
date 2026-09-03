@@ -24,9 +24,15 @@ codebase has no `@SpringBootTest` on this path, so only a real deployed request 
 it; noted honestly rather than re-claimed as "tested" this time. Fixed for real:
 `resolveBranchDistance` now runs `Propagation.REQUIRES_NEW` (its own transaction,
 suspending the caller's) so a failure there rolls back only itself and 0.37.0's `catch`
-genuinely works. Scoped to just this one method. `mvn test` still 945/945. Full detail in
-`CHANGELOG.md` Unreleased 2026-09-03 "The ungeocoded-branch booking fix didn't actually
-work — real cause was Spring transaction propagation".
+genuinely works. Scoped to just this one method. `mvn test` still 945/945. **Deployed to
+prod** (backend-only, no migration) and checked directly: `POST /pricing/calculate` still
+prices cleanly on the known `TESTING`/`TEST-2` lane, and the container logs for 5 minutes
+post-deploy show zero `UnexpectedRollbackException` entries. Couldn't force a fresh live
+repro of the original trigger — every real branch on the account already has a resolved
+geocode — so this rests on the Spring semantics diagnosed from the original stack trace,
+not a new live failure-then-success. Full detail in `CHANGELOG.md` Unreleased 2026-09-04
+"Deployed the transaction-propagation fix to prod" and 2026-09-03 "The ungeocoded-branch
+booking fix didn't actually work — real cause was Spring transaction propagation".
 
 Previously current:
 

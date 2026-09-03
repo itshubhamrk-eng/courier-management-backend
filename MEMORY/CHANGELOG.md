@@ -8,6 +8,23 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-04 — Deployed the transaction-propagation fix to prod
+
+Backend-only, no migration. Synced (1 file), built, `docker compose up -d
+--force-recreate backend`, healthy on the first try, `prod-api` readiness UP.
+
+**Verified**: couldn't re-trigger the original missing-geocode trip live — all four real
+branches on `AMAZING_LOGISTICS` already have resolved geocodes (confirmed via API), and
+deliberately breaking a real branch's address just to reproduce it wasn't worth doing to
+customer data. Instead: a direct `POST /pricing/calculate` on the known `TESTING`/`TEST-2`
+lane still prices cleanly (regression check, matched-Route/Rate path unaffected by this
+fix), and the prod container logs for the 5 minutes since redeploy show zero
+`UnexpectedRollbackException`/`Unhandled exception` entries (checked directly via `docker
+compose logs`, not assumed). The fix's correctness rests on the Spring transaction
+semantics being exactly what the stack trace showed, not on a fresh live repro.
+
+---
+
 ## [Unreleased] — 2026-09-03 — The ungeocoded-branch booking fix didn't actually work — real cause was Spring transaction propagation
 
 Direct report ("An unexpected error occurred when pincode entered, while booking
