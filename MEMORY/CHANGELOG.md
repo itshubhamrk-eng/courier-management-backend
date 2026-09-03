@@ -8,6 +8,41 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — Deployed to prod (commit 2f92c4c)
+
+Committed and pushed 0.34.0 (District Level Freight wired into Shipment Booking, `V54`),
+then deployed to the `35.154.220.116` EC2 box. Pre-push: `mvn test` 939/939, `tsc --noEmit`
+clean.
+
+**Both `git push` (SSH and HTTPS) and the prod `rsync`/`ssh` sessions hit persistent
+transport-level corruption/drops this session** — `git push` over SSH failed ~8 times in a
+row with `remote: fatal: pack has bad object at offset <random>: inflate returned -3/-5`
+(different offset every attempt; local `git fsck`/`verify-pack` confirmed the pack itself
+was clean, so this was corruption in transit, not a repo problem), same over HTTPS
+(`SSL_read: ... bad record mac`). `rsync` to the prod box similarly dropped mid-transfer
+5-10 times in a row (`connection unexpectedly closed`) before a rsync attempt completed —
+`--partial` let each retry resume rather than restart. An `ssh ... docker compose build`
+command's own local wrapper hung indefinitely because the SSH session died mid-build
+without ever returning an exit code, while the remote `docker compose build` kept running
+to completion independently on the daemon side — the fix was to stop trusting the local
+SSH command's own exit/hang and instead poll the remote image's `CreatedAt` timestamp (and
+`ps aux | grep npm`) to know when a build had actually finished. Eventually both the `git
+push` and every rsync/ssh step succeeded on retry with no code changes needed — this was
+transient network flakiness on the local machine's connection, not a GitHub/AWS-side or
+git/docker issue. If this recurs, don't debug it as a repo/SSH-config problem — just retry,
+and verify remote-side state (image timestamps, running processes) rather than trusting
+whether the local SSH/rsync command itself reported success.
+
+Deploy itself was clean once the transport worked: rsynced `backend/`/`frontend/`
+(docker-compose.yml unchanged, diffed identical against the server's copy, not
+re-rsynced to avoid the mysql-recreate risk documented in the 2026-09-02 incident below),
+built backend then frontend sequentially, `docker compose up -d --force-recreate backend
+frontend`, both came up healthy on the first try. Flyway applied `V54` clean (`53 -> 54`,
+2.4s). Verified live: `vendor.amazinglpl.com` 200, `prod-api.amazinglpl.com`
+`/actuator/health/readiness` UP, login endpoint reachable (400 on empty body).
+
+---
+
 ## [Unreleased] — 2026-09-03 — District Level Freight wired into Shipment Booking
 
 Direct full-spec follow-up to 0.33.0's rate-setup module: "Now connect it to Shipment
