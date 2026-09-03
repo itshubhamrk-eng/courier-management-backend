@@ -160,12 +160,26 @@ class PodVerificationServiceImplTest {
 
         service.verify(SHIPMENT_ID, new PodVerificationService.VerifyPodCommand(
                 photoBytes(), "photo.jpg", "image/jpeg", null, null, null,
-                "Ramesh", "WRONG-AWB", null, null));
+                "Ramesh", "WRONG-AWB", null, null, null));
 
         ArgumentCaptor<PodAnalysisRequest> captor = ArgumentCaptor.forClass(PodAnalysisRequest.class);
         verify(provider).analyze(captor.capture());
         assertThat(captor.getValue().claimedAwb()).isEqualTo("WRONG-AWB");
         assertThat(captor.getValue().shipmentActualAwb()).isEqualTo("TRK-000001");
+    }
+
+    @Test
+    @DisplayName("a live-scanned QR value is passed through to the provider for cross-checking")
+    void qrScanValuePassedToProvider() {
+        when(provider.analyze(any())).thenReturn(result(95, true, false));
+
+        service.verify(SHIPMENT_ID, new PodVerificationService.VerifyPodCommand(
+                photoBytes(), "photo.jpg", "image/jpeg", null, null, null,
+                "Ramesh", "TRK-000001", "SHP-000001", null, "TRK-000001"));
+
+        ArgumentCaptor<PodAnalysisRequest> captor = ArgumentCaptor.forClass(PodAnalysisRequest.class);
+        verify(provider).analyze(captor.capture());
+        assertThat(captor.getValue().qrScanValue()).isEqualTo("TRK-000001");
     }
 
     @Test
@@ -196,7 +210,7 @@ class PodVerificationServiceImplTest {
     @DisplayName("a missing photo is refused before any AI call")
     void missingPhotoRefused() {
         assertThatThrownBy(() -> service.verify(SHIPMENT_ID, new PodVerificationService.VerifyPodCommand(
-                null, null, null, null, null, null, "Ramesh", null, null, null)))
+                null, null, null, null, null, null, "Ramesh", null, null, null, null)))
                 .isInstanceOf(BusinessRuleException.class);
         verify(provider, never()).analyze(any());
     }
@@ -288,7 +302,7 @@ class PodVerificationServiceImplTest {
     private static PodVerificationService.VerifyPodCommand command(String receiverName) {
         return new PodVerificationService.VerifyPodCommand(
                 photoBytes(), "photo.jpg", "image/jpeg", null, null, null,
-                receiverName, "TRK-000001", "SHP-000001", null);
+                receiverName, "TRK-000001", "SHP-000001", null, null);
     }
 
     private static PodAnalysisResult result(int score, boolean signature, boolean mustReview) {

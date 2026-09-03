@@ -44,6 +44,13 @@ export const API = {
   dashboard: '/dashboard/summary',
   distances: '/distances',
   freightFactors: '/freight-factors',
+  /** District Level Freight — rate setup by From Station + District + weight slab, and
+   *  Shipment Booking's own live freight-preview call (`.../calculate`) — the same
+   *  calculation the backend re-verifies authoritatively at Confirm Booking. */
+  districtLevelFreight: '/district-level-freight',
+  districtLevelFreightImportPreview: '/district-level-freight/import/preview',
+  districtLevelFreightImport: '/district-level-freight/import',
+  districtLevelFreightCalculate: '/district-level-freight/calculate',
   /** Ticket Support — lifecycle, conversation, categories, SLA rules. See MEMORY. */
   supportTickets: '/support/tickets',
   supportCategories: '/support/categories',

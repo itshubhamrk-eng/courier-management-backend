@@ -15,6 +15,12 @@ export class PodService {
   verify(shipmentId: string, params: {
     photo: File; signature?: File | null; receiverName: string;
     awbNumber?: string | null; shipmentNumber?: string | null; deliveryDateTime?: string | null;
+    /** LR/tracking number decoded live off the label's QR by the capture screen's own camera
+     *  scan, before this call — an independent cross-check, not an echo of `awbNumber`/
+     *  `shipmentNumber` (see `HeuristicPodVerificationProvider`'s `qrScanValue` check).
+     *  Omitted when the operator didn't scan; the backend then falls back to decoding the QR
+     *  out of the uploaded photo itself. */
+    qrScanValue?: string | null;
   }) {
     const body = new FormData();
     body.append('photo', params.photo);
@@ -23,6 +29,7 @@ export class PodService {
     if (params.awbNumber) body.append('awbNumber', params.awbNumber);
     if (params.shipmentNumber) body.append('shipmentNumber', params.shipmentNumber);
     if (params.deliveryDateTime) body.append('deliveryDateTime', params.deliveryDateTime);
+    if (params.qrScanValue) body.append('qrScanValue', params.qrScanValue);
     return this.api.post<PodVerification>(`${API.pod(shipmentId)}/verify`, body);
   }
 

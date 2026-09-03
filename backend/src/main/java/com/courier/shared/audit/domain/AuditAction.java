@@ -240,6 +240,14 @@ public enum AuditAction {
     COMMUNICATION_TEMPLATE_UPDATED,
     COMMUNICATION_RETRIED,
 
+    // --- District Level Freight (V54): rate setup by From Station + District + weight
+    // slab. Configuration only — not wired into Shipment Booking/Commission/Pricing.
+    DISTRICT_FREIGHT_CREATED,
+    DISTRICT_FREIGHT_UPDATED,
+    DISTRICT_FREIGHT_DELETED,
+    DISTRICT_FREIGHT_STATUS_CHANGED,
+    DISTRICT_FREIGHT_IMPORTED,
+
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,
     UPDATED,

@@ -276,6 +276,26 @@ export const routes: Routes = [
         path: 'freight-factors', title: 'Freight Factor', canActivate: [roleGuard], data: { roles: RATE_READERS },
         loadComponent: () => import('@features/freight-factor/freight-factor').then((m) => m.FreightFactorPage)
       },
+      // District Level Freight — rate setup by From Station + District + weight slab.
+      // Rate setup only; reuses RATE_READERS (COMPANY_ADMIN/BRANCH_MANAGER, isAuthenticated()
+      // on the backend) for reads, COMPANY_ADMIN-only for writes, mirroring Rate Master's
+      // own split. 'new' declared before ':id' so it isn't swallowed by the parameter.
+      {
+        path: 'district-level-freight', title: 'District Level Freight', canActivate: [roleGuard], data: { roles: RATE_READERS },
+        loadComponent: () => import('@features/district-level-freight/district-freight-list').then((m) => m.DistrictFreightList)
+      },
+      {
+        path: 'district-level-freight/new', title: 'New District Level Freight Rate', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN] },
+        loadComponent: () => import('@features/district-level-freight/district-freight-create').then((m) => m.DistrictFreightCreate)
+      },
+      {
+        path: 'district-level-freight/:id', title: 'District Level Freight Rate', canActivate: [roleGuard], data: { roles: RATE_READERS },
+        loadComponent: () => import('@features/district-level-freight/district-freight-view').then((m) => m.DistrictFreightView)
+      },
+      {
+        path: 'district-level-freight/:id/edit', title: 'Edit District Level Freight Rate', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN] },
+        loadComponent: () => import('@features/district-level-freight/district-freight-edit').then((m) => m.DistrictFreightEdit)
+      },
       // Vehicles (fleet) — bespoke module, not one of the generic master-data lists;
       // COMPANY_ADMIN/BRANCH_MANAGER, matching VehicleServiceImpl's own gate. Routed
       // create/edit pages, not a dialog — seventeen fields read poorly in a modal

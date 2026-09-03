@@ -61,7 +61,7 @@ class HeuristicPodVerificationProviderTest {
     void unreadableBytesScoreZero() {
         PodAnalysisResult result = provider.analyze(new PodAnalysisRequest(
                 new byte[]{1, 2, 3}, "image/jpeg", signature(), "Ramesh", "TRK-1", null,
-                "TRK-1", "SHP-1", Instant.now(), false));
+                "TRK-1", "SHP-1", Instant.now(), false, null));
 
         assertThat(result.score()).isEqualTo(0);
         assertThat(result.reasons()).anyMatch(r -> r.contains("could not be read"));
@@ -87,12 +87,13 @@ class HeuristicPodVerificationProviderTest {
     }
 
     @Test
-    @DisplayName("a claimed AWB that disagrees with the shipment's real AWB is flagged")
+    @DisplayName("a claimed AWB that disagrees with the shipment's real AWB is a hard fail — score zeroed")
     void awbMismatchFlagged() {
         PodAnalysisResult result = provider.analyze(request(checkeredImage(600, 600, 200), signature(),
                 "Ramesh", "WRONG-AWB", "TRK-1"));
 
         assertThat(result.reasons()).anyMatch(r -> r.contains("does not match"));
+        assertThat(result.score()).isZero();
     }
 
     @Test
@@ -100,10 +101,32 @@ class HeuristicPodVerificationProviderTest {
     void duplicateForcesReviewFlag() {
         PodAnalysisResult result = provider.analyze(new PodAnalysisRequest(
                 checkeredImage(600, 600, 200), "image/jpeg", signature(), "Ramesh", "TRK-1", "TRK-1",
-                "TRK-1", "SHP-1", Instant.now(), true));
+                "TRK-1", "SHP-1", Instant.now(), true, null));
 
         assertThat(result.mustReviewRegardlessOfScore()).isTrue();
         assertThat(result.reasons()).anyMatch(r -> r.contains("duplicate"));
+    }
+
+    @Test
+    @DisplayName("a scanned QR that agrees with the shipment's own AWB is not flagged")
+    void qrMatchNotFlagged() {
+        PodAnalysisResult result = provider.analyze(new PodAnalysisRequest(
+                checkeredImage(600, 600, 200), "image/jpeg", signature(), "Ramesh", null, null,
+                "TRK-1", "SHP-1", Instant.now(), false, "TRK-1"));
+
+        assertThat(result.reasons()).noneMatch(r -> r.contains("QR"));
+        assertThat(result.score()).isNotZero();
+    }
+
+    @Test
+    @DisplayName("a scanned QR for a different parcel is a hard fail — score zeroed")
+    void qrMismatchFlagged() {
+        PodAnalysisResult result = provider.analyze(new PodAnalysisRequest(
+                checkeredImage(600, 600, 200), "image/jpeg", signature(), "Ramesh", null, null,
+                "TRK-1", "SHP-1", Instant.now(), false, "TRK-OTHER-PARCEL"));
+
+        assertThat(result.reasons()).anyMatch(r -> r.contains("QR") && r.contains("does not match"));
+        assertThat(result.score()).isZero();
     }
 
     // ------------------------------------------------------------------ helpers
@@ -111,7 +134,7 @@ class HeuristicPodVerificationProviderTest {
     private static PodAnalysisRequest request(byte[] photo, byte[] signature, String receiverName,
                                                String claimedAwb, String actualAwb) {
         return new PodAnalysisRequest(photo, "image/jpeg", signature, receiverName, claimedAwb, null,
-                actualAwb, "SHP-1", Instant.now(), false);
+                actualAwb, "SHP-1", Instant.now(), false, null);
     }
 
     private static byte[] signature() {

@@ -20,11 +20,13 @@ import { Customer } from '@core/models/customer.model';
 import {
   ShipmentItemRequest, CreateShipmentRequest, PricingResponse
 } from '@core/models/shipment.model';
+import { FreightCalculationResponse } from '@core/models/district-level-freight.model';
 import { ItemEntryGrid } from './components/item-entry-grid';
 import { ChargeSummary } from './components/charge-summary';
 import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
+import { FreightCalculationService } from './freight-calculation.service';
 import { printConsignmentCopies } from './consignment-print.util';
 import { parseVoiceBooking } from './voice-booking.util';
 
@@ -37,6 +39,8 @@ function today(): string {
 }
 
 type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: string | null };
+type FreightOutcome =
+  { ok: true; data: FreightCalculationResponse } | { ok: false; message: string | null };
 
 /** A native `<input type="date">` value (`yyyy-MM-dd`) has no time-of-day; the backend's
  *  `validFrom`/`validUntil` are `Instant`, so a bare date is widened to the start/end of
@@ -301,6 +305,33 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 — {{ ewayBillMandatory() ? 'E-Way Bill Mandatory' : 'E-Way Bill Optional' }}</span>
             }
 
+            <div class="freight-card">
+              <h3 class="freight-card__title">Freight Calculation</h3>
+              @if (!myBranchIdPresent()) {
+                <p class="hint">No branch assigned to your account.</p>
+              } @else if (!readyForFreight()) {
+                <p class="hint">Enter a destination pincode and at least one item's weight to calculate freight.</p>
+              } @else if (freightCalcLoading()) {
+                <p class="hint">Calculating freight…</p>
+              } @else if (freightCalcError()) {
+                <p class="err">{{ freightCalcError() }}</p>
+              } @else if (freightCalc(); as f) {
+                <dl class="freight-kv">
+                  <dt>From Station</dt><dd>{{ f.bookingBranchName }}</dd>
+                  <dt>Destination District</dt><dd>{{ f.districtName }}</dd>
+                  <dt>Chargeable Weight</dt><dd class="mono">{{ f.chargeableWeight | number: '1.3-3' }} kg</dd>
+                  <dt>Weight Slab</dt><dd>{{ f.weightSlabLabel }}</dd>
+                  <dt>Rate / KG</dt><dd class="mono">{{ f.ratePerKg | number: '1.2-2' }}</dd>
+                  <dt>Base Freight</dt><dd class="mono">{{ f.baseFreight | number: '1.2-2' }}</dd>
+                  <dt>ODA</dt><dd>{{ f.odaApplicable ? 'Applicable' : 'Not applicable' }}</dd>
+                  @if (f.odaApplicable) {
+                    <dt>ODA Charge</dt><dd class="mono">{{ f.odaCharge | number: '1.2-2' }}</dd>
+                  }
+                  <dt class="total">Total Freight</dt><dd class="mono total">{{ f.totalFreight | number: '1.2-2' }}</dd>
+                </dl>
+              }
+            </div>
+
             <div class="sum__body">
               @if (freightFactorApplicable()) {
                 <div class="factor-row">
@@ -328,15 +359,15 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   @if (p.matchedRateCode) { <span class="chip">Rate {{ p.matchedRateCode }}</span> }
                 </div>
                 <app-charge-summary [charges]="{
-                  freight: p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
+                  freight: freightCalc()?.baseFreight ?? p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
                   handlingCharge: p.chargeBreakup.handlingCharge,
-                  odaCharge: odaChargeOverride() ?? p.chargeBreakup.odaCharge,
+                  odaCharge: odaChargeOverride() ?? freightCalc()?.odaCharge ?? p.chargeBreakup.odaCharge,
                   insuranceCharge: p.chargeBreakup.insuranceCharge,
-                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta(),
+                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta(),
                   discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
                   otherCharges: otherCharges(),
                   netAmount: (manualNetAmount() ?? p.chargeBreakup.netAmount) + otherCharges() + gstOnOtherCharges()
-                    + odaChargeDelta() + gstOnOdaChargeDelta()
+                    + odaChargeDelta() + gstOnOdaChargeDelta() + freightDelta() + gstOnFreightDelta()
                 }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
                   (otherChargesChange)="otherCharges.set($event)"
                   (odaChargeChange)="odaChargeOverride.set($event)" />
@@ -352,7 +383,8 @@ function toInstantEnd(date: string | null | undefined): string | null {
             }
             <div class="sum__cta">
               <app-button icon="check" [loading]="submitting()"
-                [disabled]="!pricing() || pricingLoading() || form.invalid || ewayBillReason() !== null"
+                [disabled]="!pricing() || pricingLoading() || !freightCalc() || freightCalcLoading()
+                  || form.invalid || ewayBillReason() !== null"
                 (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
@@ -389,6 +421,13 @@ function toInstantEnd(date: string | null | undefined): string | null {
     .err { font:500 13px var(--font-sans); color:var(--danger); padding:10px 12px; background:var(--danger-bg); border-radius:var(--r-field); margin:0; }
     .matched { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .chip { font:600 11px var(--font-sans); padding:4px 10px; border-radius:999px; background:var(--brand-50); color:var(--brand-700); }
+    .freight-card { margin-top:16px; padding:12px; border:1px solid var(--surface-border); border-radius:var(--r-card); background:var(--surface-alt, transparent); }
+    .freight-card__title { margin:0 0 8px; font:600 13px var(--font-sans); color:var(--content-fg); }
+    .freight-kv { display:grid; grid-template-columns:1fr auto; gap:6px 16px; margin:0; }
+    .freight-kv dt { font:500 12px var(--font-sans); color:var(--content-muted); }
+    .freight-kv dd { font:600 13px var(--font-sans); color:var(--content-fg); margin:0; text-align:right; }
+    .freight-kv .mono { font-family:var(--font-mono, ui-monospace); }
+    .freight-kv .total { font-weight:700; font-size:14px; color:var(--brand-600); border-top:1px solid var(--surface-border); padding-top:6px; margin-top:2px; }
     .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
     .grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 16px; }
     .parties { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
@@ -450,6 +489,7 @@ export class ShipmentCreate implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ShipmentService);
   private readonly ewayBillService = inject(EwayBillService);
+  private readonly freightCalculationService = inject(FreightCalculationService);
   private readonly customers = inject(CustomerService);
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
@@ -488,6 +528,19 @@ export class ShipmentCreate implements OnInit {
   protected readonly pricing = signal<PricingResponse | null>(null);
   protected readonly pricingLoading = signal(false);
   protected readonly pricingError = signal<string | null>(null);
+
+  /**
+   * District Level Freight's own live-preview result — the authoritative source for the
+   * Freight and ODA lines shown in the Booking Summary. `null` until a preview resolves
+   * (or after a lane/weight change invalidates the last one); `freightCalcError()` carries
+   * a clear message — e.g. no configuration for this From Station + District — that also
+   * gates the Book button, per the brief's own "do not allow booking with an invalid/
+   * unavailable freight calculation" rule.
+   */
+  protected readonly freightCalc = signal<FreightCalculationResponse | null>(null);
+  protected readonly freightCalcLoading = signal(false);
+  protected readonly freightCalcError = signal<string | null>(null);
+  private readonly freightTrigger$ = new Subject<void>();
 
   /** A manual override of the previewed Net Amount — display only, cleared whenever the
    *  underlying price is recomputed. Never sent to the server: the booking is always
@@ -705,6 +758,29 @@ export class ShipmentCreate implements OnInit {
     merge(...PRICE_AFFECTING_CONTROLS.map((name) => this.form.get(name)!.valueChanges))
       .subscribe(() => { this.resetFreightFactor(); this.schedulePricing(); });
 
+    // District Level Freight's own calculation is keyed on From Station + destination
+    // pincode + chargeable weight — a different, smaller set than PricingCommand's own
+    // (it doesn't care about service type/package type/payment mode/declared value/
+    // booking date). Delivery Branch also reschedules it since picking one auto-fills
+    // deliveryPincode (see below); weight reschedules via {@link onWeight}.
+    merge(this.c('deliveryPincode').valueChanges, this.c('deliveryBranchId').valueChanges)
+      .subscribe(() => this.scheduleFreightCalc());
+
+    this.freightTrigger$.pipe(
+      debounceTime(500),
+      switchMap(() => this.freightCalc$()),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((outcome) => {
+      this.freightCalcLoading.set(false);
+      if (outcome.ok) {
+        this.freightCalc.set(outcome.data);
+        this.freightCalcError.set(null);
+      } else {
+        this.freightCalc.set(null);
+        this.freightCalcError.set(outcome.message);
+      }
+    });
+
     this.pricingTrigger$.pipe(
       debounceTime(500),
       switchMap(() => this.priceIt$()),
@@ -790,6 +866,7 @@ export class ShipmentCreate implements OnInit {
     this.weight.set(weight);
     this.resetFreightFactor();
     this.schedulePricing();
+    this.scheduleFreightCalc();
   }
 
   /** A different lane or weight may not hit the Freight Factor fallback at all, or may
@@ -822,13 +899,30 @@ export class ShipmentCreate implements OnInit {
     return (this.odaChargeDelta() * this.myBranchGstPercentage()) / 100;
   }
 
-  /** Difference between the typed ODA override and the Pricing Engine's own figure — zero
-   *  until the operator edits it. See {@link gstOnOdaChargeDelta}. */
+  /** Difference between the typed ODA override and District Level Freight's own figure —
+   *  zero until the operator edits it (the engine's `chargeBreakup.odaCharge` is no longer
+   *  the baseline; see {@link freightDelta}). See {@link gstOnOdaChargeDelta}. */
   protected odaChargeDelta(): number {
     const override = this.odaChargeOverride();
+    const baseline = this.freightCalc()?.odaCharge ?? this.pricing()?.chargeBreakup.odaCharge ?? 0;
     if (override === null) return 0;
-    const engineOda = this.pricing()?.chargeBreakup.odaCharge ?? 0;
-    return override - engineOda;
+    return override - baseline;
+  }
+
+  /** District Level Freight's own base freight is authoritative now, replacing the Pricing
+   *  Engine's own `chargeBreakup.freight` — same delta-at-booking-branch-GST% trick as
+   *  {@link gstOnOdaChargeDelta}, mirroring `ShipmentServiceImpl.copyCharge`'s
+   *  `freightDelta`/`gstOnFreightDelta` exactly, so this live preview's total matches what
+   *  actually gets booked. Zero until a freight preview has resolved. */
+  protected freightDelta(): number {
+    const freightCalc = this.freightCalc();
+    if (!freightCalc) return 0;
+    const engineFreight = this.pricing()?.chargeBreakup.freight ?? 0;
+    return freightCalc.baseFreight - engineFreight;
+  }
+
+  protected gstOnFreightDelta(): number {
+    return (this.freightDelta() * this.myBranchGstPercentage()) / 100;
   }
 
   protected onPackages(count: number): void {
@@ -993,12 +1087,43 @@ export class ShipmentCreate implements OnInit {
   /** See {@link readyToPrice} — same reason this is a plain method. */
   protected myBranchIdPresent(): boolean { return !!this.myBranchId; }
 
+  /** District Level Freight's own three inputs — a smaller set than {@link readyToPrice},
+   *  see the trigger wiring in `ngOnInit`. Plain method, same staleness reason. */
+  protected readyForFreight(): boolean {
+    const v = this.form.getRawValue();
+    return !!(v.bookingBranchId && v.deliveryPincode && this.weight().chargeable > 0);
+  }
+
   private schedulePricing(): void {
     this.pricing.set(null);
     this.pricingError.set(null);
     this.manualNetAmount.set(null);
     this.odaChargeOverride.set(null);
     this.pricingTrigger$.next();
+  }
+
+  private scheduleFreightCalc(): void {
+    this.freightCalc.set(null);
+    this.freightCalcError.set(null);
+    this.manualNetAmount.set(null);
+    this.odaChargeOverride.set(null);
+    this.freightTrigger$.next();
+  }
+
+  private freightCalc$(): Observable<FreightOutcome> {
+    if (!this.readyForFreight()) return of({ ok: false, message: null } as FreightOutcome);
+
+    this.freightCalcLoading.set(true);
+    const v = this.form.getRawValue();
+
+    return this.freightCalculationService.calculate({
+      bookingBranchId: v.bookingBranchId, destinationPincode: v.deliveryPincode,
+      chargeableWeight: this.weight().chargeable
+    }).pipe(
+      switchMap((data) => of({ ok: true, data }) as Observable<FreightOutcome>),
+      catchError((e: HttpErrorResponse) =>
+        of({ ok: false, message: e?.error?.message ?? 'Could not calculate freight for this booking.' } as FreightOutcome))
+    );
   }
 
   private priceIt$(): Observable<PriceOutcome> {
@@ -1022,7 +1147,8 @@ export class ShipmentCreate implements OnInit {
 
   protected book(): void {
     const p = this.pricing();
-    if (!p || this.form.invalid || this.ewayBillReason() !== null) return;
+    const f = this.freightCalc();
+    if (!p || !f || this.form.invalid || this.ewayBillReason() !== null) return;
     const v = this.form.getRawValue();
 
     const body: CreateShipmentRequest = {
@@ -1079,10 +1205,12 @@ export class ShipmentCreate implements OnInit {
           declaredValue: v.declaredValue || null,
           charges: {
             ...p.chargeBreakup,
-            odaCharge: this.odaChargeOverride() ?? p.chargeBreakup.odaCharge,
-            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta(),
+            freight: f.baseFreight,
+            odaCharge: this.odaChargeOverride() ?? f.odaCharge,
+            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
+              + this.gstOnFreightDelta(),
             netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
-              + this.odaChargeDelta() + this.gstOnOdaChargeDelta()
+              + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
           },
           otherCharges: this.otherCharges(),
           remarks: v.remarks || null,

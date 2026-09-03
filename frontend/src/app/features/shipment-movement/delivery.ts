@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import jsQR from 'jsqr';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -31,12 +32,16 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
  *  orders (status + text search over tracking/shipment number/receiver), then a capture ->
  *  AI verification -> decision flow for an OUT_FOR_DELIVERY row:
  *
- *  Upload POD (photo required, signature optional, real file picker) -> "Run AI
- *  Verification" (PodService.verify, POD Auto Verification module) -> PASS shows
- *  "Complete Delivery" (the existing, unchanged ShipmentMovementService.deliver — AI never
- *  itself marks a shipment DELIVERED), REVIEW shows a pending state with a manual "Check
- *  Review Status" refresh (a POD Review screen elsewhere approves/rejects it), FAIL shows
- *  "Upload New POD" to recapture. See MEMORY/modules/pod-verification.md. */
+ *  Upload POD (photo required, signature optional, real file picker) -> optionally scan the
+ *  label's own QR (device camera, jsQR) -> "Run AI Verification" (PodService.verify, POD Auto
+ *  Verification module) -> PASS shows "Complete Delivery" (the existing, unchanged
+ *  ShipmentMovementService.deliver — AI never itself marks a shipment DELIVERED), REVIEW
+ *  shows a pending state with a manual "Check Review Status" refresh (a POD Review screen
+ *  elsewhere approves/rejects it), FAIL shows "Upload New POD" to recapture. The QR scan is
+ *  optional at this screen (unlike the photo) — the backend falls back to decoding the QR out
+ *  of the uploaded photo itself when no live scan was made; either way it's a real independent
+ *  cross-check, not an echo of the already-selected shipment's own trackingNumber/
+ *  shipmentNumber (sent regardless, below). See MEMORY/modules/pod-verification.md. */
 @Component({
   selector: 'app-delivery',
   standalone: true,
@@ -142,6 +147,23 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                   </button>
                   <input #signatureFile type="file" accept="image/*" hidden (change)="onFile($event, 'signature')" />
                 </div>
+                <div class="pod">
+                  <span class="pod__label">Label QR <em>optional</em></span>
+                  @if (qrScanValue()) {
+                    <div class="qr-chip">
+                      <mat-icon>qr_code_2</mat-icon><span>{{ qrScanValue() }}</span>
+                      <button type="button" class="qr-chip__clear" (click)="clearQrScan()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                  } @else {
+                    <button type="button" class="pod__btn" (click)="scanningQr() ? stopQrScan() : startQrScan()">
+                      <mat-icon>{{ scanningQr() ? 'close' : 'qr_code_scanner' }}</mat-icon>
+                      {{ scanningQr() ? 'Cancel Scan' : 'Scan QR' }}
+                    </button>
+                  }
+                  <video #qrVideo playsinline muted class="qr-video" [class.qr-video--active]="scanningQr()"></video>
+                </div>
               </div>
               <div class="df__bar">
                 <app-button icon="smart_toy" [loading]="verifying()" [disabled]="!photo()" (pressed)="runVerification()">
@@ -215,6 +237,14 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
       padding:6px 12px; font:600 12px var(--font-sans); color:var(--content-fg); cursor:pointer; }
     .pod__btn:disabled { opacity:.6; cursor:default; }
     .pod__btn mat-icon { font-size:16px; width:16px; height:16px; }
+    .qr-chip { display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+      border:1px solid var(--success-fg, #1a7f3c); background:var(--success-bg, #e6f7ec); border-radius:var(--r-field);
+      padding:6px 10px; font:600 12px var(--font-sans); color:var(--content-fg); }
+    .qr-chip mat-icon { font-size:16px; width:16px; height:16px; color:var(--success-fg, #1a7f3c); }
+    .qr-chip__clear { display:inline-flex; border:0; background:none; cursor:pointer; padding:0; color:var(--content-muted); }
+    .qr-chip__clear mat-icon { font-size:15px; width:15px; height:15px; }
+    .qr-video { display:none; width:220px; height:165px; border-radius:var(--r-field); border:1px solid var(--surface-border); object-fit:cover; background:#000; }
+    .qr-video--active { display:block; margin-top:8px; }
     .sh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .sh strong { display:block; font:600 15px var(--font-sans); }
     .pay { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
@@ -258,6 +288,7 @@ export class Delivery implements OnInit {
   private readonly movementService = inject(ShipmentMovementService);
   private readonly podService = inject(PodService);
   private readonly masters = inject(MasterDataService);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
 
@@ -269,6 +300,11 @@ export class Delivery implements OnInit {
   readonly verification = signal<PodVerification | null>(null);
   readonly photo = signal<File | null>(null);
   readonly signature = signal<File | null>(null);
+  readonly qrScanValue = signal<string | null>(null);
+  readonly scanningQr = signal(false);
+  private readonly qrVideo = viewChild<ElementRef<HTMLVideoElement>>('qrVideo');
+  private qrStream: MediaStream | null = null;
+  private qrRafId: number | null = null;
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);
@@ -303,6 +339,7 @@ export class Delivery implements OnInit {
     this.pendingTrackingNumber = this.route.snapshot.queryParamMap.get('trackingNumber');
     if (this.pendingTrackingNumber) this.searchControl.setValue(this.pendingTrackingNumber);
     this.load();
+    this.destroyRef.onDestroy(() => this.stopQrScan());
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -356,6 +393,8 @@ export class Delivery implements OnInit {
     this.verification.set(null);
     this.photo.set(null);
     this.signature.set(null);
+    this.stopQrScan();
+    this.qrScanValue.set(null);
     this.form.patchValue({ receiverName: s.receiverName });
     this.masters.get(MASTER_DEFINITIONS['payment-modes'], s.paymentModeId)
       .subscribe((pm) => this.paymentMode.set(pm as PaymentMode));
@@ -373,6 +412,8 @@ export class Delivery implements OnInit {
     this.verification.set(null);
     this.photo.set(null);
     this.signature.set(null);
+    this.stopQrScan();
+    this.qrScanValue.set(null);
     this.form.reset();
     this.load();
   }
@@ -388,6 +429,7 @@ export class Delivery implements OnInit {
     this.verification.set(null);
     this.photo.set(null);
     this.signature.set(null);
+    this.qrScanValue.set(null);
   }
 
   runVerification(): void {
@@ -401,7 +443,8 @@ export class Delivery implements OnInit {
       photo, signature: this.signature(),
       receiverName: this.c('receiverName').value.trim(),
       awbNumber: shipment.trackingNumber, shipmentNumber: shipment.shipmentNumber,
-      deliveryDateTime: new Date().toISOString()
+      deliveryDateTime: new Date().toISOString(),
+      qrScanValue: this.qrScanValue()
     }).subscribe({
       next: (v) => { this.verifying.set(false); this.verification.set(v); },
       error: (e: HttpErrorResponse) => {
@@ -409,6 +452,64 @@ export class Delivery implements OnInit {
         this.notify.error(e.error?.message ?? 'POD verification failed.');
       }
     });
+  }
+
+  /** Opens the device camera and starts scanning frames for a QR code — decodes the label
+   *  physically stuck to the parcel, an independent identifier the operator can't accidentally
+   *  self-echo (unlike `awbNumber`/`shipmentNumber` above, which just restate the already-
+   *  selected shipment). Stops itself the moment a QR decodes; `stopQrScan()` cancels early. */
+  async startQrScan(): Promise<void> {
+    if (this.scanningQr()) return;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch {
+      this.notify.error('Camera access denied or unavailable.');
+      return;
+    }
+    this.qrStream = stream;
+    this.scanningQr.set(true);
+    const video = this.qrVideo()?.nativeElement;
+    if (!video) { this.stopQrScan(); return; }
+    video.srcObject = stream;
+    void video.play();
+    this.scanFrames(video);
+  }
+
+  stopQrScan(): void {
+    this.scanningQr.set(false);
+    if (this.qrRafId != null) { cancelAnimationFrame(this.qrRafId); this.qrRafId = null; }
+    this.qrStream?.getTracks().forEach((track) => track.stop());
+    this.qrStream = null;
+    const video = this.qrVideo()?.nativeElement;
+    if (video) video.srcObject = null;
+  }
+
+  clearQrScan(): void {
+    this.qrScanValue.set(null);
+  }
+
+  private scanFrames(video: HTMLVideoElement): void {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const tick = (): void => {
+      if (!this.scanningQr()) return;
+      if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const decoded = jsQR(frame.data, frame.width, frame.height);
+        if (decoded?.data) {
+          this.qrScanValue.set(decoded.data);
+          this.notify.success('QR code scanned.');
+          this.stopQrScan();
+          return;
+        }
+      }
+      this.qrRafId = requestAnimationFrame(tick);
+    };
+    this.qrRafId = requestAnimationFrame(tick);
   }
 
   checkReviewStatus(): void {

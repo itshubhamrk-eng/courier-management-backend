@@ -7,6 +7,91 @@
 
 ## Current Version
 
+`0.34.0` — **District Level Freight wired into Shipment Booking.** Direct follow-up to
+0.33.0: "Now connect it to Shipment Booking." Freight and ODA are now District Level
+Freight's own job at booking time — mandatory, not a fallback, replacing the Pricing
+Engine's Route/Rate/Freight Factor freight figure entirely; a booking is refused when no
+configuration exists for the From Station + destination district, or the weight falls
+outside 1-2000 KG. New `districtfreight.application.FreightCalculationService`/`Impl` (one
+class, two callers: `DistrictLevelFreightController`'s new `POST .../calculate` preview
+endpoint, and `ShipmentServiceImpl.create`/`update` authoritatively) resolves destination
+pincode -> district via a new `PincodeCoverageLookupPort` (walks the existing global
+`Pincode -> Area -> City -> District` chain, implemented in `master`) -> From Station's own
+`DistrictLevelFreightRepository` row -> weight slab -> base freight -> ODA (row's own
+`odaApplicable` AND the pincode's own `odaApplicable`, never a hardcoded 250) -> total.
+`ShipmentServiceImpl` still calls the Pricing Engine unchanged for fuel/handling/insurance/
+discount/round-off/GST% — freight+ODA alone are overridden via the identical delta-algebra
+trick the existing (0.30.3) manual-ODA-override already used, extended to freight too, so
+the commission formulas (`copyCharge`) are byte-for-byte unchanged, only what `freight`
+resolves to differs. Frontend: new "Freight Calculation" card in `shipment-create.ts`'s
+Booking Summary (From Station/District/Weight/Slab/Rate/Base Freight/ODA/Total, own
+loading/error states, gates Book Shipment), new `freight-calculation.service.ts`. `mvn
+test` 904 -> 939 (35 new/updated — `FreightCalculationServiceImplTest` covers the brief's
+full test list: worked examples, every slab boundary, ODA/non-ODA, missing/inactive
+config, invalid weight, multi-record pincode coverage). `tsc --noEmit`/`ng build
+--configuration production` clean, `ng test` 147/148 (the one failure, `reports-dashboard`,
+pre-existing, unrelated). **Not verified live this session** — no MySQL boot or browser
+click-through; verification stopped at the compile/build/unit-test bar. Full detail in
+`CHANGELOG.md` Unreleased 2026-09-03.
+
+Previously current:
+
+`0.33.0` — **District Level Freight module: new rate-setup module, From Station + District +
+six fixed weight slabs + configurable ODA, plus Excel import.** Direct full-spec request,
+explicitly scoped to rate setup only — Shipment Booking, Commission, Rate Master, Pricing
+Engine and Freight Factor are all untouched by this task. New `com.courier.modules
+.districtfreight` (`V54`): `DistrictLevelFreight` is company-owned, keyed on `branchId`
+("From Station", a `Branch` — this codebase has no separate Station Master) + `districtId`
+(the existing global District master), `UNIQUE (company_id, branch_id, district_id)`
+preventing a duplicate combination at the DB level. Six `rate1To15`..`rate1501To2000`
+per-KG columns plus `odaApplicable`/`odaCharge` (configurable per row, defaults `250.0000`,
+never hardcoded into any calculation). `branchId`/`districtId` are validated through this
+module's own `BranchLookupPort`/`DistrictLookupPort` seams (implemented in `company`/
+`master` respectively) rather than importing either entity — the same cross-feature-port
+discipline `Route.bookingBranchId`/`BranchPincodeMapping.pincodeId` already use.
+`ratePerKgFor(BigDecimal)` is a pure domain lookup for "the COMPLETE weight uses exactly
+one slab's rate, never a progressive split" — declared for a future booking integration,
+called from nowhere yet. RBAC is role-based (`COMPANY_ADMIN` writes, any authenticated
+company user reads), no new permission-catalogue rows, mirroring `RateServiceImpl` exactly.
+
+**Excel import** (new `poi-ooxml` dependency — no prior Excel import existed anywhere in
+this codebase): maps the sheet's own headers (`From Station`/`District`/six weight-slab
+rate columns), a row counts as data only when all eight of those cells are present and (for
+the six rates) numeric — a blank spacer row and the sheet's trailing "* ODA charge Rs.250
+extra..." note row are both silently ignored this way, never reported as errors. An
+existing From Station + District combination is upserted (updated), never rejected —
+only a combination repeated *within the same file* is a real error. `POST .../import
+/preview` (dry run) and `POST .../import` (commits, one transaction per row via a
+cross-bean call, same reasoning `PincodeBulkImportService` documents).
+
+**Frontend**: bespoke `features/district-level-freight/` (list/create/edit/view + an
+import dialog with preview -> commit), mirroring `features/rate-master/`'s own bespoke
+shape rather than the shared twelve-master-list architecture — same reasoning Rate itself
+wasn't folded into that architecture (multiple lookups + a fixed rate grid, no single
+parent). New nav leaf under the existing "Rate Master" section.
+
+**Verified live** via curl on a throwaway `:8082` (`:8100`/`:4200` untouched) against real
+`courier_db`, `V54` applied (schema now at 54): real create/duplicate-409/activate/
+deactivate/delete-then-404 all confirmed; `BRANCH_MANAGER` correctly 403'd on write, 200'd
+on read; a real `.xlsx` built for this test round-tripped through both preview and commit —
+new-district row `CREATED`, existing combination `UPDATED` (rates actually changed,
+confirmed via a follow-up read), blank row and ODA note row both silently ignored, an
+unknown branch name correctly reported as a row-level `ERROR`. **Then a full Chrome
+click-through** on a throwaway `:4300` (`SPRING_PROFILES_ACTIVE=test` on the backend —
+its CORS allowlist includes `:4300`, the default profile's doesn't; `:8100`/`:4200`
+untouched): nav leaf, list/filters/create/view/edit/delete/deactivate and the Excel import
+dialog's preview -> commit all clicked through against real data. **One real bug found and
+fixed live**: the import dialog's content div was wider than Angular Material's own
+`.mdc-dialog__surface` default `max-width:560px`, silently clipping its action buttons with
+no visible scrollbar (confirmed via `getComputedStyle`, not guessed) — fixed by shrinking
+the dialog to fit within 560px and making the results table wrap instead of forcing width;
+re-verified live post-fix. Test fixtures left in `courier_db` per
+`[[keep-test-data-in-dev-db]]`. `mvn test` 887 -> 904 (17 new), `tsc --noEmit`/`ng build
+--configuration production` clean, `ng test` 147/148 (the one failure, `reports-dashboard`,
+pre-existing and unrelated). Full detail in `CHANGELOG.md` Unreleased 2026-09-02.
+
+Previously current:
+
 `0.32.4` — **Pincode Branch Mapping: new "Pincode Branch Mapping" menu under Masters, map
 a branch to many pincodes at once.** Direct request. A pincode is served by exactly one
 branch per company — `branch_pincode_mapping` (`V53`) enforces it with `UNIQUE (company_id,

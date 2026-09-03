@@ -3,6 +3,7 @@ package com.courier.modules.pod.application;
 import com.courier.modules.pod.application.provider.PodAnalysisRequest;
 import com.courier.modules.pod.application.provider.PodAnalysisResult;
 import com.courier.modules.pod.application.provider.PodProviderUnavailableException;
+import com.courier.modules.pod.application.provider.PodQrDecoder;
 import com.courier.modules.pod.application.provider.PodVerificationProvider;
 import com.courier.modules.pod.domain.PodVerification;
 import com.courier.modules.pod.domain.PodVerificationRepository;
@@ -78,6 +79,15 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         boolean duplicateSuspected = !podVerificationRepository
                 .findDuplicatesWithinCompany(companyId, podHash, shipmentId).isEmpty();
 
+        // A live camera scan (delivery app's own QR reader, before this upload) wins when
+        // present — it's the freshest read off the physical label. Falling back to decoding
+        // the already-uploaded photo itself means the cross-check still runs even when the
+        // delivery app has no live-scan step (or the operator's device lacks camera access),
+        // at the cost of depending on the label happening to be visible in the photo.
+        String qrScanValue = command.qrScanValue() != null && !command.qrScanValue().isBlank()
+                ? command.qrScanValue().trim()
+                : PodQrDecoder.decode(command.photoContent());
+
         PodAnalysisResult result;
         boolean providerAvailable = true;
         try {
@@ -87,7 +97,7 @@ public class PodVerificationServiceImpl implements PodVerificationService {
                     command.receiverName(), command.awbNumber(), command.shipmentNumberClaim(),
                     shipment.getTrackingNumber(), shipment.getShipmentNumber(),
                     command.deliveryDateTime() == null ? Instant.now() : command.deliveryDateTime(),
-                    duplicateSuspected));
+                    duplicateSuspected, qrScanValue));
         } catch (PodProviderUnavailableException e) {
             log.warn("POD AI provider unavailable for shipment {} — routing to manual review",
                     shipment.getShipmentNumber());

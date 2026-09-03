@@ -58,13 +58,14 @@ public class PodVerificationController {
             @RequestParam(value = "awbNumber", required = false) String awbNumber,
             @RequestParam(value = "shipmentNumber", required = false) String shipmentNumberClaim,
             @RequestParam(value = "deliveryDateTime", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant deliveryDateTime) {
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant deliveryDateTime,
+            @RequestParam(value = "qrScanValue", required = false) String qrScanValue) {
 
         var verification = podVerificationService.verify(shipmentId,
                 new PodVerificationService.VerifyPodCommand(
                         readBytes(photo), originalFilename(photo), contentType(photo),
                         readBytes(signature), originalFilename(signature), contentType(signature),
-                        receiverName, awbNumber, shipmentNumberClaim, deliveryDateTime));
+                        receiverName, awbNumber, shipmentNumberClaim, deliveryDateTime, qrScanValue));
         return ApiResponse.success(toResponse(verification), "POD verification complete");
     }
 

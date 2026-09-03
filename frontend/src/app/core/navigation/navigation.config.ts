@@ -115,7 +115,11 @@ export const NAVIGATION: NavNode[] = [
       // No `permission` key: backend has no permission codes for this module, writes
       // are COMPANY_ADMIN-only in-page. Its own Calculate card moved to the Calculator
       // page above as a tab — this leaf is the grid itself now.
-      { id: 'freight-factor', title: 'Freight Factor', icon: 'grid_on', route: '/freight-factors', roles: COMPANY_AND_BRANCH }
+      { id: 'freight-factor', title: 'Freight Factor', icon: 'grid_on', route: '/freight-factors', roles: COMPANY_AND_BRANCH },
+      // District Level Freight — rate setup by From Station + District + weight slab,
+      // grouped here alongside the other rate-setup leaves. No `permission` key: this
+      // module has no permission-catalogue rows yet, same as Freight Factor above.
+      { id: 'district-level-freight', title: 'District Level Freight', icon: 'map', route: '/district-level-freight', roles: COMPANY_AND_BRANCH }
     ]
   },
 

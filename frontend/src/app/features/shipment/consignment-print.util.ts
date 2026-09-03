@@ -1,5 +1,6 @@
 import { ChargeBreakup } from '@core/models/shipment.model';
 import JsBarcode from 'jsbarcode';
+import qrcode from 'qrcode-generator';
 
 /** Everything the consignment note needs — nothing invented, every value comes off the
  *  real booking form and the price it was actually booked at (same `PricingResponse` the
@@ -53,6 +54,19 @@ function barcodeSvg(value: string): string {
     format: 'CODE128', displayValue: false, margin: 0, height: 34, width: 1.6
   });
   return svg.outerHTML;
+}
+
+/** Renders `value` (the LR/tracking number, same value the barcode above already encodes) as
+ *  a QR code — this is the value the POD Auto Verification module's QR cross-check scans off
+ *  the physical label, either live during delivery capture or decoded server-side out of the
+ *  POD photo itself; see `HeuristicPodVerificationProvider`'s `qrScanValue` check. Type 0 lets
+ *  the library auto-pick the smallest QR version that fits `value`; 'M' error correction
+ *  tolerates real-world print/photo degradation without bloating the module count. */
+function qrSvg(value: string): string {
+  const qr = qrcode(0, 'M');
+  qr.addData(value);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 3, margin: 0 });
 }
 
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -176,6 +190,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
           <span class="lrbox-label">LR No</span>
           <span class="lrbox-no">${esc(d.trackingNumber)}</span>
           <div class="lrbox-barcode">${barcodeSvg(d.trackingNumber)}</div>
+          <div class="lrbox-qr">${qrSvg(d.trackingNumber)}</div>
         </div>
       </div>
 
@@ -268,6 +283,8 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .lrbox-no{font-size:16px;font-weight:800}
   .lrbox-barcode{line-height:0}
   .lrbox-barcode svg{width:150px;height:34px}
+  .lrbox-qr{line-height:0}
+  .lrbox-qr svg{width:52px;height:52px}
 
   /* title strip */
   .title{display:grid;grid-template-columns:1fr auto;align-items:start;gap:16px;padding:8px 14px 10px;border-bottom:2px solid var(--line)}

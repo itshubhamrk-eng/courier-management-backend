@@ -38,7 +38,8 @@
             },
             "allowedCommonJsDependencies": [
               "apexcharts",
-              "jsbarcode"
+              "jsbarcode",
+              "jsqr"
             ]
           },
           "configurations": {

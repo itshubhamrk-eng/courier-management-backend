@@ -1,4 +1,15 @@
 import { WalletResponse, WalletTransaction, formatMoney, prettyToken, subTypeLabel } from '@core/models/wallet.model';
+import qrcode from 'qrcode-generator';
+
+/** Same synchronous QR render used by the consignment note (`consignment-print.util.ts`'s
+ *  `qrSvg`) — encodes the receipt's own transaction number so a scan can look the transaction
+ *  up directly, without retyping it. */
+function qrSvg(value: string): string {
+  const qr = qrcode(0, 'M');
+  qr.addData(value);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 3, margin: 0 });
+}
 
 /**
  * Build and download a self-contained HTML receipt for a settled wallet transaction. Nothing
@@ -38,6 +49,9 @@ export function downloadReceipt(
   .amt .l{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-top:4px}
   table{width:100%;border-collapse:collapse} td{padding:11px 28px;border-bottom:1px solid #f1f5f9;font-size:13px;vertical-align:top}
   td.k{color:#64748b;width:45%} td.v{font-weight:600;text-align:right}
+  .qr{padding:18px 28px;text-align:center;border-bottom:1px solid #e2e8f0}
+  .qr svg{width:96px;height:96px}
+  .qr p{margin:6px 0 0;font-size:10px;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase}
   .f{padding:18px 28px;font-size:11px;color:#94a3b8;text-align:center}
   @media print{body{background:#fff;padding:0}.r{border:0}}
 </style></head><body>
@@ -45,6 +59,7 @@ export function downloadReceipt(
     <div class="h">${companyLogo ? `<img src="${esc(companyLogo)}" alt="${esc(appName)}">` : ''}<h1>${esc(appName)}</h1><p>Wallet Transaction Receipt</p></div>
     <div class="amt"><div class="n">${sign}${esc(money)}</div><div class="l">${esc(txn.subTransactionTypeLabel || subTypeLabel(txn.subTransactionType))}</div></div>
     <table>${body}</table>
+    <div class="qr">${qrSvg(txn.transactionNo)}<p>${esc(txn.transactionNo)}</p></div>
     <div class="f">This is a system-generated receipt. Generated ${new Date().toLocaleString('en-IN')}.</div>
   </div>
 </body></html>`;

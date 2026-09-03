@@ -1,5 +1,7 @@
 package com.courier.modules.shipment.application;
 
+import com.courier.modules.districtfreight.application.FreightCalculationResult;
+import com.courier.modules.districtfreight.application.FreightCalculationService;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.master.application.PackageTypeService;
@@ -104,6 +106,7 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketService ticketService;
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
+    @Mock private FreightCalculationService freightCalculationService;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
     @Mock private PaymentModeService paymentModeService;
@@ -126,7 +129,8 @@ class ShipmentServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
+                ewayBillService, freightCalculationService, auditService, eventPublisher, fileStoragePort,
+                shipmentAssetRepository);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -145,6 +149,12 @@ class ShipmentServiceImplTest {
 
         PricingResult defaultPricing = pricingResult(new BigDecimal("136.00"));
         when(pricingEngine.calculate(any())).thenReturn(defaultPricing);
+
+        // Matches defaultPricing's own freight (100.00) / odaCharge (ZERO) so the freight
+        // and ODA deltas net to zero — every pre-existing net-amount/commission assertion
+        // below stays valid without needing to know about District Level Freight at all.
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("100.00"), BigDecimal.ZERO));
     }
 
     @AfterEach
@@ -208,6 +218,94 @@ class ShipmentServiceImplTest {
 
         verify(shipmentRepository, never()).save(any());
         verify(crossingService, never()).createLegs(any(), any(), any());
+    }
+
+    // ------------------------------------------------------------- District Level Freight
+
+    @Test
+    @DisplayName("booking is blocked before anything is persisted when no District Level "
+            + "Freight configuration exists for this From Station + District")
+    void bookingBlockedWithoutFreightConfiguration() {
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenThrow(new BusinessRuleException(
+                        "No District Level Freight configuration exists for ICHALKARANJI -> Pune."));
+
+        assertThatThrownBy(() -> service.create(command()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("No District Level Freight configuration exists");
+
+        verify(shipmentRepository, never()).save(any());
+        verify(chargeRepository, never()).save(any());
+        verify(itemRepository, never()).save(any());
+        verify(walletService, never()).getForBranch(any());
+    }
+
+    @Test
+    @DisplayName("the freight amount persisted on the charge row is District Level Freight's "
+            + "own figure, not the Pricing Engine's — the Pricing Engine is still consulted "
+            + "for fuel/handling/insurance/discount/round-off only")
+    void persistedFreightComesFromDistrictLevelFreight() {
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("170.00"), BigDecimal.ZERO));
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getFreight()).isEqualByComparingTo("170.0000");
+        // Fuel/handling/insurance are still whatever the (unchanged) Pricing Engine call
+        // returned — see the default stub in setUp().
+        assertThat(captor.getValue().getFuelCharge()).isEqualByComparingTo("10.00");
+        assertThat(captor.getValue().getHandlingCharge()).isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    @DisplayName("an ODA destination's freight-calculation charge becomes the shipment's own "
+            + "ODA line when the booking clerk types no manual override")
+    void districtFreightOdaChargeAppliesByDefault() {
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("170.00"), new BigDecimal("250.00")));
+
+        service.create(command());
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getOdaCharge()).isEqualByComparingTo("250.0000");
+    }
+
+    @Test
+    @DisplayName("a manual ODA override at booking still replaces District Level Freight's "
+            + "own ODA figure — the 0.30.3 override behaviour is unchanged")
+    void manualOdaOverrideStillWinsOverDistrictFreight() {
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("170.00"), new BigDecimal("250.00")));
+
+        service.create(commandWithOdaOverride(new BigDecimal("300.00")));
+
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getOdaCharge()).isEqualByComparingTo("300.0000");
+    }
+
+    @Test
+    @DisplayName("a weight outside every configured slab is refused before anything is "
+            + "persisted, exactly like a missing configuration")
+    void unsupportedWeightBlocksBooking() {
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenThrow(new BusinessRuleException(
+                        "Weight 2001 KG is outside the configured 1-2000 KG range for ICHALKARANJI -> Pune."));
+
+        assertThatThrownBy(() -> service.create(command()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("outside the configured");
+
+        verify(shipmentRepository, never()).save(any());
     }
 
     @Test
@@ -329,8 +427,10 @@ class ShipmentServiceImplTest {
     @Test
     @DisplayName("a different freight amount (500) still deducts the company's share first")
     void commissionWithDifferentFreightAmount() {
-        PricingResult priced = pricingResult(new BigDecimal("500.00"), new BigDecimal("500.00"));
-        when(pricingEngine.calculate(any())).thenReturn(priced);
+        // Freight is District Level Freight's own figure now, not the Pricing Engine's —
+        // varying it here means restubbing freightCalculationService, not pricingResult.
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("500.00"), BigDecimal.ZERO));
         when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
                 .commissionOnBasicFreight(new BigDecimal("20.00"))
                 .companyServiceChargePercentage(new BigDecimal("10.00"))
@@ -350,8 +450,8 @@ class ShipmentServiceImplTest {
     @Test
     @DisplayName("a decimal freight amount rounds the same way through both cuts")
     void commissionWithDecimalFreightAmount() {
-        PricingResult priced = pricingResult(new BigDecimal("133.33"), new BigDecimal("133.33"));
-        when(pricingEngine.calculate(any())).thenReturn(priced);
+        when(freightCalculationService.calculate(any(), any(), any()))
+                .thenReturn(freightCalculationResult(new BigDecimal("133.33"), BigDecimal.ZERO));
         when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE")
                 .commissionOnBasicFreight(new BigDecimal("15.00"))
                 .companyServiceChargePercentage(new BigDecimal("7.50"))
@@ -643,6 +743,19 @@ class ShipmentServiceImplTest {
                 null, null, null, null, null, null, null, null, null);
     }
 
+    private static CreateShipmentCommand commandWithOdaOverride(BigDecimal odaCharge) {
+        return new CreateShipmentCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                "Asha Shah", "221B Baker Street, Pune", "9876543210",
+                "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
+                SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care",
+                null, odaCharge, null,
+                List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
+                        null, null, null, null, false, false)),
+                null, null, null, null, null, null, null, null, null);
+    }
+
     private static CreateShipmentCommand commandWithManualNumber(String manualShipmentNumber) {
         return new CreateShipmentCommand(
                 BOOKING_BRANCH, DELIVERY_BRANCH, manualShipmentNumber, PICKUP_PINCODE, DELIVERY_PINCODE,
@@ -758,5 +871,13 @@ class ShipmentServiceImplTest {
                 new BigDecimal("5.000"), freight, new BigDecimal("10.00"),
                 new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("20.70"),
                 BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
+    }
+
+    private static FreightCalculationResult freightCalculationResult(BigDecimal baseFreight, BigDecimal odaCharge) {
+        boolean odaApplicable = odaCharge.signum() > 0;
+        return new FreightCalculationResult(UUID.randomUUID(), BOOKING_BRANCH, "PUNE", "Pune Hub",
+                UUID.randomUUID(), "PUN", "Pune", DELIVERY_PINCODE, new BigDecimal("5.000"),
+                "1-15 KG", new BigDecimal("20.00"), baseFreight, odaApplicable, odaCharge,
+                baseFreight.add(odaCharge));
     }
 }

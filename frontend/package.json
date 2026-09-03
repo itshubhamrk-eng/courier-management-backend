@@ -23,7 +23,9 @@
     "apexcharts": "^5.16.0",
     "driver.js": "^1.8.0",
     "jsbarcode": "^3.12.3",
+    "jsqr": "^1.4.0",
     "ng-apexcharts": "^2.4.0",
+    "qrcode-generator": "^2.0.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",
     "zone.js": "~0.15.0"

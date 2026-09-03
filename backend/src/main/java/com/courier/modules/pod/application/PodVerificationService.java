@@ -46,7 +46,13 @@ public interface PodVerificationService {
             byte[] photoContent, String photoFilename, String photoContentType,
             byte[] signatureContent, String signatureFilename, String signatureContentType,
             String receiverName, String awbNumber, String shipmentNumberClaim,
-            Instant deliveryDateTime) {
+            Instant deliveryDateTime,
+            /** LR/tracking number decoded live off the label's QR by the delivery app's own
+             *  camera, before this upload — a real independent cross-check. Null when the
+             *  delivery app didn't scan (or couldn't); {@link PodVerificationServiceImpl}
+             *  falls back to decoding the QR out of the uploaded photo itself when this is
+             *  blank, so the cross-check still runs without a dedicated scan step. */
+            String qrScanValue) {
     }
 
     record ReviewPodCommand(boolean approve, String remarks) {

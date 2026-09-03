@@ -8,6 +8,206 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — District Level Freight wired into Shipment Booking
+
+Direct full-spec follow-up to 0.33.0's rate-setup module: "Now connect it to Shipment
+Booking." Freight and ODA are now District Level Freight's own job at booking time,
+completely replacing the Pricing Engine's Route/Rate/Freight Factor freight figure —
+mandatory, not a fallback: a booking is refused outright when no configuration exists for
+the From Station + destination district, or the weight falls outside the configured
+1-2000 KG range. Commission math itself is untouched (`ShipmentServiceImpl.copyCharge`'s
+percentages/formulas are byte-for-byte the same) — only the `freight` value it consumes
+now comes from the new source.
+
+**Backend**: new `districtfreight.application.FreightCalculationService`/`Impl` — one
+class, two callers (`DistrictLevelFreightController`'s new `POST .../calculate`
+live-preview endpoint, and `ShipmentServiceImpl.create`/`update` authoritatively), so the
+rate-card lookup lives in exactly one place. Sequence: destination pincode -> new
+`PincodeCoverageLookupPort` (owned by `districtfreight`, implemented in `master` as
+`MasterDistrictFreightCoverageDirectory`, walking the existing global `Pincode.areaId ->
+Area.cityId -> City.districtId -> District` chain, crossed into via `CompanyContext
+.runAs(GlobalMasters.PLATFORM_COMPANY_ID, ...)` exactly like `MasterDistrictFreightDistrictDirectory`
+already does) -> destination district + `Pincode.serviceable`/`odaApplicable` -> From
+Station (existing `BranchLookupPort`) -> `DistrictLevelFreightRepository
+.findByCompanyIdAndBranchIdAndDistrictId` (must be `ACTIVE`) -> new `DistrictLevelFreight
+.matchWeightSlab(BigDecimal)` (added alongside the existing, still-used `ratePerKgFor` —
+same boundaries, also returns the slab's label) -> base freight -> ODA (the row's own
+`odaApplicable` AND the destination pincode's own `odaApplicable`, both true, add the
+row's own `odaCharge` — never a hardcoded 250) -> total freight. Every failure throws
+`BusinessRuleException` with a message fit to show the booking clerk directly.
+
+**Integration point, decided before writing code**: `ShipmentServiceImpl.create()`/
+`update()` still call the (unchanged) `PricingEngine`/Route/Rate/Freight Factor path for
+fuel/handling/insurance/discount/round-off/GST% — this task's brief only ever varies
+freight+ODA in its worked examples, never those other lines, and leaving that call in
+place keeps every other charge line, and the Pricing Engine module itself, completely
+untouched (zero blast radius outside `shipment` + the new `districtfreight` service).
+`copyCharge`/`toCharge`/`replaceCharges`/`persistCharges`/`netAmountWithOtherCharges` each
+gained one new `FreightCalculationResult freightCalc` parameter; `freight` inside
+`copyCharge` is now `freightCalc.baseFreight()` (never `priced.freight()`), with a
+`freightDelta`/`gstOnFreightDelta` computed the identical way the existing (0.30.3)
+`odaChargeDelta`/`gstOnOdaChargeDelta` manual-ODA-override machinery already does — pure
+delta algebra, correct regardless of what the Pricing Engine's own (now superseded)
+freight figure happened to be. The existing manual ODA override (`command.odaCharge()`)
+is untouched in behaviour — it still replaces whatever the default figure is, only that
+default is now `freightCalc.odaCharge()` instead of `priced.odaCharge()`. Freight itself
+has no override — never accepted from the frontend, always the freshly recomputed
+authoritative figure, recomputed on every `create`/`update` call, not just once.
+
+**Frontend**: new `features/shipment/freight-calculation.service.ts` (thin wrapper,
+mirrors `eway-bill.service.ts`'s own shape) and a new "Freight Calculation" card in
+`shipment-create.ts`'s Booking Summary sidebar — From Station, Destination District,
+Chargeable Weight, Weight Slab, Rate/KG, Base Freight, ODA status, ODA Charge, Total
+Freight, with its own loading/error states, debounced (500ms) on destination pincode +
+delivery branch (which auto-fills it) + weight changes, independent of the existing
+Pricing preview's own debounce (a smaller, different set of inputs). Book Shipment is now
+also gated on a resolved, error-free freight calculation. The existing `app-charge-summary`
+card's Freight/ODA lines and GST/Net Amount now read off the new calculation (with the
+same delta-adjustment trick mirrored client-side, via new `freightDelta()`/
+`gstOnFreightDelta()` methods alongside the existing `odaChargeDelta()`/
+`gstOnOdaChargeDelta()`) so the live preview total matches what actually gets booked
+server-side. Consignment-print receipt charges updated the same way.
+
+**Testing**: `FreightCalculationServiceImplTest` (24 cases) covers the brief's own test
+list directly — the ICHALKARANJI -> PUNE worked examples (20kg -> 170.00, 60kg -> 480.00,
+both before ODA) via a parameterised test, every stated boundary weight (1/15/16/50/51/
+100/101/1000/1001/2000 KG) each matching exactly one slab, 2001 KG rejected (not floored),
+zero/negative weight rejected, ODA/non-ODA (including the row's own `odaApplicable=false`
+winning over an ODA destination), missing/INACTIVE configuration both rejected with a
+clear message, unresolvable/not-serviceable destination pincodes rejected, and that the
+right district is picked from the pincode's own coverage record. `DistrictLevelFreightTest`
+gained `matchWeightSlabLabelsTheMatchedSlab`. `ShipmentServiceImplTest` gained 5 new cases
+(booking blocked without a configuration, freight persisted is District Level Freight's
+own figure not the Pricing Engine's, ODA applies/overrides correctly, unsupported weight
+blocks booking) and had two pre-existing commission tests (`commissionWithDifferentFreightAmount`/
+`commissionWithDecimalFreightAmount`) updated to restub `freightCalculationService`
+instead of `pricingEngine`, since freight no longer comes from the latter — the commission
+formulas they assert on are otherwise byte-for-byte unchanged. `mvn test` 904 -> 939 (35
+new/updated, all green). `tsc --noEmit -p tsconfig.app.json`/`ng build --configuration
+production` both clean; `ng test` 147/148 (the one failure, `reports-dashboard`,
+pre-existing and unrelated, confirmed via `[[frontend-test-runner]]`).
+
+**Not yet verified live** — no MySQL boot or browser click-through this session;
+verification stopped at the compile/build/unit-test bar (939/939 backend, clean frontend
+build). A real ICHALKARANJI -> PUNE District Level Freight row and a booking through it
+against real `courier_db` would be the natural next verification step.
+
+---
+
+## [Unreleased] — 2026-09-02 — District Level Freight module (rate setup only)
+
+Direct full-spec request: a new rate-setup module for freight by From Station +
+Destination District + a fixed six-slab per-KG rate table, plus a configurable ODA
+charge. Explicitly scoped to configuration only — no changes to Shipment Booking,
+Commission calculation, Rate Master, Pricing Engine or Freight Factor; none of those
+files were touched.
+
+**Backend**: new `com.courier.modules.districtfreight`, migration `V54`. `DistrictLevelFreight`
+(company-owned, `district_level_freight` table) carries `branchId`/`districtId` (plain UUIDs,
+no entity import — this module's own `BranchLookupPort`/`DistrictLookupPort` seams, mirroring
+`Route`'s `BranchLookupPort` and `BranchPincodeMapping`'s cross into `GlobalMasters
+.PLATFORM_COMPANY_ID`), six `rate1To15`..`rate1501To2000` columns, `odaApplicable`/`odaCharge`
+(default `250.0000`, configurable per row, never hardcoded into any calculation), `status`.
+`UNIQUE (company_id, branch_id, district_id)` prevents a duplicate From Station + District
+combination at the DB level. `ratePerKgFor(BigDecimal)` is a pure domain lookup for the "COMPLETE
+weight uses exactly one slab, never progressive" rule a future booking integration would call —
+declared, not wired to anything yet. RBAC is role-based like every module since Ticket Support
+(`WRITE = hasRole(COMPANY_ADMIN)`, `READ = isAuthenticated()`, mirroring `RateServiceImpl`
+exactly) — no new `PermissionModule` catalogue rows. Delete is a plain soft delete, always
+permitted (nothing in this codebase references a row yet).
+
+**Excel import**: new `DistrictLevelFreightExcelImportService` (Apache POI, new `poi-ooxml`
+dependency — no prior Excel import existed anywhere in this codebase to reuse). Maps the
+sheet's own column headers (`From Station`, `District`, `1KG TO 15 KG`, `16 KG TO 50KG`, `51 KG
+TO 100 KG`, `101 KG TO 1000 KG`, `1001 KG TO 1500 KG`, `1501 KG TO 2000KG`), normalised
+case/whitespace-insensitively. A row counts as data only when From Station, District and all
+six rate cells are present and numeric — everything else (a blank spacer, the trailing "* ODA
+charge Rs.250 extra..." note row) is silently ignored, not reported. An existing From Station +
+District combination is upserted (updated), never rejected — only a combination repeated
+*within the same file* is a real error. Two endpoints: `POST .../import/preview` (dry run,
+writes nothing, classifies WOULD_CREATE/WOULD_UPDATE/ERROR) and `POST .../import` (commits,
+CREATED/UPDATED/ERROR), each row in its own transaction via a cross-bean call to
+`DistrictLevelFreightService`, the same reasoning `PincodeBulkImportService` documents for its
+own per-row `create` calls.
+
+**Frontend**: bespoke `features/district-level-freight/` (not the shared twelve-master-list
+architecture — this row has multiple lookups plus a fixed six-column rate grid, the same shape
+that made `Rate` bespoke rather than a `MasterDefinition`). List/create/edit/view pages mirror
+`features/rate-master/` one-to-one; new `DistrictFreightImportDialog` (pick file -> preview ->
+commit, row-level outcome table). New nav leaf "District Level Freight" under the existing
+"Rate Master" section, `COMPANY_ADMIN`/`BRANCH_MANAGER` read, `COMPANY_ADMIN`-only write,
+reusing `RATE_READERS`.
+
+**Verified live** on a throwaway `:8082` (`:8100`/`:4200` untouched throughout) against real
+`courier_db`, `V54` applied cleanly (schema now at 54): created a real rate (`CAVETEST1` ->
+`Aurangabad`), duplicate combination correctly `409`'d, activate/deactivate round-tripped,
+`BRANCH_MANAGER` correctly `403`'d on write / `200`'d on read. Excel import exercised with a
+real `.xlsx` built for this test: a new district row `CREATED`, the existing combination
+`UPDATED` (rates changed 10.00 -> 11.00, confirmed via a follow-up `GET`), a blank row and the
+ODA note row both silently ignored (3 data rows recognised out of 6 sheet rows), and an unknown
+branch name correctly reported as a row-level `ERROR` with its own row number — both in preview
+(dry run, confirmed no write) and commit modes. Delete confirmed as a real soft delete (`200`
+then a subsequent `404`). Test fixtures (`CAVETEST1` -> Mumbai/Aurangabad) left in place per
+`[[keep-test-data-in-dev-db]]`. `tsc --noEmit`/`ng build --configuration production` both
+clean, `ng test` 147/148 (the one failure, `reports-dashboard`, confirmed pre-existing and
+unrelated). `mvn test` 887 -> 904 (17 new: 12 service, 5 domain).
+
+**Same-day "test it live" follow-up**: full Chrome click-through on a throwaway `:4300`
+frontend (`SPRING_PROFILES_ACTIVE=test` on the `:8082` backend — the default profile's
+CORS allowlist doesn't include `:4300`, only `application-test.yml` does, per this
+project's own documented throwaway-verification pattern; `:8100`/`:4200` untouched
+throughout) as `first.admin@gmail.com` (`COMPANY_ADMIN`): nav leaf renders under Rate
+Master, list/filters/create/view/edit/delete/deactivate all exercised against real data,
+Excel import's preview -> commit round-tripped through the actual dialog (2 rows updated,
+1 error row shown, toast + list refresh confirmed). **One real bug found and fixed**:
+`DistrictFreightImportDialog`'s content div was wider (720px, then 640px) than Angular
+Material's own `.mdc-dialog__surface` default `max-width:560px` (not overridden by this
+project's global `.app-dialog` rule, which only sets border-radius/shadow) — the surface's
+own `overflow-x:auto` silently clipped the Preview/Import buttons with no visible
+scrollbar, confirmed via `getComputedStyle` before fixing. Fixed by shrinking the dialog to
+512px (fits inside 560px) and making the results table wrap (`table-layout:fixed`,
+`word-break:break-word`) instead of forcing width — a self-contained fix inside this
+module's own component, not a change to the shared `.app-dialog` rule other dialogs
+(`rate-calculator-dialog` at 640px, `pod` delivery dialogs) likely share the same latent
+issue with. Re-verified live post-fix: dialog renders fully within bounds.
+
+**Then, by explicit user request** ("real :4200/:8100 restart, one test should be done on
+this" — a deliberate one-off exception to `[[never-kill-dev-ports]]`, confirmed via
+`AskUserQuestion` given a peer session was active on this same repo): rebuilt the jar
+(`mvn package -DskipTests`, full suite already green), restarted the real backend/frontend
+in place with the **same `JWT_SECRET`/`DB_*` env vars** captured from the running process
+(`ps -E`) before killing it — existing sessions (including the peer session's, if any) kept
+working with zero forced re-login, unlike every prior JWT-rotating restart this project's
+history documents. Confirmed `flyway_schema_history` still at `54` post-restart, hit the
+new endpoint unauthenticated to confirm it's live, then repeated the same click-through
+(list, Excel import dialog) on real `:4200` — dialog fix holds there too. Both processes
+now run as new PIDs; no throwaway `:8082`/`:4300` processes left behind.
+
+**Same-day real-file bug fix**: user supplied their actual production sheet
+(`~/Downloads/KARAD RATE.xlsx`, 38 From-Station=KARAD rows + a blank spacer + the ODA note
+row). Import rejected the whole file with "missing expected columns" — the sheet's 51-100
+KG column header reads `"51 KG TO  KG 100"` (unit and number swapped, extra space) versus
+the spec text `"51 KG TO 100 KG"` my exact-text header matching expected. Real sheets
+vary in word order/spacing; exact-text matching was never going to hold up past the one
+synthetic test file. Fixed `DistrictLevelFreightExcelImportService.classifyHeader` to match
+the six rate columns by **the pair of numbers the header contains**, in either order
+(`SLAB_BOUNDARIES`, a `Map<List<Integer>, String>` keyed on `(lo, hi)`), and From Station/
+District/ODA by keyword containment — no longer by literal normalised-text equality.
+Re-verified against the real file on a throwaway `:8082` (real `:8100`/`:4200` untouched
+this time): 40 rows -> 37 data rows recognised (blank row and ODA note row still correctly
+ignored); created a real `KARAD` branch (didn't exist yet) and re-ran — 33/37 rows
+`WOULD_CREATE` clean, 4 real (non-parser) errors reported by row number: `AHILYA NAGAR`
+(the district master still has the pre-2023 name `AHMEDNAGAR`), `GONDIYA`/`GUJRAT`/`GOA`
+(not in the seeded Maharashtra-only district master — Gujarat/Goa aren't Maharashtra
+districts). Those are master-data gaps for the user to resolve, not import bugs — left
+unaddressed on purpose. Added `DistrictLevelFreightExcelImportServiceTest` (2 cases: the
+real header-variant + blank-row/note-row shape parses clean; a genuinely incomplete sheet
+still gets refused with a clear message) — the previous two test files covered the CRUD
+service and the entity, not the import parser. `mvn test` 904 -> 906, all green. `KARAD`
+branch left in `courier_db` as a fixture per `[[keep-test-data-in-dev-db]]`.
+
+---
+
 ## [Unreleased] — 2026-09-02 — Deploy: pincode mapping + Razorpay webhook to 35.154.220.116
 
 Committed and pushed the pincode-area/branch-pincode-mapping/Razorpay-webhook work below

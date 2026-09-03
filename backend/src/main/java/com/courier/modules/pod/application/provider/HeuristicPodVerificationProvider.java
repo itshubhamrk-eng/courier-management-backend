@@ -99,8 +99,25 @@ public class HeuristicPodVerificationProvider implements PodVerificationProvider
         boolean awbMismatch = isMismatch(request.claimedAwb(), request.shipmentActualAwb())
                 || isMismatch(request.claimedShipmentNumber(), request.shipmentActualNumber());
         if (awbMismatch) {
-            score -= 40;
+            // Hard fail, not a point deduction: ground truth already lives in this platform's
+            // own DB record (shipmentActualAwb/shipmentActualNumber), so a mismatch here is not
+            // a quality signal to weigh against others — it means this POD was captured for a
+            // different shipment. Zeroing the score keeps it out of both PASS and REVIEW no
+            // matter how clean the rest of the photo looks; a re-upload against the right
+            // shipment is the only way forward, never a manual approve.
+            score = 0;
             reasons.add("Provided AWB/shipment number does not match this shipment's own record.");
+        }
+
+        // Same hard-fail rule for the label's own QR code — checked independently of
+        // claimedAwb/claimedShipmentNumber (those can be a self-echo of the shipment record
+        // the delivery app already has open; the QR comes off the physical parcel). Either
+        // source disagreeing with this platform's ground truth is a hard reject on its own.
+        boolean qrMismatch = isMismatch(request.qrScanValue(), request.shipmentActualAwb())
+                && isMismatch(request.qrScanValue(), request.shipmentActualNumber());
+        if (qrMismatch) {
+            score = 0;
+            reasons.add("Scanned QR code does not match this shipment's own record.");
         }
 
         boolean mustReview = false;

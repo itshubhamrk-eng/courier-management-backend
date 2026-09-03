@@ -27,6 +27,12 @@ public interface BranchRepository extends JpaRepository<Branch, UUID>,
 
     Optional<Branch> findByBranchCode(String branchCode);
 
+    /** Used by District Level Freight's Excel import to resolve a "From Station" cell
+     *  against either the branch code or the branch name, case-insensitively. */
+    Optional<Branch> findByBranchCodeIgnoreCase(String branchCode);
+
+    Optional<Branch> findByBranchNameIgnoreCase(String branchName);
+
     @Query("select b from Branch b where b.id = :id and b.companyId = :companyId")
     Optional<Branch> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 

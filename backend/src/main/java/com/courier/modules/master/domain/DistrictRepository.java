@@ -13,4 +13,8 @@ public interface DistrictRepository extends MasterDataRepository<District> {
 
     /** Used by the postal-lookup auto-resolver, scoped to the parent state. */
     Optional<District> findByCompanyIdAndStateIdAndNameIgnoreCase(UUID companyId, UUID stateId, String name);
+
+    /** Used by District Level Freight's Excel import to resolve a "District" cell by name
+     *  alone (the sheet does not name a state), scoped to the global geography owner. */
+    Optional<District> findByCompanyIdAndNameIgnoreCase(UUID companyId, String name);
 }
