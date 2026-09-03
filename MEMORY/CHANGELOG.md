@@ -8,6 +8,35 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-04 — Deployed V56 (index migration); found my own leftover log-tail processes were adding to the RAM pressure
+
+Deploying V56 (backend-only, no code change) hit `rsync` connection resets 4 times in a
+row — "connection unexpectedly closed", 0 bytes received, immediately, not the usual
+slow-timeout transport flakiness this repo's deploys have hit before. Investigated instead
+of blindly retrying: plain SSH commands worked fine, only `rsync` (which forks a remote
+process) consistently failed. Root cause found on the box itself, not the network: two
+`docker compose logs -f` watchers *I had started earlier this same session* (to catch the
+pricing-slowness reports live) were still running, un-killed, on an already
+memory-starved host ([[prod-ec2-oom-memory-starved]]) — `ps aux --sort=-%mem` showed them
+sitting there since 19:09/19:15. Killed both (`kill <pid>`), `free -h` recovered a bit
+of headroom, and `rsync` succeeded on the very next attempt with zero code changes.
+
+**Lesson for this session and future ones**: a background `docker compose logs -f`
+(or any `ssh ... -f`/streaming remote command) started for live debugging on a
+resource-constrained box must be explicitly killed when done with it — it doesn't stop on
+its own, and on a box already this tight on memory, a couple of forgotten watchers were
+enough to make `rsync` itself fail outright. Prefer a one-shot log tail (`--since` a fixed
+window, no `-f`) over a live `-f` watch on this specific box unless actively staring at
+it, and always confirm no stray `docker compose logs -f` is still running (`ps aux | grep
+'compose.*logs'`) before ending a debugging session against it.
+
+Deploy itself was then clean: `docker compose up -d --force-recreate backend`, healthy on
+the first try, Flyway applied V56 (55 -> 56, 4.2s), `prod-api` readiness UP. Backend
+settled at ~421MB/909MB post-restart (JVM still warming up) — still a tight box, this
+didn't fix the underlying RAM shortage, just cleared my own contribution to it.
+
+---
+
 ## [Unreleased] — 2026-09-04 — Missing indexes for a few real hot query paths (V56)
 
 Direct request ("add indexing in all heavy query in db") after reports of slow pricing/
