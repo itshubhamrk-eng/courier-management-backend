@@ -8,6 +8,50 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — Full booking-to-delivered flow verified live on prod
+
+Direct request to test the complete Booking -> Manifest -> Dispatch -> In Scan -> Out For
+Delivery -> Deliver chain for real on `AMAZING_LOGISTICS` (not dev), following the 0.36.0
+deploy above. Confirmed with the user first (`AskUserQuestion`) since a delivered shipment
+isn't undoable the way the earlier throwaway branches were.
+
+**Found first**: the account had zero pricing configured anywhere — no Rate Cards, no
+Freight Factor, no District Level Freight rows — so nothing could actually be booked yet.
+Flagged this to the user and confirmed adding minimal setup data before proceeding (a
+second `AskUserQuestion`), scoped entirely to the account's own pre-existing `TESTING`
+("Test branch") / `TEST-2` ("Test Latur") branches, never the real Kolhapur/Satara ones:
+one Route (`CLAUDE_TEST_LANE`), one Rate (`CLAUDE_TEST_RATE`, base 100 + slabs), one
+District Level Freight row (`TESTING` -> Latur district, 10/KG for 1-15KG). Confirmed live
+that Shipment Booking now requires District Level Freight unconditionally — `FreightCalculationServiceImpl.calculate`
+is called ahead of `PricingEngine.priceIt` and throws if no row matches, exactly as
+`FreightCalculationServiceImpl`'s own class doc says ("never a silent fallback"); the
+Route/Rate still gets matched and drives commission-percentage components, so both pieces
+are genuinely exercised together, not redundant.
+
+**Live-booked and driven through to delivered**, entirely via the real API (curl) plus
+`impersonateBranch` (COMPANY_ADMIN acting as `TESTING` then `TEST-2` — no extra
+credentials needed) so each movement step ran as the correct branch role, not the admin
+account: `TESTING-000001` (AWB `26090000004`), 1 pkg / 5 KG, `TESTING` -> `TEST-2`.
+Manifest `MFT-260903-8523` created and dispatched with the company's real existing vehicle
+(`MH24BV6244`) and a real user as driver (no fleet data invented). Status walked
+`BOOKED -> MANIFEST_CREATED -> DISPATCHED -> IN_SCAN -> OUT_FOR_DELIVERY -> DELIVERED`
+cleanly, whole chain end-to-end in under 3 minutes wall-clock. Charges confirmed correct
+by direct calculation, not just "it didn't error": Freight 50.00 (5 KG x the 10.00/KG
+1-15KG slab), GST 9.00 (18%), Net 59.00, commission split 4.50/5.00 off the matched
+Route/Rate — verified twice, once via `GET .../charges` and again by eye in the actual
+shipment detail page (`vendor.amazinglpl.com/shipments/{id}`), whose Timeline card showed
+all six steps (Booked/Loading Sheet Created/Dispatched/Received/DRS/Delivered) with real
+timestamps.
+
+**Left in place, deliberately**: the Route, Rate, District Level Freight row, and the
+delivered shipment itself. Unlike the throwaway GST/PAN test branches from the earlier
+0.36.0 verification, none of this is disposable — a delivered shipment has no undo, and
+the Route/Rate/District Level Freight rows are exactly the kind of setup data the
+account's own pre-existing `TESTING`/`TEST-2` branches exist for, reusable for whatever
+the customer's team tests next rather than junk to clean up.
+
+---
+
 ## [Unreleased] — 2026-09-03 — Deployed to prod (commit bc02c39)
 
 Committed and pushed 0.36.0 (Branch GST/PAN + login displayName-on-reload fix, bundled with
