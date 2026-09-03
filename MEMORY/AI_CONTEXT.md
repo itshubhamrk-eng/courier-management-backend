@@ -7,6 +7,59 @@
 
 ## Current Version
 
+`0.36.0` — **Branch GST/PAN fields + login displayName-on-reload fix.** Two independent
+fixes. (1) Branches gained `gstNumber`/`panNumber` (`V55`, both optional, GSTIN/PAN format
+validated in `Branch.applyInvariants`, branch-level not company-level since a company can
+run branches under different state GSTINs) — threaded through `Create`/`UpdateBranchCommand`,
+both request DTOs, `BranchResponse`, `BranchMapper`, `BranchServiceImpl` (create/update/audit
+snapshot), and a new "Tax Details" card in `branch-form.ts` (editable in both create and
+edit, unlike the create-only branch-user block) plus `branch-view.ts`. (2) The JWT carries no
+name claim (only `email`, same reasoning as `cnm`/`clogo`) so `AuthService.hydrate()` — the
+path a hard page reload takes — fell back to showing the email where the name belongs; login
+itself was fine since `applySession` had the real `LoginResponse.displayName` in memory. Fix:
+`TokenService` now stashes `displayName` in `localStorage` (`cs.dname`) alongside the tokens,
+set on login/`refreshProfile`/impersonation, read back in `hydrate()`, and correctly
+stash/restore paired through `beginImpersonation`/`restoreStash` so exiting impersonation
+restores the real user's name, not the impersonated one's. Adds no new test cases itself
+(`mvn test` still 943/943 — see the 0.35.0 entry below for where that count actually came
+from; its own changelog claim of "939 -> 942" undercounted by one, confirmed by isolating
+its files and re-running). `tsc --noEmit`/`ng build --configuration production` clean,
+`ng test` 147/148 (the one failure, `reports-dashboard`, pre-existing and unrelated — same
+as every prior release). **Not yet verified live** — no dev-server click-through this
+session; unit/compile-level verification only.
+
+Previously current:
+
+`0.35.0` — **Rate/KG override (increase-only, GST on delta) + destination Area picker
+ahead of Delivery Branch for freight resolution.** Direct request, two additions to
+0.34.0's District Level Freight booking integration. (1) Freight Calculation card's
+"Rate / KG" is now editable — `ShipmentServiceImpl.requireRateNotDecreased` refuses a
+typed value below `freightCalc.ratePerKg()` (the matched slab's own rate, a floor never a
+ceiling); `effectiveFreight(freightCalc, ratePerKgOverride)` replaces the bare
+`freightCalc.baseFreight()` throughout `copyCharge`/`netAmountWithOtherCharges`, GST
+recomputed only on the difference from the Pricing Engine's own superseded freight —
+identical delta-algebra to the existing `odaCharge` override. (2) New "Destination
+Pincode"/"Destination Area" fields ahead of "Delivery Branch" in `shipment-create.ts`: a
+6-digit pincode looks up its Areas (`GET /pincodes/{id}/areas`, existing 0.32.2 endpoint),
+primary auto-selects, picking one is now what triggers the freight preview (`readyForFreight`
+gates on `destinationAreaId`) and syncs `deliveryPincode` so Pricing Engine and District
+Level Freight never target two different destinations. New `PincodeCoverageLookupPort
+.findByPincodeAndArea` (impl in `MasterDistrictFreightCoverageDirectory`) resolves
+District via the chosen Area's own `cityId -> districtId` chain and ODA via that exact
+`PincodeArea` link's own `odaApplicable` — more accurate than the pincode-wide single flag
+`findByPincode` still uses when no Area is given. `mvn test` 939 -> 943 (4 new — this
+entry's own text said 942/3 new at the time; corrected retroactively, isolating its files
+confirmed 943 with 0.36.0's changes absent),
+`tsc --noEmit`/`ng build --configuration production` clean, `ng test` 147/148 (the one
+failure, `reports-dashboard`, pre-existing and unrelated). **Verified live** on real
+`:8100`/`:4200` (a throwaway District Level Freight fixture inserted for PUNE -> Kolhapur,
+since none existed for that branch) as `pune@gmail.com`: pincode `416013` auto-resolved
+"Girgaon, Kolhapur" and priced Rate/KG 8.50 before a Delivery Branch was even picked;
+booked a real shipment (`PUNE-000022`) with Rate/KG raised 10.00 -> 15.00 — live preview
+(Freight 45.00/GST 8.10) matched the persisted `shipment_charges` row and detail page
+exactly; a lowered rate (5.00, below the 10.00 floor) was cleanly refused server-side with
+no shipment created. Full detail in `CHANGELOG.md` Unreleased 2026-09-03.
+
 `0.34.0` — **District Level Freight wired into Shipment Booking.** Direct follow-up to
 0.33.0: "Now connect it to Shipment Booking." Freight and ODA are now District Level
 Freight's own job at booking time — mandatory, not a fallback, replacing the Pricing

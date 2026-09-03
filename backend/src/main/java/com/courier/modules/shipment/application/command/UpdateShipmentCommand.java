@@ -44,6 +44,8 @@ public record UpdateShipmentCommand(
         BigDecimal width,
         BigDecimal height,
         BigDecimal invoiceValue,
-        EwayBillDataCommand ewayBill
+        EwayBillDataCommand ewayBill,
+        UUID destinationAreaId,
+        BigDecimal ratePerKgOverride
 ) {
 }

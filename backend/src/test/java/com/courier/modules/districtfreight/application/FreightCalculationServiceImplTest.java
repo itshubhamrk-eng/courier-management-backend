@@ -30,7 +30,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Mirrors {@code DistrictLevelFreightServiceImplTest}'s own fixture shape — same
@@ -103,7 +106,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(row()));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         assertThat(result.weightSlabLabel()).isEqualTo("16-50 KG");
         assertThat(result.ratePerKg()).isEqualByComparingTo("8.50");
@@ -114,13 +117,30 @@ class FreightCalculationServiceImplTest {
     }
 
     @Test
+    @DisplayName("a chosen destination Area routes through findByPincodeAndArea instead of "
+            + "the pincode's legacy single area — resolves District/ODA off that exact link")
+    void destinationAreaRoutesThroughAreaSpecificCoverageLookup() {
+        UUID areaId = UUID.randomUUID();
+        when(coverageLookup.findByPincodeAndArea(DESTINATION_PINCODE, areaId))
+                .thenReturn(Optional.of(SERVICEABLE_ODA));
+        when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
+                .thenReturn(Optional.of(row()));
+
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, areaId, new BigDecimal("20"));
+
+        assertThat(result.baseFreight()).isEqualByComparingTo("170.00");
+        assertThat(result.odaApplicable()).isTrue();
+        verify(coverageLookup, never()).findByPincode(any());
+    }
+
+    @Test
     @DisplayName("ICHALKARANJI -> PUNE, 60 KG -> the 51-100 KG slab's rate, base freight 480.00")
     void workedExample60Kg() {
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(SERVICEABLE_NON_ODA));
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(row()));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("60"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("60"));
 
         assertThat(result.weightSlabLabel()).isEqualTo("51-100 KG");
         assertThat(result.baseFreight()).isEqualByComparingTo("480.00");
@@ -145,7 +165,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(row()));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal(weight));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal(weight));
 
         assertThat(result.weightSlabLabel()).isEqualTo(slabLabel);
         assertThat(result.ratePerKg()).isEqualByComparingTo(ratePerKg);
@@ -160,7 +180,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(row()));
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("2001")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("2001")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("outside the configured");
     }
@@ -168,7 +188,7 @@ class FreightCalculationServiceImplTest {
     @Test
     @DisplayName("zero weight is rejected before any lookup runs")
     void zeroWeightRejected() {
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, BigDecimal.ZERO))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, BigDecimal.ZERO))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("greater than zero");
     }
@@ -176,7 +196,7 @@ class FreightCalculationServiceImplTest {
     @Test
     @DisplayName("negative weight is rejected before any lookup runs")
     void negativeWeightRejected() {
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("-5")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("-5")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("greater than zero");
     }
@@ -190,7 +210,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(configured));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         assertThat(result.odaApplicable()).isTrue();
         assertThat(result.odaCharge()).isEqualByComparingTo("375.50");
@@ -204,7 +224,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(row()));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         assertThat(result.odaApplicable()).isFalse();
         assertThat(result.odaCharge()).isEqualByComparingTo("0.00");
@@ -220,7 +240,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(configured));
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         assertThat(result.odaApplicable()).isFalse();
         assertThat(result.odaCharge()).isEqualByComparingTo("0.00");
@@ -233,7 +253,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("No District Level Freight configuration exists");
     }
@@ -247,7 +267,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
                 .thenReturn(Optional.of(inactive));
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("No District Level Freight configuration exists");
     }
@@ -257,7 +277,7 @@ class FreightCalculationServiceImplTest {
     void unresolvableDestinationRejected() {
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("not on file");
     }
@@ -270,7 +290,7 @@ class FreightCalculationServiceImplTest {
                         DISTRICT, "PUNE", "Pune", true);
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(notServiceable));
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("not serviceable");
     }
@@ -292,7 +312,7 @@ class FreightCalculationServiceImplTest {
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, otherDistrict))
                 .thenReturn(Optional.empty());
 
-        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20"));
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         assertThat(result.districtId()).isEqualTo(DISTRICT);
         assertThat(result.districtCode()).isEqualTo("PUNE");
@@ -304,7 +324,7 @@ class FreightCalculationServiceImplTest {
         when(branchLookup.findBranch(eq(BRANCH), eq(COMPANY)))
                 .thenReturn(Optional.of(new BranchLookupPort.BranchRef(BRANCH, "ICHALKARANJI", "Ichalkaranji", false)));
 
-        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, new BigDecimal("20")))
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("inactive");
     }

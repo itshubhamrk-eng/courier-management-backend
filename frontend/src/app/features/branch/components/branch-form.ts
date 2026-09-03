@@ -21,6 +21,8 @@ function toOptions(rows: GeographyOption[]): SelectOption[] {
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_ -]{1,48}[A-Za-z0-9]$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[+]?[0-9 \-]{7,20}$/;
+const GSTIN = /^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/;
+const PAN = /^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const TYPE_OPTS: SelectOption[] = BRANCH_TYPES.map((t) => ({
@@ -51,9 +53,10 @@ function emailish(control: AbstractControl): ValidationErrors | null {
  * it returns once. In edit the section is absent: the account exists and is managed from
  * Users.
  *
- * Honesty: the UI-10 spec's Owner/Contact-Person and GST/PAN fields have no column on the
- * backend branch (GST/PAN are company-level); they are omitted rather than faked. "Vendor
- * Type" maps to `branchType`, "Area" to `district`, "Pincode" to `postalCode`.
+ * Honesty: the UI-10 spec's Owner/Contact-Person field has no column on the backend branch;
+ * it is omitted rather than faked. "Vendor Type" maps to `branchType`, "Area" to `district`,
+ * "Pincode" to `postalCode`. GST/PAN are branch-level fields (a company may run branches
+ * under different state GSTINs), editable in both create and edit.
  */
 @Component({
   selector: 'app-branch-form',
@@ -167,6 +170,13 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           </p>
         </app-card>
       }
+
+      <app-card title="Tax Details" subtitle="Branch's registration numbers. Optional.">
+        <div class="grid">
+          <app-input [control]="c('gstNumber')" label="GST Number" placeholder="27AAAAA0000A1Z5" [maxLength]="15" />
+          <app-input [control]="c('panNumber')" label="PAN Number" placeholder="AAAAA0000A" [maxLength]="10" />
+        </div>
+      </app-card>
 
       <app-card title="Charges" subtitle="Branch-level percentages applied to shipment charges.">
         <div class="grid">
@@ -321,6 +331,7 @@ export class BranchForm {
       allowManifest: b.allowManifest, allowCashCollection: b.allowCashCollection, allowWallet: b.allowWallet,
       instantCommission: b.instantCommission,
       remarks: b.remarks ?? '',
+      gstNumber: b.gstNumber ?? '', panNumber: b.panNumber ?? '',
       gstPercentage: b.gstPercentage, commissionOnOtherCharges: b.commissionOnOtherCharges,
       commissionOnBasicFreight: b.commissionOnBasicFreight,
       companyServiceChargePercentage: b.companyServiceChargePercentage,
@@ -360,6 +371,8 @@ export class BranchForm {
       allowManifest: [true], allowCashCollection: [true], allowWallet: [false],
       instantCommission: [true],
       remarks: ['', Validators.maxLength(500)],
+      gstNumber: ['', [Validators.pattern(GSTIN), Validators.maxLength(15)]],
+      panNumber: ['', [Validators.pattern(PAN), Validators.maxLength(10)]],
       gstPercentage: [18, [Validators.required, Validators.min(0), Validators.max(100)]],
       commissionOnOtherCharges: [20, [Validators.required, Validators.min(0), Validators.max(100)]],
       commissionOnBasicFreight: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
@@ -398,6 +411,8 @@ export class BranchForm {
       allowManifest: !!v.allowManifest, allowCashCollection: !!v.allowCashCollection, allowWallet: !!v.allowWallet,
       instantCommission: !!v.instantCommission,
       remarks: trim(v.remarks),
+      gstNumber: trim(v.gstNumber)?.toUpperCase() ?? null,
+      panNumber: trim(v.panNumber)?.toUpperCase() ?? null,
       gstPercentage: Number(v.gstPercentage),
       commissionOnOtherCharges: Number(v.commissionOnOtherCharges),
       commissionOnBasicFreight: Number(v.commissionOnBasicFreight),

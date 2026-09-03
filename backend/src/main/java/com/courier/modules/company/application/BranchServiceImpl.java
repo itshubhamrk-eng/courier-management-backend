@@ -128,6 +128,8 @@ public class BranchServiceImpl implements BranchService {
                 .allowWallet(Boolean.TRUE.equals(command.allowWallet()))
                 .instantCommission(orTrue(command.instantCommission()))
                 .remarks(command.remarks())
+                .gstNumber(command.gstNumber())
+                .panNumber(command.panNumber())
                 .gstPercentage(orDefault(command.gstPercentage(), DEFAULT_GST_PERCENTAGE))
                 .commissionOnOtherCharges(orDefault(command.commissionOnOtherCharges(),
                         DEFAULT_COMMISSION_ON_OTHER_CHARGES))
@@ -321,6 +323,8 @@ public class BranchServiceImpl implements BranchService {
         branch.setAllowWallet(Boolean.TRUE.equals(command.allowWallet()));
         branch.setInstantCommission(orTrue(command.instantCommission()));
         branch.setRemarks(command.remarks());
+        branch.setGstNumber(command.gstNumber());
+        branch.setPanNumber(command.panNumber());
         branch.setGstPercentage(command.gstPercentage());
         branch.setCommissionOnOtherCharges(command.commissionOnOtherCharges());
         branch.setCommissionOnBasicFreight(command.commissionOnBasicFreight());
@@ -653,6 +657,8 @@ public class BranchServiceImpl implements BranchService {
         v.put("allowWallet", b.isAllowWallet());
         v.put("instantCommission", b.isInstantCommission());
         v.put("remarks", b.getRemarks());
+        v.put("gstNumber", b.getGstNumber());
+        v.put("panNumber", b.getPanNumber());
         v.put("gstPercentage", String.valueOf(b.getGstPercentage()));
         v.put("commissionOnOtherCharges", String.valueOf(b.getCommissionOnOtherCharges()));
         v.put("commissionOnBasicFreight", String.valueOf(b.getCommissionOnBasicFreight()));

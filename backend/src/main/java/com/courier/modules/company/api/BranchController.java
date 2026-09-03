@@ -239,6 +239,17 @@ public class BranchController {
         return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.success("Pincode unmapped"));
     }
 
+    @GetMapping("/by-pincode/{pincodeId}")
+    @Operation(summary = "The branch mapped to a pincode, if any",
+            description = "Resolves `branch_pincode_mapping`'s one-branch-per-pincode rule "
+                    + "for the caller's company — Shipment Booking's Destination Pincode "
+                    + "field uses this to auto-select Delivery Branch. `data` is absent when "
+                    + "the pincode isn't mapped to any branch yet. `isAuthenticated()`.")
+    public ApiResponse<BranchSummaryResponse> branchForPincode(@PathVariable UUID pincodeId) {
+        return ApiResponse.success(
+                pincodeMappingService.findBranchForPincode(pincodeId).map(mapper::toSummary).orElse(null));
+    }
+
     // -------------------------------------------------------------------- helpers
 
     private Pageable sanitise(Pageable pageable) {

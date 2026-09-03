@@ -58,7 +58,8 @@ public class ShipmentMapper {
                 r.remarks(), r.otherCharges(), r.odaCharge(), r.freightFactorOverride(), toItemCommands(r.items()),
                 r.actualWeight(), r.length(), r.width(), r.height(),
                 r.crossing(), r.crossingBranchIds(), r.crossingCharge(),
-                r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()));
+                r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
+                r.destinationAreaId(), r.ratePerKgOverride());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {
@@ -71,7 +72,8 @@ public class ShipmentMapper {
                 r.shipmentType(), r.bookingDate(), r.declaredValue(), r.numberOfPackages(),
                 r.remarks(), r.otherCharges(), r.odaCharge(), r.freightFactorOverride(), toItemCommands(r.items()),
                 r.actualWeight(), r.length(), r.width(), r.height(),
-                r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()));
+                r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
+                r.destinationAreaId(), r.ratePerKgOverride());
     }
 
     /** The shipment's own invoiceValue rides along as the E-Way Bill's invoiceValue too —

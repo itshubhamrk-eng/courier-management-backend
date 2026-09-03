@@ -102,6 +102,9 @@ export interface ImportSummaryResponse {
 export interface FreightCalculationRequest {
   bookingBranchId: string;
   destinationPincode: string;
+  /** The specific Area of destinationPincode picked from its Area dropdown, if any —
+   *  resolves District/ODA off that exact pincode-area link. */
+  destinationAreaId?: string | null;
   chargeableWeight: number;
 }
 

@@ -154,6 +154,13 @@ export class MasterDataService {
     return this.branchDirectory$;
   }
 
+  /** The branch mapped to a pincode (`branch_pincode_mapping`'s one-branch rule), if any —
+   *  Shipment Booking's Destination Pincode -> auto-select Delivery Branch flow. `undefined`
+   *  when unmapped (the envelope's `data` key is simply absent). */
+  branchForPincode(pincodeId: string): Observable<BranchSummary | undefined> {
+    return this.api.get<BranchSummary>(`/branches/by-pincode/${pincodeId}`);
+  }
+
   private branchOptions(): Observable<MasterOption[]> {
     return this.branchDirectory()
       .pipe(map((list) => list.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));

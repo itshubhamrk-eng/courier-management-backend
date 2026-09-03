@@ -116,8 +116,8 @@ class PricingEngineImplTest {
 
         FreightFactor matched = mock(FreightFactor.class);
         when(matched.getFactor()).thenReturn(new BigDecimal("7.50"));
-        when(freightFactorService.calculate(any())).thenReturn(new FreightCalculationResult(
-                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50")));
+        when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.of(new FreightCalculationResult(
+                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50"))));
         when(companySettingsService.get()).thenReturn(
                 com.courier.modules.company.domain.CompanySettings.builder()
                         .gstPercentage(BigDecimal.ZERO).build());
@@ -148,8 +148,8 @@ class PricingEngineImplTest {
 
         FreightFactor matched = mock(FreightFactor.class);
         when(matched.getFactor()).thenReturn(new BigDecimal("7.50"));
-        when(freightFactorService.calculate(any())).thenReturn(new FreightCalculationResult(
-                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50")));
+        when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.of(new FreightCalculationResult(
+                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50"))));
 
         assertThatThrownBy(() -> engine.calculate(command))
                 .isInstanceOf(BusinessRuleException.class)
@@ -171,8 +171,8 @@ class PricingEngineImplTest {
 
         FreightFactor matched = mock(FreightFactor.class);
         when(matched.getFactor()).thenReturn(new BigDecimal("7.50"));
-        when(freightFactorService.calculate(any())).thenReturn(new FreightCalculationResult(
-                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50")));
+        when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.of(new FreightCalculationResult(
+                matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50"))));
         when(companySettingsService.get()).thenReturn(
                 com.courier.modules.company.domain.CompanySettings.builder()
                         .gstPercentage(BigDecimal.ZERO).build());
@@ -200,6 +200,30 @@ class PricingEngineImplTest {
                 .isNotInstanceOf(RouteRateUnavailableException.class)
                 .hasMessageContaining("not serviceable");
 
-        verify(freightFactorService, never()).calculate(any());
+        verify(freightFactorService, never()).tryCalculate(any());
+    }
+
+    @Test
+    void calculate_pricesAtFreightZero_whenTheGridHasNoCoveringSlab() {
+        UUID bookingBranchId = UUID.randomUUID();
+        UUID deliveryBranchId = UUID.randomUUID();
+        PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
+                "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                new BigDecimal("5.000"), null, null, null, null,
+                LocalDate.of(2026, 6, 1), null, null, null);
+
+        when(routeValidation.validate(command)).thenThrow(
+                new RouteRateUnavailableException("No route runs from branch %s to branch %s."
+                        .formatted(bookingBranchId, deliveryBranchId)));
+        when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.empty());
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .gstPercentage(BigDecimal.ZERO).build());
+
+        PricingResult result = engine.calculate(command);
+
+        assertThat(result.freight()).isEqualByComparingTo("0");
+        assertThat(result.netAmount()).isEqualByComparingTo("0");
+        assertThat(result.appliedFreightFactor()).isNull();
     }
 }

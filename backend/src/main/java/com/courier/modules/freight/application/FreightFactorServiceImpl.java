@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -179,26 +180,43 @@ public class FreightFactorServiceImpl implements FreightFactorService {
     @Transactional
     @PreAuthorize(READ)
     public FreightCalculationResult calculate(FreightCalculationCommand command) {
-        UUID companyId = requireCompany();
+        BigDecimal distanceKm = resolveDistance(command);
+        return tryMatch(command, distanceKm)
+                .orElseThrow(() -> new BusinessRuleException(
+                        ("No freight factor slab covers %s km / %s kg — there is a gap in the "
+                                + "configured grid.").formatted(distanceKm, command.weight())));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(READ)
+    public Optional<FreightCalculationResult> tryCalculate(FreightCalculationCommand command) {
+        return tryMatch(command, resolveDistance(command));
+    }
+
+    private BigDecimal resolveDistance(FreightCalculationCommand command) {
         if (command.weight() == null || command.weight().signum() <= 0) {
             throw new BusinessRuleException("Weight must be greater than zero.");
         }
-
         AddressDistance distance = addressDistanceService
                 .resolveBranchDistance(command.fromBranchId(), command.toBranchId());
-        BigDecimal distanceKm = distance.getDistanceKm();
-        BigDecimal weight = command.weight();
+        return distance.getDistanceKm();
+    }
 
+    /** No-match is a legitimate outcome here (unlike {@link #calculate}, which treats it as
+     *  an error) — a gap in this legacy grid no longer has to block a caller that has its
+     *  own, independent way to price the lane (District Level Freight, a manual override). */
+    private Optional<FreightCalculationResult> tryMatch(FreightCalculationCommand command, BigDecimal distanceKm) {
+        UUID companyId = requireCompany();
+        BigDecimal weight = command.weight();
         List<FreightFactor> candidates = repository.findByCompanyIdAndStatus(companyId, FreightFactorStatus.ACTIVE);
-        FreightFactor matched = candidates.stream()
+        return candidates.stream()
                 .filter(f -> f.coversDistance(distanceKm) && f.coversWeight(weight))
                 .findFirst()
-                .orElseThrow(() -> new BusinessRuleException(
-                        ("No freight factor slab covers %s km / %s kg — there is a gap in the "
-                                + "configured grid.").formatted(distanceKm, weight)));
-
-        BigDecimal freight = matched.getFactor().multiply(weight).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        return new FreightCalculationResult(matched, distanceKm, weight, freight);
+                .map(matched -> {
+                    BigDecimal freight = matched.getFactor().multiply(weight).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+                    return new FreightCalculationResult(matched, distanceKm, weight, freight);
+                });
     }
 
     // -------------------------------------------------------------------- helpers

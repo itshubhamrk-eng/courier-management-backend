@@ -45,7 +45,7 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
     @Transactional(readOnly = true)
     @PreAuthorize(READ)
     public FreightCalculationResult calculate(UUID bookingBranchId, String destinationPincode,
-                                               BigDecimal chargeableWeight) {
+                                               UUID destinationAreaId, BigDecimal chargeableWeight) {
         UUID companyId = requireCompany();
 
         if (bookingBranchId == null) {
@@ -65,7 +65,9 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
                     "Branch %s is inactive and cannot be used as a From Station.".formatted(branch.branchCode()));
         }
 
-        PincodeCoverageLookupPort.CoverageRef coverage = coverageLookup.findByPincode(destinationPincode)
+        PincodeCoverageLookupPort.CoverageRef coverage = (destinationAreaId == null
+                ? coverageLookup.findByPincode(destinationPincode)
+                : coverageLookup.findByPincodeAndArea(destinationPincode, destinationAreaId))
                 .orElseThrow(() -> new BusinessRuleException(
                         "Pincode %s is not on file or has no resolvable district — cannot calculate freight."
                                 .formatted(destinationPincode)));

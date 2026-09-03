@@ -8,6 +8,111 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — Branch GST/PAN fields + login displayName-on-reload fix
+
+Two independent, unrelated fixes bundled into the same deploy as the rate/kg + area picker
+work below.
+
+**Branch GST/PAN**: direct request — "while create branch add option to enter gst, pan
+no." Branches previously had no GST/PAN columns at all (`branch-form.ts` used to carry an
+explicit comment disclaiming the UI-10 spec's GST/PAN fields as company-level, not
+branch-level, and omitted them rather than fake it). Added for real: `V55` adds
+`gst_number VARCHAR(15)`/`pan_number VARCHAR(10)` to `branches`, both nullable.
+`Branch.applyInvariants()` trims/uppercases and validates GSTIN
+(`^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$`) and PAN (`^[A-Z]{5}[0-9]{4}[A-Z]$`)
+format when non-blank — branch-level deliberately, since a company can run branches under
+different state GSTINs. Threaded through `Create`/`UpdateBranchCommand`, both request DTOs
+(same `@Pattern`, empty string allowed), `BranchResponse`, `BranchMapper` (all three
+`toResponse`/`toCommand` builders), `BranchServiceImpl` (create, update, and the audit
+change-snapshot map). Frontend: new "Tax Details" card in `branch-form.ts` ahead of
+"Charges" — editable in both create and edit (unlike the branch-user login block, which is
+create-only), same GSTIN/PAN pattern validators, uppercased on submit; shown in
+`branch-view.ts`'s Charges card. `mvn test` all green (no new test cases added — validation
+covered by the existing `applyInvariants` path, not independently unit-tested this pass),
+`tsc --noEmit`/`ng build --configuration production`/`ng test` all clean.
+
+**Login displayName-on-reload fix**: direct report — "login getting email id in place of
+the user name." Root cause: the JWT carries no name claim, only `email` (`JwtClaims` has
+no `dname`/similar — same absence as the `cnm`/`clogo` company-brand claims were added to
+avoid, just never applied to the user's own name). `AuthService.hydrate()` — the path a
+hard page reload rebuilds the session from, decoding the stored access token alone — fell
+back to `displayName: c.email`. A normal login was unaffected (`applySession` had the real
+`LoginResponse.displayName` in memory at the moment of signing in); only survived a reload.
+Fixed without touching the JWT: `TokenService` now stashes `displayName` in `localStorage`
+(`cs.dname`) the same way `cs.company` is — set on login (`applySession`), on
+`refreshProfile()` (`/auth/me`), and on `impersonateCompany`/`impersonateBranch`; read back
+in `hydrate()` as the fallback ahead of `c.email`; and correctly paired through
+`beginImpersonation`/`restoreStash`'s existing stash mechanism so `exitImpersonation`
+restores the real user's own name rather than leaving the impersonated target's name
+behind. No backend change. **Not yet verified live** — no dev-server click-through this
+session, compile/unit-level verification only; flagged for a live check as part of the prod
+smoke test below.
+
+---
+
+## [Unreleased] — 2026-09-03 — Rate/KG override (increase-only) + destination Area picker for freight
+
+Direct request: rate/kg editable at booking but increase-only with GST applied, plus a
+destination-pincode → Area picker ahead of Delivery Branch that resolves the freight rate
+once an Area is chosen. Two independent additions to 0.34.0's District Level Freight
+booking integration, both scoped via `AskUserQuestion` first (separate new fields rather
+than reusing the consignee's own "To Pincode"; Area resolves District/ODA off the chosen
+`master_pincode_areas` link rather than the pincode's legacy single area).
+
+**Backend — Rate/KG override**: `FreightCalculationServiceImpl`/`ShipmentServiceImpl`
+unchanged in what they compute automatically; new `requireRateNotDecreased` in
+`ShipmentServiceImpl` throws before pricing/persistence if `command.ratePerKgOverride()` is
+non-null and below `freightCalc.ratePerKg()` (the matched slab's own rate) — a floor, never
+a ceiling. `effectiveFreight(freightCalc, ratePerKgOverride)` replaces the bare
+`freightCalc.baseFreight()` reference throughout `copyCharge`/`netAmountWithOtherCharges`;
+GST is recomputed only on the difference from the Pricing Engine's own (superseded) freight
+figure, identical delta-algebra to the existing `odaCharge` override. New
+`ratePerKgOverride`/`destinationAreaId` fields on `Create`/`UpdateShipmentCommand` and their
+request DTOs.
+
+**Backend — Area-based freight resolution**: `PincodeCoverageLookupPort` gained
+`findByPincodeAndArea(pincodeCode, areaId)`, implemented in
+`MasterDistrictFreightCoverageDirectory` — resolves District via the chosen Area's own
+`cityId -> districtId` chain and ODA via that exact `PincodeArea` link's own
+`odaApplicable` (not the pincode-wide single flag `findByPincode` still uses for the
+no-Area fallback). `FreightCalculationService.calculate` gained a nullable
+`destinationAreaId` parameter threaded through `DistrictLevelFreightController`'s
+`/calculate` endpoint and both `ShipmentServiceImpl` call sites. `mvn test` 939 -> 942 (3
+new: rate-below-floor refused, rate-above-floor raises freight+GST-on-delta,
+`findByPincodeAndArea` routes correctly and skips the legacy lookup).
+
+**Frontend**: `shipment-create.ts` — new "Destination Pincode"/"Destination Area" fields
+ahead of "Delivery Branch" in Booking Details (a fresh pair, not reusing the Parties card's
+own "To Pincode"). Typing a 6-digit pincode looks it up (paged master search, exact code
+match) then fetches its Areas (`GET /pincodes/{id}/areas`, the existing 0.32.2 endpoint);
+the primary Area auto-selects as a convenience default, still overridable. Picking an Area
+syncs `deliveryPincode` (so Pricing Engine and District Level Freight always target the same
+destination) and is now what `readyForFreight()` gates on, matching the brief's own "after
+area select it should get rate." Freight Calculation card's "Rate / KG" row is now an
+editable input (`ratePerKgOverride` signal, same "increase only, server-enforced, no
+client-side clamp" shape as the existing Freight Factor input) with a "(min X, increase
+only)" hint; `effectiveBaseFreight()` feeds the live Base/Total Freight display and the
+Booking Summary's freight/GST preview, mirroring the backend's own delta math. Delivery
+Branch selection still auto-fills both pincode fields from the branch's own postal code for
+the common case; the new fields stay independently editable before it. Reset alongside the
+rest of the freight preview (`scheduleFreightCalc`) on any lane/weight change, since a new
+preview's own floor may differ. `tsc --noEmit`/`ng build --configuration production` clean,
+`ng test` 147/148 (the one failure, `reports-dashboard`, pre-existing and unrelated).
+
+**Verified live** on the real `:8100`/`:4200` dev stack (a throwaway `District Level
+Freight` fixture inserted directly for PUNE -> Kolhapur, since none existed for that branch)
+as `pune@gmail.com` (BRANCH_MANAGER): typing pincode `416013` auto-resolved "Girgaon,
+Kolhapur" as the primary Area and priced Rate/KG 8.50 (16-50 KG slab) before a Delivery
+Branch was even picked; booked a real shipment (`PUNE-000022`, PUNE -> LATUR, 3 KG) with
+Rate/KG raised 10.00 -> 15.00 — live preview showed Freight 45.00/GST 8.10, confirmed
+byte-for-byte against the persisted `shipment_charges` row and the shipment detail page
+after booking; a second attempt with Rate/KG lowered to 5.00 (below the 10.00 floor) was
+cleanly refused with "Rate/KG cannot be lowered below the calculated rate of 10.0000/KG for
+PUNE → Kolhapur," no shipment created. Test fixtures (the District Level Freight row,
+`PUNE-000022`) left in `courier_db` per `[[keep-test-data-in-dev-db]]`.
+
+---
+
 ## [Unreleased] — 2026-09-03 — Deployed to prod (commit 2f92c4c)
 
 Committed and pushed 0.34.0 (District Level Freight wired into Shipment Booking, `V54`),

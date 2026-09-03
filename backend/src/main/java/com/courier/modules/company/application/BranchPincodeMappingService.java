@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -133,6 +134,17 @@ public class BranchPincodeMappingService {
                 branch.getBranchCode(), mapping.getPincodeId(), currentActor());
         auditService.record(AuditAction.BRANCH_PINCODE_UNMAPPED, ENTITY, branch.getId(),
                 Map.of("branchCode", branch.getBranchCode(), "pincodeId", mapping.getPincodeId().toString()));
+    }
+
+    /** The one branch this pincode is mapped to, if any (V53's one-branch-per-pincode
+     *  rule). Shipment Booking's Destination Pincode field uses this to auto-select
+     *  Delivery Branch — empty when the pincode isn't mapped yet. */
+    @Transactional(readOnly = true)
+    @PreAuthorize(READ)
+    public Optional<Branch> findBranchForPincode(UUID pincodeId) {
+        UUID companyId = requireCompany();
+        return mappings.findByCompanyIdAndPincodeId(companyId, pincodeId)
+                .map(mapping -> loadBranch(mapping.getBranchId(), companyId));
     }
 
     // -------------------------------------------------------------------- helpers

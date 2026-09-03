@@ -1,6 +1,7 @@
 package com.courier.modules.pricing.application;
 
 import com.courier.modules.company.application.CompanySettingsService;
+import com.courier.modules.freight.application.FreightCalculationResult;
 import com.courier.modules.freight.application.FreightFactorService;
 import com.courier.modules.freight.application.command.FreightCalculationCommand;
 import com.courier.modules.master.domain.Route;
@@ -104,16 +105,23 @@ public class PricingEngineImpl implements PricingEngine {
      * factor before freight is computed — never lower it. A smaller override is refused
      * outright (a desk can charge more than the grid says, never less); a null override
      * simply prices at the matched factor, unchanged from before this existed.
+     *
+     * <p>A gap in the grid — no cell covers this lane's distance/weight — no longer fails
+     * the call: it prices at freight zero (still GSTed, still net-zero on top) instead of
+     * throwing, so a caller with its own way to price the lane (District Level Freight, a
+     * manual Other Charges entry) is not blocked by this grid alone being incomplete. An
+     * unresolvable branch-pair distance is a different problem and still fails outright —
+     * see {@code FreightFactorServiceImpl.tryCalculate}.
      */
     private PricingResult priceByDistanceAndWeight(PricingCommand command, BigDecimal actualWeight,
                                                     BigDecimal volumetricWeight, BigDecimal chargeableWeight) {
-        var result = freightFactorService.calculate(new FreightCalculationCommand(
+        var matchOutcome = freightFactorService.tryCalculate(new FreightCalculationCommand(
                 command.bookingBranchId(), command.deliveryBranchId(), chargeableWeight));
-        BigDecimal matchedFactor = result.matchedFactor().getFactor();
+        BigDecimal matchedFactor = matchOutcome.map(r -> r.matchedFactor().getFactor()).orElse(null);
         BigDecimal effectiveFactor = matchedFactor;
-        BigDecimal chargesSubtotal = result.freight();
+        BigDecimal chargesSubtotal = matchOutcome.map(FreightCalculationResult::freight).orElse(BigDecimal.ZERO);
         if (command.freightFactorOverride() != null) {
-            if (command.freightFactorOverride().compareTo(matchedFactor) < 0) {
+            if (matchedFactor != null && command.freightFactorOverride().compareTo(matchedFactor) < 0) {
                 throw new BusinessRuleException(
                         "Freight factor can only be increased — matched %s, requested %s."
                                 .formatted(matchedFactor.toPlainString(),

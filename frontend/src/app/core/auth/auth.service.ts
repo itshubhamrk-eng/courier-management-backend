@@ -52,7 +52,10 @@ export class AuthService {
 
   /** Re-read /auth/me — reflects role changes without a fresh login. */
   refreshProfile(): Observable<CurrentUser> {
-    return this.api.get<CurrentUser>(API.auth.me).pipe(tap((u) => this._user.set(u)));
+    return this.api.get<CurrentUser>(API.auth.me).pipe(tap((u) => {
+      this.tokens.setDisplayName(u.displayName);
+      this._user.set(u);
+    }));
   }
 
   logout(): Observable<void> {
@@ -75,7 +78,7 @@ export class AuthService {
   impersonateCompany(companyId: string, password: string): Observable<ImpersonationResponse> {
     return this.api.post<ImpersonationResponse>(API.auth.impersonate(companyId), { password }).pipe(
       tap((res) => {
-        this.tokens.beginImpersonation(res.accessToken);
+        this.tokens.beginImpersonation(res.accessToken, res.displayName ?? res.email);
         this.session.syncExpiry();
         this._user.set(this.hydrate());
       })
@@ -92,7 +95,7 @@ export class AuthService {
   impersonateBranch(branchId: string): Observable<ImpersonationResponse> {
     return this.api.post<ImpersonationResponse>(API.auth.impersonateBranch(branchId), {}).pipe(
       tap((res) => {
-        this.tokens.beginImpersonation(res.accessToken);
+        this.tokens.beginImpersonation(res.accessToken, res.displayName ?? res.email);
         this.session.syncExpiry();
         this._user.set(this.hydrate());
       })
@@ -114,6 +117,7 @@ export class AuthService {
 
   private applySession(res: LoginResponse): void {
     this.tokens.setTokens(res.accessToken, res.refreshToken);
+    this.tokens.setDisplayName(res.displayName ?? res.email);
     this.session.start(res);
     const claims = decodeJwt(res.accessToken);
     this._user.set({
@@ -141,7 +145,7 @@ export class AuthService {
     if (!c) return null;
     return {
       userId: c.sub, companyId: c.cid ?? c.tid ?? null, email: c.email,
-      displayName: c.email, roles: c.roles ?? [], permissions: c.permissions ?? [],
+      displayName: this.tokens.displayName ?? c.email, roles: c.roles ?? [], permissions: c.permissions ?? [],
       branchId: c.bid ?? null, hubId: c.hid ?? null,
       companyName: c.cnm ?? null, companyLogo: c.clogo ?? null,
       impersonatedBy: c.imp && c.impByEmail ? { userId: c.impBy, email: c.impByEmail } : null

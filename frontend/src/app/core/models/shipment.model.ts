@@ -320,6 +320,14 @@ export interface ShipmentFields {
    *  is refused with a 422 otherwise (backend-enforced; the frontend's own checks in
    *  shipment-create.ts are UX only). Optional and simply attached when supplied below it. */
   ewayBill?: EwayBillBookingRequest | null;
+  /** The specific Area of `deliveryPincode` picked from its Area dropdown, if any —
+   *  resolves District Level Freight's District/ODA off that exact pincode-area link. */
+  destinationAreaId?: string | null;
+  /** Optional override of District Level Freight's own matched-slab rate/KG. Must not be
+   *  lower than that rate — the server refuses a smaller value with a 422. A higher figure
+   *  raises freight (and its GST, on the difference only) above the system-calculated
+   *  figure. */
+  ratePerKgOverride?: number | null;
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */

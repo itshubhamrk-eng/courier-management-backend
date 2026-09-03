@@ -24,4 +24,14 @@ public interface PincodeCoverageLookupPort {
      *  on file matches at all (not on the network) or its area/city/district chain is
      *  incomplete (a data gap, treated the same as "not resolvable" by the caller). */
     Optional<CoverageRef> findByPincode(String pincodeCode);
+
+    /** Same as {@link #findByPincode}, but resolves District and ODA off one specific Area
+     *  the operator picked from that pincode's own Area dropdown (the {@code
+     *  master_pincode_areas} link, 0.32.2) rather than the pincode's single legacy {@code
+     *  area_id} — a pincode routinely spans several localities/districts, and once the
+     *  operator has named exactly which one, that Area's own district/ODA is more accurate
+     *  than the pincode-wide flags. Empty when the pincode has no such Area link on file
+     *  (not just any area — this exact pincode+area pairing) or its city/district chain is
+     *  incomplete. */
+    Optional<CoverageRef> findByPincodeAndArea(String pincodeCode, UUID areaId);
 }

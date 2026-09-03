@@ -5,11 +5,12 @@ import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, merge, of, switchMap } from 'rxjs';
+import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, forkJoin, merge, of, switchMap } from 'rxjs';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { CustomerService } from '@features/customer/customer.service';
 import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
@@ -88,6 +89,18 @@ function toInstantEnd(date: string | null | undefined): string | null {
             <div class="grid3">
               <label class="fld"><span class="fld__l">Booking Date</span>
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
+              <label class="fld"><span class="fld__l">Destination Pincode</span>
+                <input class="fld__i" [formControl]="c('destinationPincode')" placeholder="e.g. 411001" maxlength="10" /></label>
+              <div class="fld">
+                <span class="fld__l">Destination Area</span>
+                @if (destinationAreaLoading()) {
+                  <span class="fld__i fld__i--hint">Looking up areas…</span>
+                } @else if (destinationAreaOptions().length) {
+                  <app-select [control]="c('destinationAreaId')" [options]="destinationAreaOptions()" placeholder="Select an area" />
+                } @else {
+                  <span class="fld__i fld__i--hint">{{ destinationAreaError() ?? 'Enter a destination pincode first' }}</span>
+                }
+              </div>
               <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search delivery branch…" />
               <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
               <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
@@ -305,35 +318,25 @@ function toInstantEnd(date: string | null | undefined): string | null {
                 — {{ ewayBillMandatory() ? 'E-Way Bill Mandatory' : 'E-Way Bill Optional' }}</span>
             }
 
-            <div class="freight-card">
-              <h3 class="freight-card__title">Freight Calculation</h3>
-              @if (!myBranchIdPresent()) {
-                <p class="hint">No branch assigned to your account.</p>
-              } @else if (!readyForFreight()) {
-                <p class="hint">Enter a destination pincode and at least one item's weight to calculate freight.</p>
-              } @else if (freightCalcLoading()) {
+            @if (myBranchIdPresent() && readyForFreight()) {
+              @if (freightCalcLoading()) {
                 <p class="hint">Calculating freight…</p>
               } @else if (freightCalcError()) {
                 <p class="err">{{ freightCalcError() }}</p>
-              } @else if (freightCalc(); as f) {
-                <dl class="freight-kv">
-                  <dt>From Station</dt><dd>{{ f.bookingBranchName }}</dd>
-                  <dt>Destination District</dt><dd>{{ f.districtName }}</dd>
-                  <dt>Chargeable Weight</dt><dd class="mono">{{ f.chargeableWeight | number: '1.3-3' }} kg</dd>
-                  <dt>Weight Slab</dt><dd>{{ f.weightSlabLabel }}</dd>
-                  <dt>Rate / KG</dt><dd class="mono">{{ f.ratePerKg | number: '1.2-2' }}</dd>
-                  <dt>Base Freight</dt><dd class="mono">{{ f.baseFreight | number: '1.2-2' }}</dd>
-                  <dt>ODA</dt><dd>{{ f.odaApplicable ? 'Applicable' : 'Not applicable' }}</dd>
-                  @if (f.odaApplicable) {
-                    <dt>ODA Charge</dt><dd class="mono">{{ f.odaCharge | number: '1.2-2' }}</dd>
-                  }
-                  <dt class="total">Total Freight</dt><dd class="mono total">{{ f.totalFreight | number: '1.2-2' }}</dd>
-                </dl>
               }
-            </div>
+            }
 
             <div class="sum__body">
-              @if (freightFactorApplicable()) {
+              @if (freightCalc(); as f) {
+                <div class="factor-row">
+                  <span class="sum__lbl">Rate / KG
+                    <span class="hint">(min {{ f.ratePerKg | number: '1.2-2' }}, increase only)</span>
+                  </span>
+                  <input class="factor-input" type="number" step="0.01" [min]="f.ratePerKg"
+                         [value]="ratePerKgOverride() ?? f.ratePerKg"
+                         (input)="onRatePerKgInput($event)" />
+                </div>
+              } @else if (freightFactorApplicable()) {
                 <div class="factor-row">
                   <span class="sum__lbl">Freight Factor
                     @if (matchedFreightFactor() != null) {
@@ -359,7 +362,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   @if (p.matchedRateCode) { <span class="chip">Rate {{ p.matchedRateCode }}</span> }
                 </div>
                 <app-charge-summary [charges]="{
-                  freight: freightCalc()?.baseFreight ?? p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
+                  freight: freightCalc() ? effectiveBaseFreight() : p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
                   handlingCharge: p.chargeBreakup.handlingCharge,
                   odaCharge: odaChargeOverride() ?? freightCalc()?.odaCharge ?? p.chargeBreakup.odaCharge,
                   insuranceCharge: p.chargeBreakup.insuranceCharge,
@@ -414,6 +417,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
     .factor-input { width:90px; text-align:right; font:700 14px var(--font-mono, ui-monospace); color:var(--brand-600);
       background:transparent; border:1px solid var(--surface-border); border-radius:6px; padding:2px 6px; }
     .factor-input:focus { outline:0; border-color:var(--brand-500); }
+    .fld__i--hint { display:flex; align-items:center; font:400 13px var(--font-sans); color:var(--content-muted); }
     .sum__paymode { margin-top:12px; }
     .sum__cta { margin-top:10px; }
     .sum__cta app-button, .sum__cta ::ng-deep .app-btn { width:100%; }
@@ -421,13 +425,6 @@ function toInstantEnd(date: string | null | undefined): string | null {
     .err { font:500 13px var(--font-sans); color:var(--danger); padding:10px 12px; background:var(--danger-bg); border-radius:var(--r-field); margin:0; }
     .matched { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .chip { font:600 11px var(--font-sans); padding:4px 10px; border-radius:999px; background:var(--brand-50); color:var(--brand-700); }
-    .freight-card { margin-top:16px; padding:12px; border:1px solid var(--surface-border); border-radius:var(--r-card); background:var(--surface-alt, transparent); }
-    .freight-card__title { margin:0 0 8px; font:600 13px var(--font-sans); color:var(--content-fg); }
-    .freight-kv { display:grid; grid-template-columns:1fr auto; gap:6px 16px; margin:0; }
-    .freight-kv dt { font:500 12px var(--font-sans); color:var(--content-muted); }
-    .freight-kv dd { font:600 13px var(--font-sans); color:var(--content-fg); margin:0; text-align:right; }
-    .freight-kv .mono { font-family:var(--font-mono, ui-monospace); }
-    .freight-kv .total { font-weight:700; font-size:14px; color:var(--brand-600); border-top:1px solid var(--surface-border); padding-top:6px; margin-top:2px; }
     .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
     .grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 16px; }
     .parties { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
@@ -571,6 +568,23 @@ export class ShipmentCreate implements OnInit {
    *  only place "increase only" is actually enforced. */
   protected readonly freightFactorOverride = signal<number | null>(null);
 
+  /** Operator override of District Level Freight's own matched-slab rate/KG — same
+   *  "increase only, server-enforced" shape as {@link freightFactorOverride}, a different
+   *  module. `null` keeps the system rate; reset on every lane/weight/area change since a
+   *  new preview's own floor may differ (see {@link scheduleFreightCalc}). */
+  protected readonly ratePerKgOverride = signal<number | null>(null);
+
+  /** Areas of the typed Destination Pincode, looked up via `master_pincode_areas` — the
+   *  new pre-Delivery-Branch flow: pincode -> areas -> pick one -> freight recalculates
+   *  off that exact area's District/ODA. Empty until a 6-digit pincode resolves. */
+  protected readonly destinationAreaOptions = signal<SelectOption[]>([]);
+  protected readonly destinationAreaLoading = signal(false);
+  protected readonly destinationAreaError = signal<string | null>(null);
+  private readonly destinationPincodeQuery$ = new Subject<string>();
+  /** True for exactly the one `deliveryBranchId` change the pincode->branch auto-select
+   *  below causes — read and cleared by the `deliveryBranchId` listener above it. */
+  private deliveryBranchFromPincode = false;
+
   /** The booking branch's own GST% (V25) — Other Charges is a manual, booking-time amount
    *  the Pricing Engine never sees, so GST on it is computed here (mirroring
    *  `ShipmentServiceImpl.copyCharge`) purely so the live preview's total matches what
@@ -628,6 +642,8 @@ export class ShipmentCreate implements OnInit {
     deliveryBranchId: [null as string | null, Validators.required],
     pickupPincode: ['', Validators.maxLength(10)],
     deliveryPincode: ['', Validators.maxLength(10)],
+    destinationPincode: ['', Validators.maxLength(10)],
+    destinationAreaId: [null as string | null],
     senderName: ['', [Validators.required, Validators.maxLength(150)]],
     senderAddress: ['', [Validators.required, Validators.maxLength(500)]],
     senderContact: ['', [Validators.required, Validators.maxLength(20)]],
@@ -720,10 +736,90 @@ export class ShipmentCreate implements OnInit {
     });
     this.form.get('deliveryBranchId')?.valueChanges.subscribe((id) => {
       if (!id) return;
+      // Skip the postalCode-> pincode sync when this Delivery Branch change is itself the
+      // *result* of resolving a typed Destination Pincode below — that pincode is already
+      // the more precise one the operator typed; overwriting it with the branch's own
+      // postal code would silently discard it.
+      if (this.deliveryBranchFromPincode) { this.deliveryBranchFromPincode = false; return; }
       this.masters.branchDirectory().subscribe((list) => {
         const branch = list.find((b) => b.id === id);
-        if (branch?.postalCode) this.form.get('deliveryPincode')?.setValue(branch.postalCode);
+        if (branch?.postalCode) {
+          this.form.get('deliveryPincode')?.setValue(branch.postalCode);
+          // Feeds the same pincode into the new Destination Pincode -> Area flow below, so
+          // picking a Delivery Branch still auto-resolves freight the way it always did —
+          // the operator can still override it there before Delivery Branch, per the brief.
+          this.form.get('destinationPincode')?.setValue(branch.postalCode);
+        }
       });
+    });
+    // Destination Pincode -> its own Areas (master_pincode_areas, 0.32.2) -> picking one
+    // resolves District Level Freight's District/ODA off that exact link rather than the
+    // pincode's legacy single area — see MasterDistrictFreightCoverageDirectory
+    // .findByPincodeAndArea. A 6-digit pincode is looked up (paged master search, exact
+    // code match) for its id, then its area links (the primary one auto-selects as a
+    // convenience default, still overridable) and, in parallel, the branch
+    // `branch_pincode_mapping` maps it to — auto-selecting Delivery Branch is the reverse
+    // of the branchDirectory subscription above (branch -> pincode), so typing a pincode
+    // works as the entry point too, not just picking a branch first.
+    this.c('destinationPincode').valueChanges.subscribe((v) =>
+      this.destinationPincodeQuery$.next((v ?? '').trim()));
+    this.destinationPincodeQuery$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      switchMap((code) => {
+        this.destinationAreaOptions.set([]);
+        this.destinationAreaError.set(null);
+        this.c('destinationAreaId').setValue(null, { emitEvent: false });
+        if (!/^\d{6}$/.test(code)) return of(null);
+        this.destinationAreaLoading.set(true);
+        return this.masters.list(MASTER_DEFINITIONS['pincodes'], { page: 0, size: 5, search: code }).pipe(
+          switchMap((page) => {
+            const match = page.content.find((r) => r.code === code);
+            if (!match) return of(null);
+            return forkJoin({
+              areas: this.masters.pincodeAreas(match.id),
+              branch: this.masters.branchForPincode(match.id).pipe(catchError(() => of(undefined)))
+            });
+          }),
+          catchError(() => of(null))
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((result) => {
+      this.destinationAreaLoading.set(false);
+      const rows = result?.areas;
+      if (!rows || !rows.length) {
+        this.destinationAreaOptions.set([]);
+        this.destinationAreaError.set(
+          this.c('destinationPincode').value?.trim() ? 'No areas found for this pincode.' : null);
+      } else {
+        this.destinationAreaOptions.set(rows.map((r) => ({
+          value: r.areaId,
+          label: r.areaName ? `${r.areaName}${r.cityName ? ', ' + r.cityName : ''}` : r.areaId
+        })));
+        const primary = rows.find((r) => r.primary);
+        if (primary) this.c('destinationAreaId').setValue(primary.areaId);
+      }
+      // The Pricing Engine reads `deliveryPincode`, not `destinationPincode` — synced here
+      // (not only from the Area-select listener below) because a pincode can resolve a
+      // Delivery Branch with no `master_pincode_areas` row at all (data gap, not a reason
+      // to leave pricing permanently blank).
+      const code = this.c('destinationPincode').value?.trim();
+      if (code && /^\d{6}$/.test(code)) this.form.get('deliveryPincode')?.setValue(code);
+      const branch = result?.branch;
+      if (branch && branch.id !== this.c('deliveryBranchId').value) {
+        this.deliveryBranchFromPincode = true;
+        this.c('deliveryBranchId').setValue(branch.id);
+      }
+    });
+    // Picking an Area is the trigger the brief asks for ("after area select it should get
+    // rate") — also syncs deliveryPincode so Pricing Engine and District Level Freight
+    // never target two different destinations for the same booking.
+    this.c('destinationAreaId').valueChanges.subscribe((areaId) => {
+      if (!areaId) return;
+      const pincode = this.c('destinationPincode').value?.trim();
+      if (pincode) this.form.get('deliveryPincode')?.setValue(pincode);
+      this.scheduleFreightCalc();
     });
     // At least one Crossing Branch is required only while Crossing is checked —
     // unchecking clears every picked hop, so a hidden stale value never submits.
@@ -918,11 +1014,28 @@ export class ShipmentCreate implements OnInit {
     const freightCalc = this.freightCalc();
     if (!freightCalc) return 0;
     const engineFreight = this.pricing()?.chargeBreakup.freight ?? 0;
-    return freightCalc.baseFreight - engineFreight;
+    return this.effectiveBaseFreight() - engineFreight;
   }
 
   protected gstOnFreightDelta(): number {
     return (this.freightDelta() * this.myBranchGstPercentage()) / 100;
+  }
+
+  /** `freightCalc().baseFreight` unless the operator raised Rate/KG above the matched
+   *  slab's own rate — the server refuses a lower one (see `requireRateNotDecreased`),
+   *  this is just the live preview echoing that same math. Zero until a freight preview
+   *  has resolved. */
+  protected effectiveBaseFreight(): number {
+    const f = this.freightCalc();
+    if (!f) return 0;
+    const override = this.ratePerKgOverride();
+    return override == null ? f.baseFreight : override * f.chargeableWeight;
+  }
+
+  protected onRatePerKgInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (Number.isNaN(v)) return;
+    this.ratePerKgOverride.set(v);
   }
 
   protected onPackages(count: number): void {
@@ -1091,7 +1204,7 @@ export class ShipmentCreate implements OnInit {
    *  see the trigger wiring in `ngOnInit`. Plain method, same staleness reason. */
   protected readyForFreight(): boolean {
     const v = this.form.getRawValue();
-    return !!(v.bookingBranchId && v.deliveryPincode && this.weight().chargeable > 0);
+    return !!(v.bookingBranchId && v.deliveryPincode && v.destinationAreaId && this.weight().chargeable > 0);
   }
 
   private schedulePricing(): void {
@@ -1107,6 +1220,7 @@ export class ShipmentCreate implements OnInit {
     this.freightCalcError.set(null);
     this.manualNetAmount.set(null);
     this.odaChargeOverride.set(null);
+    this.ratePerKgOverride.set(null);
     this.freightTrigger$.next();
   }
 
@@ -1118,7 +1232,7 @@ export class ShipmentCreate implements OnInit {
 
     return this.freightCalculationService.calculate({
       bookingBranchId: v.bookingBranchId, destinationPincode: v.deliveryPincode,
-      chargeableWeight: this.weight().chargeable
+      destinationAreaId: v.destinationAreaId, chargeableWeight: this.weight().chargeable
     }).pipe(
       switchMap((data) => of({ ok: true, data }) as Observable<FreightOutcome>),
       catchError((e: HttpErrorResponse) =>
@@ -1167,6 +1281,8 @@ export class ShipmentCreate implements OnInit {
       crossingBranchIds: v.crossing ? (v.crossingBranchIds as (string | null)[]).filter((id): id is string => !!id) : null,
       crossingCharge: v.crossingCharge || null,
       invoiceValue: v.invoiceValue || null,
+      destinationAreaId: v.destinationAreaId || null,
+      ratePerKgOverride: this.ratePerKgOverride(),
       ewayBill: this.ewayBillOpen() && (v.ewayBillNumber?.trim() || v.ewayBillInvoiceNumber?.trim()) ? {
         ewayBillNumber: v.ewayBillNumber?.trim() || null,
         invoiceNumber: v.ewayBillInvoiceNumber?.trim() || '',
@@ -1205,7 +1321,7 @@ export class ShipmentCreate implements OnInit {
           declaredValue: v.declaredValue || null,
           charges: {
             ...p.chargeBreakup,
-            freight: f.baseFreight,
+            freight: this.effectiveBaseFreight(),
             odaCharge: this.odaChargeOverride() ?? f.odaCharge,
             gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
               + this.gstOnFreightDelta(),

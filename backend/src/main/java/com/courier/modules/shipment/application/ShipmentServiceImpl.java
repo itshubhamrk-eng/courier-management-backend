@@ -213,7 +213,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         // untouched) so a missing configuration blocks the booking before anything else
         // is validated. See `FreightCalculationServiceImpl` for the full sequence.
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
-                command.bookingBranchId(), command.deliveryPincode(), weight.chargeableWeight());
+                command.bookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
+                weight.chargeableWeight());
+        requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
 
         PricingResult priced = priceIt(command.bookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
@@ -224,7 +226,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
         BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
-        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc);
+        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
+                freightCalc, command.ratePerKgOverride());
 
         if (paymentMode.isCollectAtBooking()) {
             requireSufficientBalance(command.bookingBranchId(), netAmount);
@@ -277,7 +280,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         customerService.findOrCreateForBooking(command.receiverName(), command.receiverContact());
 
         persistItems(saved, companyId, items);
-        persistCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc);
+        persistCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
+                command.ratePerKgOverride());
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
 
         if (crossing) {
@@ -331,7 +335,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         ewayBillService.enforceBookingRequirement(command.invoiceValue(), command.ewayBill());
 
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
-                shipment.getBookingBranchId(), command.deliveryPincode(), weight.chargeableWeight());
+                shipment.getBookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
+                weight.chargeableWeight());
+        requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
 
         PricingResult priced = priceIt(shipment.getBookingBranchId(), command.deliveryBranchId(),
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
@@ -376,13 +382,15 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         itemRepository.deleteAllByShipmentIdAndCompanyId(saved.getId(), companyId);
         persistItems(saved, companyId, items);
-        replaceCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc);
+        replaceCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
+                command.ratePerKgOverride());
 
         log.info("Shipment {} ({}) updated in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
-                        "netAmount", netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc).toPlainString()));
+                        "netAmount", netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
+                                freightCalc, command.ratePerKgOverride()).toPlainString()));
 
         return saved;
     }
@@ -1366,11 +1374,34 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
     }
 
+    /** District Level Freight's own matched-slab rate/KG is a floor, never a ceiling — an
+     *  operator may raise it at booking time (e.g. a negotiated premium), never lower it
+     *  below what the system calculated. */
+    private void requireRateNotDecreased(BigDecimal ratePerKgOverride, FreightCalculationResult freightCalc) {
+        if (ratePerKgOverride != null && ratePerKgOverride.compareTo(freightCalc.ratePerKg()) < 0) {
+            throw new BusinessRuleException(
+                    "Rate/KG cannot be lowered below the calculated rate of %s/KG for %s -> %s."
+                            .formatted(freightCalc.ratePerKg().toPlainString(), freightCalc.bookingBranchCode(),
+                                    freightCalc.districtName()));
+        }
+    }
+
+    /** {@code freightCalc.baseFreight()} unless the operator raised Rate/KG above the
+     *  matched slab's own rate — {@link #requireRateNotDecreased} has already refused a
+     *  lower one by the time this runs. */
+    private static BigDecimal effectiveFreight(FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
+        if (ratePerKgOverride == null) {
+            return freightCalc.baseFreight();
+        }
+        return ratePerKgOverride.multiply(freightCalc.chargeableWeight())
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
     private ShipmentCharge persistCharges(Shipment shipment, UUID companyId, PricingResult priced,
                                           BigDecimal otherCharges, BigDecimal odaCharge,
                                           com.courier.modules.company.domain.Branch bookingBranch,
-                                          FreightCalculationResult freightCalc) {
-        ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc);
+                                          FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
+        ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride);
         charge.setCompanyId(companyId);
         charge.setShipmentId(shipment.getId());
         return chargeRepository.save(charge);
@@ -1378,7 +1409,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private void replaceCharges(Shipment shipment, UUID companyId, PricingResult priced, BigDecimal otherCharges,
                                 BigDecimal odaCharge, com.courier.modules.company.domain.Branch bookingBranch,
-                                FreightCalculationResult freightCalc) {
+                                FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
         ShipmentCharge existing = chargeRepository
                 .findByShipmentIdWithinCompany(shipment.getId(), companyId)
                 .orElseGet(() -> {
@@ -1387,15 +1418,15 @@ public class ShipmentServiceImpl implements ShipmentService {
                     fresh.setShipmentId(shipment.getId());
                     return fresh;
                 });
-        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, existing);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride, existing);
         chargeRepository.save(existing);
     }
 
     private ShipmentCharge toCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                                     com.courier.modules.company.domain.Branch bookingBranch,
-                                    FreightCalculationResult freightCalc) {
+                                    FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
         ShipmentCharge charge = ShipmentCharge.builder().build();
-        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, charge);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride, charge);
         return charge;
     }
 
@@ -1453,9 +1484,10 @@ public class ShipmentServiceImpl implements ShipmentService {
      */
     private void copyCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                             com.courier.modules.company.domain.Branch bookingBranch,
-                            FreightCalculationResult freightCalc, ShipmentCharge charge) {
+                            FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
+                            ShipmentCharge charge) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
-        BigDecimal freight = freightCalc.baseFreight();
+        BigDecimal freight = effectiveFreight(freightCalc, ratePerKgOverride);
         BigDecimal freightDelta = freight.subtract(priced.freight());
         BigDecimal gstOnOtherCharges = gstOnOtherCharges(safeOtherCharges, bookingBranch);
         BigDecimal gstOnFreightDelta = percentOf(freightDelta, bookingBranch.getGstPercentage());
@@ -1512,9 +1544,10 @@ public class ShipmentServiceImpl implements ShipmentService {
     private static BigDecimal netAmountWithOtherCharges(PricingResult priced, BigDecimal otherCharges,
                                                          BigDecimal odaCharge,
                                                          com.courier.modules.company.domain.Branch bookingBranch,
-                                                         FreightCalculationResult freightCalc) {
+                                                         FreightCalculationResult freightCalc,
+                                                         BigDecimal ratePerKgOverride) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
-        BigDecimal freightDelta = freightCalc.baseFreight().subtract(priced.freight());
+        BigDecimal freightDelta = effectiveFreight(freightCalc, ratePerKgOverride).subtract(priced.freight());
         BigDecimal gstOnFreightDelta = percentOf(freightDelta, bookingBranch.getGstPercentage());
         BigDecimal finalOdaCharge = odaCharge == null ? freightCalc.odaCharge() : odaCharge;
         BigDecimal odaChargeDelta = finalOdaCharge.subtract(priced.odaCharge());

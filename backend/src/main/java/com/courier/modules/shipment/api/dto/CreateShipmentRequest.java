@@ -82,6 +82,16 @@ public record CreateShipmentRequest(
         @Schema(description = "Required when invoiceValue exceeds the mandatory threshold "
                 + "— booking is refused with a 422 otherwise. Optional and simply attached "
                 + "when supplied below the threshold.")
-        EwayBillBookingRequest ewayBill
+        EwayBillBookingRequest ewayBill,
+        @Schema(description = "The specific Area of deliveryPincode picked from its Area "
+                + "dropdown, if any. Resolves District Level Freight's District/ODA off that "
+                + "exact pincode-area link instead of the pincode's legacy single area.")
+        UUID destinationAreaId,
+        @Schema(description = "Optional override of District Level Freight's own matched-slab "
+                + "rate/KG. Must not be lower than that rate — refused with a 422 otherwise. "
+                + "A higher figure raises freight (and its GST, on the difference only) above "
+                + "the system-calculated figure.")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal ratePerKgOverride
 ) {
 }

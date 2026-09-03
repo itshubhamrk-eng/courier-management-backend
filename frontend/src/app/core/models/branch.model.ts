@@ -71,6 +71,8 @@ export interface BranchResponse {
   allowWallet: boolean;
   instantCommission: boolean;
   remarks?: string | null;
+  gstNumber?: string | null;
+  panNumber?: string | null;
   gstPercentage: number;
   commissionOnOtherCharges: number;
   commissionOnBasicFreight: number;
@@ -155,6 +157,10 @@ export interface CreateBranchRequest {
   /** Omitted defaults to true on the backend. */
   instantCommission?: boolean;
   remarks?: string | null;
+  /** Branch's GSTIN. Optional. */
+  gstNumber?: string | null;
+  /** Branch's PAN. Optional. */
+  panNumber?: string | null;
   /** Omitted defaults to 18 on the backend. */
   gstPercentage?: number | null;
   /** Omitted defaults to 20 on the backend. */
@@ -204,6 +210,8 @@ export interface UpdateBranchRequest {
   allowWallet?: boolean;
   instantCommission?: boolean;
   remarks?: string | null;
+  gstNumber?: string | null;
+  panNumber?: string | null;
   gstPercentage: number;
   commissionOnOtherCharges: number;
   commissionOnBasicFreight: number;

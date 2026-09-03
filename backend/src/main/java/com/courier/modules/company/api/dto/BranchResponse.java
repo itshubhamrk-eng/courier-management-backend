@@ -25,6 +25,7 @@ public record BranchResponse(
         boolean allowManifest, boolean allowCashCollection, boolean allowWallet,
         boolean instantCommission,
         String remarks,
+        String gstNumber, String panNumber,
         BigDecimal gstPercentage, BigDecimal commissionOnOtherCharges,
         BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
         BigDecimal drsChargePerQty,

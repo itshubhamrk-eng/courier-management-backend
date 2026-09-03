@@ -155,7 +155,7 @@ class BranchServiceImplTest {
                 null, null, null, null, "Pune", null, null, "411001",
                 null, null, null, null, null,
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null, branchUser);
+                null, null, null, null, null, null, null, branchUser);
     }
 
     private Branch existing(String code) {
@@ -323,7 +323,7 @@ class BranchServiceImplTest {
                 null, null, null, null, "Pune", null, null, "411001",
                 new BigDecimal("18.0"), new BigDecimal("73.0"), null, null, null,
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
 
         service.create(command);
 
@@ -337,7 +337,7 @@ class BranchServiceImplTest {
                 null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
                 null, null, null, null, null,
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null, version);
+                null, null, null, null, null, null, null, version);
     }
 
     @Test
@@ -380,7 +380,7 @@ class BranchServiceImplTest {
                 null, null, null, null, null, null, null, "Mumbai", null, null, "400001",
                 new BigDecimal("21.0"), new BigDecimal("79.0"), null, null, null,
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null, 2L);
+                null, null, null, null, null, null, null, 2L);
 
         service.update(b.getId(), command);
 

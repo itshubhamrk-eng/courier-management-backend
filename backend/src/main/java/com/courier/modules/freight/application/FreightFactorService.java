@@ -8,6 +8,7 @@ import com.courier.modules.freight.domain.FreightFactorCriteria;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -48,4 +49,13 @@ public interface FreightFactorService {
      *         cannot be resolved, or no cell covers this distance/weight combination
      */
     FreightCalculationResult calculate(FreightCalculationCommand command);
+
+    /**
+     * Same match as {@link #calculate}, but a grid gap is not an error — empty instead of
+     * thrown. For a caller (the Pricing Engine's own Freight Factor fallback) that has
+     * another way to price the lane and should not be blocked by this grid alone being
+     * incomplete. An unresolvable branch-pair distance still throws; that is not this grid's
+     * problem to swallow.
+     */
+    Optional<FreightCalculationResult> tryCalculate(FreightCalculationCommand command);
 }

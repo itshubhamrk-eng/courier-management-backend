@@ -85,6 +85,8 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
 
           <app-card title="Charges" subtitle="Percentages applied to shipment charges booked at this branch.">
             <dl class="kv">
+              <dt>GST Number</dt><dd class="mono">{{ branch()!.gstNumber || '—' }}</dd>
+              <dt>PAN Number</dt><dd class="mono">{{ branch()!.panNumber || '—' }}</dd>
               <dt>GST %</dt><dd>{{ branch()!.gstPercentage }}%</dd>
               <dt>Company Commission on Other Charges %</dt><dd>{{ branch()!.commissionOnOtherCharges }}%</dd>
               <dt>Commission on Basic Freight %</dt><dd>{{ branch()!.commissionOnBasicFreight }}%</dd>

@@ -35,6 +35,16 @@ import java.util.UUID;
  * @param ewayBill          the E-Way Bill's own data, required when {@code invoiceValue}
  *                          exceeds the company's threshold (booking is refused otherwise),
  *                          optional and simply attached-if-given below it
+ * @param destinationAreaId the specific Area of {@code deliveryPincode} the operator picked
+ *                          from its Area dropdown, if any — resolves District Level
+ *                          Freight's District/ODA off that exact pincode-area link. Null
+ *                          falls back to the pincode's own legacy single area.
+ * @param ratePerKgOverride optional operator override of District Level Freight's own
+ *                          matched-slab rate/KG — must not be lower than that rate (refused
+ *                          otherwise); a higher figure raises {@code freight} (and its GST,
+ *                          on the difference only, same delta-algebra {@code odaCharge}
+ *                          already uses) above the system-calculated figure. Null keeps the
+ *                          system rate unchanged.
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
@@ -68,6 +78,8 @@ public record CreateShipmentCommand(
         List<UUID> crossingBranchIds,
         BigDecimal crossingCharge,
         BigDecimal invoiceValue,
-        EwayBillDataCommand ewayBill
+        EwayBillDataCommand ewayBill,
+        UUID destinationAreaId,
+        BigDecimal ratePerKgOverride
 ) {
 }

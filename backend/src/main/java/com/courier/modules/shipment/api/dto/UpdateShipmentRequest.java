@@ -55,6 +55,9 @@ public record UpdateShipmentRequest(
         BigDecimal width,
         BigDecimal height,
         @DecimalMin(value = "0") BigDecimal invoiceValue,
-        @Valid EwayBillBookingRequest ewayBill
+        @Valid EwayBillBookingRequest ewayBill,
+        UUID destinationAreaId,
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal ratePerKgOverride
 ) {
 }

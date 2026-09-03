@@ -9,6 +9,8 @@ import com.courier.modules.master.domain.District;
 import com.courier.modules.master.domain.DistrictRepository;
 import com.courier.modules.master.domain.GlobalMasters;
 import com.courier.modules.master.domain.Pincode;
+import com.courier.modules.master.domain.PincodeArea;
+import com.courier.modules.master.domain.PincodeAreaRepository;
 import com.courier.modules.master.domain.PincodeRepository;
 import com.courier.shared.company.CompanyContext;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Answers District Level Freight's "which District does this destination pincode belong
@@ -33,6 +36,7 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
     private final AreaRepository areaRepository;
     private final CityRepository cityRepository;
     private final DistrictRepository districtRepository;
+    private final PincodeAreaRepository pincodeAreaRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,6 +72,50 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
             }
             return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
                     pincode.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
+                    district.isActive()));
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CoverageRef> findByPincodeAndArea(String pincodeCode, UUID areaId) {
+        if (pincodeCode == null || pincodeCode.isBlank() || areaId == null) {
+            return Optional.empty();
+        }
+        String trimmed = pincodeCode.trim();
+        return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () -> {
+            Pincode pincode = pincodeRepository
+                    .findByCodeWithinCompany(trimmed, GlobalMasters.PLATFORM_COMPANY_ID)
+                    .orElse(null);
+            if (pincode == null) {
+                return Optional.empty();
+            }
+            PincodeArea link = pincodeAreaRepository
+                    .findByCompanyIdAndPincodeIdAndAreaId(GlobalMasters.PLATFORM_COMPANY_ID, pincode.getId(), areaId)
+                    .orElse(null);
+            if (link == null) {
+                return Optional.empty();
+            }
+            Area area = areaRepository
+                    .findByIdWithinCompany(areaId, GlobalMasters.PLATFORM_COMPANY_ID)
+                    .orElse(null);
+            if (area == null) {
+                return Optional.empty();
+            }
+            City city = cityRepository
+                    .findByIdWithinCompany(area.getCityId(), GlobalMasters.PLATFORM_COMPANY_ID)
+                    .orElse(null);
+            if (city == null) {
+                return Optional.empty();
+            }
+            District district = districtRepository
+                    .findByIdWithinCompany(city.getDistrictId(), GlobalMasters.PLATFORM_COMPANY_ID)
+                    .orElse(null);
+            if (district == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
+                    link.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
                     district.isActive()));
         });
     }

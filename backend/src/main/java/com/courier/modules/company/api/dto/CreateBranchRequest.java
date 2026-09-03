@@ -73,6 +73,12 @@ public record CreateBranchRequest(
 
         @Size(max = 500) String remarks,
 
+        @Pattern(regexp = "^$|^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$",
+                message = "must be a valid 15-character GSTIN")
+        @Schema(description = "Branch's GSTIN. Optional.", example = "27AAAAA0000A1Z5") String gstNumber,
+        @Pattern(regexp = "^$|^[A-Za-z]{5}[0-9]{4}[A-Za-z]$", message = "must be a valid 10-character PAN")
+        @Schema(description = "Branch's PAN. Optional.", example = "AAAAA0000A") String panNumber,
+
         @DecimalMin("0.0") @DecimalMax("100.0")
         @Schema(description = "GST percentage. Defaults to 18 when omitted.", example = "18")
         BigDecimal gstPercentage,

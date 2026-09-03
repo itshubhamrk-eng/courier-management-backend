@@ -24,6 +24,7 @@ public record CreateBranchCommand(
         Boolean allowManifest, Boolean allowCashCollection, Boolean allowWallet,
         Boolean instantCommission,
         String remarks,
+        String gstNumber, String panNumber,
         BigDecimal gstPercentage, BigDecimal commissionOnOtherCharges,
         BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
         BigDecimal drsChargePerQty,

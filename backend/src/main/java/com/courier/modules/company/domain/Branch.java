@@ -22,6 +22,7 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * A physical booking / delivery office of a company.
@@ -64,6 +65,10 @@ import java.util.UUID;
 @Filter(name = CompanyOwnedEntity.COMPANY_FILTER, condition = "company_id = :companyId")
 @SQLRestriction("deleted = false")
 public class Branch extends CompanyOwnedEntity {
+
+    private static final Pattern GSTIN_PATTERN =
+            Pattern.compile("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$");
+    private static final Pattern PAN_PATTERN = Pattern.compile("^[A-Z]{5}[0-9]{4}[A-Z]$");
 
     @Column(name = "branch_code", nullable = false, length = 50)
     private String branchCode;
@@ -185,6 +190,15 @@ public class Branch extends CompanyOwnedEntity {
     @Column(name = "remarks", length = 500)
     private String remarks;
 
+    /** GSTIN of this branch's registration. Optional — branch-level, not company-level;
+     *  a company may run branches under different state GSTINs. */
+    @Column(name = "gst_number", length = 15)
+    private String gstNumber;
+
+    /** PAN of this branch's registration. Optional. */
+    @Column(name = "pan_number", length = 10)
+    private String panNumber;
+
     // --- charge percentages --------------------------------------------------
 
     /** GST percentage applied at this branch. Defaults to 18, editable on update. */
@@ -243,9 +257,17 @@ public class Branch extends CompanyOwnedEntity {
         this.branchName = branchName == null ? null : branchName.trim();
         this.email = email == null ? null : email.trim().toLowerCase();
         this.workingDays = normaliseWorkingDays(workingDays);
+        this.gstNumber = blankToNull(gstNumber == null ? null : gstNumber.trim().toUpperCase());
+        this.panNumber = blankToNull(panNumber == null ? null : panNumber.trim().toUpperCase());
 
         if (branchType == null) {
             throw new BusinessRuleException("A branch must have a type.");
+        }
+        if (gstNumber != null && !GSTIN_PATTERN.matcher(gstNumber).matches()) {
+            throw new BusinessRuleException("GST number must be a valid 15-character GSTIN.");
+        }
+        if (panNumber != null && !PAN_PATTERN.matcher(panNumber).matches()) {
+            throw new BusinessRuleException("PAN number must be a valid 10-character PAN.");
         }
         if (status == null) {
             this.status = BranchStatus.ACTIVE;
@@ -287,6 +309,10 @@ public class Branch extends CompanyOwnedEntity {
             }
         }
         return out.isEmpty() ? null : out.toString();
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     private static void requireInRange(BigDecimal value, String label, int min, int max) {
