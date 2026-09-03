@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -59,7 +60,22 @@ public class AddressDistanceService {
 
     // ------------------------------------------------------------------- resolve
 
-    @Transactional
+    /**
+     * {@code REQUIRES_NEW}, not the default {@code REQUIRED}: {@link
+     * com.courier.modules.freight.application.FreightFactorServiceImpl#tryCalculate}
+     * calls this expecting to catch an unresolved-geocode {@link BusinessRuleException}
+     * and keep going in its own (usually the booking request's) transaction — but under
+     * the default propagation, this method's transactional proxy marks the shared
+     * physical transaction rollback-only the instant it throws, regardless of whether the
+     * caller catches it afterward. The caller's later commit then fails outright with
+     * Spring's own {@code UnexpectedRollbackException}, surfacing as a generic 500 to a
+     * booking clerk who just typed a pincode — confirmed live: {@code
+     * PricingEngineImpl.calculate -> FreightFactorServiceImpl.tryCalculate ->
+     * resolveBranchDistance} was exactly this chain. Running in its own transaction lets
+     * a failure here be caught and shrugged off without poisoning whatever transaction
+     * called in.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @PreAuthorize("isAuthenticated()")
     public AddressDistance resolveBranchDistance(UUID fromBranchId, UUID toBranchId) {
         return resolve(AddressType.BRANCH, fromBranchId, toBranchId);

@@ -8,6 +8,47 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-03 — The ungeocoded-branch booking fix didn't actually work — real cause was Spring transaction propagation
+
+Direct report ("An unexpected error occurred when pincode entered, while booking
+shipment") the moment after deploying the previous fix in this same file below
+("Ungeocoded branch no longer blocks Shipment Booking") — confirmed live on prod by
+reading the real `courier-backend` container logs (`docker compose logs`), not guessed:
+`POST /api/v1/pricing/calculate` throwing `org.springframework.transaction
+.UnexpectedRollbackException: Transaction silently rolled back because it has been
+marked as rollback-only`, stack `PricingEngineImpl.calculate -> priceByDistanceAndWeight
+-> FreightFactorServiceImpl.tryCalculate -> AddressDistanceService.resolveBranchDistance`
+— exactly the call chain the previous fix touched.
+
+**Why the previous fix's `try`/`catch` didn't help**: `resolveBranchDistance` is
+`@Transactional` with the default `REQUIRED` propagation, so it joins whatever
+transaction `PricingEngineImpl.calculate` already opened rather than starting its own.
+Spring's transactional proxy marks the *shared physical transaction* rollback-only the
+instant `resolveBranchDistance` throws — at that method's own AOP boundary, before
+control ever returns to `tryCalculate`'s `catch` block. Catching the exception there
+stops it propagating as an exception, but does nothing to un-mark the transaction; when
+`PricingEngineImpl.calculate` later tries to commit that same physical transaction,
+Spring finds the rollback-only flag already set and throws `UnexpectedRollbackException`
+instead — a completely different, generic exception the earlier fix never anticipated
+catching. This is why `mvn test` stayed green throughout: Mockito unit tests never wire
+real Spring AOP transaction proxies, so this class of bug is invisible to them — only a
+real deployed request (or a `@SpringBootTest`, which this codebase doesn't have here)
+exercises it.
+
+**Real fix**: `resolveBranchDistance` now runs `Propagation.REQUIRES_NEW` — its own
+independent physical transaction, suspending the caller's for the duration. A failure
+inside it now rolls back only its own transaction and leaves the caller's untouched, so
+`tryCalculate`'s existing `catch (BusinessRuleException)` (from the previous fix) now
+genuinely works: the caller's transaction resumes clean and commits normally. Scoped to
+just this one method — its sibling `resolveCustomerAddressDistance` and the read/refresh
+methods are untouched, and the standalone Address Distance Calculator page (the other
+caller of `resolveBranchDistance`, via `AddressDistanceController`) is unaffected since
+it's already its own transaction root either way. `mvn test` still 945/945 (no test
+exercises real Spring transaction propagation here, so none could have caught this —
+noted honestly rather than claimed as "tested").
+
+---
+
 ## [Unreleased] — 2026-09-03 — Ungeocoded branch no longer blocks Shipment Booking
 
 Direct report ("remove this geocode validation while booking shipment") of the error

@@ -7,7 +7,33 @@
 
 ## Current Version
 
-`0.37.0` — **Ungeocoded branch no longer blocks Shipment Booking.** Direct report of
+`0.38.0` — **The 0.37.0 fix didn't actually work — real cause was Spring transaction
+propagation.** Deployed 0.37.0, then immediately got "An unexpected error occurred when
+pincode entered" live from the user. Read the real prod `courier-backend` container logs
+(not guessed) and found `UnexpectedRollbackException` on `POST /pricing/calculate`, stack
+`PricingEngineImpl.calculate -> FreightFactorServiceImpl.tryCalculate ->
+AddressDistanceService.resolveBranchDistance` — the exact chain 0.37.0 touched. Root
+cause: `resolveBranchDistance`'s default `@Transactional` propagation (`REQUIRED`) joins
+the caller's transaction, so Spring's proxy marks the *shared* physical transaction
+rollback-only the instant it throws — at its own AOP boundary, before `tryCalculate`'s
+`catch` block (0.37.0's fix) ever runs. Catching the exception stops it propagating but
+does nothing to un-mark the transaction; the caller's later commit then fails with a
+different, generic exception 0.37.0 never anticipated. Invisible to `mvn test` throughout
+both passes — Mockito unit tests never wire real Spring AOP transaction proxies, and this
+codebase has no `@SpringBootTest` on this path, so only a real deployed request exercises
+it; noted honestly rather than re-claimed as "tested" this time. Fixed for real:
+`resolveBranchDistance` now runs `Propagation.REQUIRES_NEW` (its own transaction,
+suspending the caller's) so a failure there rolls back only itself and 0.37.0's `catch`
+genuinely works. Scoped to just this one method. `mvn test` still 945/945. Full detail in
+`CHANGELOG.md` Unreleased 2026-09-03 "The ungeocoded-branch booking fix didn't actually
+work — real cause was Spring transaction propagation".
+
+Previously current:
+
+`0.37.0` — **Ungeocoded branch no longer blocks Shipment Booking.** (Superseded
+immediately by 0.38.0 above — the fix here looked right and passed every test, but did
+not actually work once deployed; kept for the record of what was tried and why it
+wasn't enough.) Direct report of
 "Both addresses need a resolved location before their distance can be calculated..."
 surfacing during booking. `FreightFactorServiceImpl.tryCalculate` — the Freight Factor
 grid's booking-time fallback, now legacy since District Level Freight became the
