@@ -11,6 +11,8 @@ import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentStatus;
+import com.courier.modules.support.application.TicketCategoryService;
+import com.courier.modules.support.application.TicketService;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
@@ -56,6 +58,8 @@ class PodVerificationServiceImplTest {
     @Mock private ShipmentService shipmentService;
     @Mock private PodVerificationProvider provider;
     @Mock private AuditService auditService;
+    @Mock private TicketService ticketService;
+    @Mock private TicketCategoryService ticketCategoryService;
 
     private PodVerificationProperties properties;
     private PodVerificationServiceImpl service;
@@ -64,7 +68,8 @@ class PodVerificationServiceImplTest {
     void setUp() {
         properties = new PodVerificationProperties();
         service = new PodVerificationServiceImpl(podVerificationRepository, shipmentService, provider,
-                properties, auditService);
+                properties, auditService, ticketService, ticketCategoryService);
+        when(ticketCategoryService.listCategories()).thenReturn(List.of());
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.BRANCH_MANAGER);
 
@@ -213,6 +218,75 @@ class PodVerificationServiceImplTest {
                 null, null, null, null, null, null, "Ramesh", null, null, null, null)))
                 .isInstanceOf(BusinessRuleException.class);
         verify(provider, never()).analyze(any());
+    }
+
+    // ------------------------------------------------------------------ ticket auto-raise
+
+    @Test
+    @DisplayName("a REVIEW result auto-raises a ticket when the category exists")
+    void reviewRaisesTicket() {
+        when(ticketCategoryService.listCategories()).thenReturn(
+                List.of(com.courier.modules.support.domain.TicketCategory.builder()
+                        .name("POD Verification Issue").active(true).build()));
+        when(provider.analyze(any())).thenReturn(result(70, false, false));
+
+        service.verify(SHIPMENT_ID, command("Ramesh"));
+
+        verify(ticketService).raiseSystemTicketIfNoneOpen(any(), eq(null), anyString());
+    }
+
+    @Test
+    @DisplayName("a FAIL result auto-raises a ticket at HIGH priority")
+    void failRaisesHighPriorityTicket() {
+        when(ticketCategoryService.listCategories()).thenReturn(
+                List.of(com.courier.modules.support.domain.TicketCategory.builder()
+                        .name("POD Verification Issue").active(true).build()));
+        when(provider.analyze(any())).thenReturn(result(30, false, false));
+
+        service.verify(SHIPMENT_ID, command("Ramesh"));
+
+        ArgumentCaptor<com.courier.modules.support.application.command.CreateTicketCommand> captor =
+                ArgumentCaptor.forClass(com.courier.modules.support.application.command.CreateTicketCommand.class);
+        verify(ticketService).raiseSystemTicketIfNoneOpen(captor.capture(), eq(null), anyString());
+        assertThat(captor.getValue().priority()).isEqualTo(com.courier.modules.support.domain.TicketPriority.HIGH);
+        assertThat(captor.getValue().relatedShipmentId()).isEqualTo(SHIPMENT_ID);
+    }
+
+    @Test
+    @DisplayName("a PASS result never raises a ticket")
+    void passNeverRaisesTicket() {
+        when(provider.analyze(any())).thenReturn(result(92, false, false));
+
+        service.verify(SHIPMENT_ID, command("Ramesh"));
+
+        verify(ticketService, never()).raiseSystemTicketIfNoneOpen(any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("a missing ticket category skips the raise without failing verification")
+    void missingCategorySkipsRaiseSilently() {
+        when(ticketCategoryService.listCategories()).thenReturn(List.of());
+        when(provider.analyze(any())).thenReturn(result(30, false, false));
+
+        PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
+
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
+        verify(ticketService, never()).raiseSystemTicketIfNoneOpen(any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("a ticket-raise failure never breaks the verification itself")
+    void ticketRaiseFailureDoesNotBreakVerification() {
+        when(ticketCategoryService.listCategories()).thenReturn(
+                List.of(com.courier.modules.support.domain.TicketCategory.builder()
+                        .name("POD Verification Issue").active(true).build()));
+        when(ticketService.raiseSystemTicketIfNoneOpen(any(), any(), anyString()))
+                .thenThrow(new RuntimeException("support module down"));
+        when(provider.analyze(any())).thenReturn(result(30, false, false));
+
+        PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
+
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
     }
 
     // ------------------------------------------------------------------ getLatest

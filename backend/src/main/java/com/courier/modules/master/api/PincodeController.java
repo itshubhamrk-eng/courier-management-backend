@@ -6,6 +6,7 @@ import com.courier.modules.master.api.dto.CreatePincodeRequest;
 import com.courier.modules.master.api.dto.MasterSearchRequest;
 import com.courier.modules.master.api.dto.PincodeAreaLookupResponse;
 import com.courier.modules.master.api.dto.PincodeAreaResponse;
+import com.courier.modules.master.api.dto.PincodeGeoResponse;
 import com.courier.modules.master.api.dto.PincodeResponse;
 import com.courier.modules.master.api.dto.UpdatePincodeAreaRequest;
 import com.courier.modules.master.api.dto.UpdatePincodeRequest;
@@ -76,6 +77,20 @@ public class PincodeController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/master/pincodes/{id}")
                         .buildAndExpand(created.getId()).toUri())
                 .body(ApiResponse.success(mapper.toResponse(created), "Pincode created"));
+    }
+
+    @GetMapping("/{code}/geo")
+    @Operation(summary = "Area/City/District already on file for a pincode",
+            description = """
+                    Read-only — no postal-directory call, nothing created, same read
+                    audience as every other GET here. `matched=false` when no pincode
+                    with this code is on file yet; use `/lookup/{code}` (COMPANY_ADMIN)
+                    to resolve one from the postal directory first.
+                    """)
+    public ApiResponse<PincodeGeoResponse> geo(@PathVariable String code) {
+        return ApiResponse.success(service.geography(code)
+                .map(g -> new PincodeGeoResponse(true, g.areaName(), g.cityName(), g.districtName()))
+                .orElseGet(PincodeGeoResponse::notFound));
     }
 
     @GetMapping("/lookup/{code}")

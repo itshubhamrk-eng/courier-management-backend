@@ -12,6 +12,11 @@ import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentStatus;
+import com.courier.modules.support.application.TicketCategoryService;
+import com.courier.modules.support.application.TicketService;
+import com.courier.modules.support.application.command.CreateTicketCommand;
+import com.courier.modules.support.domain.TicketCategory;
+import com.courier.modules.support.domain.TicketPriority;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
@@ -53,11 +58,15 @@ public class PodVerificationServiceImpl implements PodVerificationService {
             + Roles.BRANCH_MANAGER + "')";
     private static final String READERS = "isAuthenticated()";
 
+    private static final String POD_TICKET_CATEGORY = "POD Verification Issue";
+
     private final PodVerificationRepository podVerificationRepository;
     private final ShipmentService shipmentService;
     private final PodVerificationProvider provider;
     private final PodVerificationProperties properties;
     private final AuditService auditService;
+    private final TicketService ticketService;
+    private final TicketCategoryService ticketCategoryService;
 
     @Override
     @Transactional
@@ -146,7 +155,53 @@ public class PodVerificationServiceImpl implements PodVerificationService {
                 Map.of("shipmentNumber", shipment.getShipmentNumber(),
                         "status", status.name(), "score", result.score()));
 
+        // AI is informational, never a delivery blocker (deliver() never reads this table) —
+        // so a ticket-raise failure here must not roll back the verification itself. Swallowed
+        // deliberately; a missing category or a support-module hiccup is a staffing problem to
+        // fix, not a reason to lose the POD record or block the courier.
+        if (status == PodVerificationStatus.REVIEW || status == PodVerificationStatus.FAIL) {
+            try {
+                raisePodTicketIfNeeded(shipment, saved, status);
+            } catch (RuntimeException e) {
+                log.error("Failed to auto-raise a POD ticket for shipment {}",
+                        shipment.getShipmentNumber(), e);
+            }
+        }
+
         return saved;
+    }
+
+    /** One open "POD Verification Issue" ticket per shipment is enough — a courier retrying a
+     *  FAIL a few times via Upload New POD must not spam a fresh ticket every attempt, so this
+     *  goes through the dedup-guarded {@code raiseSystemTicketIfNoneOpen}. */
+    private void raisePodTicketIfNeeded(Shipment shipment, PodVerification verification,
+                                         PodVerificationStatus status) {
+        TicketCategory category = ticketCategoryService.listCategories().stream()
+                .filter(c -> POD_TICKET_CATEGORY.equalsIgnoreCase(c.getName()))
+                .findFirst()
+                .orElse(null);
+        if (category == null) {
+            log.error("No '{}' ticket category found — skipping auto-ticket for shipment {}",
+                    POD_TICKET_CATEGORY, shipment.getShipmentNumber());
+            return;
+        }
+
+        TicketPriority priority = status == PodVerificationStatus.FAIL
+                ? TicketPriority.HIGH
+                : TicketPriority.MEDIUM;
+        String reasonSummary = verification.reasons().isEmpty()
+                ? "No specific reasons reported."
+                : String.join("; ", verification.reasons());
+        String description = "POD Auto Verification scored this delivery %d/100 (%s).%nReasons: %s"
+                .formatted(verification.getVerificationScore(), status, reasonSummary);
+
+        CreateTicketCommand command = new CreateTicketCommand(
+                "POD %s — shipment %s".formatted(status, shipment.getShipmentNumber()),
+                description, category.getId(), null, priority,
+                shipment.getId(), null, shipment.getDeliveryBranchId(), null);
+
+        ticketService.raiseSystemTicketIfNoneOpen(command, null,
+                "Auto-raised: POD verification " + status);
     }
 
     @Override
@@ -166,6 +221,19 @@ public class PodVerificationServiceImpl implements PodVerificationService {
     @PreAuthorize(REVIEWERS)
     public List<PodVerification> listPendingReview() {
         return podVerificationRepository.findAllPendingReviewWithinCompany(requireCompany());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, PodVerification> latestByShipmentIds(java.util.Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        // Newest-first from the repository query, so the first one kept per shipmentId in
+        // this merge (a,b) -> a is the latest — same idiom findLatestByShipmentIdWithinCompany
+        // already uses for a single shipment.
+        return podVerificationRepository.findAllByShipmentIdInWithinCompany(shipmentIds, requireCompany())
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(PodVerification::getShipmentId, v -> v, (a, b) -> a));
     }
 
     @Override

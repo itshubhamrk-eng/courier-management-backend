@@ -31,7 +31,7 @@ public class PricingProperties {
 
     private boolean discountEnabled = true;
 
-    private RoundingRule roundingRule = RoundingRule.NEAREST_ONE;
+    private RoundingRule roundingRule = RoundingRule.NEAREST_FIVE;
 
     public PricingConfiguration toConfiguration() {
         return new PricingConfiguration(volumetricDivisor, fuelEnabled, odaEnabled,

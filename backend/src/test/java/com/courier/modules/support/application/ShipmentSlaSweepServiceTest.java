@@ -67,7 +67,7 @@ class ShipmentSlaSweepServiceTest {
                 .ticketNumber("TKT-000099")
                 .status(TicketStatus.OPEN)
                 .build();
-        when(ticketService.raiseSystemTicket(any(), any())).thenReturn(raised);
+        when(ticketService.raiseSystemTicket(any(), any(), any())).thenReturn(raised);
     }
 
     private ShipmentSlaPort.Candidate candidate(ShipmentSlaStage stage) {
@@ -85,7 +85,7 @@ class ShipmentSlaSweepServiceTest {
 
         service.sweepAllCompanies();
 
-        verify(ticketService, times(1)).raiseSystemTicket(any(), eq(MANAGER));
+        verify(ticketService, times(1)).raiseSystemTicket(any(), eq(MANAGER), any());
         verify(breachRepository, times(1)).save(any());
     }
 
@@ -99,7 +99,7 @@ class ShipmentSlaSweepServiceTest {
 
         service.sweepAllCompanies();
 
-        verify(ticketService, never()).raiseSystemTicket(any(), any());
+        verify(ticketService, never()).raiseSystemTicket(any(), any(), any());
     }
 
     @Test
@@ -111,7 +111,7 @@ class ShipmentSlaSweepServiceTest {
         service.sweepAllCompanies();
 
         verify(shipmentSlaPort, never()).findBreachCandidates(any(), any(), any());
-        verify(ticketService, never()).raiseSystemTicket(any(), any());
+        verify(ticketService, never()).raiseSystemTicket(any(), any(), any());
     }
 
     @Test

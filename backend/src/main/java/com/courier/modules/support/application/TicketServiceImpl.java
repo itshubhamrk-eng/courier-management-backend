@@ -148,7 +148,22 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     @Transactional
-    public Ticket raiseSystemTicket(CreateTicketCommand command, UUID assigneeUserId) {
+    public Ticket raiseSystemTicketIfNoneOpen(CreateTicketCommand command, UUID assigneeUserId,
+                                               String statusHistoryRemark) {
+        UUID companyId = requireCompany();
+        if (command.categoryId() != null && command.relatedShipmentId() != null
+                && ticketRepository.existsOpenByCompanyIdAndRelatedShipmentIdAndCategoryId(
+                        companyId, command.relatedShipmentId(), command.categoryId())) {
+            log.debug("Skipping system ticket raise — an open ticket already exists for shipment {} "
+                    + "in category {}", command.relatedShipmentId(), command.categoryId());
+            return null;
+        }
+        return raiseSystemTicket(command, assigneeUserId, statusHistoryRemark);
+    }
+
+    @Override
+    @Transactional
+    public Ticket raiseSystemTicket(CreateTicketCommand command, UUID assigneeUserId, String statusHistoryRemark) {
         UUID companyId = requireCompany();
 
         String subject = requireText(command.subject(), "Subject");
@@ -184,7 +199,7 @@ public class TicketServiceImpl implements TicketService {
                 .build();
         Ticket saved = ticketRepository.save(ticket);
 
-        writeStatusHistory(saved, null, TicketStatus.OPEN, null, "Auto-raised: SLA breach");
+        writeStatusHistory(saved, null, TicketStatus.OPEN, null, statusHistoryRemark);
         auditService.record(AuditAction.TICKET_CREATED, ENTITY, saved.getId(),
                 Map.of("ticketNumber", saved.getTicketNumber(), "priority", priority.name(), "system", true));
 

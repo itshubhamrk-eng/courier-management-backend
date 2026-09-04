@@ -92,6 +92,17 @@ export interface PincodeAreaRow {
 /** `GET /global-masters/pincodes/lookup/{code}` — the Area (and its ancestor chain)
  *  auto-resolved from the postal directory for a raw pincode. `matched: false` means the
  *  directory has no record of it, not an error. */
+/** `GET /global-masters/pincodes/{code}/geo` — read-only Area/City/District already on
+ *  file for a pincode. `matched: false` means no pincode with this code is on file, not
+ *  an error. Unlike `PincodeAreaLookup`, this never calls the postal directory or creates
+ *  a row, so it is readable by any authenticated company user. */
+export interface PincodeGeo {
+  matched: boolean;
+  areaName: string | null;
+  cityName: string | null;
+  districtName: string | null;
+}
+
 export interface PincodeAreaLookup {
   matched: boolean;
   areaId: string | null;

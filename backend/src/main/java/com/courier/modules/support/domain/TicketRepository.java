@@ -54,6 +54,18 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID>, JpaSpecif
             + "com.courier.modules.support.domain.TicketStatus.CLOSED)")
     List<Ticket> findOpenTickets(@Param("companyId") UUID companyId);
 
+    /** Is there already an open ticket for this shipment in this category — the dedup guard
+     *  a system trigger checks before raising another one for the same underlying issue
+     *  (e.g. a POD re-upload after a FAIL must not spam a new ticket every retry). */
+    @Query("select case when count(t) > 0 then true else false end from Ticket t "
+            + "where t.companyId = :companyId and t.relatedShipmentId = :shipmentId "
+            + "and t.categoryId = :categoryId "
+            + "and t.status not in (com.courier.modules.support.domain.TicketStatus.RESOLVED, "
+            + "com.courier.modules.support.domain.TicketStatus.CLOSED)")
+    boolean existsOpenByCompanyIdAndRelatedShipmentIdAndCategoryId(
+            @Param("companyId") UUID companyId, @Param("shipmentId") UUID shipmentId,
+            @Param("categoryId") UUID categoryId);
+
     /** SUPER_ADMIN sweep: every ticket across every company with an SLA still to watch,
      *  regardless of the caller's own company scope — see {@code TicketSlaSweepJob}. */
     @Query("select t from Ticket t where t.status not in (com.courier.modules.support.domain.TicketStatus.RESOLVED, "

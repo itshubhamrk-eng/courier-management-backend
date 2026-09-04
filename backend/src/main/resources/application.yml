@@ -247,9 +247,16 @@ app:
 
 pod:
   ai:
-    # false swaps in UnavailablePodVerificationProvider, simulating an unreachable/
-    # unconfigured AI vendor — POD Auto Verification then always routes to REVIEW.
-    enabled: ${POD_AI_ENABLED:true}
+    # heuristic (default, deterministic local scorer, no vendor call) | vision (real AI
+    # vision call, needs POD_AI_VISION_API_KEY) | disabled (always routes to manual review,
+    # simulating an unreachable/unconfigured AI vendor).
+    provider: ${POD_AI_PROVIDER:heuristic}
+    vision:
+      api-key: ${POD_AI_VISION_API_KEY:}
+      base-url: ${POD_AI_VISION_BASE_URL:https://api.anthropic.com/v1}
+      model: ${POD_AI_VISION_MODEL:claude-sonnet-4-5}
+      connect-timeout: 5s
+      read-timeout: 20s
   verification:
     auto-verify-threshold: ${POD_AUTO_VERIFY_THRESHOLD:85}
     manual-review-threshold: ${POD_MANUAL_REVIEW_THRESHOLD:60}
@@ -260,7 +267,7 @@ pricing:
   oda-enabled: true
   insurance-enabled: true
   discount-enabled: true
-  rounding-rule: NEAREST_ONE
+  rounding-rule: NEAREST_FIVE
 
 springdoc:
   api-docs:

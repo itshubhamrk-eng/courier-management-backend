@@ -30,6 +30,6 @@ public record PricingConfiguration(
 
     public static PricingConfiguration defaults() {
         return new PricingConfiguration(DEFAULT_VOLUMETRIC_DIVISOR, true, true, true, true,
-                RoundingRule.NEAREST_ONE);
+                RoundingRule.NEAREST_FIVE);
     }
 }

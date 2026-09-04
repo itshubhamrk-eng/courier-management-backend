@@ -8,6 +8,94 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-04 — POD Auto Verification: real vision AI, delivery no longer blocked, auto-ticket, full review table
+
+Four fixes on direct user report, all in `com.courier.modules.pod`/`support` +
+`shipment-movement`. Full detail in `MEMORY/modules/pod-verification.md`'s 2026-09-04
+update section — summary here:
+
+1. **AI scoring was never a content check** — a random unrelated photo scored 85+/100
+   (auto-PASS) since the only shipped provider, `HeuristicPodVerificationProvider`, scores
+   pixel brightness/blur/resolution + string-length checks, never image content. Added
+   `VisionPodVerificationProvider` (real vision-AI call, Anthropic Messages API via
+   `RestClient`, no SDK) as a third provider option. `pod.ai.enabled` (boolean) renamed to
+   `pod.ai.provider` (`heuristic`|`vision`|`disabled`) — **breaking env var rename**
+   (`POD_AI_ENABLED` → `POD_AI_PROVIDER`), default stays `heuristic` so behavior is
+   unchanged unless explicitly switched. New shared `PodGroundTruthRules` (AWB/QR mismatch,
+   duplicate-hash hard-fail) so both providers enforce this platform's own ground truth
+   identically.
+2. **Delivery no longer blocked on AI score**, on direct instruction ("AI verification
+   should not be mandatory for delivery"). `delivery.ts`'s "Complete Delivery" button now
+   shows for any verification result (was PASS-only); REVIEW/FAIL keep their secondary
+   action (review/re-upload) as an option, not a gate. `ShipmentServiceImpl.deliver()`
+   itself untouched — it never read `PodVerification`, so there was no backend gate.
+3. **Auto-ticket on REVIEW or FAIL** — reuses `support`'s existing
+   `TicketService.raiseSystemTicket` pattern (same one `ShipmentSlaSweepService` uses for
+   SLA breaches), extended with a new `raiseSystemTicketIfNoneOpen` dedup guard (one open
+   ticket per shipment per category) and a `statusHistoryRemark` parameter (was hardcoded
+   to the SLA sweep's own text). New category `"POD Verification Issue"` seeded by `V57`.
+   Ticket-raise failures are caught/logged, never break the verification.
+4. **POD Review page rewritten** to a paginated table of every delivered shipment (not just
+   REVIEW-status), with a click-to-enlarge photo preview (new `ImagePreviewDialog`,
+   `DialogService.previewImage`). New `GET /api/v1/pod/delivered` endpoint, batch-joining
+   latest `PodVerification` + POD assets per shipment id, same pattern
+   `ShipmentController.list` already uses for `netAmounts`/`charges`/`deliveredAt`.
+
+Backend: `mvn test` 950/950 (5 new — ticket-raise wiring in `PodVerificationServiceImplTest`,
+signature updates in `TicketServiceImplTest`/`ShipmentSlaSweepServiceTest`). Frontend:
+`ng build` clean, `ng test` 147/148 (the one failure, `navigation.config.spec.ts`'s
+"reports-dashboard" node, is pre-existing/unrelated — a different uncommitted session's
+work, confirmed by `git diff` showing that file's only change is an unrelated Vendor Audit
+Report nav entry).
+
+## [Unreleased] — 2026-09-04 — Vendor Audit Report (new report, company-level, additive only)
+
+Direct request: a new report listing every branch's paid/to-pay order counts, quantities
+and amounts, booking vs. delivery commission, ODA charges, other charges and cancel count
+— "for vendor audit." Explicit instructions along the way: don't touch the existing
+Commission Report / Branch Performance Report, and make it company-level (no
+`myBranchId` lock, unlike every other report in this module — a vendor audit needs every
+branch side by side).
+
+Purely additive, no existing method/endpoint/file touched: new domain record
+`shipment.domain.VendorAuditRow`, new `ShipmentService.vendorAudit`/`ShipmentServiceImpl
+.vendorAudit` (same "unpaged aggregate, in-memory reduce" shape `commissionSummary`/
+`branchPerformance` already use), new `GET /shipments/vendor-audit` endpoint +
+`VendorAuditRowResponse` + `ShipmentMapper.toVendorAuditRow`, one new repository method
+`ShipmentItemRepository.findByShipmentIdIn` (batch item-quantity lookup, same shape
+`ShipmentChargeRepository.findByShipmentIdIn` already has). Frontend: new
+`features/reports/vendor-audit-report.ts` (`VendorAuditReport`), `VendorAuditRow` model,
+`ShipmentService.vendorAudit`, route `/reports/vendor-audit` and nav entry, both gated to
+`FINANCE_REPORT_READERS` (`COMPANY_ADMIN`/`FINANCE_USER`/`ACCOUNTS`) rather than the wider
+`SHIPMENT_READERS` every other report route uses — a judgment call, not asked for
+explicitly: showing every branch's commission/amount figures side by side to a
+`BRANCH_MANAGER`/`OPERATOR` would leak other branches' financials, which the existing
+per-report `myBranchId` lock exists specifically to prevent.
+
+Per-branch rows split booking-side figures (grouped by `bookingBranchId`: paid/to-pay
+counts/quantities/amounts, booking commission, ODA, other charges, cancellations) from
+delivery-side figures (grouped separately by `deliveryBranchId`: delivered count, DRS/
+delivery commission) — the same split `ShipmentBookingWalletListener`/
+`ShipmentDeliveryWalletListener` use to credit two different branch wallets for the same
+shipment, since a shipment's booking and delivery branch are frequently different. A
+branch appears if it matches either role.
+
+**Known, stated-up-front limitation**: delivery/DRS commission is recomputed at report
+time from the delivery branch's *current* `drsChargePerQty` (`Branch.getDrsChargePerQty()`),
+not the rate in effect at each shipment's actual delivery time — the real system computes
+and credits DRS commission once, at delivery (`ShipmentServiceImpl.deliver`), then never
+revisits it. If a branch's DRS rate changed since an older delivery, this report's figure
+for that shipment will disagree with what was actually credited to the wallet. For an
+exact match to credited amounts, reconcile against `WalletTransaction` rows instead —
+noted in both the backend Javadoc and the frontend model, not silently claimed as exact.
+
+`mvn test` 945/945 unchanged (no new tests added for this — reports in this module have
+none, `commissionSummary`/`branchPerformance` included). `mvn -o compile` clean, `ng build
+--configuration production` clean. **Not verified live this session** — no MySQL boot or
+browser click-through against a real company with paid/to-pay/delivered/cancelled
+shipments across multiple branches; verification stopped at the compile/build/unit-test
+bar, same honesty standard as 0.34.0.
+
 ## [Unreleased] — 2026-09-04 — Deployed V56 (index migration); found my own leftover log-tail processes were adding to the RAM pressure
 
 Deploying V56 (backend-only, no code change) hit `rsync` connection resets 4 times in a

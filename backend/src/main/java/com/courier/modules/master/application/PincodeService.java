@@ -23,4 +23,13 @@ public interface PincodeService extends MasterDataService<Pincode, PincodeComman
      * @return empty when the directory has no record of this pincode
      */
     java.util.Optional<PincodeAreaLookupResult> lookupPostalArea(String pincode);
+
+    /**
+     * The Area/City/District names already on file for this pincode's own Area link —
+     * same read audience as {@link #getById}, unlike {@link #lookupPostalArea}, since
+     * this never touches the postal directory or creates a row.
+     *
+     * @return empty when no pincode with this code is on file
+     */
+    java.util.Optional<PincodeGeography> geography(String code);
 }

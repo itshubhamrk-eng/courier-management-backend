@@ -3,6 +3,8 @@ package com.courier.modules.pod.application;
 import com.courier.modules.pod.domain.PodVerification;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,6 +32,11 @@ public interface PodVerificationService {
     /** Every verification currently awaiting a human decision — the Manual Review screen's
      *  worklist, oldest first. */
     java.util.List<PodVerification> listPendingReview();
+
+    /** Latest verification per shipment, for these shipment ids — batch form of
+     *  {@link #getLatest}, for the POD Review table (every delivered shipment, whether or
+     *  not it ever had a POD run). A shipment missing from the returned map has none. */
+    Map<UUID, PodVerification> latestByShipmentIds(Collection<UUID> shipmentIds);
 
     /**
      * A reviewer's decision on a {@code REVIEW}-status verification — approve moves it to

@@ -15,7 +15,10 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiInput } from '@shared/components/ui-input/ui-input';
+import { catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { RazorpayService } from '@core/services/razorpay.service';
+import { CompanyLetterhead, CompanyProfileService } from '@features/company/company-profile.service';
 import { BranchWalletService } from './branch-wallet.service';
 import { downloadReceipt } from './receipt.util';
 
@@ -159,12 +162,14 @@ export class WalletRecharge implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly auth = inject(AuthService);
+  private readonly companyProfile = inject(CompanyProfileService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   readonly loading = signal(true);
   readonly wallet = signal<WalletResponse | null>(null);
+  private readonly company = signal<CompanyLetterhead | null>(null);
   readonly phase = signal<Phase>('form');
   readonly settled = signal<WalletTransaction | null>(null);
   readonly error = signal('');
@@ -209,6 +214,7 @@ export class WalletRecharge implements OnInit {
   }
 
   constructor() {
+    this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((c) => this.company.set(c));
     effect(() => {
       const branchId = this.branchId();
       this.loading.set(true);
@@ -235,7 +241,7 @@ export class WalletRecharge implements OnInit {
 
   receipt(): void {
     const w = this.wallet(); const t = this.settled();
-    if (w && t) downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
+    if (w && t) downloadReceipt(t, w, environment.appName, this.auth.companyLogo(), this.company());
   }
 
   pay(): void {

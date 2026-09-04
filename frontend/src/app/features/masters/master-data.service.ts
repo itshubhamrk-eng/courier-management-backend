@@ -3,7 +3,7 @@ import { Observable, of, shareReplay } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from '@core/services/api.service';
 import { Page, PageQuery } from '@core/models/page.model';
-import { MasterBootstrapResult, MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaRow } from '@core/models/master.model';
+import { MasterBootstrapResult, MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaRow, PincodeGeo } from '@core/models/master.model';
 import { LookupSource, MASTER_DEFINITIONS, MasterDefinition, MasterKey } from './master.config';
 
 /** The branch fields this module reads — the two ends of a route, the postal code a
@@ -83,6 +83,14 @@ export class MasterDataService {
    */
   lookupPincodeArea(code: string): Observable<PincodeAreaLookup> {
     return this.tap(this.api.get<PincodeAreaLookup>(`/global-masters/pincodes/lookup/${code}`));
+  }
+
+  /** Area/City/District already on file for a pincode — read-only (no postal-directory
+   *  call, nothing created), unlike {@link lookupPincodeArea}. What the consignment
+   *  receipt uses so a BRANCH_MANAGER printing it doesn't need the COMPANY_ADMIN-only
+   *  write audience `lookup/{code}` carries. */
+  pincodeGeo(code: string): Observable<PincodeGeo> {
+    return this.api.get<PincodeGeo>(`/global-masters/pincodes/${code}/geo`);
   }
 
   /** Every Area a pincode's postal record names, primary row first — the detail page's

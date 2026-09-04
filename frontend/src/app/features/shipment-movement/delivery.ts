@@ -202,15 +202,15 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                 }
 
                 <div class="df__bar">
-                  @if (v.verificationStatus === 'PASS') {
-                    <app-button icon="task_alt" [loading]="delivering()" (pressed)="deliver()">Complete Delivery</app-button>
-                  } @else if (v.verificationStatus === 'REVIEW') {
+                  <app-button icon="task_alt" [loading]="delivering()" (pressed)="deliver()">Complete Delivery</app-button>
+                  @if (v.verificationStatus === 'REVIEW') {
                     <app-button variant="stroked" icon="refresh" [loading]="checkingReview()" (pressed)="checkReviewStatus()">
                       Check Review Status
                     </app-button>
-                    <span class="ai-result__hint">Sent for manual review — a supervisor must approve or reject it.</span>
-                  } @else {
+                    <span class="ai-result__hint">AI flagged this for manual review — a ticket has been raised, but you can still complete delivery now.</span>
+                  } @else if (v.verificationStatus === 'FAIL') {
                     <app-button variant="stroked" icon="upload" (pressed)="uploadNewPod()">Upload New POD</app-button>
+                    <span class="ai-result__hint">AI verification failed — a ticket has been raised, but you can still complete delivery, or capture a new POD first.</span>
                   }
                 </div>
               </div>
@@ -347,9 +347,8 @@ export class Delivery implements OnInit {
   /** Enter-key submit inside the form — routes to whichever action is currently valid,
    *  same as clicking the one visible primary button would. */
   protected onEnter(): void {
-    const status = this.verification()?.verificationStatus;
-    if (status === 'PASS') this.deliver();
-    else if (!status || status === 'FAIL') this.runVerification();
+    if (this.verification()) this.deliver();
+    else this.runVerification();
   }
 
   protected statusIcon(v: PodVerification): string {

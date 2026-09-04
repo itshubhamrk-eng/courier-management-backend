@@ -3,6 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { Observable } from 'rxjs';
 import { ConfirmData, ConfirmDialog } from './confirm-dialog';
 import { ReasonData, ReasonDialog } from './reason-dialog';
+import { ImagePreviewData, ImagePreviewDialog } from './image-preview-dialog';
 
 /** Thin wrapper so features open a confirm without importing MatDialog wiring each time. */
 @Injectable({ providedIn: 'root' })
@@ -23,5 +24,11 @@ export class DialogService {
   prompt(data: ReasonData): Observable<string | undefined> {
     return this.dialog.open(ReasonDialog, { data, autoFocus: true, panelClass: 'app-dialog' })
       .afterClosed();
+  }
+
+  /** Click-to-enlarge preview for one uploaded image (POD photo/signature, etc.). */
+  previewImage(url: string, title?: string): void {
+    const data: ImagePreviewData = { url, title };
+    this.dialog.open(ImagePreviewDialog, { data, autoFocus: false, panelClass: 'app-dialog' });
   }
 }

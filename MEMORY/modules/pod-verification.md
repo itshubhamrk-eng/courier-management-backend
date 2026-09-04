@@ -4,6 +4,55 @@
 `V48`/`V49`. Integrated into Shipment Movement's own delivery flow
 (`com.courier.modules.shipment`) rather than replacing it — see "Integration point" below.
 
+**2026-09-04 update — four fixes, in response to real usage feedback:**
+1. **AI was never a content check.** Reported live: a random unrelated photo scored 85+/100
+   (auto-PASS) since the heuristic scorer never looked at pixel *content*, only brightness/
+   blur/resolution + string-length checks the operator's own form input trivially satisfies.
+   Added `VisionPodVerificationProvider` — a real vision-AI call (Anthropic Messages API,
+   `RestClient`, no SDK — same "one endpoint doesn't justify a dependency" call
+   `RazorpayPaymentGateway` makes) that actually assesses whether the photo plausibly shows
+   a genuine delivery/parcel/signature capture. `pod.ai.enabled` (boolean) renamed to
+   `pod.ai.provider` (`heuristic` default | `vision` | `disabled`) — a **breaking env-var
+   rename** (`POD_AI_ENABLED` → `POD_AI_PROVIDER`), since `application.yml` set the old key
+   explicitly. New `pod.ai.vision.*` config (`POD_AI_VISION_API_KEY`/`_BASE_URL`/`_MODEL`).
+   The AWB/QR-mismatch and duplicate-photo-hash hard-fail rules are shared between both
+   providers via new `PodGroundTruthRules` (package-private) — this platform's own policy,
+   not something either scorer should reproduce or a vendor could know independently.
+2. **Delivery is explicitly informational-only now, on direct user instruction** ("AI
+   verification should not be mandatory for delivery"). `delivery.ts`'s "Complete Delivery"
+   button is no longer gated on `verificationStatus === 'PASS'` — it now shows for any
+   result (PASS/REVIEW/FAIL), with REVIEW/FAIL keeping their existing secondary action
+   (Check Review Status / Upload New POD) as an option, not a block. The flow diagram above
+   is now stale for the *delivery-blocking* part — REVIEW/FAIL no longer stop delivery, they
+   just carry a hint that a ticket was raised. `ShipmentServiceImpl.deliver()` itself:
+   **still untouched**, exactly as designed originally — it never read `PodVerification`
+   before this change either, so there was no backend gate to remove.
+3. **Auto-ticket on REVIEW or FAIL.** `PodVerificationServiceImpl.verify()` now raises a
+   support ticket (category `"POD Verification Issue"`, seeded by `V57`) when the result is
+   REVIEW or FAIL — FAIL at `HIGH` priority, REVIEW at `MEDIUM`. Reuses the `support`
+   module's existing "auto-raise from business rule" pattern (`TicketService.raiseSystemTicket`,
+   the same one `ShipmentSlaSweepService` already used for SLA breaches), extended with
+   `raiseSystemTicketIfNoneOpen` — a new dedup guard (one open ticket per shipment per
+   category) so a courier retrying a FAIL a few times via "Upload New POD" doesn't spam a
+   fresh ticket every attempt. `raiseSystemTicket` also gained a `statusHistoryRemark`
+   parameter (was hardcoded to `"Auto-raised: SLA breach"` — now every caller names its own
+   trigger). Ticket-raise failures are caught and logged, never propagated — a support-module
+   hiccup must not roll back the POD verification or block delivery (point 2's own logic
+   extended to its side effects).
+4. **POD Review page rewritten** from "REVIEW-status worklist only" (no photo preview, raw
+   `target=_blank` links) to a paginated table of **every delivered shipment**, whether or
+   not a POD was ever run against it. New endpoint `GET /api/v1/pod/delivered` (batch-fetches
+   latest `PodVerification` + POD `ShipmentAsset`s per shipment id, same "page then batch-join"
+   idiom `ShipmentController.list` already uses for `netAmounts`/`charges`/`deliveredAt`) and
+   a new click-to-enlarge `ImagePreviewDialog` (`DialogService.previewImage`). The
+   Approve/Reject decision form now only renders for a REVIEW-status row — every other row
+   (PASS/FAIL/no POD at all) is view-only, since `review()` only ever accepted REVIEW anyway.
+
+The flow diagram and the rest of this document describe the **original 2026-08-20 build**
+and are otherwise still accurate (thresholds, RBAC, entity shape, API surface below except
+for the new `GET /pod/delivered` endpoint) — read both this update and the sections below
+together.
+
 ## Purpose
 
 AI-scored gate in front of the existing `deliver()` action, on direct full-spec request.
@@ -14,6 +63,11 @@ OUT_FOR_DELIVERY -> upload POD -> AI Verification -> PASS -> Complete Delivery
                                                  \-> REVIEW -> manual approve/reject
                                                  \-> FAIL -> upload a new POD
 ```
+
+**As of 2026-09-04 (see update above), this diagram is aspirational for the "blocks
+delivery" part only** — REVIEW/FAIL no longer prevent "Complete Delivery" from being clicked;
+they only add a secondary action (review/re-upload) plus an auto-raised ticket. The
+AI-scoring branch (PASS/REVIEW/FAIL determination itself) is unchanged.
 
 **AI never itself updates a shipment's status.** `ShipmentServiceImpl.deliver()` — the
 only code path that ever writes `DELIVERED` — is completely untouched by this module. POD
@@ -138,6 +192,7 @@ unused vocabulary:
 | `GET` | `/api/v1/shipments/{id}/pod/verification` | latest run for the shipment, 404 if none |
 | `POST` | `/api/v1/shipments/{id}/pod/review` | `{approve, remarks}` — REVIEW-only |
 | `GET` | `/api/v1/pod/pending-review` | **added beyond the brief's own API list** — the Manual Review screen's worklist; without it there is no way for a reviewer to discover what needs deciding |
+| `GET` | `/api/v1/pod/delivered` | **added 2026-09-04** — every DELIVERED shipment with its latest POD verification if any; the rewritten POD Review table's source. Same filters as `GET /shipments` (branch/date-range/search), status always forced to DELIVERED |
 
 ## Frontend
 

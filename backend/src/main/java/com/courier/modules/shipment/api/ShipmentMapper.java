@@ -178,6 +178,16 @@ public class ShipmentMapper {
                 s.totalChargeableWeight(), s.totalNetAmount());
     }
 
+    public com.courier.modules.shipment.api.dto.VendorAuditRowResponse toVendorAuditRow(
+            com.courier.modules.shipment.domain.VendorAuditRow r) {
+        return new com.courier.modules.shipment.api.dto.VendorAuditRowResponse(
+                r.branchId(), r.paidOrderCount(), r.paidOrderQuantity(), r.paidOrderAmount(),
+                r.topayOrderCount(), r.topayOrderQuantity(), r.topayOrderAmount(),
+                r.paidCommission(), r.deliveryCommission(), r.totalBookedOrderCount(), r.totalDeliveredOrderCount(),
+                r.bookingTotalCommission(), r.deliveryTotalCommission(),
+                r.odaCharges(), r.otherCharges(), r.cancelledOrderCount());
+    }
+
     public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,
                                              Instant deliveredAt) {
         return new ShipmentSummaryResponse(

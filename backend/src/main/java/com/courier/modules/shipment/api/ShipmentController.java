@@ -193,6 +193,20 @@ public class ShipmentController {
                 .map(mapper::toBranchPerformance).toList());
     }
 
+    @GetMapping("/vendor-audit")
+    @Operation(summary = "Vendor Audit Report: per-branch paid/to-pay volumes, booking and "
+                    + "delivery commission, ODA/other charges and cancellations",
+            description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "
+                    + "unpaged — one row per company branch appearing as either a booking or "
+                    + "a delivery branch in the search. See `VendorAuditRow` for the "
+                    + "booking-vs-delivery grouping split and its one known limitation on "
+                    + "the delivery-commission figures.")
+    public ApiResponse<List<com.courier.modules.shipment.api.dto.VendorAuditRowResponse>> vendorAudit(
+            @Valid @ParameterObject ShipmentSearchRequest search) {
+        return ApiResponse.success(shipmentService.vendorAudit(mapper.toCriteria(search)).stream()
+                .map(mapper::toVendorAuditRow).toList());
+    }
+
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a shipment",
             description = "Refused once the shipment has left the branch (DISPATCHED "

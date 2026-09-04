@@ -101,6 +101,11 @@ public class SecurityConfig {
                         // Company lifecycle. Same arrangement: @PreAuthorize on
                         // CompanyService is authoritative, this is the outer gate.
                         .requestMatchers("/api/v1/companies/**").hasRole(Roles.SUPER_ADMIN)
+                        // Own-company letterhead (name/address/GST/contact/website) for
+                        // printed documents. Any authenticated company user reads their
+                        // own company; resolved from the bound company, not a path id —
+                        // same split as company-settings below.
+                        .requestMatchers("/api/v1/company-profile/**").authenticated()
                         // The platform console: platform dashboard and super admin
                         // accounts. Nothing under here is company-scoped, so unlike the
                         // paths below a flat role rule expresses the whole truth.

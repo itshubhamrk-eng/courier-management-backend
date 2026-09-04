@@ -98,7 +98,7 @@ class PricingEngineImplTest {
         // 30 x 20 x 10 / 5000 = 1.200 -> heavier than the 1.000 actual weight
         assertThat(context.volumetricWeight()).isEqualByComparingTo("1.200");
         assertThat(context.chargeableWeight()).isEqualByComparingTo("1.200");
-        assertThat(context.configuration().roundingRule()).isEqualTo(RoundingRule.NEAREST_ONE);
+        assertThat(context.configuration().roundingRule()).isEqualTo(RoundingRule.NEAREST_FIVE);
     }
 
     @Test

@@ -1,4 +1,6 @@
 import { WalletResponse, WalletTransaction, formatMoney, prettyToken, subTypeLabel } from '@core/models/wallet.model';
+import { CompanyLetterhead } from '@features/company/company-profile.service';
+import { companyAddressLine } from '@features/shipment/consignment-print.util';
 import qrcode from 'qrcode-generator';
 
 /** Same synchronous QR render used by the consignment note (`consignment-print.util.ts`'s
@@ -17,8 +19,11 @@ function qrSvg(value: string): string {
  * PDF endpoint can replace this later; until then the client renders exactly what it holds.
  */
 export function downloadReceipt(
-  txn: WalletTransaction, wallet: WalletResponse, appName: string, companyLogo: string | null = null
+  txn: WalletTransaction, wallet: WalletResponse, appName: string,
+  companyLogo: string | null = null, company: CompanyLetterhead | null = null
 ): void {
+  const companyName = company?.companyName ?? appName;
+  const address = companyAddressLine(company);
   const money = formatMoney(txn.amount, wallet.currency);
   const when = new Date(txn.createdAt).toLocaleString('en-IN');
   const rows: Array<[string, string]> = [
@@ -44,6 +49,7 @@ export function downloadReceipt(
   .h{padding:24px 28px;background:linear-gradient(135deg,#4f46e5,#4338ca);color:#fff}
   .h img{max-height:32px;max-width:180px;object-fit:contain;margin-bottom:6px;display:block}
   .h h1{margin:0;font-size:18px} .h p{margin:4px 0 0;opacity:.85;font-size:13px}
+  .h .sub{opacity:.7;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-top:8px}
   .amt{padding:24px 28px;text-align:center;border-bottom:1px solid #e2e8f0}
   .amt .n{font-size:34px;font-weight:800;letter-spacing:-.02em;color:${txn.transactionType === 'CR' ? '#059669' : '#dc2626'}}
   .amt .l{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-top:4px}
@@ -56,7 +62,16 @@ export function downloadReceipt(
   @media print{body{background:#fff;padding:0}.r{border:0}}
 </style></head><body>
   <div class="r">
-    <div class="h">${companyLogo ? `<img src="${esc(companyLogo)}" alt="${esc(appName)}">` : ''}<h1>${esc(appName)}</h1><p>Wallet Transaction Receipt</p></div>
+    <div class="h">${companyLogo ? `<img src="${esc(companyLogo)}" alt="${esc(companyName)}">` : ''}<h1>${esc(companyName)}</h1>
+      ${address ? `<p>${esc(address)}</p>` : ''}
+      <p>
+        ${company?.gstNumber ? `GSTIN: ${esc(company.gstNumber)}` : ''}
+        ${company?.gstNumber && company?.mobile ? ' &nbsp;|&nbsp; ' : ''}
+        ${company?.mobile ? `Ph: ${esc(company.mobile)}` : ''}
+      </p>
+      ${company?.website ? `<p>${esc(company.website)}</p>` : ''}
+      <p class="sub">Wallet Transaction Receipt</p>
+    </div>
     <div class="amt"><div class="n">${sign}${esc(money)}</div><div class="l">${esc(txn.subTransactionTypeLabel || subTypeLabel(txn.subTransactionType))}</div></div>
     <table>${body}</table>
     <div class="qr">${qrSvg(txn.transactionNo)}<p>${esc(txn.transactionNo)}</p></div>

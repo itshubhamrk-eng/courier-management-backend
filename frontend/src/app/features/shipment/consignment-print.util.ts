@@ -1,6 +1,15 @@
 import { ChargeBreakup } from '@core/models/shipment.model';
+import { CompanyLetterhead } from '@features/company/company-profile.service';
 import JsBarcode from 'jsbarcode';
 import qrcode from 'qrcode-generator';
+
+/** Formats `CompanyProfileService`'s address fields into the single line the receipt
+ *  header prints — null when the company has none set, rather than a line of commas. */
+export function companyAddressLine(c: CompanyLetterhead | null | undefined): string | null {
+  if (!c) return null;
+  const parts = [c.addressLine1, c.addressLine2, c.city, c.state, c.postalCode].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
 
 /** Everything the consignment note needs — nothing invented, every value comes off the
  *  real booking form and the price it was actually booked at (same `PricingResponse` the
@@ -12,6 +21,12 @@ export interface ConsignmentPrintData {
   companyName: string;
   /** Company branding, `AuthService.companyLogo()` — absent falls back to the text wordmark. */
   companyLogo: string | null;
+  /** Single-line letterhead address — `CompanyProfileService`, formatted by the caller. Null
+   *  omits the line rather than printing an empty one. */
+  companyAddress: string | null;
+  companyGst: string | null;
+  companyContact: string | null;
+  companyWebsite: string | null;
   shipmentNumber: string;
   trackingNumber: string;
   bookingDate: string;
@@ -19,6 +34,14 @@ export interface ConsignmentPrintData {
   expectedDeliveryDate: string | null;
   bookingBranchLabel: string;
   deliveryBranchLabel: string;
+  /** Postal directory lookup (`MasterDataService.lookupPincodeArea`) off the booking side's
+   *  own pincode — null when unmatched, same meaning as `PincodeAreaLookup.matched: false`. */
+  bookingPincode: string | null;
+  bookingDistrict: string | null;
+  bookingArea: string | null;
+  deliveryPincode: string | null;
+  deliveryDistrict: string | null;
+  deliveryArea: string | null;
   senderName: string;
   senderAddress: string;
   senderContact: string;
@@ -104,10 +127,13 @@ type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Cop
 function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
   const total = d.charges.netAmount + d.otherCharges;
+  const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
+  const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
     ['From', d.bookingBranchLabel],
     ['To', d.deliveryBranchLabel],
-    ['Type', `${d.serviceTypeLabel} - ${d.paymentModeLabel}`],
+    ['Booking Pincode / Area / District', bookingGeo],
+    ['Delivery Pincode / Area / District', deliveryGeo],
     ['No Of Parcel / Weight', `${d.numberOfPackages} / ${weight}`],
     ['Booking Date', d.bookingDate],
     ['Delivery Date', d.expectedDeliveryDate ?? '—'],
@@ -178,13 +204,15 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
             <div class="tag">Courier &amp; Logistics</div>`}
           </div>
         </div>
-        <div class="co">
-          <h2>${esc(d.bookingBranchLabel)}</h2>
-          <p>Booking Branch</p>
-        </div>
-        <div class="co">
-          <h2>${esc(d.deliveryBranchLabel)}</h2>
-          <p>Delivery Branch</p>
+        <div class="co co--company">
+          <h2>${esc(d.companyName)}</h2>
+          ${d.companyAddress ? `<p>${esc(d.companyAddress)}</p>` : ''}
+          <p>
+            ${d.companyGst ? `GSTIN: ${esc(d.companyGst)}` : ''}
+            ${d.companyGst && d.companyContact ? ' &nbsp;|&nbsp; ' : ''}
+            ${d.companyContact ? `Ph: ${esc(d.companyContact)}` : ''}
+          </p>
+          ${d.companyWebsite ? `<p>${esc(d.companyWebsite)}</p>` : ''}
         </div>
         <div class="lrbox">
           <span class="lrbox-label">LR No</span>
@@ -223,13 +251,13 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
       <div class="body">
         <div class="left">
           <table class="details">
+            <tr><td class="lbl">Type :</td><td>${esc(d.serviceTypeLabel)} - <strong>${esc(d.paymentModeLabel)}</strong></td></tr>
             ${detailRows.map(([k, v]) => `<tr><td class="lbl">${esc(k)} :</td><td>${esc(v)}</td></tr>`).join('')}
           </table>
           <table class="small">
             <tr><td colspan="2">Special Instruction :&nbsp; ${esc(d.remarks ?? '—')}</td></tr>
             <tr><td colspan="2">Consignee GST Number :&nbsp; —</td></tr>
             <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
-            <tr><td colspan="2">Created By :&nbsp; ${esc(d.createdByName ?? '—')}</td></tr>
           </table>
         </div>
         <div class="right">${amountSection}
@@ -238,6 +266,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
 
       <!-- FOOTER -->
       <div class="footer">
+        <div class="createdby">Created By :&nbsp; ${esc(d.createdByName ?? '—')}</div>
         <div class="gen">* This is a computer-generated receipt, printed ${esc(new Date().toLocaleString('en-IN'))}. No signature or stamp is required.</div>
         <div class="sign">
           <span>Representative Signature</span>
@@ -267,7 +296,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .receipt-inner{border:2px solid var(--line)}
 
   /* header */
-  .head{display:grid;grid-template-columns:220px 1fr 1fr 180px;border-bottom:2px solid var(--line)}
+  .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid var(--line)}
   .head > div{padding:10px 12px}
   .head .brand{display:flex;align-items:center;justify-content:center}
   .logo{line-height:1;text-align:center}
@@ -278,6 +307,9 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .co{font-size:13px;line-height:1.3;border-left:2px solid var(--line)}
   .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
   .co p{margin:0;color:var(--muted);text-align:center}
+  .co--company{display:flex;flex-direction:column;justify-content:center}
+  .co--company h2{font-size:17px}
+  .co--company p{font-size:12px;line-height:1.5}
   .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
   .lrbox-label{font-size:11px;font-weight:700;color:var(--muted)}
   .lrbox-no{font-size:16px;font-weight:800}
@@ -314,6 +346,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
 
   /* footer */
   .footer{padding:6px 10px 10px;font-size:11px;line-height:1.4}
+  .footer .createdby{font-weight:700;font-size:12px;margin-bottom:4px}
   .footer .gen{font-weight:700}
   .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:20px}
 

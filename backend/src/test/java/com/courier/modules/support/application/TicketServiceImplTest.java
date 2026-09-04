@@ -111,7 +111,7 @@ class TicketServiceImplTest {
     void systemRaisedTicketNeedsNoCurrentUser() {
         SecurityContextHolder.clearContext();
 
-        Ticket created = service.raiseSystemTicket(command(), null);
+        Ticket created = service.raiseSystemTicket(command(), null, "Auto-raised: test");
 
         assertThat(created.getStatus()).isEqualTo(TicketStatus.OPEN);
         assertThat(created.getCreatedByUserId()).isNull();
@@ -124,7 +124,7 @@ class TicketServiceImplTest {
         when(directory.findUser(AGENT, COMPANY)).thenReturn(
                 Optional.of(new TicketDirectoryPort.UserRef(AGENT, COMPANY, "Branch Manager", "bm@test.local")));
 
-        Ticket created = service.raiseSystemTicket(command(), AGENT);
+        Ticket created = service.raiseSystemTicket(command(), AGENT, "Auto-raised: test");
 
         assertThat(created.getStatus()).isEqualTo(TicketStatus.ASSIGNED);
         assertThat(created.getAssigneeUserId()).isEqualTo(AGENT);
@@ -137,7 +137,7 @@ class TicketServiceImplTest {
         SecurityContextHolder.clearContext();
         when(directory.findUser(AGENT, COMPANY)).thenReturn(Optional.empty());
 
-        Ticket created = service.raiseSystemTicket(command(), AGENT);
+        Ticket created = service.raiseSystemTicket(command(), AGENT, "Auto-raised: test");
 
         assertThat(created.getStatus()).isEqualTo(TicketStatus.OPEN);
         assertThat(created.getAssigneeUserId()).isNull();

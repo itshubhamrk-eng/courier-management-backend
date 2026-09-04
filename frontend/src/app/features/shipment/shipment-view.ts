@@ -15,13 +15,14 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { CompanyProfileService } from '@features/company/company-profile.service';
 import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
-import { printConsignmentCopies } from './consignment-print.util';
+import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
 const TIMELINE_ICONS: Record<string, string> = {
@@ -271,6 +272,7 @@ export class ShipmentView implements OnInit {
   private readonly ewayBillService = inject(EwayBillService);
   private readonly auth = inject(AuthService);
   private readonly masters = inject(MasterDataService);
+  private readonly companyProfile = inject(CompanyProfileService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
@@ -346,26 +348,46 @@ export class ShipmentView implements OnInit {
 
   print(c: ShipmentCharge): void {
     const s = this.shipment()!;
-    printConsignmentCopies({
-      companyName: this.auth.companyName() ?? 'Courier SaaS',
-      companyLogo: this.auth.companyLogo(),
-      shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-      expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-      bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
-      senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
-      receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
-      serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
-      paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
-      numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
-      declaredValue: s.declaredValue ?? null,
-      charges: {
-        freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
-        insuranceCharge: c.insuranceCharge, gstAmount: c.gstAmount, discount: c.discountAmount,
-        roundOff: c.roundOff, netAmount: c.netAmount
-      },
-      otherCharges: c.otherCharges,
-      remarks: s.remarks ?? null,
-      createdByName: s.createdByName ?? null
+    forkJoin({
+      company: this.companyProfile.get().pipe(catchError(() => of(null))),
+      bookingGeo: s.pickupPincode
+        ? this.masters.pincodeGeo(s.pickupPincode).pipe(catchError(() => of(null)))
+        : of(null),
+      deliveryGeo: s.deliveryPincode
+        ? this.masters.pincodeGeo(s.deliveryPincode).pipe(catchError(() => of(null)))
+        : of(null)
+    }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
+      printConsignmentCopies({
+        companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
+        companyLogo: company?.logo ?? this.auth.companyLogo(),
+        companyAddress: companyAddressLine(company),
+        companyGst: company?.gstNumber ?? null,
+        companyContact: company?.mobile ?? null,
+        companyWebsite: company?.website ?? null,
+        shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+        expectedDeliveryDate: s.expectedDeliveryDate ?? null,
+        bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
+        bookingPincode: s.pickupPincode || null,
+        bookingDistrict: bookingGeo?.districtName ?? null,
+        bookingArea: bookingGeo?.areaName ?? null,
+        deliveryPincode: s.deliveryPincode || null,
+        deliveryDistrict: deliveryGeo?.districtName ?? null,
+        deliveryArea: deliveryGeo?.areaName ?? null,
+        senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
+        receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
+        serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
+        paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
+        numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
+        declaredValue: s.declaredValue ?? null,
+        charges: {
+          freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
+          insuranceCharge: c.insuranceCharge, gstAmount: c.gstAmount, discount: c.discountAmount,
+          roundOff: c.roundOff, netAmount: c.netAmount
+        },
+        otherCharges: c.otherCharges,
+        remarks: s.remarks ?? null,
+        createdByName: s.createdByName ?? null
+      });
     });
   }
 

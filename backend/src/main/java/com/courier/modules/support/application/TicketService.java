@@ -32,8 +32,17 @@ public interface TicketService {
      *  — no current-user requirement, {@code createdByUserId} stays null. The caller must
      *  already have bound {@code CompanyContext} to the target company. If
      *  {@code assigneeUserId} is given and resolves to a real company user, the ticket is
-     *  raised straight into {@code ASSIGNED}; otherwise it stays {@code OPEN}. */
-    Ticket raiseSystemTicket(CreateTicketCommand command, UUID assigneeUserId);
+     *  raised straight into {@code ASSIGNED}; otherwise it stays {@code OPEN}.
+     *  {@code statusHistoryRemark} is the initial status-history line — callers name their
+     *  own trigger (e.g. "Auto-raised: SLA breach") rather than inheriting a generic one. */
+    Ticket raiseSystemTicket(CreateTicketCommand command, UUID assigneeUserId, String statusHistoryRemark);
+
+    /** Same as {@link #raiseSystemTicket}, but skips (returns {@code null}) if an open
+     *  (not RESOLVED/CLOSED) ticket already exists for this exact
+     *  {@code (company, relatedShipmentId, categoryId)} combination — the dedup guard for a
+     *  trigger that can legitimately re-fire for the same shipment (e.g. each POD re-upload
+     *  after a FAIL), so one open issue per shipment/category is enough. */
+    Ticket raiseSystemTicketIfNoneOpen(CreateTicketCommand command, UUID assigneeUserId, String statusHistoryRemark);
 
     /** One ticket, within the caller's scope. Foreign or out-of-scope answers 404. */
     Ticket getById(UUID id);

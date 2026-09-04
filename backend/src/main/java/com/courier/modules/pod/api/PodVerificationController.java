@@ -1,19 +1,31 @@
 package com.courier.modules.pod.api;
 
+import com.courier.modules.pod.api.dto.DeliveredShipmentPodResponse;
 import com.courier.modules.pod.api.dto.PodReviewRequest;
 import com.courier.modules.pod.api.dto.PodVerificationResponse;
 import com.courier.modules.pod.application.PodVerificationService;
 import com.courier.modules.pod.domain.PodVerification;
+import com.courier.modules.shipment.api.ShipmentMapper;
+import com.courier.modules.shipment.api.dto.ShipmentSearchRequest;
 import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
+import com.courier.modules.shipment.domain.ShipmentCriteria;
+import com.courier.modules.shipment.domain.ShipmentStatus;
 import com.courier.shared.api.ApiResponse;
+import com.courier.shared.api.PageResponse;
 import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +40,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -41,9 +56,19 @@ import java.util.UUID;
 @Tag(name = "POD Auto Verification", description = "AI-scored proof of delivery: verify, read, manually review")
 public class PodVerificationController {
 
+    private static final Map<String, String> SORTABLE = Map.of(
+            "shipmentNumber", "shipmentNumber",
+            "trackingNumber", "trackingNumber",
+            "bookingDate", "bookingDate",
+            "createdDate", "createdAt",
+            "createdAt", "createdAt");
+
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final PodVerificationService podVerificationService;
     private final ShipmentService shipmentService;
     private final PodVerificationMapper mapper;
+    private final ShipmentMapper shipmentMapper;
 
     @PostMapping(value = "/api/v1/shipments/{shipmentId}/pod/verify", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Upload a POD and run AI verification",
@@ -93,6 +118,51 @@ public class PodVerificationController {
     public ApiResponse<List<PodVerificationResponse>> pendingReview() {
         return ApiResponse.success(podVerificationService.listPendingReview().stream()
                 .map(this::toResponse).toList());
+    }
+
+    @GetMapping("/api/v1/pod/delivered")
+    @Operation(summary = "POD Review — every delivered shipment, with its latest POD verification if any",
+            description = "Same filters as GET /shipments (branch, date range, search) — "
+                    + "status is always forced to DELIVERED regardless of what's passed. "
+                    + "Every delivered shipment appears exactly once, whether or not POD Auto "
+                    + "Verification ever ran against it.")
+    public ApiResponse<PageResponse<DeliveredShipmentPodResponse>> delivered(
+            @Valid @ParameterObject ShipmentSearchRequest search,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdDate", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+        ShipmentCriteria base = shipmentMapper.toCriteria(search);
+        ShipmentCriteria criteria = new ShipmentCriteria(Set.of(ShipmentStatus.DELIVERED),
+                base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
+                base.manifestId(), base.bookingDateFrom(), base.bookingDateTo(),
+                base.deliveredDateFrom(), base.deliveredDateTo(), base.search());
+
+        Page<Shipment> page = shipmentService.search(criteria, sanitise(pageable));
+        List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
+        Map<UUID, PodVerification> verifications = podVerificationService.latestByShipmentIds(ids);
+        Map<UUID, List<ShipmentAsset>> podAssets = shipmentService.podAssetsFor(ids);
+        Map<UUID, Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+
+        return ApiResponse.success(PageResponse.from(page, s -> mapper.toDeliveredRow(
+                s, verifications.get(s.getId()), deliveredAt.get(s.getId()),
+                podAssets.getOrDefault(s.getId(), List.of()))));
+    }
+
+    private Pageable sanitise(Pageable pageable) {
+        int size = Math.min(pageable.getPageSize(), MAX_PAGE_SIZE);
+        List<Sort.Order> orders = pageable.getSort().stream()
+                .map(order -> {
+                    String property = SORTABLE.get(order.getProperty());
+                    if (property == null) {
+                        throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED,
+                                "Cannot sort by '%s'. Allowed: %s"
+                                        .formatted(order.getProperty(),
+                                                String.join(", ", new TreeSet<>(SORTABLE.keySet()))));
+                    }
+                    return new Sort.Order(order.getDirection(), property);
+                })
+                .toList();
+        Sort sort = orders.isEmpty() ? Sort.by(Sort.Order.desc("createdAt")) : Sort.by(orders);
+        return org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), size, sort);
     }
 
     private PodVerificationResponse toResponse(PodVerification verification) {

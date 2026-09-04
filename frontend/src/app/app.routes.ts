@@ -361,6 +361,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/finance-report').then((m) => m.FinanceReport)
       },
       {
+        path: 'reports/vendor-audit', title: 'Vendor Audit Report', canActivate: [roleGuard], data: { roles: FINANCE_REPORT_READERS },
+        loadComponent: () => import('@features/reports/vendor-audit-report').then((m) => m.VendorAuditReport)
+      },
+      {
         path: 'reports/customers', title: 'Customer Report', canActivate: [roleGuard], data: { roles: CUSTOMER_READERS },
         loadComponent: () => import('@features/reports/customer-report').then((m) => m.CustomerReport)
       },

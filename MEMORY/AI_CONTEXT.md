@@ -7,6 +7,30 @@
 
 ## Current Version
 
+`0.40.0` — **Vendor Audit Report: new company-level report, additive only.** Direct
+request: per-branch paid/to-pay counts/quantities/amounts, booking vs. delivery
+commission, ODA/other charges, cancel count — "for vendor audit." Explicitly told not to
+touch the existing Commission Report/Branch Performance Report, and to make it
+company-level (no `myBranchId` lock, unlike every other report). New `VendorAuditRow`
+domain record + `ShipmentService.vendorAudit`/`ShipmentServiceImpl.vendorAudit` (same
+unpaged-reduce shape as `commissionSummary`/`branchPerformance`), `GET
+/shipments/vendor-audit`, one new repo method (`ShipmentItemRepository
+.findByShipmentIdIn`). Rows split booking-side figures (by `bookingBranchId`) from
+delivery-side figures (by `deliveryBranchId`) — a shipment's booking and delivery branch
+are frequently different, same split the wallet-crediting listeners use. **Known
+limitation stated in the code**: delivery/DRS commission is recomputed from the branch's
+*current* `drsChargePerQty`, not the rate at each shipment's actual delivery time — will
+disagree with `WalletTransaction` history if a branch's DRS rate ever changed; reconcile
+against wallet transactions for an exact match. Frontend `reports/vendor-audit-report.ts`,
+gated to `FINANCE_REPORT_READERS` (not the wider `SHIPMENT_READERS` other reports use) —
+a judgment call to avoid leaking other branches' financials to branch-level roles.
+`mvn test` still 945/945 (no new tests — this module's reports have none), `mvn compile`/
+`ng build --configuration production` clean. **Not verified live this session.** Full
+detail in `CHANGELOG.md` Unreleased 2026-09-04 "Vendor Audit Report (new report,
+company-level, additive only)".
+
+Previously current:
+
 `0.39.0` — **Missing indexes for a few real hot query paths (V56) + prod EC2 found
 memory-starved, already OOM-killed the backend once.** Direct request to add indexing
 after reports of slow pricing/booking on prod. Audited the whole schema against real

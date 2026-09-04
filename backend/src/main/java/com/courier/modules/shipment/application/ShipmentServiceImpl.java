@@ -56,6 +56,7 @@ import com.courier.modules.shipment.domain.ShipmentStatusHistory;
 import com.courier.modules.shipment.domain.ShipmentSummaryStats;
 import com.courier.modules.shipment.domain.ShipmentStatusHistoryRepository;
 import com.courier.modules.shipment.domain.ShipmentType;
+import com.courier.modules.shipment.domain.VendorAuditRow;
 import com.courier.modules.support.application.TicketCategoryService;
 import com.courier.modules.support.application.TicketService;
 import com.courier.modules.support.application.command.CreateTicketCommand;
@@ -508,6 +509,77 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<VendorAuditRow> vendorAudit(ShipmentCriteria criteria) {
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
+        List<UUID> ids = matches.stream().map(Shipment::getId).toList();
+        Map<UUID, ShipmentCharge> charges = chargesFor(ids);
+        Map<UUID, Long> quantities = itemRepository.findByShipmentIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ShipmentItem::getShipmentId,
+                        Collectors.summingLong(ShipmentItem::getQuantity)));
+        Map<UUID, PaymentMode> paymentModes = matches.stream()
+                .map(Shipment::getPaymentModeId).distinct()
+                .collect(Collectors.toMap(id -> id, paymentModeService::getById));
+
+        Map<UUID, List<Shipment>> byBookingBranch = matches.stream()
+                .collect(Collectors.groupingBy(Shipment::getBookingBranchId));
+        Map<UUID, List<Shipment>> byDeliveryBranch = matches.stream()
+                .filter(s -> s.getStatus() == ShipmentStatus.DELIVERED)
+                .collect(Collectors.groupingBy(Shipment::getDeliveryBranchId));
+
+        Map<UUID, BigDecimal> drsRates = new java.util.HashMap<>();
+        byDeliveryBranch.keySet().forEach(branchId ->
+                drsRates.put(branchId, branchService.drsChargePerQtyOf(branchId)));
+
+        Set<UUID> branchIds = new java.util.HashSet<>(byBookingBranch.keySet());
+        branchIds.addAll(byDeliveryBranch.keySet());
+
+        return branchIds.stream().map(branchId -> {
+            List<Shipment> booked = byBookingBranch.getOrDefault(branchId, List.of());
+            List<Shipment> delivered = byDeliveryBranch.getOrDefault(branchId, List.of());
+
+            List<Shipment> paid = booked.stream()
+                    .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtBooking()).toList();
+            List<Shipment> topay = booked.stream()
+                    .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtDelivery()).toList();
+
+            BigDecimal paidAmount = sumCharge(paid, charges, ShipmentCharge::getNetAmount);
+            BigDecimal topayAmount = sumCharge(topay, charges, ShipmentCharge::getNetAmount);
+            BigDecimal paidCommission = sumCharge(paid, charges, ShipmentCharge::getTotalCommission);
+            BigDecimal bookingTotalCommission = sumCharge(booked, charges, ShipmentCharge::getTotalCommission);
+            BigDecimal odaCharges = sumCharge(booked, charges, ShipmentCharge::getOdaCharge);
+            BigDecimal otherCharges = sumCharge(booked, charges, ShipmentCharge::getOtherCharges);
+            long cancelledCount = booked.stream()
+                    .filter(s -> s.getStatus() == ShipmentStatus.CANCELLED).count();
+
+            BigDecimal drsRate = drsRates.getOrDefault(branchId, BigDecimal.ZERO);
+            long deliveredQty = sumQty(delivered, quantities);
+            BigDecimal deliveryCommission = drsRate.multiply(BigDecimal.valueOf(deliveredQty));
+
+            return new VendorAuditRow(branchId,
+                    paid.size(), sumQty(paid, quantities), paidAmount,
+                    topay.size(), sumQty(topay, quantities), topayAmount,
+                    paidCommission, deliveryCommission,
+                    booked.size(), delivered.size(),
+                    bookingTotalCommission, deliveryCommission,
+                    odaCharges, otherCharges, cancelledCount);
+        })
+        .sorted(Comparator.comparing(VendorAuditRow::totalBookedOrderCount).reversed())
+        .toList();
+    }
+
+    private static BigDecimal sumCharge(List<Shipment> shipments, Map<UUID, ShipmentCharge> charges,
+            java.util.function.Function<ShipmentCharge, BigDecimal> field) {
+        return shipments.stream().map(s -> charges.get(s.getId())).filter(Objects::nonNull)
+                .map(field).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static long sumQty(List<Shipment> shipments, Map<UUID, Long> quantities) {
+        return shipments.stream().mapToLong(s -> quantities.getOrDefault(s.getId(), 0L)).sum();
+    }
+
     /** Shared by {@link #search} and {@link #summaryStats} — see the class-level note on
      *  {@code ShipmentCriteria.deliveredDateFrom}/{@code deliveredDateTo} for why this can't
      *  live entirely inside {@link ShipmentSpecifications}. */
@@ -552,6 +624,17 @@ public class ShipmentServiceImpl implements ShipmentService {
         return deliveryAssignmentRepository.findByShipmentIdIn(shipmentIds).stream()
                 .filter(a -> a.getDeliveredAt() != null)
                 .collect(Collectors.toMap(DeliveryAssignment::getShipmentId, DeliveryAssignment::getDeliveredAt));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, List<ShipmentAsset>> podAssetsFor(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        return shipmentAssetRepository
+                .findByShipmentIdInAndAssetTypeWithinCompany(shipmentIds, ShipmentAssetType.POD, requireCompany())
+                .stream()
+                .collect(Collectors.groupingBy(ShipmentAsset::getShipmentId));
     }
 
     @Override

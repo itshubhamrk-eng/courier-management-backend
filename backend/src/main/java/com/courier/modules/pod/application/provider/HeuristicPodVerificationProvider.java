@@ -26,13 +26,13 @@ import java.util.List;
  * {@code MEMORY/modules/pod-verification.md}; swapping in a real vision provider later is a
  * second {@link PodVerificationProvider} implementation and a config change, nothing here.
  *
- * <p>Active whenever {@code pod.ai.enabled} is {@code true} (the default) —
- * {@link UnavailablePodVerificationProvider} takes over when it is set to {@code false},
- * simulating an unconfigured/unreachable AI vendor so the "provider unavailable -> manual
- * review" rule has something real to exercise.
+ * <p>Active whenever {@code pod.ai.provider} is {@code heuristic} (the default) — set it to
+ * {@code vision} for {@link VisionPodVerificationProvider} or {@code disabled} for
+ * {@link UnavailablePodVerificationProvider} (simulating an unconfigured/unreachable AI
+ * vendor so the "provider unavailable -> manual review" rule has something real to exercise).
  */
 @Service
-@ConditionalOnProperty(prefix = "pod.ai", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "pod.ai", name = "provider", havingValue = "heuristic", matchIfMissing = true)
 public class HeuristicPodVerificationProvider implements PodVerificationProvider {
 
     private static final int MIN_DIMENSION_PIXELS = 300;
@@ -96,37 +96,9 @@ public class HeuristicPodVerificationProvider implements PodVerificationProvider
             reasons.add("Receiver name looks incomplete.");
         }
 
-        boolean awbMismatch = isMismatch(request.claimedAwb(), request.shipmentActualAwb())
-                || isMismatch(request.claimedShipmentNumber(), request.shipmentActualNumber());
-        if (awbMismatch) {
-            // Hard fail, not a point deduction: ground truth already lives in this platform's
-            // own DB record (shipmentActualAwb/shipmentActualNumber), so a mismatch here is not
-            // a quality signal to weigh against others — it means this POD was captured for a
-            // different shipment. Zeroing the score keeps it out of both PASS and REVIEW no
-            // matter how clean the rest of the photo looks; a re-upload against the right
-            // shipment is the only way forward, never a manual approve.
-            score = 0;
-            reasons.add("Provided AWB/shipment number does not match this shipment's own record.");
-        }
-
-        // Same hard-fail rule for the label's own QR code — checked independently of
-        // claimedAwb/claimedShipmentNumber (those can be a self-echo of the shipment record
-        // the delivery app already has open; the QR comes off the physical parcel). Either
-        // source disagreeing with this platform's ground truth is a hard reject on its own.
-        boolean qrMismatch = isMismatch(request.qrScanValue(), request.shipmentActualAwb())
-                && isMismatch(request.qrScanValue(), request.shipmentActualNumber());
-        if (qrMismatch) {
-            score = 0;
-            reasons.add("Scanned QR code does not match this shipment's own record.");
-        }
-
-        boolean mustReview = false;
-        if (request.duplicateSuspectedByHash()) {
-            score -= 50;
-            reasons.add("This POD photo matches one already used on a different shipment — "
-                    + "possible duplicate submission.");
-            mustReview = true;
-        }
+        PodGroundTruthRules.Outcome groundTruth = PodGroundTruthRules.applyHardFailRules(score, reasons, request);
+        score = groundTruth.score();
+        boolean mustReview = groundTruth.mustReview();
 
         boolean tamperingSuspected = metrics != null && looksTampered(metrics, request.photoBytes().length);
         if (tamperingSuspected) {
@@ -144,13 +116,6 @@ public class HeuristicPodVerificationProvider implements PodVerificationProvider
         return new PodAnalysisResult(score, List.copyOf(reasons), signatureDetected, imageQuality,
                 receiverName.isBlank() ? null : receiverName, detectedAwb, detectedDate,
                 tamperingSuspected, mustReview);
-    }
-
-    private static boolean isMismatch(String claimed, String actual) {
-        if (claimed == null || claimed.isBlank() || actual == null || actual.isBlank()) {
-            return false;
-        }
-        return !claimed.trim().equalsIgnoreCase(actual.trim());
     }
 
     private static String firstNonBlank(String a, String b) {

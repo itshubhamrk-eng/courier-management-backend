@@ -5,6 +5,7 @@ import com.courier.modules.shipment.application.command.CreateShipmentCommand;
 import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
 import com.courier.modules.shipment.domain.BranchPerformanceSummary;
+import com.courier.modules.shipment.domain.VendorAuditRow;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
@@ -93,6 +94,16 @@ public interface ShipmentService {
     List<BranchPerformanceSummary> branchPerformance(ShipmentCriteria criteria);
 
     /**
+     * Vendor Audit Report: per-branch paid/to-pay volumes and amounts, booking and
+     * delivery (DRS) commission, ODA charges, other charges and cancellations for the same
+     * search — reconciliation figures for a franchise/vendor branch. See {@link
+     * VendorAuditRow} for the booking-vs-delivery grouping split and its one known
+     * limitation. One row per company branch appearing as either a booking or a delivery
+     * branch in the search.
+     */
+    List<VendorAuditRow> vendorAudit(ShipmentCriteria criteria);
+
+    /**
      * Net amount per shipment, for the list row — batch-fetched (one query for the whole
      * page, not one per row) since {@code netAmount} lives on the separate
      * {@code shipment_charges} row, not on {@code Shipment} itself. A shipment missing
@@ -115,6 +126,14 @@ public interface ShipmentService {
      * been delivered (or has no assignment at all).
      */
     Map<UUID, java.time.Instant> deliveredAtFor(Collection<UUID> shipmentIds);
+
+    /**
+     * Every POD-kind asset (photo + signature, every historical upload, newest first) per
+     * shipment, for the POD Review table's photo-preview column — batch-fetched the same way
+     * as {@link #netAmountsFor}. A shipment missing from the returned map has no POD asset at
+     * all (never captured, or delivered by a path that predates POD Auto Verification).
+     */
+    Map<UUID, List<com.courier.modules.shipment.domain.ShipmentAsset>> podAssetsFor(Collection<UUID> shipmentIds);
 
     /**
      * Every shipment scanned onto any of these manifests, within the caller's company —

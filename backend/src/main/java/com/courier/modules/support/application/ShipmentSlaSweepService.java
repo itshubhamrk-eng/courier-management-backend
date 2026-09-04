@@ -113,7 +113,7 @@ public class ShipmentSlaSweepService {
                 candidate.branchId(),
                 companyId);
 
-        Ticket ticket = ticketService.raiseSystemTicket(command, assigneeUserId);
+        Ticket ticket = ticketService.raiseSystemTicket(command, assigneeUserId, "Auto-raised: SLA breach");
 
         breachRepository.save(ShipmentSlaBreach.builder()
                 .shipmentId(candidate.shipmentId())

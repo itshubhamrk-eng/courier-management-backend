@@ -2,7 +2,8 @@ import { HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { ApiService, SILENT_ERRORS } from './api.service';
 import { API } from '@core/config/api-endpoints';
-import { PodVerification, PodReviewRequest } from '@core/models/pod.model';
+import { PodVerification, PodReviewRequest, DeliveredShipmentPod } from '@core/models/pod.model';
+import { PageQuery } from '@core/models/page.model';
 
 /** POD Auto Verification — talks to /api/v1/shipments/{id}/pod/**, mirroring
  *  PodVerificationController one-to-one. See MEMORY/modules/pod-verification.md. */
@@ -48,5 +49,12 @@ export class PodService {
   /** The Manual Review screen's worklist — every REVIEW-status verification, oldest first. */
   pendingReview() {
     return this.api.get<PodVerification[]>('/pod/pending-review');
+  }
+
+  /** The POD Review table — every delivered shipment, whether or not a POD verification
+   *  ever ran against it. Same filter shape as ShipmentService.list (branch, date range,
+   *  search); status is always forced to DELIVERED server-side. */
+  deliveredWithPod(query: PageQuery) {
+    return this.api.page<DeliveredShipmentPod>('/pod/delivered', query);
   }
 }

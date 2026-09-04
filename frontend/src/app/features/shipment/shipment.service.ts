@@ -6,7 +6,7 @@ import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary, BranchPerformanceSummary
+  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow
 } from '@core/models/shipment.model';
 
 /**
@@ -37,6 +37,11 @@ export class ShipmentService {
   branchPerformance(filters: ShipmentSearchRequest) {
     return this.api.get<BranchPerformanceSummary[]>(
       `${API.shipments}/branch-performance`, filters as Record<string, unknown>);
+  }
+  /** Per-branch vendor-audit reconciliation totals for the Vendor Audit Report — same
+   *  filters as `list`. */
+  vendorAudit(filters: ShipmentSearchRequest) {
+    return this.api.get<VendorAuditRow[]>(`${API.shipments}/vendor-audit`, filters as Record<string, unknown>);
   }
   get(id: string) { return this.api.get<ShipmentResponse>(`${API.shipments}/${id}`); }
   getByTrackingNumber(trackingNumber: string) {

@@ -389,6 +389,30 @@ export interface BranchCommissionSummary {
   totalCommission: number;
 }
 
+/** One row of GET /shipments/vendor-audit — the Vendor Audit Report's per-branch
+ *  reconciliation table. Mirrors backend `VendorAuditRowResponse`.
+ *  `deliveryCommission`/`deliveryTotalCommission` are recomputed from the branch's
+ *  *current* DRS rate — see the backend `VendorAuditRow` javadoc for why an older
+ *  delivery's figure here can differ from what was actually credited. */
+export interface VendorAuditRow {
+  branchId: string;
+  paidOrderCount: number;
+  paidOrderQuantity: number;
+  paidOrderAmount: number;
+  topayOrderCount: number;
+  topayOrderQuantity: number;
+  topayOrderAmount: number;
+  paidCommission: number;
+  deliveryCommission: number;
+  totalBookedOrderCount: number;
+  totalDeliveredOrderCount: number;
+  bookingTotalCommission: number;
+  deliveryTotalCommission: number;
+  odaCharges: number;
+  otherCharges: number;
+  cancelledOrderCount: number;
+}
+
 /** One row of GET /shipments/branch-performance — the Branch Performance Report's
  *  per-branch summary table. Mirrors backend `BranchPerformanceSummaryResponse`. */
 export interface BranchPerformanceSummary {

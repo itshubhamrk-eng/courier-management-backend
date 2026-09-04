@@ -18,6 +18,10 @@ public interface ShipmentItemRepository extends JpaRepository<ShipmentItem, UUID
     List<ShipmentItem> findAllByShipmentIdWithinCompany(@Param("shipmentId") UUID shipmentId,
                                                         @Param("companyId") UUID companyId);
 
+    /** Batch form for a report over many shipments at once — see {@code
+     *  ShipmentChargeRepository.findByShipmentIdIn} for the same shape. */
+    List<ShipmentItem> findByShipmentIdIn(java.util.Collection<UUID> shipmentIds);
+
     /**
      * A hard delete, deliberately — unlike every soft-deleted aggregate in this project.
      * An item is a value of the shipment's own packing detail with no external reference

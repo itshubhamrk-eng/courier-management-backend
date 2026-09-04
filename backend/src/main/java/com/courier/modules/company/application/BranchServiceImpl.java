@@ -36,6 +36,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -365,6 +366,15 @@ public class BranchServiceImpl implements BranchService {
         Branch branch = loadOrThrow(id, CompanyContext.requireCompanyId());
         requireVisible(caller, branch);
         return branch;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public BigDecimal drsChargePerQtyOf(UUID branchId) {
+        return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
+                .map(Branch::getDrsChargePerQty)
+                .orElse(BigDecimal.ZERO);
     }
 
     @Override

@@ -10,6 +10,7 @@ import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
+import { CompanyProfileService } from '@features/company/company-profile.service';
 import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { CustomerService } from '@features/customer/customer.service';
 import { SettingsService } from '@features/settings/settings.service';
@@ -28,7 +29,7 @@ import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { FreightCalculationService } from './freight-calculation.service';
-import { printConsignmentCopies } from './consignment-print.util';
+import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
 import { parseVoiceBooking } from './voice-booking.util';
 
 /** `yyyy-MM-dd` in the local timezone — a native `<input type="date">` value, and what
@@ -489,6 +490,7 @@ export class ShipmentCreate implements OnInit {
   private readonly freightCalculationService = inject(FreightCalculationService);
   private readonly customers = inject(CustomerService);
   private readonly masters = inject(MasterDataService);
+  private readonly companyProfile = inject(CompanyProfileService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
@@ -653,7 +655,7 @@ export class ShipmentCreate implements OnInit {
     serviceTypeId: [null as string | null, Validators.required],
     packageTypeId: [null as string | null, Validators.required],
     paymentModeId: [null as string | null, Validators.required],
-    bookingDate: [today()],
+    bookingDate: [{ value: today(), disabled: true }],
     numberOfPackages: [1],
     declaredValue: [null as number | null],
     remarks: ['', Validators.maxLength(500)],
@@ -1306,31 +1308,51 @@ export class ShipmentCreate implements OnInit {
           });
         }
         this.notify.success(`Shipment ${s.shipmentNumber} booked — AWB ${s.trackingNumber}.`);
-        printConsignmentCopies({
-          companyName: this.auth.companyName() ?? 'Courier SaaS',
-          companyLogo: this.auth.companyLogo(),
-          shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-          expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-          bookingBranchLabel: this.myBranchLabel(), deliveryBranchLabel: this.branchLabel(v.deliveryBranchId),
-          senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
-          receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
-          serviceTypeLabel: this.labelOf(this.serviceTypeOptions(), v.serviceTypeId),
-          packageTypeLabel: this.labelOf(this.packageTypeOptions(), v.packageTypeId),
-          paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
-          numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,
-          declaredValue: v.declaredValue || null,
-          charges: {
-            ...p.chargeBreakup,
-            freight: this.effectiveBaseFreight(),
-            odaCharge: this.odaChargeOverride() ?? f.odaCharge,
-            gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
-              + this.gstOnFreightDelta(),
-            netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
-              + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
-          },
-          otherCharges: this.otherCharges(),
-          remarks: v.remarks || null,
-          createdByName: s.createdByName ?? null
+        forkJoin({
+          company: this.companyProfile.get().pipe(catchError(() => of(null))),
+          bookingGeo: v.pickupPincode
+            ? this.masters.pincodeGeo(v.pickupPincode).pipe(catchError(() => of(null)))
+            : of(null),
+          deliveryGeo: v.deliveryPincode
+            ? this.masters.pincodeGeo(v.deliveryPincode).pipe(catchError(() => of(null)))
+            : of(null)
+        }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
+          printConsignmentCopies({
+            companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
+            companyLogo: company?.logo ?? this.auth.companyLogo(),
+            companyAddress: companyAddressLine(company),
+            companyGst: company?.gstNumber ?? null,
+            companyContact: company?.mobile ?? null,
+            companyWebsite: company?.website ?? null,
+            shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+            expectedDeliveryDate: s.expectedDeliveryDate ?? null,
+            bookingBranchLabel: this.myBranchLabel(), deliveryBranchLabel: this.branchLabel(v.deliveryBranchId),
+            bookingPincode: v.pickupPincode || null,
+            bookingDistrict: bookingGeo?.districtName ?? null,
+            bookingArea: bookingGeo?.areaName ?? null,
+            deliveryPincode: v.deliveryPincode || null,
+            deliveryDistrict: deliveryGeo?.districtName ?? null,
+            deliveryArea: deliveryGeo?.areaName ?? null,
+            senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
+            receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
+            serviceTypeLabel: this.labelOf(this.serviceTypeOptions(), v.serviceTypeId),
+            packageTypeLabel: this.labelOf(this.packageTypeOptions(), v.packageTypeId),
+            paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
+            numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,
+            declaredValue: v.declaredValue || null,
+            charges: {
+              ...p.chargeBreakup,
+              freight: this.effectiveBaseFreight(),
+              odaCharge: this.odaChargeOverride() ?? f.odaCharge,
+              gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
+                + this.gstOnFreightDelta(),
+              netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
+                + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
+            },
+            otherCharges: this.otherCharges(),
+            remarks: v.remarks || null,
+            createdByName: s.createdByName ?? null
+          });
         });
         const image = this.selectedImageFile();
         if (image) {

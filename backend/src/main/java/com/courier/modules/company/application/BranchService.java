@@ -7,6 +7,7 @@ import com.courier.modules.company.domain.BranchCriteria;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +55,16 @@ public interface BranchService {
     Branch update(UUID id, UpdateBranchCommand command);
 
     Branch getById(UUID id);
+
+    /**
+     * The branch's current DRS charge/qty rate — company-scoped like every other read, but
+     * deliberately <b>not</b> gated by the caller's own branch visibility {@link #getById}
+     * enforces (a {@code BRANCH_MANAGER} calling {@code getById} on a branch other than
+     * their own 404s). A company-wide report (e.g. Vendor Audit) needs every branch's
+     * current rate side by side, not just the caller's own. Zero for a branch id absent
+     * from the caller's company — never throws.
+     */
+    BigDecimal drsChargePerQtyOf(UUID branchId);
 
     Page<Branch> search(BranchCriteria criteria, Pageable pageable);
 

@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { CompanyLetterhead, CompanyProfileService } from '@features/company/company-profile.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -132,10 +134,12 @@ export class WalletDashboard implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly auth = inject(AuthService);
+  private readonly companyProfile = inject(CompanyProfileService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
 
+  private readonly company = signal<CompanyLetterhead | null>(null);
   readonly loading = signal(true);
   readonly txnLoading = signal(true);
   readonly needsBranchPick = signal(false);
@@ -161,6 +165,7 @@ export class WalletDashboard implements OnInit {
   }));
 
   constructor() {
+    this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((c) => this.company.set(c));
     effect(() => {
       const branchId = this.branchIdParam();
       this.branchControl.setValue(branchId, { emitEvent: false });
@@ -275,6 +280,6 @@ export class WalletDashboard implements OnInit {
       availableBalance: s.availableBalance, holdBalance: s.holdBalance, totalBalance: s.totalBalance,
       currency: s.currency, createdAt: '', updatedAt: '', version: 0
     };
-    downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
+    downloadReceipt(t, w, environment.appName, this.auth.companyLogo(), this.company());
   }
 }

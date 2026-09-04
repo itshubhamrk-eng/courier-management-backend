@@ -4,6 +4,10 @@ import com.courier.modules.master.application.port.PincodePostalLookupProvider;
 import com.courier.modules.master.application.command.PincodeCommand;
 import com.courier.modules.master.domain.Area;
 import com.courier.modules.master.domain.AreaRepository;
+import com.courier.modules.master.domain.City;
+import com.courier.modules.master.domain.CityRepository;
+import com.courier.modules.master.domain.District;
+import com.courier.modules.master.domain.DistrictRepository;
 import com.courier.modules.master.domain.GlobalMasters;
 import com.courier.modules.master.domain.MasterDataCriteria;
 import com.courier.modules.master.domain.Pincode;
@@ -57,6 +61,8 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
     private static final String READ = "isAuthenticated()";
 
     private final AreaRepository areas;
+    private final CityRepository cities;
+    private final DistrictRepository districts;
     private final PincodePostalLookupProvider postalLookup;
     private final GeographyAutoResolver geographyResolver;
 
@@ -64,6 +70,8 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
 
     public PincodeServiceImpl(PincodeRepository pincodes,
                               AreaRepository areas,
+                              CityRepository cities,
+                              DistrictRepository districts,
                               MasterUniquenessChecker uniqueness,
                               AuditService auditService,
                               PincodePostalLookupProvider postalLookup,
@@ -71,6 +79,8 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
                               PincodeAreaService pincodeAreaService) {
         super(pincodes, uniqueness, auditService, "Pincode", MasterTable.PINCODES);
         this.areas = areas;
+        this.cities = cities;
+        this.districts = districts;
         this.postalLookup = postalLookup;
         this.geographyResolver = geographyResolver;
         this.pincodeAreaService = pincodeAreaService;
@@ -147,6 +157,23 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
         return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID,
                 () -> repository.findByCodeWithinCompany(code, GlobalMasters.PLATFORM_COMPANY_ID)
                         .orElseThrow(() -> new ResourceNotFoundException("Pincode", code)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READ)
+    public Optional<PincodeGeography> geography(String code) {
+        return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () -> repository
+                .findByCodeWithinCompany(code, GlobalMasters.PLATFORM_COMPANY_ID)
+                .map(pincode -> {
+                    Area area = areas.findById(pincode.getAreaId()).orElse(null);
+                    City city = area != null ? cities.findById(area.getCityId()).orElse(null) : null;
+                    District district = city != null ? districts.findById(city.getDistrictId()).orElse(null) : null;
+                    return new PincodeGeography(pincode.getName(),
+                            area != null ? area.getName() : null,
+                            city != null ? city.getName() : null,
+                            district != null ? district.getName() : null);
+                }));
     }
 
     /**

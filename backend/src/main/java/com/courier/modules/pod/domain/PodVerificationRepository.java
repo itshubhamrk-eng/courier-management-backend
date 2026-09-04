@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +25,14 @@ public interface PodVerificationRepository extends JpaRepository<PodVerification
             + "and v.verificationStatus = com.courier.modules.pod.domain.PodVerificationStatus.REVIEW "
             + "order by v.createdAt asc")
     java.util.List<PodVerification> findAllPendingReviewWithinCompany(@Param("companyId") UUID companyId);
+
+    /** Batch form of {@link #findAllByShipmentIdWithinCompany} — every verification (any
+     *  status) for these shipments, newest first, for the POD Review table's "latest per
+     *  shipment" batch fetch. */
+    @Query("select v from PodVerification v where v.shipmentId in :shipmentIds "
+            + "and v.companyId = :companyId order by v.createdAt desc")
+    java.util.List<PodVerification> findAllByShipmentIdInWithinCompany(
+            @Param("shipmentIds") Collection<UUID> shipmentIds, @Param("companyId") UUID companyId);
 
     /** Any prior run — any shipment, any status — whose photo hash matches this one, within
      *  the same company. Used for duplicate-POD detection; excludes the run being replaced

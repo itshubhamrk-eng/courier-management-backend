@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { CompanyLetterhead, CompanyProfileService } from '@features/company/company-profile.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '@env/environment';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
@@ -73,6 +75,7 @@ export class WalletTransactions implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly auth = inject(AuthService);
+  private readonly companyProfile = inject(CompanyProfileService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -80,6 +83,7 @@ export class WalletTransactions implements OnInit {
   readonly exporting = signal(false);
   readonly filterOpen = signal(false);
   readonly wallet = signal<WalletResponse | null>(null);
+  private readonly company = signal<CompanyLetterhead | null>(null);
   readonly page = signal<Page<WalletTransaction>>(emptyPage<WalletTransaction>());
   readonly sort = signal<SortState | null>({ active: 'createdAt', direction: 'desc' });
 
@@ -95,6 +99,7 @@ export class WalletTransactions implements OnInit {
   readonly cur = computed(() => this.wallet()?.currency ?? 'INR');
 
   constructor() {
+    this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((c) => this.company.set(c));
     effect(() => {
       const branchId = this.branchId();
       this.service.get(branchId).subscribe({ next: (w) => this.wallet.set(w), error: () => this.wallet.set(null) });
@@ -138,7 +143,7 @@ export class WalletTransactions implements OnInit {
 
   receipt(t: WalletTransaction): void {
     const w = this.wallet();
-    if (w) downloadReceipt(t, w, environment.appName, this.auth.companyLogo());
+    if (w) downloadReceipt(t, w, environment.appName, this.auth.companyLogo(), this.company());
     else this.notify.error('Wallet not loaded yet.');
   }
 

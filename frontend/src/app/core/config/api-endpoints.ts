@@ -35,6 +35,9 @@ export const API = {
   branchWallet: '/branch-wallet',
   hubs: '/hubs',
   companySettings: '/company-settings',
+  /** Own-company letterhead (name/address/GST/contact/website) for printed documents —
+   *  any authenticated company user reads, unlike `/companies/**` (SUPER_ADMIN only). */
+  companyProfile: '/company-profile',
   companyRazorpayConfig: '/company-razorpay-config',
   subscriptionPlans: '/subscription-plans',
   /** The platform console: platform dashboard and platform-operator accounts. */
