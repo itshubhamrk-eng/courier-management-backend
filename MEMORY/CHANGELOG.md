@@ -8,6 +8,37 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-07 — Pincode District/State filters + master-list filter bug, deployed to prod (commit 2e76d64)
+
+Added `districtId`/`stateId` filters to the Pincode master list (resolved through
+Area -> City -> District -> State via a new Collection-valued equality in
+`MasterDataSpecifications`), swapped the `zone` column for District/State display,
+and wired up the `odaApplicable` filter param the frontend already sent but the
+backend silently ignored.
+
+While testing live, found the ODA filter didn't stick — traced it to a real bug in
+`MasterList` (shared by all 12 master lists, not just Pincode): the constructor's
+`def()`-driven `effect()` transitively read the `filters` signal via its own
+`load()` call, so *applying* a filter (which writes `filters`) re-triggered that
+same effect, which reset `filters` back to `{}` and reloaded unfiltered a moment
+later. Fixed with `untracked()` around the reset-and-load block.
+
+Deploy: rsync of the full `frontend/` tree failed ~20 times in a row (`connection
+unexpectedly closed`, 0 bytes each time, same known transport flakiness as prior
+entries) even after the usual retries; only 3 frontend files had actually changed,
+so rsync'd those individually instead — each succeeded on the first try. Backend
+tree rsync (more files, but succeeded on attempt 3) was fine. `sha256sum` verified
+every synced file matched local before building. Prod was at 47-86Mi free RAM
+going in (already recovering from earlier pressure this session) — stopped
+`courier-backend` before building to reclaim ~288MiB headroom; both `docker
+compose build backend` and `build frontend` completed clean (`mvn` BUILD SUCCESS,
+`ng build` no errors). `docker compose up -d --force-recreate backend frontend`
+brought both up healthy; Flyway applied `V57` (pod ticket category, pending from
+an earlier merge, unrelated to this change) clean. Verified live: `courier-backend`
+`/actuator/health/readiness` UP, `vendor.amazinglpl.com` 200.
+
+---
+
 ## [Unreleased] — 2026-09-04 — POD Auto Verification: real vision AI, delivery no longer blocked, auto-ticket, full review table
 
 Four fixes on direct user report, all in `com.courier.modules.pod`/`support` +
