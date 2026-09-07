@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
@@ -141,18 +141,24 @@ export class MasterList {
         return;
       }
       this.breadcrumb.set([{ label: 'Masters' }, { label: def.group }, { label: def.plural }]);
-      // A different master means different filters and a different sort; start clean
-      // rather than carrying a filter that does not exist on the new list.
-      const initialSort = def.defaultSort
-        ? { active: def.defaultSort.field, direction: def.defaultSort.direction }
-        : null;
-      this.query = {
-        page: 0, size: 20,
-        ...(def.defaultSort ? { sort: `${def.defaultSort.field},${def.defaultSort.direction}` } : {})
-      };
-      this.filters.set({});
-      this.sort.set(initialSort);
-      this.load();
+      // untracked: load() reads the filters signal (via buildQuery), and without this the
+      // effect would pick that up as a dependency too — so applying a filter (which writes
+      // filters) would re-trigger this def-driven reset and silently clear what was just
+      // applied. This effect exists to react to the route param alone.
+      untracked(() => {
+        // A different master means different filters and a different sort; start clean
+        // rather than carrying a filter that does not exist on the new list.
+        const initialSort = def.defaultSort
+          ? { active: def.defaultSort.field, direction: def.defaultSort.direction }
+          : null;
+        this.query = {
+          page: 0, size: 20,
+          ...(def.defaultSort ? { sort: `${def.defaultSort.field},${def.defaultSort.direction}` } : {})
+        };
+        this.filters.set({});
+        this.sort.set(initialSort);
+        this.load();
+      });
     });
   }
 

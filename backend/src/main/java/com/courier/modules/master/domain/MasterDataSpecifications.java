@@ -5,6 +5,7 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -52,6 +53,11 @@ public final class MasterDataSpecifications {
                     // liked, so compare case-insensitively rather than rejecting "a".
                     predicates.add(cb.equal(cb.upper(path.as(String.class)),
                             text.trim().toUpperCase()));
+                } else if (value instanceof Collection<?> ids) {
+                    // A parent filter (e.g. district/state) resolved to the set of child
+                    // ids it covers. Empty -> matches nothing, same as an empty explicit
+                    // id scope: the parent exists but has no children here.
+                    predicates.add(ids.isEmpty() ? cb.disjunction() : path.in(ids));
                 } else {
                     predicates.add(cb.equal(path, value));
                 }

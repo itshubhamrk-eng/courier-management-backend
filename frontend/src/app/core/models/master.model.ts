@@ -69,6 +69,10 @@ export interface Area extends MasterRecord {
 export interface Pincode extends MasterRecord {
   areaId: string;
   areaName: string | null;
+  districtId: string | null;
+  districtName: string | null;
+  stateId: string | null;
+  stateName: string | null;
   serviceable: boolean;
   codAvailable: boolean;
   prepaidAvailable: boolean;

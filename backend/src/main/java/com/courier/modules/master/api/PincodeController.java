@@ -43,6 +43,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -194,21 +195,38 @@ public class PincodeController {
     @GetMapping
     @Operation(summary = "List pincodes",
             description = """
-                    Paged, sorted, filtered, searchable. Filter by `areaId`, by `serviceable`
-                    or by delivery `zone` — the three a booking screen asks for. Sort:
-                    `code`, `name`, `status`, `displayOrder`, `createdDate`, `updatedDate`.
+                    Paged, sorted, filtered, searchable. Filter by `areaId`, `districtId` or
+                    `stateId` (each widens to the areas it covers; `areaId` combined with
+                    one of those intersects), by `serviceable`, or by `odaApplicable` — the
+                    booking/ops screen's usual filters. Sort: `code`, `name`, `status`,
+                    `displayOrder`, `createdDate`, `updatedDate`.
                     """)
     public ApiResponse<PageResponse<PincodeResponse>> list(
             @Valid @ParameterObject MasterSearchRequest search,
             @Parameter(description = "Only pincodes of this area")
             @RequestParam(required = false) UUID areaId,
+            @Parameter(description = "Only pincodes within this district")
+            @RequestParam(required = false) UUID districtId,
+            @Parameter(description = "Only pincodes within this state")
+            @RequestParam(required = false) UUID stateId,
             @Parameter(description = "Only serviceable (or only unserviceable) pincodes")
             @RequestParam(required = false) Boolean serviceable,
-            @Parameter(description = "Delivery zone, e.g. LOCAL")
-            @RequestParam(required = false) String zone,
+            @Parameter(description = "Only ODA (or only non-ODA) pincodes")
+            @RequestParam(required = false) Boolean odaApplicable,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
 
-        MasterDataCriteria criteria = criteriaMapper.toCriteria(search).with("areaId", areaId).with("serviceable", serviceable).with("zone", zone);
+        MasterDataCriteria criteria = criteriaMapper.toCriteria(search)
+                .with("serviceable", serviceable).with("odaApplicable", odaApplicable);
+
+        Set<UUID> geographyAreaIds = mapper.resolveAreaIdsForGeography(districtId, stateId);
+        if (geographyAreaIds != null) {
+            if (areaId != null) {
+                geographyAreaIds = geographyAreaIds.contains(areaId) ? Set.of(areaId) : Set.of();
+            }
+            criteria = criteria.with("areaId", geographyAreaIds);
+        } else {
+            criteria = criteria.with("areaId", areaId);
+        }
 
         return ApiResponse.success(mapper.toPage(
                 service.search(criteria, MasterSortSupport.sanitise(pageable))));

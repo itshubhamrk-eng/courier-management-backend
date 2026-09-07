@@ -289,7 +289,8 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
       { key: 'code', header: 'Pincode', sortable: true, width: '120px' },
       { key: 'name', header: 'Post office', sortable: true },
       { key: 'areaName', header: 'Area', value: (r) => text(r['areaName']) },
-      { key: 'zone', header: 'Zone', width: '100px', value: (r) => text(r['zone']) },
+      { key: 'districtName', header: 'District', value: (r) => text(r['districtName']) },
+      { key: 'stateName', header: 'State', value: (r) => text(r['stateName']) },
       { key: 'serviceable', header: 'Serviceable', kind: 'boolean', width: '120px', value: (r) => yesNo(r['serviceable']) },
       { key: 'codAvailable', header: 'COD', kind: 'boolean', width: '80px', value: (r) => yesNo(r['codAvailable']) },
       { key: 'odaApplicable', header: 'ODA', kind: 'boolean', width: '80px', value: (r) => yesNo(r['odaApplicable']) },
@@ -311,12 +312,13 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
         hint: 'Out-of-Delivery-Area — still served, just not on the standard network.' }
     ],
     filters: [
+      { key: 'stateId', label: 'State', kind: 'lookup', lookup: 'states' },
+      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts' },
       { key: 'areaId', label: 'Area', kind: 'lookup', lookup: 'areas' },
       { key: 'serviceable', label: 'Serviceable only', kind: 'boolean' },
-      { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' },
-      { key: 'zone', label: 'Zone', kind: 'text', maxLength: 20 }
+      { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' }
     ],
-    exportColumns: ['code', 'name', 'areaName', 'zone', 'serviceable', 'codAvailable', 'prepaidAvailable', 'odaApplicable', 'status']
+    exportColumns: ['code', 'name', 'areaName', 'districtName', 'stateName', 'serviceable', 'codAvailable', 'prepaidAvailable', 'odaApplicable', 'status']
   },
 
   'vehicle-types': {
