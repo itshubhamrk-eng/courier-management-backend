@@ -343,6 +343,21 @@ runtime evidence**. Provision an active `RIVAL_CO` admin and a rival branch, the
       is unchanged — still happens at booking, only commission's timing moved. `mvn test`
       719/719. **Not yet verified live** — no local MySQL session this task. See
       `MEMORY/modules/shipment-booking.md`/`shipment-movement.md`.
+- [x] **TO_PAY/COD booking-branch commission was never credited at all** — closed
+      2026-09-07, direct bug report ("topay order commission not credited after thc
+      inscan"). `DispatchCommissionEarned` above was scoped to collect-at-booking payment
+      modes only from the start (moved-from-booking-time entry above, same eligibility as
+      before); `deliver()` only ever credited the delivery branch's side (COD debit, DRS
+      commission) — nothing credited the booking branch's own commission for a TO_PAY
+      order, at either dispatch or delivery. User's explicit choice (asked, not assumed):
+      credit it **at delivery**, once payment is actually collected, not at THC dispatch.
+      New `ShipmentEvent.DeliveryCommissionEarned`, published from `ShipmentServiceImpl
+      .deliver()` alongside `CodCollectedAtDelivery`, same eligibility/amount as
+      `DispatchCommissionEarned` (`commissionOnBasicFreight + branchCommissionOnOtherAmount`,
+      gated on booking branch `instantCommission`), handled by a third method on the same
+      `ShipmentBookingWalletListener`. `mvn test` 950 -> 952 (2 new). **Not yet verified
+      live/deployed** — user chose to hold the deploy; pushed to `origin/main` only
+      (commit `0799904`).
 - [x] Razorpay **webhook** endpoint (`payment.captured`), so a closed browser still settles —
       closed 2026-09-02, direct bug report ("tab closed while payment process"). New
       `RazorpayWebhookController` (`POST /api/v1/branch-wallet/webhook/razorpay`, public — see

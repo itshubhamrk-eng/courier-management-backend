@@ -7,6 +7,24 @@
 
 ## Current Version
 
+`0.42.0` — **TO_PAY/COD booking-branch commission was never credited; fixed, not yet
+deployed (commit `0799904`).** Direct bug report ("topay order commission not credited
+after thc inscan"). `DispatchCommissionEarned` (fires on Trip Challan/manifest dispatch)
+is gated to collect-at-booking payment modes by design since the 2026-08-14
+commission-timing move; `deliver()` only ever credited the delivery branch's own side
+(COD debit, DRS commission) — the booking branch's commission for a TO_PAY order was
+credited nowhere, at either dispatch or delivery. Asked the user where it should trigger
+(dispatch vs. delivery) rather than assuming — chose delivery, once payment's actually
+collected. New `ShipmentEvent.DeliveryCommissionEarned`, published from `deliver()`
+alongside `CodCollectedAtDelivery`, same eligibility/amount as `DispatchCommissionEarned`
+(extracted into a shared `eligibleBranchCommission` helper), handled by a third method on
+`ShipmentBookingWalletListener`. `mvn test` 950 -> 952 (2 new, plus fixed one existing
+test's missing booking-branch stub). Pushed to `origin/main` only — **user chose to hold
+the prod deploy**, not yet live. Full detail in `CHANGELOG.md` Unreleased 2026-09-07 "TO_PAY/
+COD booking-branch commission never credited; fixed, not yet deployed (commit 0799904)".
+
+Previously current:
+
 `0.41.0` — **Cascade District filter off State in Pincode master-list drawer; deployed to
 prod (commit 9dfa7c3).** District filter picked from every district regardless of the
 State chosen in the same drawer. Generic `dependsOn`/`dependsOnParam` added to

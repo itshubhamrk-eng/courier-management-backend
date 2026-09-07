@@ -8,6 +8,37 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-07 — TO_PAY/COD booking-branch commission never credited; fixed, not yet deployed (commit 0799904)
+
+Direct bug report: "topay order commission not credited after thc inscan." Traced it —
+`ShipmentServiceImpl.publishDispatchCommissionIfEarned` (fires `DispatchCommissionEarned`
+on Trip Challan/manifest dispatch) is gated on `paymentMode.isCollectAtBooking()`, by
+design, since the commission-timing move documented earlier in this file (2026-08-14).
+For TO_PAY/COD that's always false. Checked `deliver()` too: it only ever credits the
+*delivery* branch's side (COD debit via `CodCollectedAtDelivery`, DRS commission via
+`DrsChargeApplicable`) — nothing anywhere credits the *booking* branch's own commission
+for a TO_PAY order. Not a regression; a real gap that's existed since the dispatch-time
+move.
+
+Asked the user rather than assuming: should TO_PAY commission credit at THC dispatch (same
+trigger as Prepaid) or at delivery (once payment's actually collected)? Chose delivery.
+
+New `ShipmentEvent.DeliveryCommissionEarned`, published from `ShipmentServiceImpl.deliver()`
+right alongside `CodCollectedAtDelivery`, same eligibility/amount `DispatchCommissionEarned`
+uses (`commissionOnBasicFreight + branchCommissionOnOtherAmount`, gated on the booking
+branch's `instantCommission`) — extracted the shared computation into
+`eligibleBranchCommission(bookingBranchId, charge)` so both sites use one source of truth.
+Handled by a third listener method on `ShipmentBookingWalletListener`, same AFTER_COMMIT/
+`REQUIRES_NEW`/try-catch-and-log shape as every other wallet seam here.
+
+`mvn test` 950 -> 952 (2 new: commission credited when instantCommission on, skipped when
+off; also fixed an existing test, `deliverCollectAtDeliveryPublishesCodEvent`, which had no
+stub for the booking branch and NPE'd once `deliver()` started looking it up). `mvn -o
+compile` clean. Pushed to `origin/main` (commit `0799904`) — **user explicitly chose to
+hold the prod deploy for now**, not deployed/verified live yet.
+
+---
+
 ## [Unreleased] — 2026-09-07 — Cascade District filter off State; deployed to prod (commit 9dfa7c3)
 
 Pincode master-list's District filter listed every district regardless of the State
