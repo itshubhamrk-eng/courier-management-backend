@@ -140,10 +140,20 @@ export class MasterDataService {
   }
 
   private masterOptions(key: MasterKey): Observable<MasterOption[]> {
+    return this.masterOptionsScoped(key, {});
+  }
+
+  /**
+   * Same shape as {@link options}, narrowed by extra query params (e.g. `stateId` for a
+   * District picker cascading off a selected State) — used by the filter drawer's
+   * `dependsOn` fields. Not cached: the parent value changes often enough, and each scoped
+   * list is small, that a per-combination cache would cost more than it saves.
+   */
+  masterOptionsScoped(key: MasterKey, params: Record<string, string>): Observable<MasterOption[]> {
     const def = MASTER_DEFINITIONS[key];
     if (!def) return of([]);
     return this.api
-      .page<MasterRecord>(def.apiPath, { page: 0, size: 100, status: 'ACTIVE' })
+      .page<MasterRecord>(def.apiPath, { page: 0, size: 200, status: 'ACTIVE', ...params })
       .pipe(map((p) => p.content.map((r) => ({ value: r.id, label: `${r.name} (${r.code})` }))));
   }
 

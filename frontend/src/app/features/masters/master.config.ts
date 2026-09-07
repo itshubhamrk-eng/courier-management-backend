@@ -62,6 +62,15 @@ export interface MasterField {
   lookup?: LookupSource;
   /** Section heading in the form; fields with the same group are laid out together. */
   group?: string;
+  /**
+   * Filter-drawer only: this `lookup` picker's options narrow to whatever `dependsOn`
+   * (another filter's key in the same drawer) is currently set to — e.g. District narrows
+   * to the selected State. `dependsOnParam` is the query param the parent's value is sent
+   * as (defaults to `dependsOn` itself). Empty/cleared parent empties this field's options
+   * and resets its own value, since a stale child selection could belong to the old parent.
+   */
+  dependsOn?: string;
+  dependsOnParam?: string;
 }
 
 /** A column on the shared table. `value` renders the cell; `badge` styles it as a chip. */
@@ -313,7 +322,7 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
     ],
     filters: [
       { key: 'stateId', label: 'State', kind: 'lookup', lookup: 'states' },
-      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts' },
+      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts', dependsOn: 'stateId' },
       { key: 'areaId', label: 'Area', kind: 'lookup', lookup: 'areas' },
       { key: 'serviceable', label: 'Serviceable only', kind: 'boolean' },
       { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' }

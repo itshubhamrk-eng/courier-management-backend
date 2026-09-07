@@ -4,7 +4,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect } from '@shared/components/ui-select/ui-select';
 import { MasterOption, MASTER_STATUSES } from '@core/models/master.model';
 import { MasterDataService } from '../master-data.service';
-import { MasterDefinition, MasterField } from '../master.config';
+import { MasterDefinition, MasterField, MasterKey } from '../master.config';
 
 /**
  * The advanced-filter drawer, built from the definition's `filters`.
@@ -82,18 +82,51 @@ export class MasterFilter implements OnInit {
   ngOnInit(): void {
     const controls: Record<string, FormControl> = { status: this.fb.control(null) };
     for (const filter of this.extraFilters()) {
-      controls[filter.key] = this.fb.control(null);
+      // A dependsOn field starts with nothing to pick from until its parent has a value —
+      // disabled rather than merely empty, so it reads as "pick a State first" and its
+      // (excluded, while disabled) value never leaks into apply()'s form.value.
+      controls[filter.key] = this.fb.control({ value: null, disabled: !!filter.dependsOn });
     }
     this.form = this.fb.group(controls);
 
     for (const filter of this.extraFilters()) {
       if (filter.kind !== 'lookup' || !filter.lookup) continue;
+      if (filter.dependsOn) {
+        this.watchDependent(filter);
+        continue;
+      }
       this.service.options(filter.lookup).subscribe({
         next: (options) => this.options.update((current) => ({ ...current, [filter.key]: options })),
         // A picker that cannot load leaves the filter empty rather than blocking the drawer.
         error: () => this.options.update((current) => ({ ...current, [filter.key]: [] }))
       });
     }
+  }
+
+  /** Wires one `dependsOn` lookup field to reload (and its own value to reset) whenever
+   *  the parent field it depends on changes. */
+  private watchDependent(filter: MasterField): void {
+    const parentKey = filter.dependsOn!;
+    const paramName = filter.dependsOnParam ?? parentKey;
+    const parent = this.form.get(parentKey);
+    const child = this.controlFor(filter.key);
+    if (!parent) return;
+
+    parent.valueChanges.subscribe((parentValue: string | null) => {
+      child.reset(null);
+      if (!parentValue) {
+        child.disable({ emitEvent: false });
+        this.options.update((current) => ({ ...current, [filter.key]: [] }));
+        return;
+      }
+      child.enable({ emitEvent: false });
+      // dependsOn cascading is only meaningful for real master lookups (a geography
+      // parent), never the 'branches' lookup — safe to narrow here.
+      this.service.masterOptionsScoped(filter.lookup! as MasterKey, { [paramName]: parentValue }).subscribe({
+        next: (options) => this.options.update((current) => ({ ...current, [filter.key]: options })),
+        error: () => this.options.update((current) => ({ ...current, [filter.key]: [] }))
+      });
+    });
   }
 
   controlFor(key: string): FormControl {
@@ -118,6 +151,14 @@ export class MasterFilter implements OnInit {
 
   reset(): void {
     this.form.reset();
+    // form.reset() clears values but leaves each control's enabled/disabled state as-is —
+    // a dependsOn field left enabled from a prior State pick would show empty options
+    // with no clue why, so put it back to "pick the parent first".
+    for (const filter of this.extraFilters()) {
+      if (!filter.dependsOn) continue;
+      this.controlFor(filter.key).disable({ emitEvent: false });
+      this.options.update((current) => ({ ...current, [filter.key]: [] }));
+    }
     this.changed.emit({});
   }
 }
