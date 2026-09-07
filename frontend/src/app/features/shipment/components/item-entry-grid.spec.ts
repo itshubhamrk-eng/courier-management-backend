@@ -44,11 +44,11 @@ describe('ItemEntryGrid — weight preview', () => {
     }]);
   });
 
-  it('actual weight sums weight × quantity across every row', () => {
+  it('actual weight sums each row\'s own weight as-is, never multiplied by quantity', () => {
     internals.patch(0, { itemName: 'Box', quantity: 2, weight: 3 });
     fixture.detectChanges();
 
-    expect(weight.actual).toBeCloseTo(6, 3);
+    expect(weight.actual).toBeCloseTo(3, 3);
   });
 
   it('volumetric weight is l×w×h/5000, and chargeable picks whichever is larger', () => {

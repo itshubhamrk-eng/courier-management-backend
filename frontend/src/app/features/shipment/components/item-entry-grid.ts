@@ -37,8 +37,9 @@ function emptyRow(weightKg: number = FALLBACK_DEFAULT_WEIGHT_KG): ItemRow {
  * The packed item grid — one row per package, add/remove freely. Weight/volumetric/
  * chargeable shown here are a **client-side preview only**, using the same formula the
  * Pricing Engine's `VolumetricCalculator`/`ChargeableWeightCalculator` apply
- * (`volumetric = l*w*h/5000`, `chargeable = max(actual, volumetric)`) — the figures that
- * actually book come back from the server in Step 3.
+ * (`volumetric = l*w*h/5000 * quantity`, `chargeable = max(actual, volumetric)`) — the
+ * figures that actually book come back from the server in Step 3. `weight` itself is the
+ * row's own total, entered directly — not multiplied by `quantity` the way L/W/H are.
  */
 @Component({
   selector: 'app-item-entry-grid',
@@ -128,8 +129,10 @@ export class ItemEntryGrid {
   protected readonly totalQuantity = computed(() =>
     this.rows().reduce((sum, r) => sum + (r.quantity || 1), 0));
 
+  // Weight (kg) is the row's own total, not a per-unit figure — unlike the L/W/H fields
+  // below, it is never multiplied by quantity.
   protected readonly actualWeight = computed(() =>
-    this.rows().reduce((sum, r) => sum + (r.weight ?? 0) * (r.quantity || 1), 0));
+    this.rows().reduce((sum, r) => sum + (r.weight ?? 0), 0));
 
   protected readonly volumetricWeight = computed(() =>
     this.rows().reduce((sum, r) => {

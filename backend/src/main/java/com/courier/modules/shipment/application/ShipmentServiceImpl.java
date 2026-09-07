@@ -1445,10 +1445,13 @@ public class ShipmentServiceImpl implements ShipmentService {
      * Sums the item grid using the Pricing Engine's own reusable weight utilities —
      * {@link WeightCalculator#normalise}, {@link VolumetricCalculator#calculate} and
      * {@link ChargeableWeightCalculator#calculate} — rather than reimplementing the
-     * volumetric formula here. Each item's own dimensions contribute its own volumetric
-     * weight, multiplied by quantity; a shipment with no captured dimensions on any item
-     * prices on actual weight alone, the same "not refused" rule
-     * {@code VolumetricCalculator} documents for a single parcel.
+     * volumetric formula here. {@code item.getWeight()} is the row's own total (not
+     * multiplied by quantity — an operator weighing a packed carton enters what the
+     * scale says, not a per-unit figure); each item's own dimensions still contribute
+     * their own volumetric weight multiplied by quantity, since L/W/H describe one unit.
+     * A shipment with no captured dimensions on any item prices on actual weight alone,
+     * the same "not refused" rule {@code VolumetricCalculator} documents for a single
+     * parcel.
      */
     private WeightSummary summariseWeight(List<ShipmentItem> items) {
         BigDecimal divisor = pricingProperties.toConfiguration().volumetricDivisor();
@@ -1456,7 +1459,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         BigDecimal volumetric = BigDecimal.ZERO;
         for (ShipmentItem item : items) {
             int quantity = item.getQuantity() == null ? 1 : item.getQuantity();
-            actual = actual.add(item.getWeight().multiply(BigDecimal.valueOf(quantity)));
+            actual = actual.add(item.getWeight());
             BigDecimal itemVolumetric = VolumetricCalculator.calculate(
                     item.getLengthCm(), item.getWidthCm(), item.getHeightCm(), divisor);
             volumetric = volumetric.add(itemVolumetric.multiply(BigDecimal.valueOf(quantity)));
