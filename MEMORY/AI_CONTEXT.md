@@ -7,6 +7,21 @@
 
 ## Current Version
 
+`0.43.0` — **Weight (kg) in the shipment item grid is now a row total, never `qty *
+weight`; not yet deployed (commit `663ba63`).** Direct bug report ("in place of weight in
+kg should not be qty*weight"). Both `item-entry-grid.ts`'s preview and backend
+`ShipmentServiceImpl.summariseWeight()` were multiplying entered weight by quantity for
+the row/shipment actual-weight total — asked the user first (weight = row total vs.
+per-unit×qty) rather than assuming; they confirmed row total. Fixed both sides;
+dimensions (L/W/H) untouched, still per-unit×qty for volumetric weight. Pricing-affecting
+for any row with quantity > 1, once deployed. `mvn test` 952/952, `ng build` clean, one
+frontend spec updated. Pushed to `origin/main` only — **not deployed**, held alongside
+the pending TO_PAY commission fix (0.42.0 below). Full detail in `CHANGELOG.md` Unreleased
+2026-09-07 "Weight (kg) in the item grid is a row total, not per-unit×qty; not yet
+deployed (commit 663ba63)".
+
+Previously current:
+
 `0.42.0` — **TO_PAY/COD booking-branch commission was never credited; fixed, not yet
 deployed (commit `0799904`).** Direct bug report ("topay order commission not credited
 after thc inscan"). `DispatchCommissionEarned` (fires on Trip Challan/manifest dispatch)

@@ -8,6 +8,28 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-07 — Weight (kg) in the item grid is a row total, not per-unit×qty; not yet deployed (commit 663ba63)
+
+Direct bug report: "in place of weight in kg should not be qty*weight." Both
+`item-entry-grid.ts`'s client-side preview (`actualWeight` computed) and the backend's
+`ShipmentServiceImpl.summariseWeight()` treated the entered `weight` as per-unit,
+multiplying it by `quantity` for the row/shipment total — asked the user to confirm rather
+than assume: weight is now the row's own total, entered directly, never multiplied.
+Dimensions (L/W/H) are untouched — still per-unit, multiplied by quantity for volumetric
+weight, since a length/width/height genuinely describes one package regardless of how the
+scale-weight was entered.
+
+Changed both sides: `item-entry-grid.ts`'s `actualWeight` computed (`sum + r.weight`, no
+`* quantity`) and `ShipmentServiceImpl.summariseWeight()` (`actual.add(item.getWeight())`,
+same). This changes actual/chargeable weight for any row with `quantity > 1` — a real
+pricing-affecting change once deployed, not cosmetic. `mvn test` still 952/952 (all
+existing item-command test fixtures use `quantity: 1`, unaffected); updated
+`item-entry-grid.spec.ts`'s one `quantity: 2` case to expect the un-multiplied total.
+`ng build --configuration production` clean. Pushed to `origin/main` (commit `663ba63`) —
+**not deployed**, holding alongside the pending TO_PAY commission fix below.
+
+---
+
 ## [Unreleased] — 2026-09-07 — TO_PAY/COD booking-branch commission never credited; fixed, not yet deployed (commit 0799904)
 
 Direct bug report: "topay order commission not credited after thc inscan." Traced it —
