@@ -7,6 +7,23 @@
 
 ## Current Version
 
+`0.41.0` — **Cascade District filter off State in Pincode master-list drawer; deployed to
+prod (commit 9dfa7c3).** District filter picked from every district regardless of the
+State chosen in the same drawer. Generic `dependsOn`/`dependsOnParam` added to
+`MasterField` (filter-drawer only): a dependent lookup starts disabled, enables + reloads
+scoped options (new `MasterDataService.masterOptionsScoped`) once its parent gets a value,
+`reset()` disables it again. `districtId` wired to `dependsOn: 'stateId'`. Was uncommitted
+WIP from a prior session; committed + deployed on direct request ("deploy all changes").
+Checked prod directly rather than trusting changelog history before deploying: `flyway_
+schema_history` already at V57, containers built 2h prior — confirms 0.40.0 (Vendor Audit
+Report) and everything in `dec552c` (POD AI verification/ticketing, pincode geography,
+pricing/wallet) was already live, so this deploy's real delta was just 3 frontend files,
+no backend/migration. Deploy verified live: `/actuator/health/readiness` 200, frontend
+200. Full detail in `CHANGELOG.md` Unreleased 2026-09-07 "Cascade District filter off
+State; deployed to prod (commit 9dfa7c3)".
+
+Previously current:
+
 `0.40.0` — **Vendor Audit Report: new company-level report, additive only.** Direct
 request: per-branch paid/to-pay counts/quantities/amounts, booking vs. delivery
 commission, ODA/other charges, cancel count — "for vendor audit." Explicitly told not to

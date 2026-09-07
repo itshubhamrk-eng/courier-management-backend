@@ -8,6 +8,37 @@ All notable changes to this project. Format based on
 
 ---
 
+## [Unreleased] — 2026-09-07 — Cascade District filter off State; deployed to prod (commit 9dfa7c3)
+
+Pincode master-list's District filter listed every district regardless of the State
+picked in the same drawer. Added generic `dependsOn`/`dependsOnParam` to `MasterField`
+(filter-drawer only) — a dependent lookup field starts disabled, enables and reloads
+scoped options (new `MasterDataService.masterOptionsScoped(key, params)`, extends the
+existing `masterOptions` with extra query params) once its parent field gets a value;
+`reset()` puts it back to disabled. Wired `districtId` to `dependsOn: 'stateId'`.
+
+Was sitting uncommitted locally from a prior session; user asked to deploy "all changes,"
+confirmed this WIP should be included. Git author identity was unset on this machine
+(hostname change) — set repo-local (not global) `user.name`/`user.email` to match existing
+commit history before committing, per user's explicit choice.
+
+Checked prod state directly before deploying rather than assuming from changelog history:
+`flyway_schema_history` already at V57 (matches local's highest migration), backend/
+frontend containers built 2 hours prior — confirms commit 2e76d64 (and everything merged
+in `dec552c`: Vendor Audit Report, POD AI verification/ticketing, pincode geography,
+pricing/wallet work) was already fully live. This deploy's delta was only the 3 frontend
+files above — no backend change, no migration.
+
+Deploy: rsync'd the 3 changed files individually (all succeeded first try), `sha256sum`
+verified each against local. Prod RAM was tight (235Mi available) — stopped
+`courier-backend` before `docker compose build frontend` for headroom, same pattern as the
+2026-09-04/09-07 entries below. Build clean (`ng build` no errors, 80s). `docker compose up
+-d --force-recreate frontend` + `docker compose start backend` — both came back healthy
+(backend ~70s to pass its health check, frontend ~12s). Verified live: `/actuator/health/
+readiness` 200, frontend root 200.
+
+---
+
 ## [Unreleased] — 2026-09-07 — Pincode District/State filters + master-list filter bug, deployed to prod (commit 2e76d64)
 
 Added `districtId`/`stateId` filters to the Pincode master list (resolved through
