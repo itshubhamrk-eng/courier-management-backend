@@ -45,7 +45,9 @@ public sealed interface ShipmentEvent {
      * instantCommission} on. Handled by {@code ShipmentBookingWalletListener}, which calls
      * {@code WalletService.creditCommission} — moved here (was on {@link
      * PrepaidBookingConfirmed}, i.e. at booking) on direct user request: "credit branch
-     * commission after Trip Challan created", not at order booking.
+     * commission after Trip Challan created", not at order booking. Only fires for
+     * collect-at-booking payment modes — a collect-at-delivery (TO_PAY/COD) shipment's
+     * booking commission credits later instead, via {@link DeliveryCommissionEarned}.
      *
      * @param branchCommission the branch's own two commission lines, summed —
      *                         {@code commissionOnBasicFreight + branchCommissionOnOtherAmount}
@@ -78,6 +80,31 @@ public sealed interface ShipmentEvent {
             UUID deliveryBranchId,
             String shipmentNumber,
             BigDecimal netAmount,
+            Instant occurredAt
+    ) implements ShipmentEvent {
+    }
+
+    /**
+     * A collect-at-delivery ({@code TO_PAY}/{@code COD}) shipment was delivered — its
+     * booking branch has commission still to collect, only now that payment has actually
+     * been collected. The {@link DispatchCommissionEarned} trigger never fires for these
+     * (it's gated to collect-at-booking payment modes only), so without this a TO_PAY
+     * order's booking branch never got its commission at all. Published from {@code
+     * ShipmentServiceImpl.deliver}, same eligibility {@link DispatchCommissionEarned} uses
+     * otherwise (booking branch has {@code instantCommission} on, commission > 0). Handled
+     * by {@code ShipmentBookingWalletListener}, which calls the same {@code WalletService
+     * .creditCommission} — this is the booking branch's own commission, not a delivery-side
+     * credit, even though it's triggered by delivery.
+     *
+     * @param branchCommission same two-line sum as {@link DispatchCommissionEarned} —
+     *                         {@code commissionOnBasicFreight + branchCommissionOnOtherAmount}
+     */
+    record DeliveryCommissionEarned(
+            UUID shipmentId,
+            UUID companyId,
+            UUID bookingBranchId,
+            String shipmentNumber,
+            BigDecimal branchCommission,
             Instant occurredAt
     ) implements ShipmentEvent {
     }

@@ -488,6 +488,8 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(charge));
         when(branchService.getById(shipment.getDeliveryBranchId()))
                 .thenReturn(Branch.builder().branchCode("PUNE").build());
+        when(branchService.getById(BOOKING_BRANCH))
+                .thenReturn(Branch.builder().branchCode("MUMBAI").build());
 
         service.deliver(shipment.getId(),
                 new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
@@ -497,6 +499,76 @@ class ShipmentMovementServiceImplTest {
         assertThat(captor.getValue().deliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
         assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
         assertThat(captor.getValue().netAmount()).isEqualByComparingTo("450.0000");
+    }
+
+    @Test
+    @DisplayName("delivering a TO_PAY/COD shipment credits the booking branch's own commission "
+            + "(not the company's) once payment is actually collected, when instantCommission is on")
+    void deliverCollectAtDeliveryPublishesCommissionWhenInstant() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+        ShipmentCharge charge = ShipmentCharge.builder()
+                .netAmount(new BigDecimal("450.0000"))
+                .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                .build();
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(charge));
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE").build());
+        when(branchService.getById(BOOKING_BRANCH))
+                .thenReturn(Branch.builder().branchCode("MUMBAI").instantCommission(true).build());
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DeliveryCommissionEarned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().bookingBranchId()).isEqualTo(BOOKING_BRANCH);
+        assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
+        // commissionOnBasicFreight (10) + branchCommissionOnOtherAmount (5), never the
+        // company's own cut.
+        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
+    }
+
+    @Test
+    @DisplayName("delivering a TO_PAY/COD shipment publishes no commission when the booking "
+            + "branch has instantCommission off")
+    void deliverCollectAtDeliverySkipsCommissionWhenNotInstant() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+        ShipmentCharge charge = ShipmentCharge.builder()
+                .netAmount(new BigDecimal("450.0000"))
+                .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                .build();
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(charge));
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE").build());
+        when(branchService.getById(BOOKING_BRANCH))
+                .thenReturn(Branch.builder().branchCode("MUMBAI").instantCommission(false).build());
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryCommissionEarned.class));
     }
 
     @Test

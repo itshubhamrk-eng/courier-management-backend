@@ -884,22 +884,41 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (!paymentMode.isCollectAtBooking()) {
             return;
         }
-        com.courier.modules.company.domain.Branch bookingBranch =
-                branchService.getById(shipment.getBookingBranchId());
-        if (!bookingBranch.isInstantCommission()) {
-            return;
-        }
-        // Only the branch's own two lines — totalCommission (V28) also folds in the
-        // company's own commissionOnBasicFreight, which is company revenue and must
-        // never land in the branch's wallet.
-        BigDecimal branchCommission = charge.getCommissionOnBasicFreight()
-                .add(charge.getBranchCommissionOnOtherAmount());
+        BigDecimal branchCommission = eligibleBranchCommission(shipment.getBookingBranchId(), charge);
         if (branchCommission.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
         eventPublisher.publishEvent(new ShipmentEvent.DispatchCommissionEarned(
                 shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
                 branchCommission, Instant.now()));
+    }
+
+    // Delivery-side mirror of publishDispatchCommissionIfEarned, for collect-at-delivery
+    // (TO_PAY/COD) shipments only — their booking branch never gets a DispatchCommissionEarned
+    // (gated to collect-at-booking payment modes), so without this the booking branch's
+    // commission on a TO_PAY order was never credited at all. Caller already checked
+    // paymentMode.isCollectAtDelivery().
+    private void publishDeliveryCommissionIfEarned(Shipment shipment, UUID companyId, ShipmentCharge charge) {
+        BigDecimal branchCommission = eligibleBranchCommission(shipment.getBookingBranchId(), charge);
+        if (branchCommission.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        eventPublisher.publishEvent(new ShipmentEvent.DeliveryCommissionEarned(
+                shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
+                branchCommission, Instant.now()));
+    }
+
+    // Zero when the booking branch has instantCommission off — same as if there were
+    // nothing to credit, so callers don't need a separate check.
+    private BigDecimal eligibleBranchCommission(UUID bookingBranchId, ShipmentCharge charge) {
+        com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(bookingBranchId);
+        if (!bookingBranch.isInstantCommission()) {
+            return BigDecimal.ZERO;
+        }
+        // Only the branch's own two lines — totalCommission (V28) also folds in the
+        // company's own commissionOnBasicFreight, which is company revenue and must
+        // never land in the branch's wallet.
+        return charge.getCommissionOnBasicFreight().add(charge.getBranchCommissionOnOtherAmount());
     }
 
     @Override
@@ -1095,6 +1114,7 @@ public class ShipmentServiceImpl implements ShipmentService {
             eventPublisher.publishEvent(new ShipmentEvent.CodCollectedAtDelivery(
                     saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
                     charge.getNetAmount(), Instant.now()));
+            publishDeliveryCommissionIfEarned(saved, companyId, charge);
         }
 
         int totalQty = itemRepository.findAllByShipmentIdWithinCompany(saved.getId(), companyId).stream()

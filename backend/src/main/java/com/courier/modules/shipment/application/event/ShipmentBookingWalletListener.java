@@ -27,8 +27,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * "impossible" — see the module's own memory doc for the follow-up this implies.
  *
  * <p>Also credits branch commission, but on a separate event — {@link
- * ShipmentEvent.DispatchCommissionEarned}, fired once the shipment's Trip Challan (manifest
- * dispatch) is created, not at booking time; see that event's own javadoc for why.
+ * ShipmentEvent.DispatchCommissionEarned} for collect-at-booking shipments, fired once the
+ * shipment's Trip Challan (manifest dispatch) is created, not at booking time; or {@link
+ * ShipmentEvent.DeliveryCommissionEarned} for collect-at-delivery (TO_PAY/COD) shipments,
+ * fired once delivered since that's when payment is actually collected. See either event's
+ * own javadoc for why.
  */
 @Slf4j
 @Component
@@ -63,6 +66,24 @@ public class ShipmentBookingWalletListener {
         } catch (RuntimeException e) {
             log.error("Could not settle commission credit for branch {}, shipment {} ({}); "
                     + "the manifest stays dispatched, commission uncredited — reconcile manually",
+                    event.bookingBranchId(), event.shipmentNumber(), event.shipmentId(), e);
+        }
+    }
+
+    // Same commission credit as DispatchCommissionEarned's handler above, just triggered by
+    // delivery instead of dispatch — see ShipmentEvent.DeliveryCommissionEarned's own doc for
+    // why TO_PAY/COD shipments need this separate trigger.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(ShipmentEvent.DeliveryCommissionEarned event) {
+        try {
+            CompanyContext.runAs(event.companyId(), () -> walletService.creditCommission(
+                    new CommissionCreditCommand(event.bookingBranchId(),
+                            event.branchCommission(), event.shipmentNumber(),
+                            "Branch commission for shipment " + event.shipmentNumber())));
+        } catch (RuntimeException e) {
+            log.error("Could not settle commission credit for branch {}, shipment {} ({}); "
+                    + "the shipment stays delivered, commission uncredited — reconcile manually",
                     event.bookingBranchId(), event.shipmentNumber(), event.shipmentId(), e);
         }
     }
