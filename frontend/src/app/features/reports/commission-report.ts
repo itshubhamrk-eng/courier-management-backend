@@ -15,6 +15,7 @@ import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentFilter } from '../shipment/components/shipment-filter';
 import { ShipmentService } from '../shipment/shipment.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
  * Commission Report — an overall total (summed client-side over
@@ -205,17 +206,12 @@ export class CommissionReport implements OnInit {
   }
 
   private download(rows: BranchCommissionSummary[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branch', 'shipmentCount', 'totalNetAmount', 'commissionOnBasicFreight',
       'branchCommissionOnOtherAmount', 'companyCommissionOnBasicFreight', 'totalCommission'];
-    const line = (r: BranchCommissionSummary) => [this.branchLabel(r.bookingBranchId), r.shipmentCount,
+    const lines = rows.map((r) => [this.branchLabel(r.bookingBranchId), r.shipmentCount,
       r.totalNetAmount, r.commissionOnBasicFreight, r.branchCommissionOnOtherAmount,
-      r.companyCommissionOnBasicFreight, r.totalCommission].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `commission-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+      r.companyCommissionOnBasicFreight, r.totalCommission]);
+    downloadCsv(`commission-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [1, 2, 3, 4, 5, 6]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

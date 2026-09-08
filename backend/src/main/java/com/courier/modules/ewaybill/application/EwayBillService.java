@@ -62,6 +62,11 @@ public interface EwayBillService {
      *  the shipment has never had one. */
     Optional<EwayBillSnapshot> findLatestForShipment(UUID shipmentId);
 
+    /** Batch form of {@link #findLatestForShipment} — one query for a whole page of
+     *  shipments (a THC's shipment list, a Shipment list page) rather than one per row.
+     *  A shipment missing from the returned map has never had an E-Way Bill. */
+    java.util.Map<UUID, EwayBillSnapshot> findLatestForShipments(java.util.Collection<UUID> shipmentIds);
+
     // ------------------------------------------------------------- standalone lifecycle
 
     EwayBill create(CreateEwayBillCommand command);
@@ -97,8 +102,8 @@ public interface EwayBillService {
     /** Read-only projection Shipment Booking's own response embeds — deliberately not the
      *  {@link EwayBill} entity itself, so {@code shipment.api} never depends on this
      *  module's domain package (only its application interface). */
-    record EwayBillSnapshot(UUID id, String ewayBillNumber, String status, BigDecimal invoiceValue,
-                            java.time.Instant validFrom, java.time.Instant validUntil,
+    record EwayBillSnapshot(UUID id, String ewayBillNumber, String status, String invoiceNumber,
+                            BigDecimal invoiceValue, java.time.Instant validFrom, java.time.Instant validUntil,
                             String documentUrl) {
     }
 }

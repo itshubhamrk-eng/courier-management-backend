@@ -69,6 +69,11 @@ public interface ShipmentService {
 
     Shipment getByTrackingNumber(String trackingNumber);
 
+    /** Bulk Shipment Tracking report: whatever subset of {@code numbers} matches this
+     *  company's shipments (by tracking or shipment number), in a single query — the
+     *  caller is responsible for reconciling which of its input numbers came back. */
+    List<Shipment> bulkTrack(Collection<String> numbers);
+
     /** POD/delivery data for a shipment — null once it's never been assigned for delivery,
      *  and unset (delivered fields null) until {@link #deliver} closes it out. */
     DeliveryAssignment getDeliveryAssignment(UUID shipmentId);
@@ -126,6 +131,17 @@ public interface ShipmentService {
      * been delivered (or has no assignment at all).
      */
     Map<UUID, java.time.Instant> deliveredAtFor(Collection<UUID> shipmentIds);
+
+    /** Latest IN_SCAN ("received") timestamp per shipment — the Bulk Shipment Tracking
+     *  report's Received Date column. Same batch-by-id shape as {@link #deliveredAtFor}. */
+    Map<UUID, java.time.Instant> receivedAtFor(Collection<UUID> shipmentIds);
+
+    /**
+     * Current E-Way Bill invoice number per shipment, for the THC's own INVOICE NO column —
+     * batch-fetched the same way as {@link #netAmountsFor}. A shipment missing from the
+     * returned map has no E-Way Bill, or one with no invoice number recorded on it.
+     */
+    Map<UUID, String> invoiceNumbersFor(Collection<UUID> shipmentIds);
 
     /**
      * Every POD-kind asset (photo + signature, every historical upload, newest first) per
@@ -196,6 +212,17 @@ public interface ShipmentService {
      *         onto its own verification record
      */
     ShipmentAsset attachPodAsset(UUID shipmentId, String kind, String url);
+
+    /**
+     * Called by {@code com.courier.modules.pod} whenever a shipment's POD verification
+     * reaches {@code PASS} (AI auto-pass, a manual reviewer's approve, or a company-direct
+     * upload). Marks the shipment {@code podApproved} and, if it is already {@code
+     * DELIVERED} and its commission hasn't credited yet, credits it now — the delivery-time
+     * mirror of the check {@code deliver()} itself runs when POD was already approved
+     * before delivery. Idempotent: a second call for an already-approved/already-credited
+     * shipment is a no-op.
+     */
+    void markPodApproved(UUID shipmentId);
 
     /** @param documentType one of the five the brief names, as a string on the wire */
     record AddDocumentCommand(String documentType, String documentName, String documentUrl,

@@ -19,6 +19,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -89,6 +90,21 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "remarks", length = 500)
     private String remarks;
 
+    /** Trip expenses, all optional and operator-entered at dispatch time — every one of
+     *  them prints on the THC alongside the vehicle/driver so the trip's cash outlay is
+     *  on the same document as the load itself. */
+    @Column(name = "fuel_cost", precision = 12, scale = 2)
+    private BigDecimal fuelCost;
+
+    @Column(name = "driver_advance", precision = 12, scale = 2)
+    private BigDecimal driverAdvance;
+
+    @Column(name = "toll_amount", precision = 12, scale = 2)
+    private BigDecimal tollAmount;
+
+    @Column(name = "other_amount", precision = 12, scale = 2)
+    private BigDecimal otherAmount;
+
     public boolean isDispatched() {
         return status != ManifestStatus.CREATED;
     }
@@ -98,7 +114,8 @@ public class Manifest extends CompanyOwnedEntity {
      *         fixed at the moment it leaves, the same "point of no return" DISPATCH
      *         carries everywhere else in this project
      */
-    public void dispatch(UUID vehicleId, UUID driverUserId, Instant departureTime) {
+    public void dispatch(UUID vehicleId, UUID driverUserId, Instant departureTime,
+            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
         if (isDispatched()) {
             throw new BusinessRuleException(
                     "Manifest %s has already been dispatched.".formatted(manifestNumber));
@@ -108,5 +125,9 @@ public class Manifest extends CompanyOwnedEntity {
         this.status = ManifestStatus.DISPATCHED;
         this.dispatchedAt = Instant.now();
         this.departureTime = departureTime != null ? departureTime : this.dispatchedAt;
+        this.fuelCost = fuelCost;
+        this.driverAdvance = driverAdvance;
+        this.tollAmount = tollAmount;
+        this.otherAmount = otherAmount;
     }
 }

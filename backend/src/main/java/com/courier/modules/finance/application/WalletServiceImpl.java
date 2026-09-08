@@ -5,12 +5,15 @@ import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
 import com.courier.modules.finance.application.command.CommissionCreditCommand;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
+import com.courier.modules.finance.application.command.DeliveryWeightCommissionCreditCommand;
 import com.courier.modules.finance.application.command.DrsChargeCreditCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
+import com.courier.modules.finance.application.command.ShipmentReversalCommand;
 import com.courier.modules.finance.application.event.WalletEvent;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.PendingCommissionPort;
 import com.courier.modules.finance.domain.ReferenceType;
 import com.courier.modules.finance.domain.SubTransactionType;
 import com.courier.modules.finance.domain.TransactionType;
@@ -110,6 +113,7 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final WalletTransactionRepository transactionRepository;
     private final BranchDirectoryPort branchDirectory;
+    private final PendingCommissionPort pendingCommission;
     private final CompanyPaymentGatewayResolver paymentGatewayResolver;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
@@ -203,6 +207,9 @@ public class WalletServiceImpl implements WalletService {
                 transactionRepository.findLatestSettledOfType(wallet.getId(), companyId,
                         SubTransactionType.WRC, PaymentStatus.SUCCESS, PageRequest.of(0, 1)));
 
+        PendingCommissionPort.PendingCommission pending =
+                pendingCommission.pendingCommissionFor(resolved, companyId);
+
         return new WalletSummary(
                 wallet,
                 branch == null ? null : branch.branchCode(),
@@ -213,6 +220,9 @@ public class WalletServiceImpl implements WalletService {
                 sum(wallet, companyId, TransactionType.DR, startOfMonth),
                 sum(wallet, companyId, TransactionType.CR, Instant.EPOCH),
                 sum(wallet, companyId, TransactionType.DR, Instant.EPOCH),
+                sumCommission(wallet, companyId, startOfDay),
+                pending.bookingPending(),
+                pending.deliveryPending(),
                 transactionRepository.countByWallet(wallet.getId(), companyId),
                 lastTransaction == null ? null : lastTransaction.getCreatedAt(),
                 lastRecharge == null ? null : lastRecharge.getAmount(),
@@ -507,6 +517,38 @@ public class WalletServiceImpl implements WalletService {
         return entry;
     }
 
+    // ------------------------------------------------------------- TO_PAY receipt debit
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction debitForToPayReceivedAtBranch(CodDeliveryDebitCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.TPY;
+        reason.requireSupports(TransactionType.DR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
+                null);
+
+        log.info("Wallet {} debited {} {} for TO_PAY receipt {} by {}", wallet.getWalletNumber(),
+                wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
+                currentActor());
+        auditService.record(AuditAction.WALLET_DEBITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletDebited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
     // ------------------------------------------------------------- DRS charge credit
 
     @Override
@@ -530,6 +572,38 @@ public class WalletServiceImpl implements WalletService {
         log.info("Wallet {} credited {} {} DRS commission for shipment {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
                 currentActor());
+        auditService.record(AuditAction.WALLET_CREDITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletCredited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
+    // --------------------------------------------------- delivery weight commission credit
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction creditForDeliveryWeightCommission(DeliveryWeightCommissionCreditCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.DWC;
+        reason.requireSupports(TransactionType.CR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
+                null);
+
+        log.info("Wallet {} credited {} {} delivery weight commission for shipment {} by {}",
+                wallet.getWalletNumber(), wallet.getCurrency(), validated.toPlainString(),
+                command.shipmentNumber(), currentActor());
         auditService.record(AuditAction.WALLET_CREDITED, ENTITY, wallet.getId(),
                 ledgerDetails(wallet, entry));
         eventPublisher.publishEvent(new WalletEvent.WalletCredited(
@@ -599,6 +673,75 @@ public class WalletServiceImpl implements WalletService {
         eventPublisher.publishEvent(new WalletEvent.WalletCredited(
                 wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
                 entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
+    // ------------------------------------------------------------ shipment cancellation
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public List<WalletTransaction> reverseForShipment(ShipmentReversalCommand command) {
+        UUID companyId = requireCompany();
+
+        List<WalletTransaction> originals = new java.util.ArrayList<>(
+                transactionRepository.findSettledByReferenceWithinCompany(
+                        ReferenceType.SHIPMENT, command.shipmentNumber(), companyId,
+                        PaymentStatus.SUCCESS));
+        // Deterministic lock order across wallets, not the ledger's own creation order —
+        // the same "never lock rows in caller-decided order" discipline the class javadoc's
+        // row-locking rule implies, in case two entries here land on different branches.
+        originals.sort(java.util.Comparator.comparing(WalletTransaction::getWalletId));
+
+        List<WalletTransaction> reversals = new java.util.ArrayList<>();
+        for (WalletTransaction original : originals) {
+            // A reversal never itself gets reversed — SRF/ADJ entries this same method wrote
+            // (or a manual adjustment) are not something a cancellation should undo again.
+            if (original.getSubTransactionType() == SubTransactionType.SRF
+                    || original.getSubTransactionType() == SubTransactionType.ADJ) {
+                continue;
+            }
+
+            try {
+                reversals.add(postReversal(original, companyId, command.remarks()));
+            } catch (RuntimeException e) {
+                log.error("Could not reverse {} entry {} ({} {}) for cancelled shipment {}; "
+                        + "reconcile manually", original.getSubTransactionType(),
+                        original.getTransactionNo(), original.getAmount().toPlainString(),
+                        original.getTransactionType(), command.shipmentNumber(), e);
+            }
+        }
+
+        return reversals;
+    }
+
+    private WalletTransaction postReversal(WalletTransaction original, UUID companyId, String remarks) {
+        Wallet source = walletRepository.findByIdWithinCompany(original.getWalletId(), companyId)
+                .orElseThrow(() -> new ResourceNotFoundException(ENTITY, original.getWalletId()));
+        Wallet wallet = lockOrThrow(source.getBranchId(), companyId);
+        requireOperational(wallet);
+
+        boolean creditBack = original.isDebit();
+        TransactionType type = creditBack ? TransactionType.CR : TransactionType.DR;
+        SubTransactionType reason = creditBack ? SubTransactionType.SRF : SubTransactionType.ADJ;
+
+        WalletTransaction entry = post(wallet, companyId, type, reason, original.getAmount(),
+                ReferenceType.SHIPMENT, original.getReferenceId(),
+                remarks + " — reversing " + original.getTransactionNo(), null, null, null);
+
+        log.info("Wallet {} {} {} {} reversing {} {} for shipment {} by {}",
+                wallet.getWalletNumber(), creditBack ? "credited" : "debited", wallet.getCurrency(),
+                original.getAmount().toPlainString(), original.getSubTransactionType(),
+                original.getTransactionNo(), original.getReferenceId(), currentActor());
+        auditService.record(
+                creditBack ? AuditAction.WALLET_CREDITED : AuditAction.WALLET_DEBITED,
+                ENTITY, wallet.getId(), ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(creditBack
+                ? new WalletEvent.WalletCredited(wallet.getId(), companyId, wallet.getBranchId(),
+                        entry.getId(), reason, original.getAmount(), entry.getBalanceAfter(), Instant.now())
+                : new WalletEvent.WalletDebited(wallet.getId(), companyId, wallet.getBranchId(),
+                        entry.getId(), reason, original.getAmount(), entry.getBalanceAfter(), Instant.now()));
 
         return entry;
     }
@@ -758,6 +901,16 @@ public class WalletServiceImpl implements WalletService {
     private BigDecimal sum(Wallet wallet, UUID companyId, TransactionType type, Instant from) {
         return Wallet.normalise(transactionRepository.sumSettledSince(
                 wallet.getId(), companyId, type, from, PaymentStatus.SUCCESS));
+    }
+
+    private static final List<SubTransactionType> COMMISSION_REASONS =
+            List.of(SubTransactionType.COM, SubTransactionType.DRS);
+
+    /** The commission slice of {@link #sum} — same settled-credit rule, narrowed to
+     *  {@code COM}/{@code DRS}. */
+    private BigDecimal sumCommission(Wallet wallet, UUID companyId, Instant from) {
+        return Wallet.normalise(transactionRepository.sumSettledSinceForSubTypes(
+                wallet.getId(), companyId, TransactionType.CR, COMMISSION_REASONS, from, PaymentStatus.SUCCESS));
     }
 
     private static WalletTransaction firstOf(List<WalletTransaction> rows) {

@@ -10,6 +10,7 @@ public record ManifestSummaryStats(
         long totalManifests,
         long totalShipments,
         BigDecimal totalWeight,
-        long totalPackages
+        long totalPackages,
+        BigDecimal totalTripExpenses
 ) {
 }

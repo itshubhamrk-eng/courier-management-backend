@@ -10,9 +10,11 @@ import java.math.BigDecimal;
 
 /**
  * Deployment-wide pricing defaults, bound from {@code pricing.*}. Every field here is a
- * tunable the module's spec calls out under "Configuration" — none of it is per-company yet
- * (that would need a settings row, the way {@code company.CompanySettings} works, and no
- * caller has asked for company-level overrides).
+ * tunable the module's spec calls out under "Configuration". {@code roundingRule} is now
+ * also settable per company ({@code CompanySettings.roundOffRule}); {@code PricingEngineImpl}
+ * uses the company's value when set and falls back to this deployment default otherwise —
+ * every other field here is still deployment-wide only, no caller has asked for a
+ * company-level override of those yet.
  */
 @Getter
 @Setter

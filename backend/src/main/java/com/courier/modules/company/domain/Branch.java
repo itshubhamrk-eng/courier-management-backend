@@ -80,7 +80,7 @@ public class Branch extends CompanyOwnedEntity {
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "branch_type", nullable = false, length = 30)
     @Builder.Default
-    private BranchType branchType = BranchType.BOOKING_DELIVERY_BRANCH;
+    private BranchType branchType = BranchType.BRANCH;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
@@ -228,6 +228,21 @@ public class Branch extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal drsChargePerQty = new BigDecimal("2.00");
 
+    /** Delivery commission per kg, credited to the delivery branch's wallet on delivery
+     *  ({@code deliveryCommission = deliveryCommissionRatePerKg *
+     *  max(shipment's chargeable weight, deliveryCommissionMinWeightKg)}). A rate, not a
+     *  fixed amount — unlike {@link #drsChargePerQty}. Defaults to 1.50, editable. */
+    @Column(name = "delivery_commission_rate_per_kg", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal deliveryCommissionRatePerKg = new BigDecimal("1.50");
+
+    /** Minimum chargeable weight (kg) for {@link #deliveryCommissionRatePerKg} — a
+     *  shipment lighter than this still earns commission as if it weighed this much.
+     *  Defaults to 10.00, editable. */
+    @Column(name = "delivery_commission_min_weight_kg", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal deliveryCommissionMinWeightKg = new BigDecimal("10.00");
+
     // ---------------------------------------------------------------- behaviour
 
     public static String normaliseCode(String code) {
@@ -283,6 +298,12 @@ public class Branch extends CompanyOwnedEntity {
         requireInRange(companyServiceChargePercentage, "Company service charge percentage", 0, 100);
         if (drsChargePerQty != null && drsChargePerQty.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessRuleException("DRS charge per qty cannot be negative.");
+        }
+        if (deliveryCommissionRatePerKg != null && deliveryCommissionRatePerKg.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessRuleException("Delivery commission rate per kg cannot be negative.");
+        }
+        if (deliveryCommissionMinWeightKg != null && deliveryCommissionMinWeightKg.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessRuleException("Delivery commission minimum weight cannot be negative.");
         }
     }
 

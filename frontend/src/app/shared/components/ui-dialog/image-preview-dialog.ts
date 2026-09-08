@@ -18,9 +18,15 @@ export interface ImagePreviewData {
     <div class="ipd">
       <div class="ipd__head">
         <span class="text-h2">{{ data.title ?? 'Preview' }}</span>
-        <button class="ipd__close" type="button" (click)="ref.close()" aria-label="Close">
-          <mat-icon>close</mat-icon>
-        </button>
+        <div class="ipd__actions">
+          <a class="ipd__download" [href]="data.url" [download]="(data.title ?? 'download')" target="_blank"
+             rel="noopener" aria-label="Download">
+            <mat-icon>download</mat-icon>
+          </a>
+          <button class="ipd__close" type="button" (click)="ref.close()" aria-label="Close">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
       </div>
       <div class="ipd__body">
         <img [src]="data.url" [alt]="data.title ?? 'Preview'" />
@@ -30,7 +36,9 @@ export interface ImagePreviewData {
   styles: [`
     .ipd { display:flex; flex-direction:column; max-width:90vw; max-height:90vh; }
     .ipd__head { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; }
-    .ipd__close { border:none; background:none; cursor:pointer; display:flex; color:var(--content-muted); }
+    .ipd__actions { display:flex; align-items:center; gap:8px; }
+    .ipd__download, .ipd__close { border:none; background:none; cursor:pointer; display:flex; color:var(--content-muted); text-decoration:none; }
+    .ipd__download:hover, .ipd__close:hover { color:var(--content-fg); }
     .ipd__body { padding:0 16px 16px; overflow:auto; display:flex; justify-content:center; }
     .ipd__body img { max-width:100%; max-height:80vh; object-fit:contain; border-radius:var(--r-field); }
   `]

@@ -118,9 +118,11 @@ public class ManifestController {
         Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
         Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> charges = shipmentService.chargesFor(ids);
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
+        Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
         List<ShipmentSummaryResponse> summaries = page.getContent().stream()
                 .map(s -> shipmentMapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()),
-                        deliveredAt.get(s.getId())))
+                        deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()), receivedAt.get(s.getId())))
                 .toList();
         return ApiResponse.success(summaries);
     }

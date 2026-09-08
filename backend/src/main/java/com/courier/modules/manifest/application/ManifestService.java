@@ -7,6 +7,7 @@ import com.courier.modules.manifest.domain.ManifestSummaryStats;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -45,9 +46,12 @@ public interface ManifestService {
      * {@code ShipmentService.transitionToDispatched}) in the same transaction. Refuses a
      * manifest already dispatched, an inactive/foreign vehicle, or a driver id that is
      * not a real user of this company. {@code departureTime} is operator-entered and
-     * optional — null falls back to the dispatch moment itself.
+     * optional — null falls back to the dispatch moment itself. {@code fuelCost}/
+     * {@code driverAdvance}/{@code tollAmount}/{@code otherAmount} are all optional trip
+     * expenses, stored as entered with no validation beyond non-negative.
      */
-    Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime);
+    Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
+            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount);
 
     /**
      * Removes one shipment from a still-{@code CREATED} manifest, reverting it to

@@ -130,6 +130,25 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('crossingCharge')" /></label>
               </div>
             }
+            <div class="spacer"></div>
+            <label class="chk">
+              <input type="checkbox" [formControl]="c('appointmentDelivery')" />
+              <span>Appointment Delivery</span>
+            </label>
+            @if (c('appointmentDelivery').value) {
+              <div class="spacer"></div>
+              <div class="grid3">
+                <label class="fld"><span class="fld__l">Appointment Date</span>
+                  <input class="fld__i" type="date" [formControl]="c('appointmentDate')" /></label>
+                <label class="fld"><span class="fld__l">Time Slot</span>
+                  <input class="fld__i" [formControl]="c('appointmentTimeSlot')" placeholder="e.g. 1:00-2:00" maxlength="20" /></label>
+              </div>
+            }
+            <div class="spacer"></div>
+            <label class="chk">
+              <input type="checkbox" [formControl]="c('insuranceApplicable')" />
+              <span>Insurance Applicable <span class="hint">(2% of freight)</span></span>
+            </label>
           </app-card>
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
@@ -366,15 +385,21 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   freight: freightCalc() ? effectiveBaseFreight() : p.chargeBreakup.freight, fuelCharge: p.chargeBreakup.fuelCharge,
                   handlingCharge: p.chargeBreakup.handlingCharge,
                   odaCharge: odaChargeOverride() ?? freightCalc()?.odaCharge ?? p.chargeBreakup.odaCharge,
-                  insuranceCharge: p.chargeBreakup.insuranceCharge,
-                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta(),
+                  insuranceCharge: finalInsuranceCharge(),
+                  applicableCharges: p.chargeBreakup.applicableCharges,
+                  gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta()
+                    + gstOnInsuranceChargeDelta(),
                   discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
                   otherCharges: otherCharges(),
+                  appointmentDeliveryCharge: c('appointmentDelivery').value ? appointmentDeliveryCharge() : undefined,
                   netAmount: (manualNetAmount() ?? p.chargeBreakup.netAmount) + otherCharges() + gstOnOtherCharges()
                     + odaChargeDelta() + gstOnOdaChargeDelta() + freightDelta() + gstOnFreightDelta()
+                    + (c('appointmentDelivery').value ? appointmentDeliveryCharge() : 0)
+                    + insuranceChargeDelta() + gstOnInsuranceChargeDelta()
                 }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
                   (otherChargesChange)="otherCharges.set($event)"
-                  (odaChargeChange)="odaChargeOverride.set($event)" />
+                  (odaChargeChange)="odaChargeOverride.set($event)"
+                  (appointmentDeliveryChargeChange)="appointmentDeliveryCharge.set($event)" />
               }
             </div>
 
@@ -385,10 +410,13 @@ function toInstantEnd(date: string | null | undefined): string | null {
             @if (ewayBillReason(); as reason) {
               <p class="err">{{ reason }}</p>
             }
+            @if (appointmentDeliveryReason(); as reason) {
+              <p class="err">{{ reason }}</p>
+            }
             <div class="sum__cta">
               <app-button icon="check" [loading]="submitting()"
                 [disabled]="!pricing() || pricingLoading() || !freightCalc() || freightCalcLoading()
-                  || form.invalid || ewayBillReason() !== null"
+                  || form.invalid || ewayBillReason() !== null || appointmentDeliveryReason() !== null"
                 (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
@@ -559,6 +587,11 @@ export class ShipmentCreate implements OnInit {
    *  to the server, see {@link book}. */
   protected readonly odaChargeOverride = signal<number | null>(null);
 
+  /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
+   *  GST-free (direct user request), unlike {@link otherCharges}. Reset to zero whenever
+   *  the checkbox is unchecked, see `ngOnInit`. */
+  protected readonly appointmentDeliveryCharge = signal<number>(0);
+
   /** Set only when the current preview priced through the Freight Factor fallback (no
    *  route/rate for this lane) — gates the "Freight Factor" input in the summary. */
   protected readonly freightFactorApplicable = signal(false);
@@ -662,6 +695,10 @@ export class ShipmentCreate implements OnInit {
     crossing: [false],
     crossingBranchIds: this.fb.array<FormControl<string | null>>([]),
     crossingCharge: [null as number | null],
+    appointmentDelivery: [false],
+    appointmentDate: [null as string | null],
+    appointmentTimeSlot: ['', Validators.maxLength(20)],
+    insuranceApplicable: [false],
     invoiceValue: [null as number | null],
     ewayBillNumber: ['', Validators.maxLength(30)],
     ewayBillInvoiceNumber: ['', Validators.maxLength(50)],
@@ -831,6 +868,15 @@ export class ShipmentCreate implements OnInit {
       } else {
         this.crossingBranchArray.clear();
         this.form.get('crossingCharge')?.setValue(null);
+      }
+    });
+    // Unchecking Appointment Delivery clears its date/slot/charge, same "hidden stale
+    // value never submits" rule as Crossing above.
+    this.form.get('appointmentDelivery')?.valueChanges.subscribe((on) => {
+      if (!on) {
+        this.form.get('appointmentDate')?.setValue(null);
+        this.form.get('appointmentTimeSlot')?.setValue('');
+        this.appointmentDeliveryCharge.set(0);
       }
     });
     this.masters.options('service-types').subscribe((o) => {
@@ -1023,6 +1069,27 @@ export class ShipmentCreate implements OnInit {
     return (this.freightDelta() * this.myBranchGstPercentage()) / 100;
   }
 
+  /** When the Insurance Applicable checkbox is on, insurance is 2% of freight instead of
+   *  the Pricing Engine's own rate-driven `chargeBreakup.insuranceCharge` — mirrors
+   *  `ShipmentServiceImpl.copyCharge`'s `finalInsuranceCharge`. Plain method, not
+   *  `computed()` — same `FormControl.value`-staleness reason as {@link readyToPrice}. */
+  protected finalInsuranceCharge(): number {
+    const engineInsurance = this.pricing()?.chargeBreakup.insuranceCharge ?? 0;
+    if (!this.c('insuranceApplicable').value) return engineInsurance;
+    const freight = this.freightCalc() ? this.effectiveBaseFreight() : (this.pricing()?.chargeBreakup.freight ?? 0);
+    return freight * 0.02;
+  }
+
+  /** Difference between {@link finalInsuranceCharge} and the engine's own figure — zero
+   *  unless the checkbox is on. See {@link gstOnInsuranceChargeDelta}. */
+  protected insuranceChargeDelta(): number {
+    return this.finalInsuranceCharge() - (this.pricing()?.chargeBreakup.insuranceCharge ?? 0);
+  }
+
+  protected gstOnInsuranceChargeDelta(): number {
+    return (this.insuranceChargeDelta() * this.myBranchGstPercentage()) / 100;
+  }
+
   /** `freightCalc().baseFreight` unless the operator raised Rate/KG above the matched
    *  slab's own rate — the server refuses a lower one (see `requireRateNotDecreased`),
    *  this is just the live preview echoing that same math. Zero until a freight preview
@@ -1087,6 +1154,17 @@ export class ShipmentCreate implements OnInit {
     if (!/^\d{12}$/.test(number)) return 'E-Way Bill number must be exactly 12 digits.';
     if (!invoiceNumber) return 'An E-Way Bill invoice number is required.';
     if (!this.c('ewayBillInvoiceDate').value) return 'An E-Way Bill invoice date is required.';
+    return null;
+  }
+
+  /** Null once nothing blocks booking; otherwise the reason shown next to the Book button —
+   *  same "plain method, not computed()" reason as {@link ewayBillReason} (reads
+   *  `FormControl.value`). The backend re-checks this itself (`Shipment.applyInvariants`),
+   *  this is UX only. */
+  protected appointmentDeliveryReason(): string | null {
+    if (!this.c('appointmentDelivery').value) return null;
+    if (!this.c('appointmentDate').value) return 'Pick an appointment delivery date.';
+    if (!(this.c('appointmentTimeSlot').value ?? '').trim()) return 'Enter an appointment delivery time slot.';
     return null;
   }
 
@@ -1285,6 +1363,11 @@ export class ShipmentCreate implements OnInit {
       invoiceValue: v.invoiceValue || null,
       destinationAreaId: v.destinationAreaId || null,
       ratePerKgOverride: this.ratePerKgOverride(),
+      appointmentDelivery: v.appointmentDelivery || null,
+      appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
+      appointmentTimeSlot: v.appointmentDelivery ? (v.appointmentTimeSlot?.trim() || null) : null,
+      appointmentDeliveryCharge: v.appointmentDelivery ? (this.appointmentDeliveryCharge() || null) : null,
+      insuranceApplicable: v.insuranceApplicable || null,
       ewayBill: this.ewayBillOpen() && (v.ewayBillNumber?.trim() || v.ewayBillInvoiceNumber?.trim()) ? {
         ewayBillNumber: v.ewayBillNumber?.trim() || null,
         invoiceNumber: v.ewayBillInvoiceNumber?.trim() || '',
@@ -1344,12 +1427,15 @@ export class ShipmentCreate implements OnInit {
               ...p.chargeBreakup,
               freight: this.effectiveBaseFreight(),
               odaCharge: this.odaChargeOverride() ?? f.odaCharge,
+              insuranceCharge: this.finalInsuranceCharge(),
               gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
-                + this.gstOnFreightDelta(),
+                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta(),
               netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
                 + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
+                + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta()
             },
             otherCharges: this.otherCharges(),
+            appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,
             remarks: v.remarks || null,
             createdByName: s.createdByName ?? null
           });

@@ -83,6 +83,12 @@ export interface WalletSummary {
   monthDebit: number;
   totalCredit: number;
   totalDebit: number;
+  /** Settled COM/DRS credits since 00:00 UTC — the commission slice of todayCredit. */
+  todayCreditCommission: number;
+  /** Commission on collect-at-booking shipments not yet dispatched. */
+  bookingPendingCommission: number;
+  /** Commission on collect-at-delivery (TO_PAY/COD) shipments not yet delivered. */
+  deliveryPendingCommission: number;
   transactionCount: number;
   lastTransactionAt?: string | null;
   lastRechargeAmount?: number | null;

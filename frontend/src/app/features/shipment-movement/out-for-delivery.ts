@@ -255,6 +255,8 @@ export class OutForDelivery implements OnInit {
       <td>${this.esc(s.receiverContact)}</td>
       <td>${this.esc(this.label(s.paymentModeId, this.paymentModeOptions()))}</td>
       <td style="text-align:right">${collectAmount(s) ?? '—'}</td>
+      <td></td>
+      <td></td>
     </tr>`).join('');
     win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
       <style>
@@ -289,9 +291,9 @@ export class OutForDelivery implements OnInit {
         <div><span>Date</span><span>${this.esc(new Date().toLocaleDateString())}</span></div>
         <div><span>Shipments</span><span>${rows.length}</span></div>
       </div>
-      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Contact</th><th>Payment</th><th style="text-align:right">Amount</th></tr></thead>
+      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Contact</th><th>Payment</th><th style="text-align:right">Amount</th><th>Receiver Sign</th><th>Stamp</th></tr></thead>
       <tbody>${tableRows}</tbody>
-      <tfoot><tr><td colspan="5">Total to Collect</td><td style="text-align:right">${totalAmount}</td></tr></tfoot></table>
+      <tfoot><tr><td colspan="5">Total to Collect</td><td style="text-align:right">${totalAmount}</td><td></td><td></td></tr></tfoot></table>
     </body></html>`);
     win.document.close();
     win.focus();

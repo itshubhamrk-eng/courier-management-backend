@@ -8,10 +8,13 @@ import com.courier.modules.dashboard.api.dto.DashboardActivityResponse;
 import com.courier.modules.dashboard.api.dto.DashboardChartsResponse;
 import com.courier.modules.dashboard.api.dto.DashboardStatisticsResponse;
 import com.courier.modules.dashboard.api.dto.DashboardSummaryResponse;
+import com.courier.modules.dashboard.api.dto.DeliveryAgingBucketResponse;
 import com.courier.modules.dashboard.api.dto.PipelineStageResponse;
 import com.courier.modules.dashboard.api.dto.RecentShipmentResponse;
 import com.courier.modules.dashboard.api.dto.TopCustomerResponse;
 import com.courier.modules.dashboard.api.dto.TopRouteResponse;
+import com.courier.modules.dashboard.api.dto.PodOverviewResponse;
+import com.courier.modules.dashboard.api.dto.RejectedPodResponse;
 import com.courier.modules.dashboard.domain.DashboardBranchDirectoryPort;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.domain.Wallet;
@@ -20,6 +23,11 @@ import com.courier.modules.finance.domain.WalletTransaction;
 import com.courier.modules.finance.domain.WalletTransactionRepository;
 import com.courier.modules.manifest.domain.ManifestRepository;
 import com.courier.modules.manifest.domain.ManifestStatus;
+import com.courier.modules.master.domain.PaymentMode;
+import com.courier.modules.master.domain.PaymentModeRepository;
+import com.courier.modules.pod.application.PodVerificationService;
+import com.courier.modules.pod.domain.PodVerification;
+import com.courier.modules.pod.domain.PodVerificationStatus;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
@@ -37,6 +45,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -95,6 +105,17 @@ public class DashboardServiceImpl implements DashboardService {
     private static final Set<ShipmentStatus> DELAY_EXCLUDED = EnumSet.of(
             ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED, ShipmentStatus.RETURNED);
 
+    /** The POD Dashboard pie's own candidate set — every shipment where a POD is still
+     *  relevant, whether or not one was ever run against it. Current state, not month-bound
+     *  (same "backlog, not a monthly stat" philosophy {@link #PENDING_DELIVERY} already
+     *  uses): a DELIVERED shipment with no POD still blocks its own delivery commission,
+     *  and a REJECTED one still needs a re-upload, regardless of when it was booked. */
+    private static final Set<ShipmentStatus> POD_RELEVANT = EnumSet.of(
+            ShipmentStatus.OUT_FOR_DELIVERY, ShipmentStatus.DELIVERED);
+
+    /** How many rows the branch dashboard's "Rejected POD" backlog shows at most. */
+    private static final int REJECTED_POD_LIMIT = 20;
+
     /** A shipment still open this many days after booking counts as delayed. A simple,
      *  company-wide backlog heuristic — not the per-stage SLA rules {@code
      *  ShipmentSlaSweepService} already enforces. */
@@ -121,6 +142,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final ManifestRepository manifestRepository;
     private final WalletRepository walletRepository;
     private final DashboardBranchDirectoryPort branchDirectory;
+    private final PodVerificationService podVerificationService;
+    private final PaymentModeRepository paymentModeRepository;
 
     /**
      * Deliberately not {@code @Transactional}: {@link #ownWallet} calls into
@@ -237,9 +260,13 @@ public class DashboardServiceImpl implements DashboardService {
         // A caller with an own branch is by construction never the cross-tenant
         // SUPER_ADMIN case (that role has no branch), so `scope` is always their real
         // company here.
-        long pendingDelivery = ownWallet == null ? 0L
-                : shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
+        // Row-returning, not the plain count, so the branch-scoped card below can bucket
+        // these same shipments by how long they've sat since being received — no second
+        // query for an identical shipment set.
+        List<Shipment> pendingDeliveryShipments = ownWallet == null ? List.of()
+                : shipmentRepository.findByCompanyIdAndDeliveryBranchIdAndStatusIn(
                         scope, ownBranchId, PENDING_DELIVERY);
+        long pendingDelivery = pendingDeliveryShipments.size();
 
         DashboardStatisticsResponse statistics = new DashboardStatisticsResponse(
                 todayShipments, delivered, inTransit, pending, totalRevenue,
@@ -256,7 +283,8 @@ public class DashboardServiceImpl implements DashboardService {
         // The exact opposite condition: a caller WITH an own branch gets the branch-scoped
         // sibling instead — never both, the two sections cover mutually exclusive callers.
         BranchOverviewResponse branchOverview = ownBranchId != null
-                ? branchOverview(scope, ownBranchId, pendingDelivery, monthStart, today) : null;
+                ? branchOverview(scope, ownBranchId, pendingDelivery, pendingDeliveryShipments, monthStart, today)
+                : null;
 
         return new DashboardSummaryResponse(statistics, recentShipments(recent),
                 recentActivity(recent, recentDeliveries, recentWalletTransactions, crossTenant, scope),
@@ -350,9 +378,15 @@ public class DashboardServiceImpl implements DashboardService {
         long lowBalanceBranches = walletRepository.countByCompanyIdAndAvailableBalanceLessThan(
                 companyId, LOW_BALANCE_THRESHOLD);
 
+        List<UUID> toPayModeIds = toPayModeIds(companyId);
+        long toPayAwaitingDelivery = toPayModeIds.isEmpty() ? 0L
+                : shipmentRepository.countByCompanyIdAndStatusInAndPaymentModeIdIn(
+                        companyId, PENDING_DELIVERY, toPayModeIds);
+
         return new CompanyOverviewResponse(pipeline, readyForManifest, manifestsAwaitingDispatch,
                 pendingDeliveryCompanyWide, delayedShipments, totalWalletBalance, lowBalanceBranches,
-                topRoutes(companyId, monthStart, today), topCustomers(companyId, monthStart, today));
+                topRoutes(companyId, monthStart, today), topCustomers(companyId, monthStart, today),
+                podOverview(companyId, null), toPayAwaitingDelivery);
     }
 
     /**
@@ -364,7 +398,7 @@ public class DashboardServiceImpl implements DashboardService {
      * here would just be a duplicate query for an identical number.
      */
     private BranchOverviewResponse branchOverview(UUID companyId, UUID branchId, long pendingDelivery,
-            LocalDate monthStart, LocalDate today) {
+            List<Shipment> pendingDeliveryShipments, LocalDate monthStart, LocalDate today) {
         List<PipelineStageResponse> pipeline = PIPELINE_STAGES.stream()
                 .map(status -> new PipelineStageResponse(status.name(),
                         shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusAndBookingDateBetween(
@@ -378,8 +412,129 @@ public class DashboardServiceImpl implements DashboardService {
         long delayedShipments = shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
                 companyId, branchId, DELAY_EXCLUDED, today.minusDays(DELAYED_AFTER_DAYS));
 
+        // HashSet, not Set.of/copyOf: a shipment with no payment mode recorded yet would
+        // otherwise NPE on contains(null) — Set.of's immutable sets reject a null probe
+        // outright rather than just answering false.
+        Set<UUID> toPayModeIds = new java.util.HashSet<>(toPayModeIds(companyId));
+        long toPayAwaitingDelivery = pendingDeliveryShipments.stream()
+                .filter(s -> toPayModeIds.contains(s.getPaymentModeId()))
+                .count();
+
         return new BranchOverviewResponse(pipeline, readyForManifest, manifestsAwaitingDispatch,
-                pendingDelivery, delayedShipments);
+                pendingDelivery, delayedShipments, deliveryPendingAging(companyId, pendingDeliveryShipments),
+                podOverview(companyId, branchId), rejectedPods(companyId, branchId), toPayAwaitingDelivery);
+    }
+
+    /** TO_PAY-shaped payment mode ids for a company — collects at delivery, but not
+     *  cash-on-delivery (the consignee's amount). Backs the dashboard's "TO_PAY awaiting
+     *  delivery" tile: shipments already debited at THC in-scan (see {@code
+     *  ShipmentServiceImpl.scanOneIn}'s {@code ToPayReceivedAtDeliveryBranch}) but not yet
+     *  actually delivered. */
+    private List<UUID> toPayModeIds(UUID companyId) {
+        return paymentModeRepository.findByCompanyIdAndCollectAtDeliveryTrueAndCashOnDeliveryFalse(companyId)
+                .stream().map(PaymentMode::getId).toList();
+    }
+
+    /**
+     * POD Dashboard pie for the given scope — every branch's own state (company-wide when
+     * {@code branchId} is null). A candidate shipment missing from the latest-verification
+     * map has never had a POD run at all ({@code pendingUpload}); otherwise its own latest
+     * run's status places it in exactly one of the other three buckets.
+     */
+    private PodOverviewResponse podOverview(UUID companyId, UUID branchId) {
+        List<UUID> candidateIds = branchId == null
+                ? shipmentRepository.findIdsByCompanyIdAndStatusIn(companyId, POD_RELEVANT)
+                : shipmentRepository.findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(companyId, branchId, POD_RELEVANT);
+        if (candidateIds.isEmpty()) {
+            return new PodOverviewResponse(0, 0, 0, 0);
+        }
+        Map<UUID, PodVerification> latest = podVerificationService.latestByShipmentIds(candidateIds);
+        long pendingVerification = countByStatus(latest, PodVerificationStatus.REVIEW);
+        long approved = countByStatus(latest, PodVerificationStatus.PASS);
+        long rejected = countByStatus(latest, PodVerificationStatus.FAIL);
+        long pendingUpload = candidateIds.size() - latest.size();
+        return new PodOverviewResponse(pendingUpload, pendingVerification, approved, rejected);
+    }
+
+    private static long countByStatus(Map<UUID, PodVerification> latest, PodVerificationStatus status) {
+        return latest.values().stream().filter(v -> v.getVerificationStatus() == status).count();
+    }
+
+    /** The branch dashboard's own "Rejected POD — option to upload" backlog: every shipment
+     *  in this branch whose latest POD verification is FAIL, capped at {@link
+     *  #REJECTED_POD_LIMIT}. Separate query from {@link #podOverview} (the count there is
+     *  enough for the pie; this one also needs each shipment's own number/receiver to
+     *  render a real row, not just a total). */
+    private List<RejectedPodResponse> rejectedPods(UUID companyId, UUID branchId) {
+        List<UUID> candidateIds = shipmentRepository.findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(
+                companyId, branchId, POD_RELEVANT);
+        if (candidateIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, PodVerification> latest = podVerificationService.latestByShipmentIds(candidateIds);
+        List<PodVerification> rejected = latest.values().stream()
+                .filter(v -> v.getVerificationStatus() == PodVerificationStatus.FAIL)
+                .limit(REJECTED_POD_LIMIT)
+                .toList();
+        if (rejected.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> rejectedShipmentIds = rejected.stream().map(PodVerification::getShipmentId).toList();
+        Map<UUID, Shipment> shipmentsById = shipmentRepository
+                .findAllByCompanyIdAndIdIn(companyId, rejectedShipmentIds).stream()
+                .collect(Collectors.toMap(Shipment::getId, s -> s));
+        return rejected.stream()
+                .map(v -> {
+                    Shipment s = shipmentsById.get(v.getShipmentId());
+                    String reason = v.reasons().isEmpty() ? v.getReviewRemarks() : String.join("; ", v.reasons());
+                    return new RejectedPodResponse(v.getShipmentId(),
+                            s == null ? null : s.getShipmentNumber(),
+                            s == null ? null : s.getReceiverName(), reason);
+                })
+                .toList();
+    }
+
+    /** Buckets the branch's own Pending Delivery shipments (IN_SCAN/OUT_FOR_DELIVERY) by how
+     *  long since each was received — its last IN_SCAN scan-in, not its booking date, since
+     *  a shipment can sit booked for a while before ever reaching this branch. Ranges are
+     *  half-open on the low end so every shipment lands in exactly one bucket: [24,36),
+     *  [36,48), [48,72), [72,&#8734;). Under 24h isn't a breach yet, so it's simply not
+     *  counted anywhere — same "omit the not-yet-a-problem case" convention as the rest of
+     *  this class. */
+    private List<DeliveryAgingBucketResponse> deliveryPendingAging(UUID companyId, List<Shipment> shipments) {
+        if (shipments.isEmpty()) {
+            return List.of(
+                    new DeliveryAgingBucketResponse("Since 24h", 0L),
+                    new DeliveryAgingBucketResponse("Since 36h", 0L),
+                    new DeliveryAgingBucketResponse("Since 48h", 0L),
+                    new DeliveryAgingBucketResponse("72h+", 0L));
+        }
+        List<UUID> ids = shipments.stream().map(Shipment::getId).toList();
+        Map<UUID, Instant> receivedAt = shipmentStatusHistoryRepository
+                .findAllByCompanyIdAndShipmentIdInAndStatus(companyId, ids, ShipmentStatus.IN_SCAN)
+                .stream()
+                .collect(Collectors.toMap(ShipmentStatusHistory::getShipmentId, ShipmentStatusHistory::getChangedAt,
+                        (a, b) -> a.isAfter(b) ? a : b));
+
+        Instant now = Instant.now();
+        long since24 = 0, since36 = 0, since48 = 0, since72 = 0;
+        for (Shipment s : shipments) {
+            Instant received = receivedAt.get(s.getId());
+            // No IN_SCAN history shouldn't happen for IN_SCAN/OUT_FOR_DELIVERY — defensive,
+            // not fabricated: an un-received shipment simply isn't aged into any bucket.
+            if (received == null) continue;
+            long hours = Duration.between(received, now).toHours();
+            if (hours >= 72) since72++;
+            else if (hours >= 48) since48++;
+            else if (hours >= 36) since36++;
+            else if (hours >= 24) since24++;
+        }
+
+        return List.of(
+                new DeliveryAgingBucketResponse("Since 24h", since24),
+                new DeliveryAgingBucketResponse("Since 36h", since36),
+                new DeliveryAgingBucketResponse("Since 48h", since48),
+                new DeliveryAgingBucketResponse("72h+", since72));
     }
 
     private List<TopRouteResponse> topRoutes(UUID companyId, LocalDate monthStart, LocalDate today) {

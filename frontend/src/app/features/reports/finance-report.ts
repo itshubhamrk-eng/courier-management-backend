@@ -9,6 +9,7 @@ import { TableColumn } from '@shared/components/ui-table/ui-table';
 import { UiTable } from '@shared/components/ui-table/ui-table';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { BranchWalletService } from '@features/branch-wallet/branch-wallet.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
  * Finance Report — a branch-scoped caller (has `myBranchId`) sees their own wallet's
@@ -154,16 +155,11 @@ export class FinanceReport implements OnInit {
   }
 
   private download(rows: WalletSummary[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branch', 'branchCode', 'availableBalance', 'todayCredit', 'todayDebit',
       'totalCredit', 'totalDebit', 'transactionCount'];
-    const line = (r: WalletSummary) => [r.branchName, r.branchCode, r.availableBalance, r.todayCredit,
-      r.todayDebit, r.totalCredit, r.totalDebit, r.transactionCount].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `finance-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const lines = rows.map((r) => [r.branchName, r.branchCode, r.availableBalance, r.todayCredit,
+      r.todayDebit, r.totalCredit, r.totalDebit, r.transactionCount]);
+    downloadCsv(`finance-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [2, 3, 4, 5, 6, 7]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

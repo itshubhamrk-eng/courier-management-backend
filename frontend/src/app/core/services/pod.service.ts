@@ -57,4 +57,15 @@ export class PodService {
   deliveredWithPod(query: PageQuery) {
     return this.api.page<DeliveredShipmentPod>('/pod/delivered', query);
   }
+
+  /** Company-level upload — no branch login required. Works against any of the company's
+   *  own OUT_FOR_DELIVERY/DELIVERED shipments and is always auto-approved (no AI call, no
+   *  REVIEW step). COMPANY_ADMIN only. */
+  uploadByCompany(shipmentId: string, params: { photo: File; signature?: File | null; receiverName: string }) {
+    const body = new FormData();
+    body.append('photo', params.photo);
+    if (params.signature) body.append('signature', params.signature);
+    body.append('receiverName', params.receiverName);
+    return this.api.post<PodVerification>(API.podCompanyUpload(shipmentId), body);
+  }
 }

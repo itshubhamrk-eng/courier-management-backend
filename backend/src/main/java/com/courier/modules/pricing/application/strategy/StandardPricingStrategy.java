@@ -58,6 +58,7 @@ public class StandardPricingStrategy implements PricingStrategy {
                 context.charge(ChargeType.HANDLING),
                 context.charge(ChargeType.ODA),
                 context.charge(ChargeType.INSURANCE),
+                context.charge(ChargeType.APPLICABLE_CHARGES),
                 context.charge(ChargeType.GST),
                 context.charge(ChargeType.DISCOUNT),
                 context.charge(ChargeType.ROUND_OFF),

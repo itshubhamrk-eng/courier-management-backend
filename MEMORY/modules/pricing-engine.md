@@ -222,13 +222,17 @@ immutable `domain.PricingConfiguration` `PricingEngineImpl` builds a `PricingCon
 | `pricing.oda-enabled` | `true` | `ODAChargeCalculator` |
 | `pricing.insurance-enabled` | `true` | `InsuranceCalculator` (also needs `declaredValue > 0`) |
 | `pricing.discount-enabled` | `true` | `DiscountCalculator` (also needs a discount on the request) |
-| `pricing.rounding-rule` | `NEAREST_ONE` | `RoundOffCalculator` |
+| `pricing.rounding-rule` | `NEAREST_FIVE` | `RoundOffCalculator` |
 
 Handling and GST have no toggle — the module's own Configuration list only names Fuel,
 Insurance, ODA and Discounts, and GST is statutory, not a company preference.
 `RoundingRule` (`domain`) is `NONE` / `NEAREST_ONE` / `NEAREST_FIVE` / `NEAREST_TEN`, each
-`HALF_UP`. Company-level overrides were not asked for and are not built — every request
-today uses the one deployment-wide default.
+`HALF_UP`. **2026-09-08: `roundingRule` is now also company-configurable**
+(`CompanySettings.roundOffRule`, V64) — `PricingEngineImpl.resolveRoundingRule()` uses the
+company's value when set, falling back to this deployment default on blank/invalid;
+resolved only on the priced (non-Freight-Factor-fallback) path. Every other row in this
+table is still deployment-wide only, no caller has asked for a company-level override of
+those yet. See `MEMORY/modules/company-settings.md`.
 
 ## The charge sequence, end to end
 

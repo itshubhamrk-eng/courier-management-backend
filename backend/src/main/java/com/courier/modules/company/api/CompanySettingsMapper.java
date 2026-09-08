@@ -19,7 +19,7 @@ public class CompanySettingsMapper {
                 r.autoGenerateBarcode(), r.allowDuplicateReferenceNumber(), r.autoAssignTrackingNumber(),
                 r.defaultChargeableWeightKg(),
                 r.gstPercentage(), r.invoicePrefix(), r.creditLimit(), r.walletEnabled(),
-                r.codEnabled(), r.onlinePaymentEnabled(), r.autoInvoiceGeneration(),
+                r.codEnabled(), r.onlinePaymentEnabled(), r.autoInvoiceGeneration(), r.roundOffRule(),
                 r.slaBreachTicketEnabled(), r.slaBookingToLoadingSheetHours(),
                 r.slaLoadingSheetToThcHours(), r.slaThcToInscanHours(),
                 r.slaInscanToDrsHours(), r.slaDrsToDeliveryHours(),
@@ -49,7 +49,7 @@ public class CompanySettingsMapper {
                 new CompanySettingsResponse.Finance(
                         s.getGstPercentage(), s.getInvoicePrefix(), s.getCreditLimit(),
                         s.isWalletEnabled(), s.isCodEnabled(), s.isOnlinePaymentEnabled(),
-                        s.isAutoInvoiceGeneration()),
+                        s.isAutoInvoiceGeneration(), s.getRoundOffRule()),
                 new CompanySettingsResponse.Sla(
                         s.isSlaBreachTicketEnabled(), s.getSlaBookingToLoadingSheetHours(),
                         s.getSlaLoadingSheetToThcHours(), s.getSlaThcToInscanHours(),

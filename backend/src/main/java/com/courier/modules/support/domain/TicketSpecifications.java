@@ -41,6 +41,9 @@ public final class TicketSpecifications {
             if (safe.relatedBranchId() != null) {
                 predicates.add(cb.equal(root.get("relatedBranchId"), safe.relatedBranchId()));
             }
+            if (safe.relatedShipmentId() != null) {
+                predicates.add(cb.equal(root.get("relatedShipmentId"), safe.relatedShipmentId()));
+            }
             if (safe.assigneeUserId() != null) {
                 predicates.add(cb.equal(root.get("assigneeUserId"), safe.assigneeUserId()));
             }

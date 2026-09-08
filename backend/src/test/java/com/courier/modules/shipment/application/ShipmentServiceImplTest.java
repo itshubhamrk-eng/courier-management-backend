@@ -604,7 +604,8 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(withoutPincode))
                 .isInstanceOf(BusinessRuleException.class)
@@ -656,6 +657,11 @@ class ShipmentServiceImplTest {
 
         assertThat(cancelled.getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
         verify(historyRepository).save(any());
+
+        org.mockito.ArgumentCaptor<ShipmentEvent.Cancelled> captor =
+                org.mockito.ArgumentCaptor.forClass(ShipmentEvent.Cancelled.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().shipmentNumber()).isEqualTo(existing.getShipmentNumber());
     }
 
     @Test
@@ -775,7 +781,8 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithOdaOverride(BigDecimal odaCharge) {
@@ -788,7 +795,8 @@ class ShipmentServiceImplTest {
                 null, odaCharge, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithRatePerKgOverride(BigDecimal ratePerKgOverride) {
@@ -801,7 +809,8 @@ class ShipmentServiceImplTest {
                 null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null, null, null, ratePerKgOverride);
+                null, null, null, null, null, null, null, null, null, null, ratePerKgOverride,
+                null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithManualNumber(String manualShipmentNumber) {
@@ -813,7 +822,8 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private static UpdateShipmentCommand updateCommand(Long expectedVersion) {
@@ -825,7 +835,8 @@ class ShipmentServiceImplTest {
                 null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "updated", null, null, null,
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact,
@@ -839,7 +850,8 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, crossing,
-                crossingBranchId == null ? null : List.of(crossingBranchId), null, null, null, null, null);
+                crossingBranchId == null ? null : List.of(crossingBranchId), null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private static Shipment existingShipment(ShipmentStatus status) {
@@ -917,8 +929,8 @@ class ShipmentServiceImplTest {
 
         return new PricingResult(route, rate, new BigDecimal("5.000"), BigDecimal.ZERO,
                 new BigDecimal("5.000"), freight, new BigDecimal("10.00"),
-                new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("20.70"),
-                BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
+                new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("20.70"), BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
     }
 
     private static FreightCalculationResult freightCalculationResult(BigDecimal baseFreight, BigDecimal odaCharge) {

@@ -92,6 +92,21 @@ public record CreateShipmentRequest(
                 + "A higher figure raises freight (and its GST, on the difference only) above "
                 + "the system-calculated figure.")
         @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
-        BigDecimal ratePerKgOverride
+        BigDecimal ratePerKgOverride,
+        @Schema(description = "When true, appointmentDate/appointmentTimeSlot are required "
+                + "— booking is refused with a 422 otherwise.")
+        Boolean appointmentDelivery,
+        @Schema(description = "Required only when appointmentDelivery is true")
+        LocalDate appointmentDate,
+        @Schema(description = "Free text, e.g. \"1:00-2:00\" — required only when "
+                + "appointmentDelivery is true")
+        @Size(max = 20) String appointmentTimeSlot,
+        @Schema(description = "Optional, defaults to zero. Deliberately never taxed with "
+                + "GST, unlike otherCharges.")
+        @DecimalMin(value = "0") BigDecimal appointmentDeliveryCharge,
+        @Schema(description = "When true, insurance is charged at 2% of freight instead of "
+                + "the Pricing Engine's own rate-driven insurance figure. GST is recomputed "
+                + "on the difference, same as odaCharge.")
+        Boolean insuranceApplicable
 ) {
 }

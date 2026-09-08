@@ -92,6 +92,8 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
               <dt>Commission on Basic Freight %</dt><dd>{{ branch()!.commissionOnBasicFreight }}%</dd>
               <dt>Company Service Charge %</dt><dd>{{ branch()!.companyServiceChargePercentage }}%</dd>
               <dt>DRS Charge per Qty</dt><dd>{{ branch()!.drsChargePerQty }}</dd>
+              <dt>Delivery Commission per Kg</dt><dd>{{ branch()!.deliveryCommissionRatePerKg }}</dd>
+              <dt>Delivery Commission Minimum Chargeable Weight (Kg)</dt><dd>{{ branch()!.deliveryCommissionMinWeightKg }}</dd>
             </dl>
           </app-card>
 

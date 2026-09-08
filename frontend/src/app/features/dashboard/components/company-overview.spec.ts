@@ -13,6 +13,8 @@ const overview = (over: Partial<CompanyOverviewData> = {}): CompanyOverviewData 
   ],
   readyForManifest: 0, manifestsAwaitingDispatch: 0, pendingDelivery: 0, delayedShipments: 0,
   totalWalletBalance: 12500, lowBalanceBranches: 0, topRoutes: [], topCustomers: [],
+  podOverview: { pendingUpload: 0, pendingVerification: 0, approved: 0, rejected: 0 },
+  toPayAwaitingDelivery: 0,
   ...over
 });
 

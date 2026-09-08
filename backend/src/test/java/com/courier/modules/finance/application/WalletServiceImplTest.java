@@ -3,9 +3,11 @@ package com.courier.modules.finance.application;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
+import com.courier.modules.finance.application.command.ShipmentReversalCommand;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.PendingCommissionPort;
 import com.courier.modules.finance.domain.ReferenceType;
 import com.courier.modules.finance.domain.SubTransactionType;
 import com.courier.modules.finance.domain.TransactionType;
@@ -75,6 +77,7 @@ class WalletServiceImplTest {
     @Mock private WalletRepository walletRepository;
     @Mock private WalletTransactionRepository transactionRepository;
     @Mock private BranchDirectoryPort branchDirectory;
+    @Mock private PendingCommissionPort pendingCommission;
     @Mock private PaymentGatewayPort paymentGateway;
     @Mock private CompanyPaymentGatewayResolver paymentGatewayResolver;
     @Mock private AuditService auditService;
@@ -86,8 +89,10 @@ class WalletServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new WalletServiceImpl(walletRepository, transactionRepository, branchDirectory,
-                paymentGatewayResolver, auditService, eventPublisher);
+                pendingCommission, paymentGatewayResolver, auditService, eventPublisher);
         when(paymentGatewayResolver.resolve(any())).thenReturn(paymentGateway);
+        when(pendingCommission.pendingCommissionFor(any(), any()))
+                .thenReturn(PendingCommissionPort.PendingCommission.ZERO);
 
         CompanyContext.setCompanyId(TENANT);
         planted(ADMIN, Roles.COMPANY_ADMIN);
@@ -558,5 +563,122 @@ class WalletServiceImplTest {
 
         verify(walletRepository).lockByBranchIdWithinCompany(BRANCH, TENANT);
         assertThat(captureEntry().getWalletId()).isEqualTo(wallet.getId());
+    }
+
+    // ---------------------------------------------------------- shipment cancellation
+
+    private WalletTransaction originalEntry(UUID walletId, TransactionType type,
+                                            SubTransactionType reason, String amount, String shipmentNumber) {
+        return WalletTransaction.builder()
+                .transactionNo("TXN-ORIG-" + UUID.randomUUID())
+                .walletId(walletId)
+                .transactionType(type)
+                .subTransactionType(reason)
+                .amount(new BigDecimal(amount))
+                .balanceBefore(BigDecimal.ZERO)
+                .balanceAfter(BigDecimal.ZERO)
+                .referenceType(ReferenceType.SHIPMENT)
+                .referenceId(shipmentNumber)
+                .build();
+    }
+
+    @Test
+    @DisplayName("cancelling a shipment credits back its freight debit as SRF")
+    void reverseCreditsBackADebit() {
+        WalletTransaction original = originalEntry(wallet.getId(), TransactionType.DR,
+                SubTransactionType.SBK, "300.00", "SHP-1");
+        when(transactionRepository.findSettledByReferenceWithinCompany(
+                ReferenceType.SHIPMENT, "SHP-1", TENANT, PaymentStatus.SUCCESS))
+                .thenReturn(List.of(original));
+        when(walletRepository.findByIdWithinCompany(wallet.getId(), TENANT))
+                .thenReturn(Optional.of(wallet));
+
+        List<WalletTransaction> reversals = service.reverseForShipment(
+                new ShipmentReversalCommand("SHP-1", "Shipment SHP-1 cancelled"));
+
+        assertThat(reversals).hasSize(1);
+        WalletTransaction reversal = reversals.get(0);
+        assertThat(reversal.getTransactionType()).isEqualTo(TransactionType.CR);
+        assertThat(reversal.getSubTransactionType()).isEqualTo(SubTransactionType.SRF);
+        assertThat(reversal.getAmount()).isEqualByComparingTo("300.00");
+        assertThat(reversal.getReferenceId()).isEqualTo("SHP-1");
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1300.00");
+        verify(auditService).record(eq(AuditAction.WALLET_CREDITED), eq("Wallet"), any(), any());
+    }
+
+    @Test
+    @DisplayName("cancelling a shipment debits back its commission credit as ADJ")
+    void reverseDebitsBackACredit() {
+        WalletTransaction original = originalEntry(wallet.getId(), TransactionType.CR,
+                SubTransactionType.COM, "150.00", "SHP-2");
+        when(transactionRepository.findSettledByReferenceWithinCompany(
+                ReferenceType.SHIPMENT, "SHP-2", TENANT, PaymentStatus.SUCCESS))
+                .thenReturn(List.of(original));
+        when(walletRepository.findByIdWithinCompany(wallet.getId(), TENANT))
+                .thenReturn(Optional.of(wallet));
+
+        List<WalletTransaction> reversals = service.reverseForShipment(
+                new ShipmentReversalCommand("SHP-2", "Shipment SHP-2 cancelled"));
+
+        assertThat(reversals).hasSize(1);
+        WalletTransaction reversal = reversals.get(0);
+        assertThat(reversal.getTransactionType()).isEqualTo(TransactionType.DR);
+        assertThat(reversal.getSubTransactionType()).isEqualTo(SubTransactionType.ADJ);
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("850.00");
+        verify(auditService).record(eq(AuditAction.WALLET_DEBITED), eq("Wallet"), any(), any());
+    }
+
+    @Test
+    @DisplayName("a reversal entry (SRF/ADJ) is never itself reversed")
+    void reversalsAreNotReReversed() {
+        WalletTransaction alreadyReversed = originalEntry(wallet.getId(), TransactionType.CR,
+                SubTransactionType.SRF, "300.00", "SHP-3");
+        when(transactionRepository.findSettledByReferenceWithinCompany(
+                ReferenceType.SHIPMENT, "SHP-3", TENANT, PaymentStatus.SUCCESS))
+                .thenReturn(List.of(alreadyReversed));
+
+        List<WalletTransaction> reversals = service.reverseForShipment(
+                new ShipmentReversalCommand("SHP-3", "remarks"));
+
+        assertThat(reversals).isEmpty();
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("one entry's reversal failure does not block the others")
+    void partialFailureContinues() {
+        Wallet inactiveWallet = Wallet.builder()
+                .walletNumber("WLT-INACTIVE")
+                .branchId(OTHER_BRANCH)
+                .status(WalletStatus.INACTIVE)
+                .availableBalance(new BigDecimal("500.00"))
+                .holdBalance(Wallet.ZERO)
+                .currency("INR")
+                .build();
+        inactiveWallet.setCompanyId(TENANT);
+
+        WalletTransaction failing = originalEntry(inactiveWallet.getId(), TransactionType.CR,
+                SubTransactionType.COM, "50.00", "SHP-4");
+        WalletTransaction succeeding = originalEntry(wallet.getId(), TransactionType.DR,
+                SubTransactionType.SBK, "200.00", "SHP-4");
+        when(transactionRepository.findSettledByReferenceWithinCompany(
+                ReferenceType.SHIPMENT, "SHP-4", TENANT, PaymentStatus.SUCCESS))
+                .thenReturn(List.of(failing, succeeding));
+        when(walletRepository.findByIdWithinCompany(inactiveWallet.getId(), TENANT))
+                .thenReturn(Optional.of(inactiveWallet));
+        when(walletRepository.findByIdWithinCompany(wallet.getId(), TENANT))
+                .thenReturn(Optional.of(wallet));
+        when(walletRepository.findByBranchIdWithinCompany(OTHER_BRANCH, TENANT))
+                .thenReturn(Optional.of(inactiveWallet));
+        when(walletRepository.lockByBranchIdWithinCompany(OTHER_BRANCH, TENANT))
+                .thenReturn(Optional.of(inactiveWallet));
+
+        List<WalletTransaction> reversals = service.reverseForShipment(
+                new ShipmentReversalCommand("SHP-4", "remarks"));
+
+        assertThat(reversals).hasSize(1);
+        assertThat(reversals.get(0).getSubTransactionType()).isEqualTo(SubTransactionType.SRF);
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1200.00");
+        assertThat(inactiveWallet.getAvailableBalance()).isEqualByComparingTo("500.00");
     }
 }

@@ -47,6 +47,7 @@ public class PricingMapper {
                 result.handlingCharge(),
                 result.odaCharge(),
                 result.insuranceCharge(),
+                result.applicableCharges(),
                 result.gstAmount(),
                 result.discountAmount(),
                 result.roundOff(),

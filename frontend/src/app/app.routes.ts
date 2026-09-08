@@ -262,6 +262,27 @@ export const routes: Routes = [
         path: 'rates/:id/edit', title: 'Edit Rate', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN] },
         loadComponent: () => import('@features/rate-master/rate-edit').then((m) => m.RateEdit)
       },
+      // Charges — Charge & Charge Settings configuration, independent of Rate Master and
+      // not yet wired into Shipment Booking. COMPANY_ADMIN-only throughout (reads and
+      // writes), mirroring ChargeServiceImpl/ChargeSettingServiceImpl's single ADMIN gate
+      // — unlike Rate Master, no other role needs to read a company's own pricing
+      // configuration today. 'new' declared before ':id' so the literal is not swallowed.
+      {
+        path: 'charges', title: 'Charges', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/charges/charge-list').then((m) => m.ChargeList)
+      },
+      {
+        path: 'charges/new', title: 'New Charge', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/charges/charge-create').then((m) => m.ChargeCreate)
+      },
+      {
+        path: 'charges/:id', title: 'Charge', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/charges/charge-view').then((m) => m.ChargeView)
+      },
+      {
+        path: 'charges/:id/edit', title: 'Edit Charge', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/charges/charge-edit').then((m) => m.ChargeEdit)
+      },
       // Address Distance — resolve/list the road distance between two branches.
       // isAuthenticated() on the backend, same posture as Rate Master's reads/calculator.
       {
@@ -373,6 +394,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/shipment-exception-report').then((m) => m.ShipmentExceptionReport)
       },
       {
+        path: 'reports/bulk-tracking', title: 'Bulk Shipment Tracking', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/bulk-tracking-report').then((m) => m.BulkTrackingReport)
+      },
+      {
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
@@ -433,6 +458,13 @@ export const routes: Routes = [
       {
         path: 'movement/pod-review', title: 'POD Review', canActivate: [roleGuard], data: { roles: UPDATERS },
         loadComponent: () => import('@features/shipment-movement/pod-review').then((m) => m.PodReview)
+      },
+      // Company-level POD upload — no branch login required, always auto-approved. Mirrors
+      // PodVerificationServiceImpl.uploadByCompany's own hasRole('COMPANY_ADMIN') gate.
+      {
+        path: 'movement/pod-company-upload', title: 'Upload POD (Company)', canActivate: [roleGuard],
+        data: { roles: [AppRole.COMPANY_ADMIN] },
+        loadComponent: () => import('@features/shipment-movement/pod-company-upload').then((m) => m.PodCompanyUpload)
       },
       // Master data — one set of screens for all twelve lists, selected by :master.
       // 'new' is declared before ':id' so the literal segment is not swallowed by the

@@ -104,6 +104,9 @@ class PodVerificationServiceImplTest {
         assertThat(saved.getVerificationScore()).isEqualTo(92);
         verify(shipmentService).uploadPodFile(eq(SHIPMENT_ID), any());
         verify(shipmentService).attachPodAsset(eq(SHIPMENT_ID), eq("PHOTO"), anyString());
+        // PASS is the only outcome that earns delivery commission (2026-09-08) — markPodApproved
+        // is what actually credits it, if/once the shipment is DELIVERED.
+        verify(shipmentService).markPodApproved(SHIPMENT_ID);
     }
 
     @Test
@@ -114,6 +117,7 @@ class PodVerificationServiceImplTest {
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
         assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.REVIEW);
+        verify(shipmentService, never()).markPodApproved(any());
     }
 
     @Test
@@ -124,6 +128,7 @@ class PodVerificationServiceImplTest {
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
         assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
+        verify(shipmentService, never()).markPodApproved(any());
     }
 
     @Test
@@ -316,6 +321,7 @@ class PodVerificationServiceImplTest {
         assertThat(saved.getReviewedBy()).isEqualTo(CALLER);
         assertThat(saved.getReviewedAt()).isNotNull();
         assertThat(saved.getReviewRemarks()).isEqualTo("Looks fine");
+        verify(shipmentService).markPodApproved(SHIPMENT_ID);
     }
 
     @Test
@@ -329,6 +335,7 @@ class PodVerificationServiceImplTest {
                 new PodVerificationService.ReviewPodCommand(false, "Unclear photo"));
 
         assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
+        verify(shipmentService, never()).markPodApproved(any());
     }
 
     @Test
@@ -342,6 +349,55 @@ class PodVerificationServiceImplTest {
         assertThatThrownBy(() -> service.review(SHIPMENT_ID,
                 new PodVerificationService.ReviewPodCommand(true, null)))
                 .isInstanceOf(BusinessRuleException.class);
+    }
+
+    // ------------------------------------------------------------------ uploadByCompany
+
+    @Test
+    @DisplayName("company upload always resolves to PASS, no AI call, and marks POD approved")
+    void companyUploadAlwaysPasses() {
+        PodVerification saved = service.uploadByCompany(SHIPMENT_ID, companyUploadCommand());
+
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PASS);
+        assertThat(saved.getVerificationScore()).isEqualTo(100);
+        assertThat(saved.getAiProvider()).isEqualTo("company-direct");
+        verify(provider, never()).analyze(any());
+        verify(shipmentService).uploadPodFile(eq(SHIPMENT_ID), any());
+        verify(shipmentService).markPodApproved(SHIPMENT_ID);
+    }
+
+    @Test
+    @DisplayName("company upload works against a DELIVERED shipment too, not just OUT_FOR_DELIVERY")
+    void companyUploadAllowsDelivered() {
+        Shipment delivered = outForDeliveryShipment();
+        delivered.setStatus(ShipmentStatus.DELIVERED);
+        when(shipmentService.getById(SHIPMENT_ID)).thenReturn(delivered);
+
+        PodVerification saved = service.uploadByCompany(SHIPMENT_ID, companyUploadCommand());
+
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PASS);
+    }
+
+    @Test
+    @DisplayName("company upload is refused for a shipment that's neither OUT_FOR_DELIVERY nor DELIVERED")
+    void companyUploadRefusedForWrongStatus() {
+        Shipment booked = outForDeliveryShipment();
+        booked.setStatus(ShipmentStatus.BOOKED);
+        when(shipmentService.getById(SHIPMENT_ID)).thenReturn(booked);
+
+        assertThatThrownBy(() -> service.uploadByCompany(SHIPMENT_ID, companyUploadCommand()))
+                .isInstanceOf(BusinessRuleException.class);
+        verify(shipmentService, never()).markPodApproved(any());
+    }
+
+    @Test
+    @DisplayName("company upload is refused without a photo, before any upload attempt")
+    void companyUploadRefusedWithoutPhoto() {
+        assertThatThrownBy(() -> service.uploadByCompany(SHIPMENT_ID,
+                new PodVerificationService.CompanyUploadPodCommand(
+                        null, null, null, null, null, null, "Ramesh")))
+                .isInstanceOf(BusinessRuleException.class);
+        verify(shipmentService, never()).uploadPodFile(any(), any());
     }
 
     // ------------------------------------------------------------------ helpers
@@ -371,6 +427,11 @@ class PodVerificationServiceImplTest {
 
     private static byte[] photoBytes() {
         return new byte[]{1, 2, 3, 4};
+    }
+
+    private static PodVerificationService.CompanyUploadPodCommand companyUploadCommand() {
+        return new PodVerificationService.CompanyUploadPodCommand(
+                photoBytes(), "photo.jpg", "image/jpeg", null, null, null, "Ramesh");
     }
 
     private static PodVerificationService.VerifyPodCommand command(String receiverName) {

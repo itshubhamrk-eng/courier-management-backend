@@ -25,9 +25,10 @@ const GSTIN = /^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/;
 const PAN = /^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-const TYPE_OPTS: SelectOption[] = BRANCH_TYPES.map((t) => ({
-  value: t, label: t.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
-}));
+const TYPE_LABELS: Record<BranchType, string> = {
+  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', VENDOR: 'Vendor'
+};
+const TYPE_OPTS: SelectOption[] = BRANCH_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
 const DAY_OPTS: SelectOption[] = DAYS.map((d) => ({ value: d, label: d }));
 
 /**
@@ -185,6 +186,8 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           <app-input [control]="c('commissionOnBasicFreight')" label="Commission on Basic Freight %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="10" />
           <app-input [control]="c('companyServiceChargePercentage')" label="Company Service Charge %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="10" />
           <app-input [control]="c('drsChargePerQty')" label="DRS Charge per Qty" type="number" [min]="0" [step]="0.01" placeholder="2" />
+          <app-input [control]="c('deliveryCommissionRatePerKg')" label="Delivery Commission per Kg" type="number" [min]="0" [step]="0.01" placeholder="1.5" />
+          <app-input [control]="c('deliveryCommissionMinWeightKg')" label="Delivery Commission Minimum Chargeable Weight (Kg)" type="number" [min]="0" [step]="0.01" placeholder="10" />
         </div>
       </app-card>
 
@@ -335,7 +338,9 @@ export class BranchForm {
       gstPercentage: b.gstPercentage, commissionOnOtherCharges: b.commissionOnOtherCharges,
       commissionOnBasicFreight: b.commissionOnBasicFreight,
       companyServiceChargePercentage: b.companyServiceChargePercentage,
-      drsChargePerQty: b.drsChargePerQty
+      drsChargePerQty: b.drsChargePerQty,
+      deliveryCommissionRatePerKg: b.deliveryCommissionRatePerKg,
+      deliveryCommissionMinWeightKg: b.deliveryCommissionMinWeightKg
     }, { emitEvent: false });
     this.form.markAsPristine();
     this.hydrated.set(true);
@@ -378,6 +383,8 @@ export class BranchForm {
       commissionOnBasicFreight: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
       companyServiceChargePercentage: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
       drsChargePerQty: [2, [Validators.required, Validators.min(0)]],
+      deliveryCommissionRatePerKg: [1.5, [Validators.required, Validators.min(0)]],
+      deliveryCommissionMinWeightKg: [10, [Validators.required, Validators.min(0)]],
       // Create-only. Kept as a group so the payload maps straight onto BranchUserRequest;
       // no minimum length on the password — the server's policy owns that rule and its
       // message names the one that failed.
@@ -417,7 +424,9 @@ export class BranchForm {
       commissionOnOtherCharges: Number(v.commissionOnOtherCharges),
       commissionOnBasicFreight: Number(v.commissionOnBasicFreight),
       companyServiceChargePercentage: Number(v.companyServiceChargePercentage),
-      drsChargePerQty: Number(v.drsChargePerQty)
+      drsChargePerQty: Number(v.drsChargePerQty),
+      deliveryCommissionRatePerKg: Number(v.deliveryCommissionRatePerKg),
+      deliveryCommissionMinWeightKg: Number(v.deliveryCommissionMinWeightKg)
     };
 
     if (this.isCreate()) {

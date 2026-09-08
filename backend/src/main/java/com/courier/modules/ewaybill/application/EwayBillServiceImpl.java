@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,6 +38,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * E-Way Bill Management use cases. See {@link EwayBillService} for the module's own
@@ -137,6 +139,20 @@ public class EwayBillServiceImpl implements EwayBillService {
         return currentFor(shipmentId, requireCompany()).map(this::toSnapshot);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, EwayBillSnapshot> findLatestForShipments(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        UUID companyId = requireCompany();
+        return repository.findAllByShipmentIdInWithinCompany(shipmentIds, companyId).stream()
+                .collect(Collectors.groupingBy(EwayBill::getShipmentId))
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> toSnapshot(e.getValue().stream().filter(b -> b.getStatus() != EwayBillStatus.CANCELLED)
+                                .findFirst().orElse(e.getValue().get(0)))));
+    }
+
     /** Newest non-cancelled row, or simply the newest if every row for this shipment has
      *  been cancelled — see the class doc on why more than one row may exist. */
     private Optional<EwayBill> currentFor(UUID shipmentId, UUID companyId) {
@@ -146,7 +162,7 @@ public class EwayBillServiceImpl implements EwayBillService {
     }
 
     private EwayBillSnapshot toSnapshot(EwayBill b) {
-        return new EwayBillSnapshot(b.getId(), b.getEwayBillNumber(), b.getStatus().name(),
+        return new EwayBillSnapshot(b.getId(), b.getEwayBillNumber(), b.getStatus().name(), b.getInvoiceNumber(),
                 b.getInvoiceValue(), b.getValidFrom(), b.getValidUntil(), b.getDocumentUrl());
     }
 

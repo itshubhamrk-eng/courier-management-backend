@@ -1,5 +1,25 @@
 # Shipment Booking
 
+**Insurance Applicable (2026-09-08, `V65`):** optional checkbox at booking time —
+`Shipment.insuranceApplicable`. When checked, `ShipmentServiceImpl.copyCharge` sets
+`ShipmentCharge.insuranceCharge` to `freight * 2%` instead of the Pricing Engine's own
+rate-driven `priced.insuranceCharge()` — same delta-and-GST treatment `odaCharge` gets
+(unlike `appointmentDeliveryCharge`, which is deliberately untaxed, insurance stays
+taxed since the engine's own figure always was). No new `shipment_charges` column —
+`insurance_charge` already existed. Applied to `courier_db` and verified live via curl
+(throwaway `:8082`, real `:8080`/`:4200` untouched): same lane, freight `15.00` —
+unchecked gives `insuranceCharge: 0`/`netAmount: 17.70`, checked gives `insuranceCharge:
+0.30` (2% of freight) and `netAmount: 18.054` (+0.30 insurance +0.054 GST on that
+delta). No frontend click-through this session, curl only.
+
+**Appointment Delivery (2026-09-08, `V60`):** optional checkbox at booking time —
+`Shipment.appointmentDelivery`/`appointmentDate`/`appointmentTimeSlot` (free text, e.g.
+"1:00-2:00"), plus an optional `ShipmentCharge.appointmentDeliveryCharge` that is
+deliberately never taxed with GST (direct user request), added straight into
+`netAmount` alongside `gstAmount` rather than folded into it — unlike `otherCharges`.
+`applyInvariants` requires both date and slot once checked, nulls them otherwise. See
+`CHANGELOG.md` for the full plumbing; not yet applied to the dev DB.
+
 **Status:** DONE (v0.16.0, 2026-07-30). New package `com.courier.modules.shipment`,
 migration `V17`. Replaces the earlier, never-built design sketch in this file's
 predecessor — the old `modules/shipment.md` doc-only note (consignor/consignee,

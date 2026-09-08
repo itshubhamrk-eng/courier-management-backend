@@ -13,6 +13,7 @@ import { SortState } from '@shared/components/ui-table/ui-table';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { DistrictFreightTable, DistrictFreightPerms, DistrictFreightAction } from './components/district-freight-table';
 import { DistrictFreightImportDialog } from './components/district-freight-import-dialog';
@@ -173,17 +174,15 @@ export class DistrictFreightList implements OnInit {
   }
 
   private download(rows: DistrictLevelFreight[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branchName', 'districtName', ...WEIGHT_SLABS.map((s) => s.key), 'odaApplicable', 'odaCharge', 'status'];
-    const line = (r: DistrictLevelFreight) => [
-      r.branchName, r.districtName, ...WEIGHT_SLABS.map((s) => (r as unknown as Record<string, unknown>)[s.key]),
+    const slabCols = WEIGHT_SLABS.map((_, i) => 2 + i);
+    const odaChargeCol = 2 + WEIGHT_SLABS.length + 1;
+    const lines = rows.map((r) => [
+      r.branchName, r.districtName,
+      ...WEIGHT_SLABS.map((s) => (r as unknown as Record<string, unknown>)[s.key] as string | number),
       r.odaApplicable, r.odaCharge, r.status
-    ].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `district-level-freight-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    ]);
+    downloadCsv(`district-level-freight-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [...slabCols, odaChargeCol]);
     this.notify.info(`Exported ${rows.length} rate(s).`);
   }
 }

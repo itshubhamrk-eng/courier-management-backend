@@ -191,8 +191,45 @@ public class Shipment extends CompanyOwnedEntity {
     @Builder.Default
     private ShipmentStatus status = ShipmentStatus.BOOKED;
 
+    /** Set once this shipment's POD verification reaches {@code PASS} — by AI auto-pass, a
+     *  manual reviewer's approve, or a company-direct upload (always auto-approved). Delivery
+     *  commission (DRS charge, weight commission, TO_PAY/COD booking commission) waits for
+     *  this, not just for {@code DELIVERED} — see {@code ShipmentServiceImpl
+     *  .creditDeliveryCommissionsIfEligible} and {@code PodVerificationServiceImpl}. */
+    @Column(name = "pod_approved", nullable = false)
+    @Builder.Default
+    private boolean podApproved = false;
+
+    /** Guards {@link #podApproved}-gated commission crediting against firing twice — POD
+     *  approval and delivery can happen in either order, and both call sites check this. */
+    @Column(name = "commission_credited", nullable = false)
+    @Builder.Default
+    private boolean commissionCredited = false;
+
     @Column(name = "remarks", length = 500)
     private String remarks;
+
+    /** Optional at booking time — when true, {@link #appointmentDate}/{@link
+     *  #appointmentTimeSlot} must be set and the operator may charge an Appointment
+     *  Delivery Charge ({@code ShipmentCharge.appointmentDeliveryCharge}, deliberately
+     *  GST-free — see that field). */
+    @Column(name = "appointment_delivery", nullable = false)
+    @Builder.Default
+    private boolean appointmentDelivery = false;
+
+    @Column(name = "appointment_date")
+    private LocalDate appointmentDate;
+
+    /** Free text, e.g. {@code "1:00-2:00"} — not a structured time range. */
+    @Column(name = "appointment_time_slot", length = 20)
+    private String appointmentTimeSlot;
+
+    /** Optional at booking time — when true, insurance is charged at 2% of freight
+     *  instead of the Pricing Engine's own rate-driven insurance figure. See
+     *  {@code ShipmentServiceImpl.copyCharge}. */
+    @Column(name = "insurance_applicable", nullable = false)
+    @Builder.Default
+    private boolean insuranceApplicable = false;
 
     // ---------------------------------------------------------------- behaviour
 
@@ -244,6 +281,16 @@ public class Shipment extends CompanyOwnedEntity {
         }
         if (shipmentType == null) {
             this.shipmentType = ShipmentType.NON_DOCUMENT;
+        }
+        if (appointmentDelivery) {
+            if (appointmentDate == null || blankToNull(appointmentTimeSlot) == null) {
+                throw new BusinessRuleException(
+                        "Appointment Delivery needs both a date and a time slot.");
+            }
+            this.appointmentTimeSlot = appointmentTimeSlot.trim();
+        } else {
+            this.appointmentDate = null;
+            this.appointmentTimeSlot = null;
         }
     }
 

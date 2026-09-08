@@ -39,7 +39,12 @@ Eight sections, ~50 typed columns:
   dimensionUnit (`CM|INCH`), autoGenerateBarcode, allowDuplicateReferenceNumber,
   autoAssignTrackingNumber.
 - **Finance** — gstPercentage (`DECIMAL(5,2)`, 0–100), invoicePrefix, creditLimit
-  (`DECIMAL(19,4)`), walletEnabled, codEnabled, onlinePaymentEnabled, autoInvoiceGeneration.
+  (`DECIMAL(19,4)`), walletEnabled, codEnabled, onlinePaymentEnabled, autoInvoiceGeneration,
+  roundOffRule (`VARCHAR(20)`, default `NEAREST_FIVE`; V64, 2026-09-08 — a plain string
+  naming one of `pricing.domain.RoundingRule`'s constants, not that enum itself, so this
+  module stays free of a dependency on `pricing`; read by `PricingEngineImpl` to round
+  Shipment Booking's final amount, falling back to the deployment default
+  `pricing.rounding-rule` on blank/invalid — see `MEMORY/modules/pricing-engine.md`).
 - **Notification** — smsEnabled, emailEnabled, whatsappEnabled, pushNotificationEnabled.
 - **Security** — passwordPolicy, sessionTimeoutMinutes, maxLoginAttempts,
   lockDurationMinutes, otpExpiryMinutes. **Stored but not yet consumed by auth** — auth

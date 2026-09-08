@@ -18,6 +18,7 @@ import { SortState } from '@shared/components/ui-table/ui-table';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { TransactionTable } from './components/transaction-table';
 import { TransactionFilter } from './components/transaction-filter';
@@ -156,17 +157,13 @@ export class WalletTransactions implements OnInit {
   }
 
   private download(rows: WalletTransaction[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['createdAt', 'transactionNo', 'transactionType', 'subTransactionType', 'amount', 'balanceAfter', 'referenceId', 'paymentGateway', 'paymentStatus'];
-    const line = (t: WalletTransaction) => [
+    const lines = rows.map((t) => [
       t.createdAt, t.transactionNo, t.transactionType, subTypeLabel(t.subTransactionType), t.amount, t.balanceAfter,
       t.referenceId, t.paymentGateway ?? '', t.paymentStatus ?? ''
-    ].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `wallet-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    ]);
+    // balanceAfter (index 5) is a running balance, not additive — excluded from the total.
+    downloadCsv(`wallet-transactions-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [4]);
     this.notify.info(`Exported ${rows.length} transaction(s).`);
   }
 }

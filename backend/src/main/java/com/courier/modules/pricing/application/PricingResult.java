@@ -21,6 +21,11 @@ public record PricingResult(
         BigDecimal handlingCharge,
         BigDecimal odaCharge,
         BigDecimal insuranceCharge,
+        /** Sum of every ACTIVE charge (from the {@code charge} module) matched to this
+         *  booking's service type and weight/distance — zero when none are configured or
+         *  none of their slabs cover this shipment. Null-free/never negative, same as
+         *  every other line here. */
+        BigDecimal applicableCharges,
         BigDecimal gstAmount,
         BigDecimal discountAmount,
         BigDecimal roundOff,

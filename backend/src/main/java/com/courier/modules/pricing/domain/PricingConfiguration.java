@@ -32,4 +32,12 @@ public record PricingConfiguration(
         return new PricingConfiguration(DEFAULT_VOLUMETRIC_DIVISOR, true, true, true, true,
                 RoundingRule.NEAREST_FIVE);
     }
+
+    /** Copy with a different {@link #roundingRule()} — used to layer the caller's
+     *  company-level override on top of the deployment default without rebuilding every
+     *  other field by hand. */
+    public PricingConfiguration withRoundingRule(RoundingRule override) {
+        return new PricingConfiguration(volumetricDivisor, fuelEnabled, odaEnabled,
+                insuranceEnabled, discountEnabled, override);
+    }
 }

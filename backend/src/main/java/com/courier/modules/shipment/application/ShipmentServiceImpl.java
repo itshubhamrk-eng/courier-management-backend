@@ -227,8 +227,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
         BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
+        BigDecimal appointmentDeliveryCharge = command.appointmentDeliveryCharge() == null
+                ? BigDecimal.ZERO : command.appointmentDeliveryCharge();
+        boolean insuranceApplicable = Boolean.TRUE.equals(command.insuranceApplicable());
         BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
-                freightCalc, command.ratePerKgOverride());
+                freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable);
 
         if (paymentMode.isCollectAtBooking()) {
             requireSufficientBalance(command.bookingBranchId(), netAmount);
@@ -266,6 +269,10 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .remarks(command.remarks())
                 .invoiceValue(command.invoiceValue())
                 .ewayBillRequired(ewayBillRequired)
+                .appointmentDelivery(Boolean.TRUE.equals(command.appointmentDelivery()))
+                .appointmentDate(command.appointmentDate())
+                .appointmentTimeSlot(command.appointmentTimeSlot())
+                .insuranceApplicable(insuranceApplicable)
                 .build();
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
@@ -282,7 +289,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         persistItems(saved, companyId, items);
         persistCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
-                command.ratePerKgOverride());
+                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable);
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
 
         if (crossing) {
@@ -370,6 +377,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setRemarks(command.remarks());
         shipment.setInvoiceValue(command.invoiceValue());
         shipment.setEwayBillRequired(ewayBillRequired);
+        shipment.setAppointmentDelivery(Boolean.TRUE.equals(command.appointmentDelivery()));
+        shipment.setAppointmentDate(command.appointmentDate());
+        shipment.setAppointmentTimeSlot(command.appointmentTimeSlot());
+        boolean insuranceApplicable = Boolean.TRUE.equals(command.insuranceApplicable());
+        shipment.setInsuranceApplicable(insuranceApplicable);
         shipment.applyInvariants();
         Shipment saved = shipmentRepository.save(shipment);
 
@@ -378,20 +390,23 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
 
         BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
+        BigDecimal appointmentDeliveryCharge = command.appointmentDeliveryCharge() == null
+                ? BigDecimal.ZERO : command.appointmentDeliveryCharge();
         com.courier.modules.company.domain.Branch bookingBranch =
                 branchService.getById(shipment.getBookingBranchId());
 
         itemRepository.deleteAllByShipmentIdAndCompanyId(saved.getId(), companyId);
         persistItems(saved, companyId, items);
         replaceCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
-                command.ratePerKgOverride());
+                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable);
 
         log.info("Shipment {} ({}) updated in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
                         "netAmount", netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
-                                freightCalc, command.ratePerKgOverride()).toPlainString()));
+                                freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable)
+                                .toPlainString()));
 
         return saved;
     }
@@ -412,6 +427,14 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID companyId = requireCompany();
         return shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, trackingNumber)
                 .orElseThrow(() -> new ResourceNotFoundException(ENTITY, trackingNumber));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<Shipment> bulkTrack(Collection<String> numbers) {
+        return shipmentRepository.findAllByCompanyIdAndTrackingNumberInOrShipmentNumberIn(
+                requireCompany(), numbers);
     }
 
     @Override
@@ -629,6 +652,28 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
+    public Map<UUID, Instant> receivedAtFor(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        return historyRepository
+                .findAllByCompanyIdAndShipmentIdInAndStatus(requireCompany(), shipmentIds, ShipmentStatus.IN_SCAN)
+                .stream()
+                .collect(Collectors.toMap(ShipmentStatusHistory::getShipmentId, ShipmentStatusHistory::getChangedAt,
+                        (a, b) -> a.isAfter(b) ? a : b));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public Map<UUID, String> invoiceNumbersFor(Collection<UUID> shipmentIds) {
+        if (shipmentIds.isEmpty()) return Map.of();
+        return ewayBillService.findLatestForShipments(shipmentIds).entrySet().stream()
+                .filter(e -> e.getValue().invoiceNumber() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().invoiceNumber()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
     public Map<UUID, List<ShipmentAsset>> podAssetsFor(Collection<UUID> shipmentIds) {
         if (shipmentIds.isEmpty()) return Map.of();
         return shipmentAssetRepository
@@ -727,7 +772,8 @@ public class ShipmentServiceImpl implements ShipmentService {
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_CANCELLED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "previousStatus", previous.name()));
-        eventPublisher.publishEvent(new ShipmentEvent.Cancelled(saved.getId(), companyId, Instant.now()));
+        eventPublisher.publishEvent(new ShipmentEvent.Cancelled(
+                saved.getId(), companyId, saved.getShipmentNumber(), Instant.now()));
 
         return saved;
     }
@@ -956,7 +1002,7 @@ public class ShipmentServiceImpl implements ShipmentService {
             return null;
         }
         String manifestRef = (manifestNumber == null || manifestNumber.isBlank()) ? "" : " (" + manifestNumber + ")";
-        String subject = "%d shipment(s) short-received%s".formatted(missingTrackingNumbers.size(), manifestRef);
+        String subject = "Short shipment received — %d shipment(s)%s".formatted(missingTrackingNumbers.size(), manifestRef);
         String description = ("The following %d shipment(s) were left unchecked as \"not physically available\" "
                 + "during In Scan%s and are still showing DISPATCHED: %s.")
                 .formatted(missingTrackingNumbers.size(), manifestRef, String.join(", ", missingTrackingNumbers));
@@ -1001,6 +1047,18 @@ public class ShipmentServiceImpl implements ShipmentService {
             auditService.record(AuditAction.SHIPMENT_IN_SCANNED, ENTITY, saved.getId(),
                     Map.of("shipmentNumber", saved.getShipmentNumber()));
             eventPublisher.publishEvent(new ShipmentEvent.ReceivedAtBranch(saved.getId(), companyId, Instant.now()));
+
+            // TO_PAY's freight is the branch's liability the instant the shipment is
+            // physically here, not deferred to actual delivery like COD (the consignee's
+            // amount, only real once collected) — see ShipmentEvent.ToPayReceivedAtDeliveryBranch.
+            PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
+            if (paymentMode.isCollectAtDelivery() && !paymentMode.isCashOnDelivery()) {
+                ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
+                        .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
+                eventPublisher.publishEvent(new ShipmentEvent.ToPayReceivedAtDeliveryBranch(
+                        saved.getId(), companyId, receivingBranchId, saved.getShipmentNumber(),
+                        charge.getNetAmount(), Instant.now()));
+            }
             return new MovementOutcome(trackingNumber, true, null);
         }
 
@@ -1109,25 +1167,88 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
         if (paymentMode.isCollectAtDelivery()) {
-            ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
-                    .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
-            eventPublisher.publishEvent(new ShipmentEvent.CodCollectedAtDelivery(
-                    saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
-                    charge.getNetAmount(), Instant.now()));
-            publishDeliveryCommissionIfEarned(saved, companyId, charge);
+            // COD's amount is the consignee's, only real once actually collected here — TO_PAY
+            // already debited its freight earlier, at in-scan (see scanOneIn), so it does not
+            // repeat that debit on delivery. This is cash actually collected, a debit not a
+            // commission, so it fires regardless of POD status, unlike the commission credits
+            // creditDeliveryCommissionsIfEligible below.
+            if (paymentMode.isCashOnDelivery()) {
+                ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
+                        .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
+                eventPublisher.publishEvent(new ShipmentEvent.CodCollectedAtDelivery(
+                        saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
+                        charge.getNetAmount(), Instant.now()));
+            }
         }
 
-        int totalQty = itemRepository.findAllByShipmentIdWithinCompany(saved.getId(), companyId).stream()
+        // Covers the common case: POD Auto Verification already reached PASS before this
+        // shipment was delivered (verify() runs against OUT_FOR_DELIVERY, ahead of "Complete
+        // Delivery"). If POD isn't approved yet, this is a no-op — markPodApproved credits
+        // it later instead, once approval actually happens.
+        creditDeliveryCommissionsIfEligible(saved, companyId);
+
+        return saved;
+    }
+
+    /**
+     * Credits DRS charge, weight-based delivery commission and (for a collect-at-delivery
+     * shipment) the booking branch's TO_PAY/COD commission — but only once, and only once
+     * the shipment is both {@code DELIVERED} and {@code podApproved}. Called from {@link
+     * #deliver} itself (POD already approved before delivery) and from {@link
+     * #markPodApproved} (POD approved after delivery already happened) — whichever of the
+     * two conditions is satisfied second is the one that actually triggers the credit.
+     */
+    private void creditDeliveryCommissionsIfEligible(Shipment shipment, UUID companyId) {
+        if (shipment.getStatus() != ShipmentStatus.DELIVERED || !shipment.isPodApproved()
+                || shipment.isCommissionCredited()) {
+            return;
+        }
+
+        PaymentMode paymentMode = paymentModeService.getById(shipment.getPaymentModeId());
+        if (paymentMode.isCollectAtDelivery()) {
+            ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), companyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", shipment.getId()));
+            publishDeliveryCommissionIfEarned(shipment, companyId, charge);
+        }
+
+        int totalQty = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
                 .mapToInt(ShipmentItem::getQuantity).sum();
-        BigDecimal drsChargePerQty = branchService.getById(saved.getDeliveryBranchId()).getDrsChargePerQty();
-        BigDecimal drsCharge = drsChargePerQty.multiply(BigDecimal.valueOf(totalQty));
+        com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
+        BigDecimal drsCharge = deliveryBranch.getDrsChargePerQty().multiply(BigDecimal.valueOf(totalQty));
         if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
             eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(
-                    saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
+                    shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
                     drsCharge, Instant.now()));
         }
 
-        return saved;
+        // Independent of DRS charge: a per-kg commission on the shipment's own chargeable
+        // weight, with a floor so a very light shipment still earns the floor's worth.
+        BigDecimal chargeableWeight = shipment.getChargeableWeight() == null
+                ? BigDecimal.ZERO : shipment.getChargeableWeight();
+        BigDecimal billableWeight = chargeableWeight.max(deliveryBranch.getDeliveryCommissionMinWeightKg());
+        BigDecimal deliveryWeightCommission = deliveryBranch.getDeliveryCommissionRatePerKg()
+                .multiply(billableWeight);
+        if (deliveryWeightCommission.compareTo(BigDecimal.ZERO) > 0) {
+            eventPublisher.publishEvent(new ShipmentEvent.DeliveryWeightCommissionApplicable(
+                    shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
+                    deliveryWeightCommission, Instant.now()));
+        }
+
+        shipment.setCommissionCredited(true);
+        shipmentRepository.save(shipment);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public void markPodApproved(UUID shipmentId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        if (!shipment.isPodApproved()) {
+            shipment.setPodApproved(true);
+            shipment = shipmentRepository.save(shipment);
+        }
+        creditDeliveryCommissionsIfEligible(shipment, companyId);
     }
 
     /** Persists one asset row if {@code url} is actually present — {@code deliver()} calls
@@ -1506,8 +1627,10 @@ public class ShipmentServiceImpl implements ShipmentService {
     private ShipmentCharge persistCharges(Shipment shipment, UUID companyId, PricingResult priced,
                                           BigDecimal otherCharges, BigDecimal odaCharge,
                                           com.courier.modules.company.domain.Branch bookingBranch,
-                                          FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
-        ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride);
+                                          FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
+                                          BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable) {
+        ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc,
+                ratePerKgOverride, appointmentDeliveryCharge, insuranceApplicable);
         charge.setCompanyId(companyId);
         charge.setShipmentId(shipment.getId());
         return chargeRepository.save(charge);
@@ -1515,7 +1638,8 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private void replaceCharges(Shipment shipment, UUID companyId, PricingResult priced, BigDecimal otherCharges,
                                 BigDecimal odaCharge, com.courier.modules.company.domain.Branch bookingBranch,
-                                FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
+                                FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
+                                BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable) {
         ShipmentCharge existing = chargeRepository
                 .findByShipmentIdWithinCompany(shipment.getId(), companyId)
                 .orElseGet(() -> {
@@ -1524,21 +1648,29 @@ public class ShipmentServiceImpl implements ShipmentService {
                     fresh.setShipmentId(shipment.getId());
                     return fresh;
                 });
-        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride, existing);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride,
+                appointmentDeliveryCharge, insuranceApplicable, existing);
         chargeRepository.save(existing);
     }
 
     private ShipmentCharge toCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                                     com.courier.modules.company.domain.Branch bookingBranch,
-                                    FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride) {
+                                    FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
+                                    BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable) {
         ShipmentCharge charge = ShipmentCharge.builder().build();
-        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride, charge);
+        copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride,
+                appointmentDeliveryCharge, insuranceApplicable, charge);
         return charge;
     }
 
     /** Scale/rounding for money derived from a percentage — matches the column's own
      *  {@code DECIMAL(19,4)}. */
     private static final int MONEY_SCALE = 4;
+
+    /** {@code insuranceApplicable}'s own rate — direct user request ("2% of freight value
+     *  as insurance"), independent of the Pricing Engine's rate-driven {@code
+     *  InsuranceCalculator} (which this overrides when checked). */
+    private static final BigDecimal INSURANCE_PERCENTAGE = BigDecimal.valueOf(2);
 
     /**
      * {@code otherCharges} is manual, typed at booking time — not part of the Pricing
@@ -1587,12 +1719,26 @@ public class ShipmentServiceImpl implements ShipmentService {
      * booking branch's own {@code gstPercentage} — same source {@code gstOnOtherCharges}
      * uses. An unedited ODA still nets out correctly by the same delta-algebra {@code
      * freightDelta} above relies on.
+     *
+     * <p>{@code appointmentDeliveryCharge} (Appointment Delivery, manual at booking time)
+     * is deliberately never taxed with GST, unlike {@code otherCharges} — direct user
+     * request. Added straight into {@code netAmount}, with no corresponding line folded
+     * into {@code gstAmount}.
+     *
+     * <p>{@code insuranceApplicable} (checkbox, manual at booking time), when true,
+     * replaces the Pricing Engine's own rate-driven {@code priced.insuranceCharge()} with
+     * {@code freight * 2%} instead — same delta-and-tax treatment as {@code odaCharge}:
+     * only the difference from the engine's figure needs fresh GST, since {@code
+     * priced.gstAmount()} only ever taxed the engine's (now possibly superseded) figure.
      */
     private void copyCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                             com.courier.modules.company.domain.Branch bookingBranch,
                             FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
+                            BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
                             ShipmentCharge charge) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
+        BigDecimal safeAppointmentDeliveryCharge =
+                appointmentDeliveryCharge == null ? BigDecimal.ZERO : appointmentDeliveryCharge;
         BigDecimal freight = effectiveFreight(freightCalc, ratePerKgOverride);
         BigDecimal freightDelta = freight.subtract(priced.freight());
         BigDecimal gstOnOtherCharges = gstOnOtherCharges(safeOtherCharges, bookingBranch);
@@ -1601,6 +1747,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         BigDecimal finalOdaCharge = odaCharge == null ? freightCalc.odaCharge() : odaCharge;
         BigDecimal odaChargeDelta = finalOdaCharge.subtract(priced.odaCharge());
         BigDecimal gstOnOdaChargeDelta = percentOf(odaChargeDelta, bookingBranch.getGstPercentage());
+
+        BigDecimal finalInsuranceCharge = insuranceApplicable
+                ? percentOf(freight, INSURANCE_PERCENTAGE) : priced.insuranceCharge();
+        BigDecimal insuranceChargeDelta = finalInsuranceCharge.subtract(priced.insuranceCharge());
+        BigDecimal gstOnInsuranceChargeDelta = percentOf(insuranceChargeDelta, bookingBranch.getGstPercentage());
 
         BigDecimal branchShareOfOtherCharges = BigDecimal.valueOf(100)
                 .subtract(bookingBranch.getCommissionOnOtherCharges());
@@ -1618,17 +1769,22 @@ public class ShipmentServiceImpl implements ShipmentService {
         charge.setFuelCharge(priced.fuelCharge());
         charge.setHandlingCharge(priced.handlingCharge());
         charge.setOdaCharge(finalOdaCharge);
-        charge.setInsuranceCharge(priced.insuranceCharge());
-        charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges).add(gstOnOdaChargeDelta).add(gstOnFreightDelta));
+        charge.setInsuranceCharge(finalInsuranceCharge);
+        charge.setApplicableCharges(priced.applicableCharges());
+        charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges).add(gstOnOdaChargeDelta).add(gstOnFreightDelta)
+                .add(gstOnInsuranceChargeDelta));
         charge.setDiscountAmount(priced.discountAmount());
         charge.setRoundOff(priced.roundOff());
         charge.setOtherCharges(safeOtherCharges);
+        charge.setAppointmentDeliveryCharge(safeAppointmentDeliveryCharge);
         charge.setCommissionOnBasicFreight(commissionOnBasicFreight);
         charge.setBranchCommissionOnOtherAmount(branchCommissionOnOtherAmount);
         charge.setCompanyCommissionOnBasicFreight(companyCommissionOnBasicFreight);
         charge.setTotalCommission(totalCommission);
         charge.setNetAmount(priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges)
-                .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta));
+                .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta)
+                .add(safeAppointmentDeliveryCharge)
+                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta));
         charge.setMatchedRouteId(priced.matchedRoute() == null ? null : priced.matchedRoute().getId());
         charge.setMatchedRateId(priced.matchedRate() == null ? null : priced.matchedRate().getId());
         charge.setAppliedFreightFactor(priced.appliedFreightFactor());
@@ -1651,15 +1807,26 @@ public class ShipmentServiceImpl implements ShipmentService {
                                                          BigDecimal odaCharge,
                                                          com.courier.modules.company.domain.Branch bookingBranch,
                                                          FreightCalculationResult freightCalc,
-                                                         BigDecimal ratePerKgOverride) {
+                                                         BigDecimal ratePerKgOverride,
+                                                         BigDecimal appointmentDeliveryCharge,
+                                                         boolean insuranceApplicable) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
-        BigDecimal freightDelta = effectiveFreight(freightCalc, ratePerKgOverride).subtract(priced.freight());
+        BigDecimal safeAppointmentDeliveryCharge =
+                appointmentDeliveryCharge == null ? BigDecimal.ZERO : appointmentDeliveryCharge;
+        BigDecimal freight = effectiveFreight(freightCalc, ratePerKgOverride);
+        BigDecimal freightDelta = freight.subtract(priced.freight());
         BigDecimal gstOnFreightDelta = percentOf(freightDelta, bookingBranch.getGstPercentage());
         BigDecimal finalOdaCharge = odaCharge == null ? freightCalc.odaCharge() : odaCharge;
         BigDecimal odaChargeDelta = finalOdaCharge.subtract(priced.odaCharge());
         BigDecimal gstOnOdaChargeDelta = percentOf(odaChargeDelta, bookingBranch.getGstPercentage());
+        BigDecimal finalInsuranceCharge = insuranceApplicable
+                ? percentOf(freight, INSURANCE_PERCENTAGE) : priced.insuranceCharge();
+        BigDecimal insuranceChargeDelta = finalInsuranceCharge.subtract(priced.insuranceCharge());
+        BigDecimal gstOnInsuranceChargeDelta = percentOf(insuranceChargeDelta, bookingBranch.getGstPercentage());
         return priced.netAmount().add(safeOtherCharges).add(gstOnOtherCharges(safeOtherCharges, bookingBranch))
-                .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta);
+                .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta)
+                .add(safeAppointmentDeliveryCharge)
+                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta);
     }
 
     private void appendHistory(Shipment shipment, UUID companyId, ShipmentStatus previous,

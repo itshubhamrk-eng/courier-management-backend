@@ -120,6 +120,23 @@ export interface TopCustomer {
   revenue: number;
 }
 
+/** POD Dashboard pie: every OUT_FOR_DELIVERY/DELIVERED shipment, bucketed by its own latest
+ *  POD verification state — a shipment with no verification row at all is `pendingUpload`. */
+export interface PodOverview {
+  pendingUpload: number;
+  pendingVerification: number;
+  approved: number;
+  rejected: number;
+}
+
+/** A row in the branch dashboard's "Rejected POD" backlog — still needs a re-upload. */
+export interface RejectedPod {
+  shipmentId: string;
+  shipmentNumber: string | null;
+  receiverName: string | null;
+  reason: string | null;
+}
+
 /**
  * Company-wide operational overview (COMPANY_ADMIN profile only) — pipeline, the
  * action-required backlog, wallet total across every branch, and top routes/customers.
@@ -135,6 +152,10 @@ export interface CompanyOverview {
   lowBalanceBranches: number;
   topRoutes: TopRoute[];
   topCustomers: TopCustomer[];
+  podOverview: PodOverview;
+  /** Pending-delivery TO_PAY shipments — freight already debited from the delivery
+   *  branch's wallet at THC in-scan, not yet actually delivered. */
+  toPayAwaitingDelivery: number;
 }
 
 /**
@@ -144,12 +165,22 @@ export interface CompanyOverview {
  * wallet balance is already a KPI tile. `null` for a company/platform-scoped caller,
  * whose layout renders `companyOverview` instead.
  */
+/** One row of the branch dashboard's Delivery Pending aging breakdown — how long since
+ *  each pending-delivery shipment was received (last IN_SCAN), not since booking. */
+export interface DeliveryAgingBucket { label: string; count: number; }
+
 export interface BranchOverview {
   pipeline: PipelineStage[];
   readyForManifest: number;
   manifestsAwaitingDispatch: number;
   pendingDelivery: number;
   delayedShipments: number;
+  deliveryPendingAging: DeliveryAgingBucket[];
+  podOverview: PodOverview;
+  rejectedPods: RejectedPod[];
+  /** Pending-delivery TO_PAY shipments — freight already debited from this branch's
+   *  wallet at THC in-scan, not yet actually delivered. */
+  toPayAwaitingDelivery: number;
 }
 
 /** The full aggregate the page consumes. Assembled from several endpoints by the service. */

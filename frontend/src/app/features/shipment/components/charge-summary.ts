@@ -10,12 +10,19 @@ export interface ChargeSummaryData {
   handlingCharge: number;
   odaCharge: number;
   insuranceCharge: number;
+  /** Sum of ACTIVE charge-module rows (e.g. "Hamali") matched to this booking's service
+   *  type and weight/distance — auto-computed, never manually edited here. */
+  applicableCharges: number;
   gstAmount: number;
   discountAmount: number;
   roundOff: number;
   /** Manual, typed at booking time — not part of the Pricing Engine's own rate-driven
    *  lines above; added on top of the engine's net amount by the caller. */
   otherCharges: number;
+  /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
+   *  GST-free, unlike {@link otherCharges}. Undefined/omitted hides the row entirely
+   *  (e.g. Shipment Charges' persisted view when the shipment carries none). */
+  appointmentDeliveryCharge?: number;
   netAmount: number;
 }
 
@@ -42,6 +49,9 @@ export interface ChargeSummaryData {
       @if (charges().insuranceCharge) {
         <dt>Insurance</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
       }
+      @if (charges().applicableCharges) {
+        <dt>Applicable Charges</dt><dd class="mono">{{ charges().applicableCharges | number: '1.2-2' }}</dd>
+      }
       <dt>Other Charges</dt>
       @if (editable()) {
         <dd class="mono">
@@ -59,6 +69,17 @@ export interface ChargeSummaryData {
         </dd>
       } @else if (charges().odaCharge) {
         <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
+      }
+      @if (showAppointmentCharge()) {
+        <dt>Appointment Delivery <span class="hint">(no GST)</span></dt>
+        @if (editable()) {
+          <dd class="mono">
+            <input class="net-input" type="number" step="0.01" min="0"
+                   [value]="charges().appointmentDeliveryCharge ?? 0" (input)="onAppointmentDeliveryChargeInput($event)" />
+          </dd>
+        } @else {
+          <dd class="mono">{{ charges().appointmentDeliveryCharge ?? 0 | number: '1.2-2' }}</dd>
+        }
       }
       @if (charges().gstAmount) {
         <dt>GST</dt><dd class="mono">{{ charges().gstAmount | number: '1.2-2' }}</dd>
@@ -90,6 +111,7 @@ export interface ChargeSummaryData {
     .net-input { width:100px; text-align:right; font:700 16px var(--font-mono, ui-monospace); color:var(--brand-600);
       background:transparent; border:1px solid var(--surface-border); border-radius:6px; padding:2px 6px; }
     .net-input:focus { outline:0; border-color:var(--brand-500); }
+    .hint { font:400 11px var(--font-sans); color:var(--content-muted); }
   `]
 })
 export class ChargeSummary {
@@ -104,6 +126,16 @@ export class ChargeSummary {
   /** Emits the typed ODA Charge override — sent to the server, same as
    *  {@link otherChargesChange} (see `ShipmentCreate.odaCharge` form control). */
   readonly odaChargeChange = output<number>();
+  /** Emits the typed Appointment Delivery Charge — sent to the server, same as
+   *  {@link otherChargesChange}. */
+  readonly appointmentDeliveryChargeChange = output<number>();
+
+  /** Only shown when the caller actually supplies a value — undefined means Appointment
+   *  Delivery isn't checked (create) or the persisted shipment never had one (view), so
+   *  the row stays out of the way rather than showing an always-editable zero. */
+  protected showAppointmentCharge(): boolean {
+    return this.charges().appointmentDeliveryCharge !== undefined;
+  }
 
   protected onNetAmountInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
@@ -118,5 +150,10 @@ export class ChargeSummary {
   protected onOdaChargeInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
     if (!Number.isNaN(v)) this.odaChargeChange.emit(v);
+  }
+
+  protected onAppointmentDeliveryChargeInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    if (!Number.isNaN(v)) this.appointmentDeliveryChargeChange.emit(v);
   }
 }

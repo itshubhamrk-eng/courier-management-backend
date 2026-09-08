@@ -325,7 +325,8 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
       { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts', dependsOn: 'stateId' },
       { key: 'areaId', label: 'Area', kind: 'lookup', lookup: 'areas' },
       { key: 'serviceable', label: 'Serviceable only', kind: 'boolean' },
-      { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' }
+      { key: 'odaApplicable', label: 'ODA only', kind: 'boolean' },
+      { key: 'zone', label: 'Zone', kind: 'text', maxLength: 20, placeholder: 'LOCAL' }
     ],
     exportColumns: ['code', 'name', 'areaName', 'districtName', 'stateName', 'serviceable', 'codAvailable', 'prepaidAvailable', 'odaApplicable', 'status']
   },

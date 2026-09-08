@@ -17,6 +17,8 @@ public record CompanyOverviewResponse(
         BigDecimal totalWalletBalance,
         long lowBalanceBranches,
         List<TopRouteResponse> topRoutes,
-        List<TopCustomerResponse> topCustomers
+        List<TopCustomerResponse> topCustomers,
+        PodOverviewResponse podOverview,
+        long toPayAwaitingDelivery
 ) {
 }

@@ -18,6 +18,7 @@ import { RateTable, RatePerms, RateAction } from './components/rate-table';
 import { RateFilter } from './components/rate-filter';
 import { RateCalculatorDialog } from './components/rate-calculator-dialog';
 import { RateService } from './rate.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN];
 const LIFECYCLE = [AppRole.COMPANY_ADMIN];
@@ -169,18 +170,13 @@ export class RateList implements OnInit {
   }
 
   private download(rows: Rate[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['rateCode', 'rateName', 'route', 'serviceType', 'packageType', 'paymentMode', 'minimumWeight', 'maximumWeight', 'weightUnit', 'baseRate', 'status'];
-    const line = (r: Rate) => [
+    const lines = rows.map((r) => [
       r.rateCode, r.rateName, this.routeNames().get(r.routeId), this.serviceTypeNames().get(r.serviceTypeId),
       this.packageTypeNames().get(r.packageTypeId), this.paymentModeNames().get(r.paymentModeId),
       r.minimumWeight, r.maximumWeight, r.weightUnit, r.baseRate, r.status
-    ].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `rates-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    ]);
+    downloadCsv(`rates-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [6, 7, 9]);
     this.notify.info(`Exported ${rows.length} rate(s).`);
   }
 }

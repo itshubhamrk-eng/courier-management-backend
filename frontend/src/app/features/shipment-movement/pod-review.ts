@@ -17,6 +17,8 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { PinIllustration } from '@shared/components/illustrations/pin-illustration';
+import { MasterDataService } from '@features/masters/master-data.service';
+import { SelectOption } from '@shared/components/ui-select/ui-select';
 
 /** POD Review — every delivered shipment, whether or not POD Auto Verification ever ran
  *  against it, with a click-to-enlarge preview of the captured photo/signature. A row whose
@@ -56,7 +58,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Delivered</th><th>POD</th><th>AI Status</th><th>Score</th><th></th></tr>
+                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From</th><th>To</th><th>Received</th><th>Delivered</th><th>POD</th><th>AI Status</th><th>Score</th><th></th></tr>
                 </thead>
                 <tbody>
                   @for (row of page().content; track row.shipmentId; let i = $index) {
@@ -64,6 +66,9 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
                       <td>{{ page().page * page().size + i + 1 }}</td>
                       <td>{{ row.trackingNumber || row.shipmentNumber }}</td>
                       <td>{{ row.receiverName || '—' }}</td>
+                      <td>{{ branchLabel(row.bookingBranchId) }}</td>
+                      <td>{{ branchLabel(row.deliveryBranchId) }}</td>
+                      <td>{{ row.receivedAt ? (row.receivedAt | date: 'mediumDate') : '—' }}</td>
                       <td>{{ row.deliveredAt ? (row.deliveredAt | date: 'mediumDate') : '—' }}</td>
                       <td>
                         @if (row.photoUrl) {
@@ -99,6 +104,12 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
               </span></div>
             <app-button variant="stroked" icon="close" (pressed)="selected.set(null)">Back to List</app-button>
           </div>
+          <dl class="ai-result__grid sh__meta">
+            <div><dt>From</dt><dd>{{ branchLabel(row.bookingBranchId) }}</dd></div>
+            <div><dt>To</dt><dd>{{ branchLabel(row.deliveryBranchId) }}</dd></div>
+            <div><dt>Received</dt><dd>{{ row.receivedAt ? (row.receivedAt | date: 'medium') : '—' }}</dd></div>
+            <div><dt>Delivered</dt><dd>{{ row.deliveredAt ? (row.deliveredAt | date: 'medium') : '—' }}</dd></div>
+          </dl>
         </app-card>
 
         <app-card title="Captured POD">
@@ -136,15 +147,21 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
         }
 
         @if (row.verificationStatus === 'REVIEW') {
-          <app-card title="Decision">
-            <form [formGroup]="form" class="df">
-              <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" [maxLength]="1000" />
-              <div class="df__bar">
-                <app-button variant="danger" icon="cancel" [loading]="deciding() === 'reject'" (pressed)="decide(false)">Reject</app-button>
-                <app-button icon="check_circle" [loading]="deciding() === 'approve'" (pressed)="decide(true)">Approve</app-button>
-              </div>
-            </form>
-          </app-card>
+          @if (canDecide()) {
+            <app-card title="Decision">
+              <form [formGroup]="form" class="df">
+                <app-input [control]="c('remarks')" label="Remarks" placeholder="Optional" [maxLength]="1000" />
+                <div class="df__bar">
+                  <app-button variant="danger" icon="cancel" [loading]="deciding() === 'reject'" (pressed)="decide(false)">Reject</app-button>
+                  <app-button icon="check_circle" [loading]="deciding() === 'approve'" (pressed)="decide(true)">Approve</app-button>
+                </div>
+              </form>
+            </app-card>
+          } @else {
+            <app-card title="Decision">
+              <p class="text-caption">Awaiting a company-level decision — approve/reject is a COMPANY_ADMIN action.</p>
+            </app-card>
+          }
         }
       }
     </div>
@@ -169,6 +186,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
     .status-badge--none { background:var(--surface-muted); color:var(--content-muted); }
     .sh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .sh strong { display:block; font:600 15px var(--font-sans); }
+    .sh__meta { margin-top:14px; }
     .pods { display:flex; gap:16px; flex-wrap:wrap; }
     .pod-thumb { display:flex; flex-direction:column; align-items:center; gap:6px; width:160px;
       border:1px solid var(--surface-border); border-radius:var(--r-field); padding:10px; cursor:pointer;
@@ -190,6 +208,14 @@ export class PodReview implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly podService = inject(PodService);
   private readonly dialog = inject(DialogService);
+  private readonly masters = inject(MasterDataService);
+
+  readonly branchOptions = signal<SelectOption[]>([]);
+
+  /** Approve/reject credits delivery commission, so it's company-level now (backend
+   *  enforces the real gate — hasRole('COMPANY_ADMIN') on PodVerificationServiceImpl
+   *  .review — this just avoids showing a form that would 403). */
+  readonly canDecide = () => this.auth.hasAnyRole(['COMPANY_ADMIN']);
 
   /** A branch-tier viewer sees only their own branch's deliveries, same scoping rule the
    *  Delivery worklist and Shipment list already apply. */
@@ -211,10 +237,15 @@ export class PodReview implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'POD Review' }]);
+    this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
     this.load();
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
+
+  branchLabel(id: string | null): string {
+    return this.branchOptions().find((o) => o.value === id)?.label ?? '—';
+  }
 
   load(): void {
     this.loading.set(true);

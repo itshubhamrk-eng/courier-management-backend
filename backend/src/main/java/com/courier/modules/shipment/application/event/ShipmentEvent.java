@@ -67,14 +67,40 @@ public sealed interface ShipmentEvent {
     }
 
     /**
-     * A shipment collected at delivery ({@code TO_PAY}/{@code COD}) was delivered and its
-     * delivery branch's wallet still needs debiting — the delivery-side mirror of
-     * {@link PrepaidBookingConfirmed}. Published only when the payment mode collects at
-     * delivery — see {@code ShipmentServiceImpl.deliver}. Handled by
-     * {@code ShipmentDeliveryWalletListener}, which calls {@code WalletService
-     * .debitForCodDelivery}.
+     * A {@code COD} shipment was delivered and its delivery branch's wallet still needs
+     * debiting the consignee's collected amount — the delivery-side mirror of {@link
+     * PrepaidBookingConfirmed}. Published only for cash-on-delivery payment modes — see
+     * {@code ShipmentServiceImpl.deliver}. {@code TO_PAY} does <b>not</b> publish this: its
+     * freight is already debited earlier, at {@link ToPayReceivedAtDeliveryBranch}, since
+     * that liability is the branch's the moment the shipment arrives, not deferred to actual
+     * delivery. Handled by {@code ShipmentDeliveryWalletListener}, which calls {@code
+     * WalletService.debitForCodDelivery}.
      */
     record CodCollectedAtDelivery(
+            UUID shipmentId,
+            UUID companyId,
+            UUID deliveryBranchId,
+            String shipmentNumber,
+            BigDecimal netAmount,
+            Instant occurredAt
+    ) implements ShipmentEvent {
+    }
+
+    /**
+     * A {@code TO_PAY} shipment reached its own final delivery branch — in-scanned off its
+     * incoming Trip Hire Challan, not a crossing hub's in-scan (see {@code
+     * ShipmentServiceImpl.scanOneIn}'s {@code finalDestination} branch, the same one {@link
+     * ReceivedAtBranch} is gated on) — and its delivery branch's wallet owes the freight
+     * right away. The consignee only pays cash at the door once the shipment is actually
+     * delivered, but the branch's liability to the company is booked the moment the
+     * shipment is physically on its premises, not deferred to {@link Delivered}. Published
+     * only for {@code TO_PAY} (collect-at-delivery, not cash-on-delivery) payment modes —
+     * {@code COD}'s amount is the consignee's, not the freight, and still debits at {@link
+     * CodCollectedAtDelivery} once actually collected. Handled by {@code
+     * ShipmentDeliveryWalletListener}, which calls {@code WalletService
+     * .debitForToPayReceivedAtBranch}.
+     */
+    record ToPayReceivedAtDeliveryBranch(
             UUID shipmentId,
             UUID companyId,
             UUID deliveryBranchId,
@@ -128,6 +154,26 @@ public sealed interface ShipmentEvent {
     ) implements ShipmentEvent {
     }
 
+    /**
+     * A shipment was delivered and its delivery branch's wallet still needs crediting with
+     * weight-based delivery commission ({@code amount = delivery branch's own
+     * deliveryCommissionRatePerKg * max(shipment's chargeable weight, branch's
+     * deliveryCommissionMinWeightKg)}) — published on every delivery, independent of and in
+     * addition to {@link DrsChargeApplicable}. See {@code ShipmentServiceImpl.deliver}.
+     * Handled by {@code ShipmentDeliveryWalletListener}, which calls {@code
+     * WalletService.creditForDeliveryWeightCommission}. Not published when {@code amount} is
+     * zero (a branch with {@code deliveryCommissionRatePerKg} set to 0) — nothing to credit.
+     */
+    record DeliveryWeightCommissionApplicable(
+            UUID shipmentId,
+            UUID companyId,
+            UUID deliveryBranchId,
+            String shipmentNumber,
+            BigDecimal amount,
+            Instant occurredAt
+    ) implements ShipmentEvent {
+    }
+
     // ---------------------------------------------------------------- Communication Center
     //
     // The six records below carry only ids/scalars, same discipline as every event above —
@@ -163,6 +209,12 @@ public sealed interface ShipmentEvent {
     record Delivered(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
     }
 
-    record Cancelled(UUID shipmentId, UUID companyId, Instant occurredAt) implements ShipmentEvent {
+    /**
+     * Carries {@code shipmentNumber} — unlike its five siblings above — because {@code
+     * ShipmentCancellationWalletListener} needs it to look up every wallet entry filed
+     * against this shipment ({@code referenceId}) and reverse them.
+     */
+    record Cancelled(UUID shipmentId, UUID companyId, String shipmentNumber, Instant occurredAt)
+            implements ShipmentEvent {
     }
 }

@@ -64,7 +64,8 @@ public class ShipmentMovementController {
                     + "vehicle and driver, moves the manifest and every shipment on it to DISPATCHED.")
     public ApiResponse<DispatchManifestResponse> dispatch(@Valid @RequestBody DispatchManifestRequest request) {
         Manifest manifest = manifestService.dispatch(request.manifestId(), request.vehicleId(),
-                request.driverUserId(), request.departureTime());
+                request.driverUserId(), request.departureTime(),
+                request.fuelCost(), request.driverAdvance(), request.tollAmount(), request.otherAmount());
         // The shipments themselves are already DISPATCHED by the time this call returns —
         // count them by that status rather than MANIFEST_CREATED, which none of them are anymore.
         ShipmentCriteria dispatchedOnThisManifest = new ShipmentCriteria(
@@ -75,7 +76,9 @@ public class ShipmentMovementController {
         return ApiResponse.success(new DispatchManifestResponse(
                 manifest.getId(), manifest.getManifestNumber(), manifest.getStatus(),
                 manifest.getVehicleId(), manifest.getDriverUserId(), manifest.getDispatchedAt(),
-                manifest.getDepartureTime(), dispatchedCount), "Manifest dispatched");
+                manifest.getDepartureTime(), dispatchedCount,
+                manifest.getFuelCost(), manifest.getDriverAdvance(), manifest.getTollAmount(),
+                manifest.getOtherAmount()), "Manifest dispatched");
     }
 
     @PostMapping("/in-scan")

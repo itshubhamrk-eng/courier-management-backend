@@ -58,6 +58,13 @@ public enum PermissionModule {
      */
     GLOBAL_MASTER("Global Masters", 107),
     RATE_MASTER("Rate Master", 110),
+    /**
+     * Charge & Charge Settings: a standalone pricing/commission configuration module,
+     * scoped to one Service Type per charge. {@code COMPANY_ADMIN}-only, both reads and
+     * writes — not yet consumed by Shipment Booking or any freight/commission/wallet
+     * calculation; that integration is separate, later work.
+     */
+    CHARGE("Charges", 112),
     ROUTE_MASTER("Route Master", 120),
 
     SHIPMENT("Shipments", 130),

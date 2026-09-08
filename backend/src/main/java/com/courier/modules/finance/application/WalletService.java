@@ -5,8 +5,10 @@ import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
 import com.courier.modules.finance.application.command.CommissionCreditCommand;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
+import com.courier.modules.finance.application.command.DeliveryWeightCommissionCreditCommand;
 import com.courier.modules.finance.application.command.DrsChargeCreditCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
+import com.courier.modules.finance.application.command.ShipmentReversalCommand;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.finance.domain.WalletTransaction;
@@ -121,6 +123,25 @@ public interface WalletService {
     WalletTransaction debitForCodDelivery(CodDeliveryDebitCommand command);
 
     /**
+     * Debits the delivery branch's wallet for a {@code TO_PAY} shipment the moment it is
+     * in-scanned off its incoming Trip Hire Challan at its own final delivery branch
+     * ({@code TPY}, referencing the shipment number) — not a crossing hub's in-scan, and not
+     * {@link #debitForCodDelivery}'s later, actual-delivery trigger. The branch is liable
+     * for the freight the instant the shipment is physically on its premises, ahead of the
+     * consignee actually paying cash at the door; {@code COD} still waits for
+     * {@link #debitForCodDelivery} since that amount is the consignee's, not the freight, and
+     * is only real once collected. Same non-{@code COMPANY_ADMIN}-only shape as
+     * {@link #debitForCodDelivery}.
+     *
+     * @param command branch, amount, and the shipment the debit answers to
+     * @throws com.courier.shared.exception.BusinessRuleException insufficient balance, a
+     *         non-ACTIVE wallet, or a non-positive amount
+     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
+     *         caller's own and the caller is not a company admin
+     */
+    WalletTransaction debitForToPayReceivedAtBranch(CodDeliveryDebitCommand command);
+
+    /**
      * Credits the delivery branch's wallet with DRS commission on a delivered shipment
      * ({@code DRS}, referencing the shipment number) — {@code drsCharge = branch's own
      * drsChargePerQty * item quantity}, published from {@code ShipmentServiceImpl.deliver}
@@ -134,6 +155,23 @@ public interface WalletService {
      *         caller's own and the caller is not a company admin
      */
     WalletTransaction creditForDrsCharge(DrsChargeCreditCommand command);
+
+    /**
+     * Credits the delivery branch's wallet with weight-based delivery commission on a
+     * delivered shipment ({@code DWC}, referencing the shipment number) — {@code amount =
+     * branch's own deliveryCommissionRatePerKg * max(shipment's chargeable weight,
+     * branch's deliveryCommissionMinWeightKg)}, published from {@code
+     * ShipmentServiceImpl.deliver} for every delivery, independent of and in addition to
+     * {@link #creditForDrsCharge}. Same non-{@code COMPANY_ADMIN}-only shape as
+     * {@link #debitForCodDelivery}.
+     *
+     * @param command branch, amount, and the shipment the credit answers to
+     * @throws com.courier.shared.exception.BusinessRuleException a non-ACTIVE wallet or a
+     *         non-positive amount
+     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
+     *         caller's own and the caller is not a company admin
+     */
+    WalletTransaction creditForDeliveryWeightCommission(DeliveryWeightCommissionCreditCommand command);
 
     /**
      * Credits the booking branch's wallet with its commission share of a PREPAID shipment
@@ -150,6 +188,26 @@ public interface WalletService {
     WalletTransaction creditCommission(CommissionCreditCommand command);
 
     /**
+     * Undoes every settled wallet entry filed against a cancelled shipment — the cancel
+     * seam. Walks the ledger by {@code (SHIPMENT, shipmentNumber)}, and for each entry not
+     * itself already a reversal, posts the opposite move on that <em>same</em> entry's own
+     * wallet: a debit ({@code SBK}, freight) is credited back ({@code SRF}), a credit
+     * ({@code COM}/{@code DRS}/{@code DWC}, commission) is debited back ({@code ADJ}). Each
+     * entry's wallet is resolved from the ledger row itself, not a caller-supplied branch,
+     * because a shipment's freight debit and its commission credit can sit on different
+     * branches.
+     *
+     * <p>One entry's failure (an INACTIVE wallet, a commission already spent past what the
+     * branch can now give back) does not block the rest — logged for manual reconciliation,
+     * the same accepted-gap shape {@link #debitForBooking} documents, rather than leaving a
+     * cancelled shipment's other, reversible entries un-reversed too.
+     *
+     * @param command the shipment being cancelled, and the remarks each reversal carries
+     * @return the reversal entries actually posted, in the order their originals were found
+     */
+    List<WalletTransaction> reverseForShipment(ShipmentReversalCommand command);
+
+    /**
      * Derived view of a wallet, assembled for the summary endpoint.
      *
      * @param branchCode      / {@code branchName} — the labels a statement needs, resolved
@@ -160,6 +218,15 @@ public interface WalletService {
      * @param monthDebit      settled debits this calendar month (UTC)
      * @param totalCredit     settled credits over the wallet's life
      * @param totalDebit      settled debits over the wallet's life
+     * @param todayCreditCommission settled {@code COM}/{@code DRS} credits since midnight
+     *                        UTC — the commission slice of {@code todayCredit}, not a
+     *                        separate pool
+     * @param bookingPendingCommission commission still short of its dispatch trigger —
+     *                        collect-at-booking shipments not yet {@code DISPATCHED}; see
+     *                        {@code PendingCommissionPort}
+     * @param deliveryPendingCommission commission still short of its delivery trigger —
+     *                        collect-at-delivery (TO_PAY/COD) shipments not yet {@code
+     *                        DELIVERED}
      * @param transactionCount entries in the ledger
      * @param lastTransactionAt when the ledger last moved, or null for an untouched wallet
      * @param lastRechargeAmount / {@code lastRechargeAt} — the most recent settled recharge
@@ -174,6 +241,9 @@ public interface WalletService {
             BigDecimal monthDebit,
             BigDecimal totalCredit,
             BigDecimal totalDebit,
+            BigDecimal todayCreditCommission,
+            BigDecimal bookingPendingCommission,
+            BigDecimal deliveryPendingCommission,
             long transactionCount,
             Instant lastTransactionAt,
             BigDecimal lastRechargeAmount,

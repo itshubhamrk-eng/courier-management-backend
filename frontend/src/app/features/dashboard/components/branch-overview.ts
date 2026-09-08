@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { BranchOverview as BranchOverviewData } from '../models/dashboard.model';
+import { PodStatusPie } from './pod-status-pie';
 
 interface ActionItem {
   key: string;
@@ -32,7 +33,7 @@ const STAGE_TONES: Record<string, 'brand' | 'info' | 'warning' | 'success'> = {
   selector: 'app-branch-overview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, RouterLink, UiCard, UiLoader],
+  imports: [MatIconModule, RouterLink, UiCard, UiLoader, PodStatusPie],
   template: `
     @if (loading()) {
       <app-card title="Branch Overview">
@@ -81,6 +82,42 @@ const STAGE_TONES: Record<string, 'brand' | 'info' | 'warning' | 'success'> = {
           </ul>
         }
       </app-card>
+
+      @if (agingBuckets().length) {
+        <app-card tone="danger" title="Delivery Pending Aging" subtitle="Time since received at this branch, not since booking">
+          <div class="bo-aging">
+            @for (b of agingBuckets(); track b.label) {
+              <a class="bo-aging__tile" [attr.data-hot]="b.count > 0" [routerLink]="['/movement/pending-delivery']">
+                <span class="bo-aging__count">{{ b.count }}</span>
+                <span class="bo-aging__label">{{ b.label }}</span>
+              </a>
+            }
+          </div>
+        </app-card>
+      }
+
+      <app-pod-status-pie tone="info" title="POD Overview — This Branch"
+        subtitle="This branch's own delivery proof, current state"
+        [loading]="loading()" [data]="data()!.podOverview" />
+
+      @if (data()!.rejectedPods.length) {
+        <app-card tone="danger" title="Rejected POD" subtitle="Needs a re-upload">
+          <ul class="bo-rejected">
+            @for (r of data()!.rejectedPods; track r.shipmentId) {
+              <li class="bo-rejected__item">
+                <div class="bo-rejected__body">
+                  <p class="bo-rejected__number">{{ r.shipmentNumber ?? '—' }}</p>
+                  <p class="text-caption">{{ r.receiverName ?? '—' }} @if (r.reason) { · {{ r.reason }} }</p>
+                </div>
+                <a class="bo-actions__btn" data-tone="danger"
+                  [routerLink]="['/movement/delivery']" [queryParams]="{ trackingNumber: r.shipmentNumber }">
+                  Upload <mat-icon>arrow_forward</mat-icon>
+                </a>
+              </li>
+            }
+          </ul>
+        </app-card>
+      }
     }
   `,
   styles: [`
@@ -136,6 +173,22 @@ const STAGE_TONES: Record<string, 'brand' | 'info' | 'warning' | 'success'> = {
     .bo-actions__btn[data-tone="danger"]  { background:linear-gradient(155deg, #f87171, var(--danger)); }
     .bo-actions__btn[data-tone="brand"]   { background:linear-gradient(155deg, var(--brand-400), var(--brand-600)); }
     .bo-actions__btn[data-tone="info"]    { background:linear-gradient(155deg, #60a5fa, var(--info)); }
+
+    .bo-aging { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; }
+    .bo-aging__tile { display:flex; flex-direction:column; align-items:center; gap:4px; padding:14px 8px;
+      border-radius:16px; background:var(--surface-muted); text-decoration:none; color:inherit;
+      transition:transform .15s ease, box-shadow .15s ease; }
+    .bo-aging__tile:hover { transform:translateY(-1px); box-shadow:var(--shadow-clay-sm); }
+    .bo-aging__tile[data-hot="true"] { background:var(--danger-bg); }
+    .bo-aging__count { font:700 22px var(--font-sans); }
+    .bo-aging__tile[data-hot="true"] .bo-aging__count { color:var(--danger); }
+    .bo-aging__label { font:600 11px var(--font-sans); color:var(--content-muted); text-align:center; }
+
+    .bo-rejected { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+    .bo-rejected__item { display:flex; align-items:center; justify-content:space-between; gap:14px;
+      padding:12px; border-radius:18px; background:var(--danger-bg); }
+    .bo-rejected__body { min-width:0; }
+    .bo-rejected__number { font:700 14px var(--font-sans); margin:0; }
   `]
 })
 export class BranchOverview {
@@ -162,8 +215,16 @@ export class BranchOverview {
       items.push({ key: 'delayed', label: 'Delayed shipments', count: d.delayedShipments,
         icon: 'schedule', tone: 'danger', actionLabel: 'View', route: '/shipments' });
     }
+    if (d.toPayAwaitingDelivery > 0) {
+      items.push({ key: 'toPay', label: 'TO_PAY awaiting delivery', count: d.toPayAwaitingDelivery,
+        icon: 'payments', tone: 'info', actionLabel: 'View', route: '/movement/pending-delivery' });
+    }
     return items;
   });
+
+  /** Always 4 buckets from the backend (even all-zero) — empty only when there's no
+   *  branch data at all, which the template's outer `@if (!data())` branch already covers. */
+  readonly agingBuckets = computed(() => this.data()?.deliveryPendingAging ?? []);
 
   stageLabel(stage: string): string {
     return stage.split('_').map((w) => w[0] + w.slice(1).toLowerCase()).join(' ');

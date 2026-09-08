@@ -239,6 +239,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.codEnabled(), s::setCodEnabled);
         set(c.onlinePaymentEnabled(), s::setOnlinePaymentEnabled);
         set(c.autoInvoiceGeneration(), s::setAutoInvoiceGeneration);
+        set(c.roundOffRule(), v -> s.setRoundOffRule(v.toUpperCase()));
     }
 
     private void applySla(CompanySettings s, CompanySettingsCommand c) {

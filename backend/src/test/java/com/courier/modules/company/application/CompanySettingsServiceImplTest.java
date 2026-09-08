@@ -79,7 +79,7 @@ class CompanySettingsServiceImplTest {
         return new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -151,7 +151,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                new BigDecimal("12.50"), "inv", null, Boolean.TRUE, null, null, null,
+                new BigDecimal("12.50"), "inv", null, Boolean.TRUE, null, null, null, "nearest_ten",
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -165,6 +165,7 @@ class CompanySettingsServiceImplTest {
         assertThat(saved.getGstPercentage()).isEqualByComparingTo("12.50");
         assertThat(saved.getInvoicePrefix()).isEqualTo("INV");  // uppercased
         assertThat(saved.isWalletEnabled()).isTrue();
+        assertThat(saved.getRoundOffRule()).isEqualTo("NEAREST_TEN");  // uppercased
         // Untouched by a finance patch.
         assertThat(saved.getAwbPrefix()).isEqualTo("LEGACY");
         verify(auditService).record(eq(AuditAction.COMPANY_SETTINGS_UPDATED), any(), any(), any());
@@ -183,7 +184,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, WeightUnit.POUND, null, null, null, null,
                 new BigDecimal("30.000"),
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -210,7 +211,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, "HELP@Legacy.test", null, null, null, null, "inr", null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 Boolean.TRUE, null, null, null,
@@ -237,7 +238,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,

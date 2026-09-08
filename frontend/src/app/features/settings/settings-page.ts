@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -6,11 +7,67 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { SettingsService } from './settings.service';
 import { RazorpayConfigService, RazorpayConfigResponse } from './razorpay-config.service';
+import { SettingsSectionDialog, SectionField } from './components/settings-section-dialog';
 
 interface Section { key: string; title: string; icon: string; desc: string; }
 
+/** Field definitions per section, matching CompanySettingsRequest's flat field set. Keys
+ *  must match the backend DTO exactly — the PATCH endpoints ignore anything else. */
+const SECTION_FIELDS: Record<string, SectionField[]> = {
+  general: [
+    { key: 'companyName', label: 'Company name', type: 'text' },
+    { key: 'displayName', label: 'Display name', type: 'text' },
+    { key: 'supportEmail', label: 'Support email', type: 'text' },
+    { key: 'supportMobile', label: 'Support mobile', type: 'text' },
+    { key: 'website', label: 'Website', type: 'text' },
+    { key: 'language', label: 'Language', type: 'text' },
+    { key: 'timezone', label: 'Timezone', type: 'text' },
+    { key: 'currency', label: 'Currency (3-letter code)', type: 'text' },
+    { key: 'country', label: 'Country', type: 'text' },
+    { key: 'state', label: 'State', type: 'text' },
+    { key: 'city', label: 'City', type: 'text' }
+  ],
+  sla: [
+    { key: 'slaBreachTicketEnabled', label: 'Auto-raise ticket on SLA breach', type: 'checkbox' },
+    { key: 'slaBookingToLoadingSheetHours', label: 'Booking → Loading Sheet (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaLoadingSheetToThcHours', label: 'Loading Sheet → THC (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaThcToInscanHours', label: 'THC → Inscan (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaInscanToDrsHours', label: 'Inscan → DRS (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaDrsToDeliveryHours', label: 'DRS → Delivery (hours)', type: 'number', min: 1, max: 720 }
+  ],
+  notification: [
+    { key: 'smsEnabled', label: 'SMS', type: 'checkbox' },
+    { key: 'emailEnabled', label: 'Email', type: 'checkbox' },
+    { key: 'whatsappEnabled', label: 'WhatsApp', type: 'checkbox' },
+    { key: 'pushNotificationEnabled', label: 'Push notifications', type: 'checkbox' }
+  ],
+  security: [
+    { key: 'passwordPolicy', label: 'Password policy', type: 'text' },
+    { key: 'sessionTimeoutMinutes', label: 'Session timeout (minutes)', type: 'number', min: 1, max: 1440 },
+    { key: 'maxLoginAttempts', label: 'Max login attempts', type: 'number', min: 1, max: 20 },
+    { key: 'lockDurationMinutes', label: 'Lock duration (minutes)', type: 'number', min: 1, max: 1440 },
+    { key: 'otpExpiryMinutes', label: 'OTP expiry (minutes)', type: 'number', min: 1, max: 60 }
+  ],
+  branding: [
+    { key: 'companyLogo', label: 'Logo URL', type: 'text' },
+    { key: 'favicon', label: 'Favicon URL', type: 'text' },
+    { key: 'primaryColor', label: 'Primary colour (#rrggbb)', type: 'text' },
+    { key: 'secondaryColor', label: 'Secondary colour (#rrggbb)', type: 'text' },
+    {
+      key: 'theme', label: 'Theme', type: 'select',
+      options: [
+        { value: 'LIGHT', label: 'Light' },
+        { value: 'DARK', label: 'Dark' },
+        { value: 'SYSTEM', label: 'System' }
+      ]
+    }
+  ]
+};
+
 /** Company Settings — the eight sections from the backend, loaded from /company-settings.
- *  A section editor drawer would drop in here; this foundation renders the live values. */
+ *  General, SLA, Notification, Security and Branding open a generic field-driven dialog
+ *  (see SECTION_FIELDS below) that PATCHes just that section; Shipment's weight and
+ *  Finance's Razorpay config keep their own inline widgets since they predate the dialog. */
 @Component({
   selector: 'app-settings-page',
   standalone: true,
@@ -25,7 +82,11 @@ interface Section { key: string; title: string; icon: string; desc: string; }
         <div class="grid">
           @for (s of sections; track s.key) {
             <app-card [title]="s.title" [subtitle]="s.desc">
-              <div card-actions><button class="edit"><mat-icon>edit</mat-icon></button></div>
+              @if (editableSections.has(s.key)) {
+                <div card-actions>
+                  <button class="edit" type="button" (click)="editSection(s.key)"><mat-icon>edit</mat-icon></button>
+                </div>
+              }
               <div class="kv">
                 @for (row of preview(s.key); track row.k) {
                   <div class="kv__row"><span class="text-caption">{{ row.k }}</span><span class="kv__v">{{ row.v }}</span></div>
@@ -67,6 +128,20 @@ interface Section { key: string; title: string; icon: string; desc: string; }
                             (click)="saveRazorpay()">{{ savingRazorpay() ? 'Saving…' : 'Save' }}</button>
                   </div>
                 </div>
+                <div class="dcw">
+                  <label class="text-caption" for="round-off-select">Round Off (Shipment Booking's final amount)</label>
+                  <div class="dcw__row">
+                    <select id="round-off-select" class="dcw__i" [value]="roundOffRuleInput()"
+                            (change)="onRoundOffInput($event)">
+                      <option value="NONE">No rounding</option>
+                      <option value="NEAREST_ONE">Nearest 1</option>
+                      <option value="NEAREST_FIVE">Nearest 5</option>
+                      <option value="NEAREST_TEN">Nearest 10</option>
+                    </select>
+                    <button type="button" class="dcw__save" [disabled]="savingRoundOff()"
+                            (click)="saveRoundOff()">{{ savingRoundOff() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
               }
             </app-card>
           }
@@ -99,8 +174,10 @@ export class SettingsPage implements OnInit {
   private readonly razorpayService = inject(RazorpayConfigService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
+  private readonly dialog = inject(MatDialog);
   readonly loading = signal(true);
   readonly data = signal<Record<string, unknown>>({});
+  readonly editableSections = new Set(Object.keys(SECTION_FIELDS));
 
   /** The one editable field on this page so far — see `saveDefaultWeight`. */
   readonly defaultWeightInput = signal<number | null>(null);
@@ -113,6 +190,11 @@ export class SettingsPage implements OnInit {
   readonly razorpayKeyIdInput = signal('');
   readonly razorpayKeySecretInput = signal('');
   readonly savingRazorpay = signal(false);
+
+  /** Finance's second inline field — same "no full edit dialog yet" treatment as
+   *  Razorpay above and Shipment's default weight. */
+  readonly roundOffRuleInput = signal('NEAREST_FIVE');
+  readonly savingRoundOff = signal(false);
 
   readonly sections: Section[] = [
     { key: 'general', title: 'General', icon: 'business', desc: 'Identity, contact and regional defaults.' },
@@ -132,6 +214,10 @@ export class SettingsPage implements OnInit {
         const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
         if (shipment?.defaultChargeableWeightKg != null) {
           this.defaultWeightInput.set(Number(shipment.defaultChargeableWeightKg));
+        }
+        const finance = (d as { finance?: { roundOffRule?: string } })?.finance;
+        if (finance?.roundOffRule) {
+          this.roundOffRuleInput.set(finance.roundOffRule);
         }
         this.loading.set(false);
       },
@@ -197,6 +283,46 @@ export class SettingsPage implements OnInit {
         this.notify.success('Razorpay configuration updated');
       },
       error: () => this.savingRazorpay.set(false)
+    });
+  }
+
+  onRoundOffInput(e: Event): void {
+    this.roundOffRuleInput.set((e.target as HTMLSelectElement).value);
+  }
+
+  saveRoundOff(): void {
+    this.savingRoundOff.set(true);
+    this.service.patchSection('finance', { roundOffRule: this.roundOffRuleInput() }).subscribe({
+      next: (d) => {
+        const finance = (d as { finance?: unknown })?.finance;
+        if (finance) this.data.update((prev) => ({ ...prev, finance }));
+        this.savingRoundOff.set(false);
+        this.notify.success('Round off rule updated');
+      },
+      error: () => this.savingRoundOff.set(false)
+    });
+  }
+
+  editSection(section: string): void {
+    const fields = SECTION_FIELDS[section];
+    if (!fields) return;
+    const d = this.data() as Record<string, Record<string, unknown>>;
+    const values = d[section] ?? {};
+    const sectionMeta = this.sections.find((s) => s.key === section);
+
+    this.dialog.open(SettingsSectionDialog, {
+      data: { title: `Edit ${sectionMeta?.title ?? section}`, fields, values },
+      panelClass: 'app-dialog'
+    }).afterClosed().subscribe((result?: Record<string, unknown>) => {
+      if (!result) return;
+      this.service.patchSection(section, result).subscribe({
+        next: (updated) => {
+          const patched = (updated as Record<string, unknown>)[section];
+          if (patched) this.data.update((prev) => ({ ...prev, [section]: patched }));
+          this.notify.success(`${sectionMeta?.title ?? 'Section'} settings updated`);
+        },
+        error: (err) => this.notify.error(err?.error?.message ?? 'Could not update settings.')
+      });
     });
   }
 

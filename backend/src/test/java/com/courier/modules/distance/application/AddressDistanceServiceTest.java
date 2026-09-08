@@ -68,7 +68,7 @@ class AddressDistanceServiceTest {
 
     private Branch branch(UUID id, BigDecimal lat, BigDecimal lon) {
         Branch b = Branch.builder().branchCode("PUNE").branchName("Pune")
-                .branchType(BranchType.BOOKING_BRANCH).status(BranchStatus.ACTIVE)
+                .branchType(BranchType.BRANCH).status(BranchStatus.ACTIVE)
                 .latitude(lat).longitude(lon).build();
         b.setId(id);
         b.setCompanyId(COMPANY);

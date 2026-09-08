@@ -6,7 +6,7 @@ import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow
+  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse
 } from '@core/models/shipment.model';
 
 /**
@@ -46,6 +46,10 @@ export class ShipmentService {
   get(id: string) { return this.api.get<ShipmentResponse>(`${API.shipments}/${id}`); }
   getByTrackingNumber(trackingNumber: string) {
     return this.api.get<ShipmentResponse>(`${API.shipments}/track/${trackingNumber}`);
+  }
+  /** Bulk Shipment Tracking report — one row per number pasted in, matched or not. */
+  bulkTrack(numbers: string[]) {
+    return this.api.post<BulkTrackResponse>(`${API.shipments}/track/bulk`, { numbers });
   }
   items(id: string) { return this.api.get<ShipmentItem[]>(`${API.shipments}/${id}/items`); }
   charges(id: string) { return this.api.get<ShipmentCharge>(`${API.shipments}/${id}/charges`); }

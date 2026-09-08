@@ -4,6 +4,7 @@ import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } 
 import { ActivatedRoute } from '@angular/router';
 import { Observable, forkJoin, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
+import qrcode from 'qrcode-generator';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { AuthService } from '@core/auth/auth.service';
@@ -39,11 +40,20 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
  *  dialog *is* the PDF export, there's no separate file written). "Preview THC" on this
  *  page just reopens the same tab for an already-dispatched manifest. The THC follows a
  *  branded challan layout (KTC-style: title bar, company/challan-number header, meta strip,
- *  bordered shipment table, total row, signature footer) trimmed to columns this data model
- *  actually has — no place/route/qty, since a shipment carries none of those. Its TO PAY
- *  FREIGHT column only shows a figure for `topayModeIds` — `collectAtDelivery` but not
- *  `cashOnDelivery` — since COD cash and billed/paid freight aren't the trip's to-pay amount;
- *  the footer total only adds up that column. */
+ *  bordered shipment table, total row, terms & conditions, signature footer). The printed
+ *  challan number is not `manifestNumber` itself but `THC/<booking-branch-code>/<DDMMYY
+ *  dispatch date>/<manifestNumber's own random suffix>` (see `thcNumber()`) — the branch
+ *  code and date make it human-readable on paper, the suffix keeps it unique without a new
+ *  backend sequence. Its TO PAY FREIGHT column only shows a figure for `topayModeIds` —
+ *  `collectAtDelivery` but not `cashOnDelivery` — since COD cash and billed/paid freight
+ *  aren't the trip's to-pay amount; the footer total only adds up that column. INVOICE NO
+ *  is each shipment's own current E-Way Bill invoice number — `Shipment.invoiceNumber`,
+ *  batch-fetched server-side by `/manifests/{id}/shipments` the same "one query, not one
+ *  per row" way as `netAmount`/`deliveredAt` already are (see `ShipmentService
+ *  .invoiceNumbersFor`) — blank ("—") for a shipment with no E-Way Bill, the normal case
+ *  below the mandatory-value threshold. The QR code encodes the challan number as plain
+ *  text (same `qrcode-generator` lib `consignment-print.util.ts` already uses for the LR's
+ *  own QR, no CDN dependency). */
 @Component({
   selector: 'app-trip-hire-challan',
   standalone: true,
@@ -131,6 +141,12 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
               <label class="fld"><span class="fld__l">Departure Time</span>
                 <input class="fld__i" type="datetime-local" [formControl]="c('departureTime')" />
                 <span class="fld__hint">Blank means now</span></label>
+              <div class="grid2">
+                <app-input [control]="c('fuelCost')" type="number" label="Fuel Cost" placeholder="0.00" />
+                <app-input [control]="c('driverAdvance')" type="number" label="Driver Advance" placeholder="0.00" />
+                <app-input [control]="c('tollAmount')" type="number" label="Toll" placeholder="0.00" />
+                <app-input [control]="c('otherAmount')" type="number" label="Other Amount" placeholder="0.00" />
+              </div>
               @if (!vehicleOptions().length) { <p class="empty">No active vehicles — add one first.</p> }
               @if (!manifestShipments().length && !loadingShipments()) { <p class="empty">No shipments left on this manifest — cannot dispatch.</p> }
               <div class="df__bar">
@@ -201,6 +217,11 @@ export class TripHireChallan implements OnInit {
   readonly openManifests = signal<Manifest[]>([]);
   readonly loadingManifests = signal(true);
   readonly branchNames = signal<Map<string, string>>(new Map());
+  readonly branchCodes = signal<Map<string, string>>(new Map());
+  /** Driver id -> {name, mobile} for the THC's own DRIVER MOBILE field — same
+   *  `userDirectory()` lookup DRS Report/Detail already uses for the same reason
+   *  (`userOptions()`'s Lookup has no mobile slot). */
+  readonly driverDirectory = signal<Map<string, { name: string; mobile: string }>>(new Map());
   readonly manifestShipments = signal<Shipment[]>([]);
   readonly loadingShipments = signal(false);
   /** Ids unchecked in "Shipments on this Manifest" — dropped from the row list right
@@ -212,7 +233,11 @@ export class TripHireChallan implements OnInit {
   readonly form: FormGroup = this.fb.group({
     vehicleId: [null as string | null, Validators.required],
     driverUserId: [null as string | null, Validators.required],
-    departureTime: [null as string | null]
+    departureTime: [null as string | null],
+    fuelCost: [null as number | null, Validators.min(0)],
+    driverAdvance: [null as number | null, Validators.min(0)],
+    tollAmount: [null as number | null, Validators.min(0)],
+    otherAmount: [null as number | null, Validators.min(0)]
   });
 
   ngOnInit(): void {
@@ -221,8 +246,11 @@ export class TripHireChallan implements OnInit {
       this.vehicleOptions.set(v.map((x) => ({ value: x.id, label: x.vehicleNumber }))));
     this.movementService.userOptions().subscribe((u) =>
       this.driverOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
-    this.masterData.branchDirectory().subscribe((list) =>
-      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
+    this.movementService.userDirectory().subscribe((m) => this.driverDirectory.set(m));
+    this.masterData.branchDirectory().subscribe((list) => {
+      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+      this.branchCodes.set(new Map(list.map((b) => [b.id, b.branchCode])));
+    });
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
       this.topayModeIds.set(new Set(p.content
         .filter((r) => r['collectAtDelivery'] === true && r['cashOnDelivery'] !== true)
@@ -305,7 +333,9 @@ export class TripHireChallan implements OnInit {
         const v = this.form.getRawValue();
         return this.movementService.dispatch({
           manifestId: manifest.id, vehicleId: v.vehicleId, driverUserId: v.driverUserId,
-          departureTime: v.departureTime ? new Date(v.departureTime).toISOString() : null
+          departureTime: v.departureTime ? new Date(v.departureTime).toISOString() : null,
+          fuelCost: v.fuelCost, driverAdvance: v.driverAdvance,
+          tollAmount: v.tollAmount, otherAmount: v.otherAmount
         });
       })
     ).subscribe({
@@ -315,7 +345,9 @@ export class TripHireChallan implements OnInit {
         this.pendingRemovals.set([]);
         const dispatched: Manifest = {
           ...manifest, status: r.status, vehicleId: r.vehicleId, driverUserId: r.driverUserId,
-          dispatchedAt: r.dispatchedAt, departureTime: r.departureTime
+          dispatchedAt: r.dispatchedAt, departureTime: r.departureTime,
+          fuelCost: r.fuelCost, driverAdvance: r.driverAdvance,
+          tollAmount: r.tollAmount, otherAmount: r.otherAmount
         };
         this.manifest.set(dispatched);
         this.notify.success(`Manifest ${r.manifestNumber} dispatched.`);
@@ -344,10 +376,32 @@ export class TripHireChallan implements OnInit {
     return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /** Mirrors the branded KTC-style Trip Hire Challan layout, trimmed to the columns this
-   *  data model actually carries — no place/route/qty/GST, since a shipment has no
-   *  such fields and nothing here should be invented. TO PAY FREIGHT only carries a figure
-   *  for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's doc. */
+  /** `THC/<booking-branch-code>/<DDMMYY dispatch date>/<manifestNumber's own random
+   *  suffix>` — human-readable on paper, still unique without a new DB sequence. Falls back
+   *  to "now" when there's no dispatch/departure time yet (a not-yet-dispatched preview). */
+  private thcNumber(m: Manifest): string {
+    const code = this.branchCodes().get(m.bookingBranchId) ?? 'NA';
+    const dispatched = m.departureTime ?? m.dispatchedAt;
+    const d = dispatched ? new Date(dispatched) : new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    const seq = m.manifestNumber.split('-').pop() ?? m.manifestNumber;
+    return `THC/${code}/${dd}${mm}${yy}/${seq}`;
+  }
+
+  /** Same inline `qrcode-generator` pattern as `consignment-print.util.ts`'s own `qrSvg` —
+   *  no CDN, no separate PDF/image service. */
+  private qrSvg(value: string): string {
+    const qr = qrcode(0, 'M');
+    qr.addData(value);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 3, margin: 0 });
+  }
+
+  /** Mirrors the branded KTC-style Trip Hire Challan layout. TO PAY FREIGHT only carries a
+   *  figure for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's
+   *  doc. INVOICE NO is the shipment's E-Way Bill invoice number, blank where none exists. */
   private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
     const topayIds = this.topayModeIds();
     const topayFreight = (s: Shipment): number | null => topayIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
@@ -357,16 +411,26 @@ export class TripHireChallan implements OnInit {
     const rows = shipments.map((s, i) => `<tr>
       <td class="center">${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
+      <td>${this.esc(s.invoiceNumber) || '—'}</td>
       <td>${this.esc(s.senderName)}</td>
       <td>${this.esc(s.receiverName)}</td>
       <td class="center">${bookingDate(s)}</td>
       <td class="right">${s.chargeableWeight}</td>
       <td class="right">${topayFreight(s) ?? ''}</td>
+      <td></td>
+      <td></td>
     </tr>`).join('');
     const dispatched = m.departureTime ?? m.dispatchedAt;
     const dispatchedDate = dispatched ? new Date(dispatched) : null;
     const companyName = this.esc(this.auth.companyName() ?? 'Trip Hire Challan');
     const companyLogo = this.auth.companyLogo();
+    const driver = this.driverDirectory().get(m.driverUserId ?? '');
+    const thcNumber = this.thcNumber(m);
+    const fuelCost = m.fuelCost ?? 0;
+    const driverAdvance = m.driverAdvance ?? 0;
+    const tollAmount = m.tollAmount ?? 0;
+    const otherAmount = m.otherAmount ?? 0;
+    const totalExpenses = fuelCost + driverAdvance + tollAmount + otherAmount;
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
       <style>
@@ -376,12 +440,14 @@ export class TripHireChallan implements OnInit {
         button { padding: 5px 12px; margin-right: 5px; border: 1px solid #777; background: #eee; cursor: pointer; font-size: 12px; }
         .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #777; }
         .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #777; }
-        .header { display: grid; grid-template-columns: 1fr 230px; border-bottom: 1px solid #777; }
+        .header { display: grid; grid-template-columns: 1fr 230px 90px; border-bottom: 1px solid #777; }
         .company-info { text-align: center; padding: 10px; line-height: 15px; }
         .company-info .big { font-size: 13px; font-weight: bold; }
         .company-info .mark { max-width: 100%; max-height: 40px; object-fit: contain; }
         .challan-box { border-left: 1px solid #777; padding: 10px; text-align: center; }
-        .challan-number { font-size: 12px; font-weight: bold; }
+        .challan-number { font-size: 11px; font-weight: bold; word-break: break-all; }
+        .qr-box { border-left: 1px solid #777; padding: 8px; text-align: center; }
+        .qr-box svg { width: 70px; height: 70px; }
         .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #777; }
         .meta div { padding: 4px 6px; border-right: 1px solid #777; }
         .meta div:last-child { border-right: 0; }
@@ -395,11 +461,19 @@ export class TripHireChallan implements OnInit {
         .c-sr { width: 30px; }
         .c-date { width: 75px; }
         .c-weight, .c-freight { width: 75px; }
+        .c-sign { width: 60px; }
         .total-row td { font-weight: bold; height: 22px; }
         .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
         .footer-left { padding: 5px; border-right: 1px solid #777; }
         .footer-right { text-align: center; padding: 5px; font-weight: bold; }
         .signature { height: 22px; margin-top: 2px; }
+        .terms { border-bottom: 1px solid #777; padding: 6px 8px; font-size: 8px; line-height: 13px; }
+        .terms .label { display: block; margin-bottom: 2px; }
+        .terms ol { margin: 0; padding-left: 14px; }
+        .expenses { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #777; }
+        .expenses div { padding: 4px 6px; border-right: 1px solid #777; }
+        .expenses div:last-child { border-right: 0; }
+        .expenses .total { font-weight: bold; }
         @media print {
           body { background: #fff; padding: 0; margin: 0; }
           .toolbar { display: none; }
@@ -420,34 +494,67 @@ export class TripHireChallan implements OnInit {
         <div class="header">
           <div class="company-info">${companyLogo ? `<img class="mark" src="${this.esc(companyLogo)}" alt="${companyName}">` : `<span class="big">${companyName}</span>`}</div>
           <div class="challan-box">
-            <div class="challan-number">${this.esc(m.manifestNumber)}</div>
+            <div class="challan-number">${this.esc(thcNumber)}</div>
           </div>
+          <div class="qr-box">${this.qrSvg(thcNumber)}</div>
         </div>
 
         <div class="meta">
           <div><span class="label">DATE</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleDateString('en-GB')) : '—'}</div>
           <div><span class="label">TIME</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleTimeString()) : '—'}</div>
+          <div><span class="label">FROM</span>${this.esc(this.branchNames().get(m.bookingBranchId) ?? '—')}</div>
+          <div><span class="label">TO</span>${this.esc(this.branchNames().get(m.deliveryBranchId) ?? '—')}</div>
           <div><span class="label">VEHICLE NO</span>${this.esc(this.label(m.vehicleId, this.vehicleOptions()))}</div>
           <div><span class="label">DRIVER NAME</span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</div>
+          <div><span class="label">DRIVER MOBILE</span>${this.esc(driver?.mobile) || '—'}</div>
+          <div><span class="label">QTY (PKGS)</span>${m.totalPackages}</div>
         </div>
 
         <table>
           <thead><tr>
             <th class="c-sr">SR<br>NO.</th>
             <th>TRACKING NO</th>
+            <th>INVOICE NO</th>
             <th>CONSIGNOR NAME</th>
             <th>CONSIGNEE NAME</th>
             <th class="c-date">BOOKING<br>DATE</th>
             <th class="c-weight">WEIGHT</th>
             <th class="c-freight">TO PAY<br>FREIGHT</th>
+            <th class="c-sign">RECEIVER<br>SIGN</th>
+            <th class="c-sign">STAMP</th>
           </tr></thead>
-          <tbody>${rows || '<tr><td colspan="7" class="center">No shipments</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="10" class="center">No shipments</td></tr>'}</tbody>
           <tfoot><tr class="total-row">
-            <td colspan="5" class="right">Total</td>
+            <td colspan="6" class="right">Total</td>
             <td class="right">${totalWeight}</td>
             <td class="right">${totalFreight}</td>
+            <td></td>
+            <td></td>
           </tr></tfoot>
         </table>
+
+        ${totalExpenses > 0 ? `<div class="expenses">
+          <div><span class="label">FUEL COST</span>${fuelCost || '—'}</div>
+          <div><span class="label">DRIVER ADVANCE</span>${driverAdvance || '—'}</div>
+          <div><span class="label">TOLL</span>${tollAmount || '—'}</div>
+          <div><span class="label">OTHER</span>${otherAmount || '—'}</div>
+          <div class="total"><span class="label">TOTAL EXPENSES</span>${totalExpenses}</div>
+        </div>` : ''}
+
+        <div class="terms">
+          <span class="label">TERMS &amp; CONDITIONS</span>
+          <ol>
+            <li>Goods are carried entirely at the owner's risk.</li>
+            <li>Driver must carry a valid driving license, RC and this Trip Hire Challan for the entire trip.</li>
+            <li>Vehicle and load must match the QTY and shipment list stated above at every checkpoint.</li>
+            <li>Any shortage, damage or tampering of seal must be reported to the branch immediately.</li>
+            <li>${companyName} is not liable for delay or loss caused by circumstances beyond its control.</li>
+            <li>Freight/other charges become payable only on safe and timely delivery at the destination branch.</li>
+            <li>Driver is responsible for the vehicle, load and all documents until handover is acknowledged at destination.</li>
+            <li>Any discrepancy in quantity or condition must be reported at the time of delivery.</li>
+            <li>All disputes are subject to the jurisdiction of the courts at the booking branch's location.</li>
+          </ol>
+        </div>
 
         <div class="footer">
           <div class="footer-left"><strong>${companyName}</strong></div>

@@ -8,9 +8,15 @@ import com.courier.modules.finance.domain.WalletRepository;
 import com.courier.modules.finance.domain.WalletTransactionRepository;
 import com.courier.modules.manifest.domain.ManifestRepository;
 import com.courier.modules.manifest.domain.ManifestStatus;
+import com.courier.modules.master.domain.PaymentModeRepository;
+import com.courier.modules.pod.application.PodVerificationService;
+import com.courier.modules.pod.domain.PodVerification;
+import com.courier.modules.pod.domain.PodVerificationStatus;
+import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
 import com.courier.modules.shipment.domain.ShipmentRepository;
 import com.courier.modules.shipment.domain.ShipmentStatus;
+import com.courier.modules.shipment.domain.ShipmentStatusHistory;
 import com.courier.modules.shipment.domain.ShipmentStatusHistoryRepository;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
@@ -67,6 +73,8 @@ class DashboardServiceImplTest {
     @Mock private ManifestRepository manifestRepository;
     @Mock private WalletRepository walletRepository;
     @Mock private DashboardBranchDirectoryPort branchDirectory;
+    @Mock private PodVerificationService podVerificationService;
+    @Mock private PaymentModeRepository paymentModeRepository;
 
     private DashboardServiceImpl service;
 
@@ -74,11 +82,16 @@ class DashboardServiceImplTest {
     void setUp() {
         service = new DashboardServiceImpl(shipmentRepository, shipmentChargeRepository,
                 shipmentStatusHistoryRepository, walletTransactionRepository, walletService,
-                manifestRepository, walletRepository, branchDirectory);
+                manifestRepository, walletRepository, branchDirectory, podVerificationService,
+                paymentModeRepository);
         // Every caller in these tests has no own branch (company/platform admins) —
         // the same degrade-rather-than-throw path DashboardServiceImpl.ownWallet()
         // already documents.
         when(walletService.getForBranch(null)).thenThrow(new BusinessRuleException("no own branch"));
+        // No TO_PAY-shaped payment modes stubbed by default — the "TO_PAY awaiting
+        // delivery" tile degrades to 0 rather than NPEing on an un-stubbed mock.
+        when(paymentModeRepository.findByCompanyIdAndCollectAtDeliveryTrueAndCashOnDeliveryFalse(any()))
+                .thenReturn(List.of());
     }
 
     @AfterEach
@@ -118,6 +131,12 @@ class DashboardServiceImplTest {
         when(walletRepository.sumAvailableBalanceByCompanyId(COMPANY)).thenReturn(new BigDecimal("500"));
         when(walletRepository.countByCompanyIdAndAvailableBalanceLessThan(COMPANY, new BigDecimal("1000")))
                 .thenReturn(2L);
+        com.courier.modules.master.domain.PaymentMode toPayMode = new com.courier.modules.master.domain.PaymentMode();
+        toPayMode.setId(UUID.randomUUID());
+        when(paymentModeRepository.findByCompanyIdAndCollectAtDeliveryTrueAndCashOnDeliveryFalse(COMPANY))
+                .thenReturn(List.of(toPayMode));
+        when(shipmentRepository.countByCompanyIdAndStatusInAndPaymentModeIdIn(
+                eq(COMPANY), any(Collection.class), eq(List.of(toPayMode.getId())))).thenReturn(9L);
         when(shipmentRepository.findTopRoutesByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class), any(Pageable.class))).thenReturn(List.of());
         when(shipmentRepository.findTopCustomersByCompanyIdAndBookingDateBetween(
@@ -137,6 +156,14 @@ class DashboardServiceImplTest {
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of(dailyRevenue(today, new BigDecimal("42"))));
 
+        // POD Dashboard pie, company-wide: 2 candidates, both missing from the
+        // verification map — both pendingUpload, nothing else.
+        UUID podShipmentA = UUID.randomUUID();
+        UUID podShipmentB = UUID.randomUUID();
+        when(shipmentRepository.findIdsByCompanyIdAndStatusIn(eq(COMPANY), any()))
+                .thenReturn(List.of(podShipmentA, podShipmentB));
+        when(podVerificationService.latestByShipmentIds(any())).thenReturn(Map.of());
+
         DashboardSummaryResponse response = service.summary();
 
         assertThat(response.companyOverview()).isNotNull();
@@ -144,6 +171,9 @@ class DashboardServiceImplTest {
         assertThat(response.companyOverview().manifestsAwaitingDispatch()).isEqualTo(6L);
         assertThat(response.companyOverview().totalWalletBalance()).isEqualByComparingTo("500");
         assertThat(response.companyOverview().lowBalanceBranches()).isEqualTo(2L);
+        assertThat(response.companyOverview().toPayAwaitingDelivery()).isEqualTo(9L);
+        assertThat(response.companyOverview().podOverview().pendingUpload()).isEqualTo(2L);
+        assertThat(response.companyOverview().podOverview().approved()).isEqualTo(0L);
 
         assertThat(response.charts()).isNotNull();
         assertThat(response.charts().shipmentTrend()).hasSize(1);
@@ -277,8 +307,27 @@ class DashboardServiceImplTest {
         when(shipmentStatusHistoryRepository.findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc(
                 eq(COMPANY), eq(branch), eq(ShipmentStatus.DELIVERED))).thenReturn(List.of());
         when(walletTransactionRepository.findRecent(any(UUID.class), eq(COMPANY), any())).thenReturn(List.of());
-        when(shipmentRepository.countByCompanyIdAndDeliveryBranchIdAndStatusIn(
-                eq(COMPANY), eq(branch), any(Collection.class))).thenReturn(9L);
+
+        // Pending Delivery: 2 shipments, received (last IN_SCAN) 40h and 80h ago — one
+        // lands in the "Since 36h" aging bucket, the other in "72h+". Only pendingA is
+        // TO_PAY — pendingB has no payment mode recorded (null), which must not NPE the
+        // toPayAwaitingDelivery filter (Set.of/copyOf's contains(null) would).
+        UUID toPayModeId = UUID.randomUUID();
+        Shipment pendingA = Shipment.builder().paymentModeId(toPayModeId).build();
+        Shipment pendingB = Shipment.builder().build();
+        com.courier.modules.master.domain.PaymentMode toPayMode = new com.courier.modules.master.domain.PaymentMode();
+        toPayMode.setId(toPayModeId);
+        when(paymentModeRepository.findByCompanyIdAndCollectAtDeliveryTrueAndCashOnDeliveryFalse(COMPANY))
+                .thenReturn(List.of(toPayMode));
+        when(shipmentRepository.findByCompanyIdAndDeliveryBranchIdAndStatusIn(
+                eq(COMPANY), eq(branch), any(Collection.class))).thenReturn(List.of(pendingA, pendingB));
+        java.time.Instant now = java.time.Instant.now();
+        when(shipmentStatusHistoryRepository.findAllByCompanyIdAndShipmentIdInAndStatus(
+                eq(COMPANY), any(Collection.class), eq(ShipmentStatus.IN_SCAN))).thenReturn(List.of(
+                        ShipmentStatusHistory.builder().shipmentId(pendingA.getId())
+                                .status(ShipmentStatus.IN_SCAN).changedAt(now.minusSeconds(40 * 3600L)).build(),
+                        ShipmentStatusHistory.builder().shipmentId(pendingB.getId())
+                                .status(ShipmentStatus.IN_SCAN).changedAt(now.minusSeconds(80 * 3600L)).build()));
 
         // Charts — branch-scoped siblings, not the company-wide ones.
         LocalDate today = LocalDate.now();
@@ -301,6 +350,24 @@ class DashboardServiceImplTest {
         when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
                 eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class))).thenReturn(8L);
 
+        // POD Dashboard pie + Rejected POD backlog: 4 candidate shipments at this branch —
+        // one never had a POD run (pendingUpload, by omission from the map below), one
+        // REVIEW, one PASS, one FAIL (the rejected one, needing a re-upload).
+        UUID noPodShipment = UUID.randomUUID();
+        UUID reviewShipment = UUID.randomUUID();
+        UUID passShipment = UUID.randomUUID();
+        UUID failShipment = UUID.randomUUID();
+        when(shipmentRepository.findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(eq(COMPANY), eq(branch), any()))
+                .thenReturn(List.of(noPodShipment, reviewShipment, passShipment, failShipment));
+        Shipment rejectedShipment = Shipment.builder().shipmentNumber("SHP-REJECTED").receiverName("Ramesh").build();
+        rejectedShipment.setId(failShipment);
+        when(shipmentRepository.findAllByCompanyIdAndIdIn(eq(COMPANY), any()))
+                .thenReturn(List.of(rejectedShipment));
+        when(podVerificationService.latestByShipmentIds(any())).thenReturn(Map.of(
+                reviewShipment, podVerification(reviewShipment, PodVerificationStatus.REVIEW),
+                passShipment, podVerification(passShipment, PodVerificationStatus.PASS),
+                failShipment, podVerification(failShipment, PodVerificationStatus.FAIL)));
+
         DashboardSummaryResponse response = service.summary();
 
         assertThat(response.companyOverview()).isNull();
@@ -308,8 +375,27 @@ class DashboardServiceImplTest {
         assertThat(response.branchOverview().pipeline()).hasSize(7);
         assertThat(response.branchOverview().readyForManifest()).isEqualTo(6L);
         assertThat(response.branchOverview().manifestsAwaitingDispatch()).isEqualTo(7L);
-        assertThat(response.branchOverview().pendingDelivery()).isEqualTo(9L);
+        assertThat(response.branchOverview().pendingDelivery()).isEqualTo(2L);
         assertThat(response.branchOverview().delayedShipments()).isEqualTo(8L);
+        assertThat(response.branchOverview().deliveryPendingAging()).hasSize(4);
+        assertThat(response.branchOverview().toPayAwaitingDelivery()).isEqualTo(1L);
+        assertThat(response.branchOverview().deliveryPendingAging())
+                .extracting("label", "count")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Since 24h", 0L),
+                        org.assertj.core.groups.Tuple.tuple("Since 36h", 1L),
+                        org.assertj.core.groups.Tuple.tuple("Since 48h", 0L),
+                        org.assertj.core.groups.Tuple.tuple("72h+", 1L));
+
+        // POD Dashboard pie: 1 of the 4 candidates is missing from the verification map
+        // (pendingUpload), the other 3 land in their own latest-status bucket.
+        assertThat(response.branchOverview().podOverview().pendingUpload()).isEqualTo(1L);
+        assertThat(response.branchOverview().podOverview().pendingVerification()).isEqualTo(1L);
+        assertThat(response.branchOverview().podOverview().approved()).isEqualTo(1L);
+        assertThat(response.branchOverview().podOverview().rejected()).isEqualTo(1L);
+        assertThat(response.branchOverview().rejectedPods()).hasSize(1);
+        assertThat(response.branchOverview().rejectedPods().get(0).shipmentNumber()).isEqualTo("SHP-REJECTED");
+        assertThat(response.branchOverview().rejectedPods().get(0).receiverName()).isEqualTo("Ramesh");
 
         // KPI tiles ("This Month's Bookings"/"Collection") come from the branch-scoped
         // queries, not the whole-company ones — the actual bug this test now guards.
@@ -363,6 +449,13 @@ class DashboardServiceImplTest {
             @Override public LocalDate getDay() { return day; }
             @Override public BigDecimal getRevenue() { return revenue; }
         };
+    }
+
+    private static PodVerification podVerification(UUID shipmentId, PodVerificationStatus status) {
+        PodVerification v = PodVerification.builder().shipmentId(shipmentId).verificationStatus(status)
+                .verificationScore(80).aiProvider("heuristic-local").aiModel("structural-v1").build();
+        v.setId(UUID.randomUUID());
+        return v;
     }
 
     private void signedIn(String role) {

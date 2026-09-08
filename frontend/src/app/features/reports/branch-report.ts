@@ -11,6 +11,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 interface BranchRow extends BranchPerformanceSummary {
   totalCommission: number;
@@ -159,17 +160,13 @@ export class BranchReport implements OnInit {
   }
 
   private download(rows: BranchRow[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branch', 'shipmentCount', 'deliveredCount', 'inTransitCount', 'returnedCount',
       'cancelledCount', 'totalChargeableWeight', 'totalNetAmount', 'totalCommission'];
-    const line = (r: BranchRow) => [this.branchLabel(r.bookingBranchId), r.shipmentCount, r.deliveredCount,
+    const lines = rows.map((r) => [this.branchLabel(r.bookingBranchId), r.shipmentCount, r.deliveredCount,
       r.inTransitCount, r.returnedCount, r.cancelledCount, r.totalChargeableWeight, r.totalNetAmount,
-      r.totalCommission].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `branch-performance-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+      r.totalCommission]);
+    downloadCsv(`branch-performance-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
+      [1, 2, 3, 4, 5, 6, 7, 8]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

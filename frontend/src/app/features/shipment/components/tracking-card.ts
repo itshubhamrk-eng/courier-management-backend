@@ -26,7 +26,9 @@ import { ShipmentStatus } from '@core/models/shipment.model';
       <div class="tc__meta">
         <app-shipment-status-badge [status]="status()" />
         <span class="tc__date">Booked {{ bookingDate() | date: 'mediumDate' }}</span>
-        @if (expectedDeliveryDate()) {
+        @if (deliveredAt()) {
+          <span class="tc__date tc__date--delivered">Delivered {{ deliveredAt() | date: 'mediumDate' }}</span>
+        } @else if (expectedDeliveryDate()) {
           <span class="tc__date">Expected {{ expectedDeliveryDate() | date: 'mediumDate' }}</span>
         }
       </div>
@@ -43,6 +45,7 @@ import { ShipmentStatus } from '@core/models/shipment.model';
     .tc__meta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
     .tc__meta app-shipment-status-badge ::ng-deep .badge { height:28px; padding:0 14px; font-size:13px; }
     .tc__date { font:400 13px var(--font-sans); color:var(--content-muted); }
+    .tc__date--delivered { color:var(--success); font-weight:600; }
     .mono { font-family:var(--font-mono, ui-monospace); }
   `]
 })
@@ -52,4 +55,5 @@ export class TrackingCard {
   readonly status = input.required<ShipmentStatus>();
   readonly bookingDate = input.required<string>();
   readonly expectedDeliveryDate = input<string | null>(null);
+  readonly deliveredAt = input<string | null>(null);
 }

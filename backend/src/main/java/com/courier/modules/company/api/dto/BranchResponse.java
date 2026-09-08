@@ -29,6 +29,7 @@ public record BranchResponse(
         BigDecimal gstPercentage, BigDecimal commissionOnOtherCharges,
         BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
         BigDecimal drsChargePerQty,
+        BigDecimal deliveryCommissionRatePerKg, BigDecimal deliveryCommissionMinWeightKg,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
 
         @Schema(description = "Only on the create response: the account made with the branch")

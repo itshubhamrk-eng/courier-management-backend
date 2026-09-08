@@ -26,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 import java.util.List;
@@ -117,14 +118,29 @@ public class ManifestServiceImpl implements ManifestService {
         List<Manifest> matches = manifestRepository.findAll(ManifestSpecifications.matching(criteria));
         List<UUID> ids = matches.stream().map(Manifest::getId).toList();
         ManifestShipmentAggregate aggregate = ManifestShipmentAggregate.of(shipmentService.findByManifestIds(ids));
+        BigDecimal totalTripExpenses = matches.stream()
+                .map(ManifestServiceImpl::tripExpenseTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new ManifestSummaryStats(matches.size(), aggregate.shipmentCount(),
-                aggregate.totalWeight(), aggregate.totalPackages());
+                aggregate.totalWeight(), aggregate.totalPackages(), totalTripExpenses);
+    }
+
+    /** Fuel/advance/toll/other are each independently optional — nulls contribute 0
+     *  rather than making the whole manifest's total null. */
+    private static BigDecimal tripExpenseTotal(Manifest m) {
+        return nz(m.getFuelCost()).add(nz(m.getDriverAdvance()))
+                .add(nz(m.getTollAmount())).add(nz(m.getOtherAmount()));
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 
     @Override
     @Transactional
     @PreAuthorize(WRITERS)
-    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime) {
+    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
+            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(id, companyId);
 
@@ -148,7 +164,7 @@ public class ManifestServiceImpl implements ManifestService {
         // company role currently models "driver" cleanly enough to restrict further.
         userService.getById(driverUserId);
 
-        manifest.dispatch(vehicleId, driverUserId, departureTime);
+        manifest.dispatch(vehicleId, driverUserId, departureTime, fuelCost, driverAdvance, tollAmount, otherAmount);
         Manifest saved = manifestRepository.save(manifest);
 
         shipmentService.transitionToDispatched(

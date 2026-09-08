@@ -7,6 +7,7 @@ import { AppRole } from '@core/models/role.model';
 import { Permission, PermissionSearchRequest, prettyToken } from '@core/models/permission.model';
 import { Page, PageQuery, emptyPage } from '@core/models/page.model';
 import { UiTable, TableColumn, SortState } from '@shared/components/ui-table/ui-table';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -150,12 +151,8 @@ export class PermissionList implements OnInit {
 
   private download(rows: Permission[]): void {
     const cols: (keyof Permission)[] = ['module', 'permissionCode', 'permissionName', 'action', 'resource', 'status', 'isSystemPermission', 'requiredFeatureFlag'];
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `permissions-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const lines = rows.map((r) => cols.map((c) => r[c] as string | number | boolean));
+    downloadCsv(`permissions-${new Date().toISOString().slice(0, 10)}.csv`, cols, lines);
     this.notify.info(`Exported ${rows.length} permission(s).`);
   }
 }

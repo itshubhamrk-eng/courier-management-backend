@@ -108,6 +108,11 @@ public final class DefaultPermissionCatalog {
         MATRIX.put(PermissionModule.RATE_MASTER,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, IMPORT, EXPORT, APPROVE,
                         ACTIVATE, DEACTIVATE, CALCULATE));
+        // Charge & Charge Settings: a company's own pricing/commission configuration,
+        // COMPANY_ADMIN-only. Same master-data shape as ROUTE_MASTER below — full CRUD
+        // plus the activate/deactivate pair a configuration row needs to be withdrawn
+        // without deleting it.
+        MATRIX.put(PermissionModule.CHARGE, MASTER);
         MATRIX.put(PermissionModule.ROUTE_MASTER, MASTER);
 
         // Operations.

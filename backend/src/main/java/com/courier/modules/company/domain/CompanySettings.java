@@ -177,6 +177,14 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private boolean autoInvoiceGeneration = false;
 
+    /** Name of a {@code com.courier.modules.pricing.domain.RoundingRule} constant (e.g.
+     *  {@code "NEAREST_FIVE"}). Plain string, not that enum, so this module stays free of
+     *  a dependency on pricing (pricing already depends on company one-way, via
+     *  {@code CompanySettingsService}) — the same treatment {@link #passwordPolicy} gets. */
+    @Column(name = "round_off_rule", length = 20, nullable = false)
+    @Builder.Default
+    private String roundOffRule = "NEAREST_FIVE";
+
     // === SLA (shipment lifecycle) ===========================================
     // Hours a shipment may sit in one status before the sweep (ShipmentSlaSweepJob)
     // raises an auto-ticket. Each field is the outbound leg of the status named,

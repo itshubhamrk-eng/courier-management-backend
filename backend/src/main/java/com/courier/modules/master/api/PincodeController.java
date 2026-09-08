@@ -197,9 +197,9 @@ public class PincodeController {
             description = """
                     Paged, sorted, filtered, searchable. Filter by `areaId`, `districtId` or
                     `stateId` (each widens to the areas it covers; `areaId` combined with
-                    one of those intersects), by `serviceable`, or by `odaApplicable` — the
-                    booking/ops screen's usual filters. Sort: `code`, `name`, `status`,
-                    `displayOrder`, `createdDate`, `updatedDate`.
+                    one of those intersects), by `serviceable`, `odaApplicable`, or `zone`
+                    (case-insensitive exact match) — the booking/ops screen's usual filters.
+                    Sort: `code`, `name`, `status`, `displayOrder`, `createdDate`, `updatedDate`.
                     """)
     public ApiResponse<PageResponse<PincodeResponse>> list(
             @Valid @ParameterObject MasterSearchRequest search,
@@ -213,10 +213,13 @@ public class PincodeController {
             @RequestParam(required = false) Boolean serviceable,
             @Parameter(description = "Only ODA (or only non-ODA) pincodes")
             @RequestParam(required = false) Boolean odaApplicable,
+            @Parameter(description = "Only pincodes in this rate-master delivery zone")
+            @RequestParam(required = false) String zone,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
 
         MasterDataCriteria criteria = criteriaMapper.toCriteria(search)
-                .with("serviceable", serviceable).with("odaApplicable", odaApplicable);
+                .with("serviceable", serviceable).with("odaApplicable", odaApplicable)
+                .with("zone", zone);
 
         Set<UUID> geographyAreaIds = mapper.resolveAreaIdsForGeography(districtId, stateId);
         if (geographyAreaIds != null) {

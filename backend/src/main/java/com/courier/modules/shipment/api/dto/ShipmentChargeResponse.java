@@ -10,8 +10,17 @@ import java.util.UUID;
 public record ShipmentChargeResponse(
         UUID shipmentId,
         BigDecimal freight, BigDecimal fuelCharge, BigDecimal handlingCharge, BigDecimal odaCharge,
-        BigDecimal insuranceCharge, BigDecimal gstAmount, BigDecimal discountAmount,
+        BigDecimal insuranceCharge,
+        @Schema(description = "Sum of ACTIVE charge-module rows (e.g. \"Hamali\") matched "
+                + "to this shipment's service type and weight/distance. GST-inclusive, "
+                + "unlike appointmentDeliveryCharge.")
+        BigDecimal applicableCharges,
+        BigDecimal gstAmount, BigDecimal discountAmount,
         BigDecimal roundOff, BigDecimal otherCharges,
+        @Schema(description = "Manual, typed at booking time when appointmentDelivery is "
+                + "checked. Deliberately GST-free — added straight into netAmount, never "
+                + "folded into gstAmount.")
+        BigDecimal appointmentDeliveryCharge,
         BigDecimal commissionOnBasicFreight, BigDecimal branchCommissionOnOtherAmount,
         BigDecimal companyCommissionOnBasicFreight, BigDecimal totalCommission, BigDecimal netAmount,
         UUID matchedRouteId, String matchedRouteCode,

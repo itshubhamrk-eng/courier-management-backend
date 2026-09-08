@@ -31,6 +31,7 @@ public class BranchMapper {
                 r.gstPercentage(), r.commissionOnOtherCharges(),
                 r.commissionOnBasicFreight(), r.companyServiceChargePercentage(),
                 r.drsChargePerQty(),
+                r.deliveryCommissionRatePerKg(), r.deliveryCommissionMinWeightKg(),
                 toCommand(r.branchUser()));
     }
 
@@ -52,6 +53,7 @@ public class BranchMapper {
                 r.gstPercentage(), r.commissionOnOtherCharges(),
                 r.commissionOnBasicFreight(), r.companyServiceChargePercentage(),
                 r.drsChargePerQty(),
+                r.deliveryCommissionRatePerKg(), r.deliveryCommissionMinWeightKg(),
                 r.version());
     }
 
@@ -85,6 +87,7 @@ public class BranchMapper {
                 branch.gstPercentage(), branch.commissionOnOtherCharges(),
                 branch.commissionOnBasicFreight(), branch.companyServiceChargePercentage(),
                 branch.drsChargePerQty(),
+                branch.deliveryCommissionRatePerKg(), branch.deliveryCommissionMinWeightKg(),
                 branch.createdBy(), branch.createdDate(), branch.updatedBy(),
                 branch.updatedDate(), branch.version(),
                 new BranchUserResponse(created.userId(), created.userEmail(),
@@ -107,6 +110,7 @@ public class BranchMapper {
                 b.getGstPercentage(), b.getCommissionOnOtherCharges(),
                 b.getCommissionOnBasicFreight(), b.getCompanyServiceChargePercentage(),
                 b.getDrsChargePerQty(),
+                b.getDeliveryCommissionRatePerKg(), b.getDeliveryCommissionMinWeightKg(),
                 b.getCreatedBy(), b.getCreatedAt(), b.getUpdatedBy(), b.getUpdatedAt(), b.getVersion(),
                 null);
     }

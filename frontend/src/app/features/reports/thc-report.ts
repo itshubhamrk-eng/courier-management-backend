@@ -41,6 +41,8 @@ import { Lookup } from '@features/users/user.service';
         <div class="stat"><span class="stat__l">Total Weight</span>
           <span class="stat__v">{{ summary() ? (summary()!.totalWeight | number: '1.3-3') + ' kg' : '—' }}</span></div>
         <div class="stat"><span class="stat__l">Total Packages</span><span class="stat__v">{{ summary()?.totalPackages ?? '—' }}</span></div>
+        <div class="stat"><span class="stat__l">Trip Expenses</span>
+          <span class="stat__v">{{ summary() ? '₹' + (summary()!.totalTripExpenses | number: '1.2-2') : '—' }}</span></div>
       </div>
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()"
@@ -56,6 +58,7 @@ import { Lookup } from '@features/users/user.service';
           <td class="num">{{ m.shipmentCount }}</td>
           <td class="num">{{ m.totalWeight | number: '1.3-3' }} kg</td>
           <td class="num">{{ m.totalPackages }}</td>
+          <td class="num">{{ tripExpenseTotal(m) > 0 ? ('₹' + (tripExpenseTotal(m) | number: '1.2-2')) : '—' }}</td>
           <td>{{ m.dispatchedAt ? (m.dispatchedAt | date: 'mediumDate') : '—' }}</td>
         </ng-template>
       </app-table>
@@ -102,6 +105,7 @@ export class ThcReport implements OnInit {
     { key: 'shipmentCount', header: 'Shipments', align: 'right', width: '100px' },
     { key: 'totalWeight', header: 'Weight', align: 'right', width: '110px' },
     { key: 'totalPackages', header: 'Packages', align: 'right', width: '100px' },
+    { key: 'tripExpenses', header: 'Trip Expenses', align: 'right', width: '120px' },
     { key: 'dispatchedAt', header: 'Dispatched', width: '130px' }
   ];
 
@@ -135,6 +139,10 @@ export class ThcReport implements OnInit {
   protected branchLabel(id: string): string { return this.branches().get(id) ?? id; }
   protected vehicleLabel(id: string | null | undefined): string { return id ? (this.vehicles().get(id) ?? id) : '—'; }
   protected driverLabel(id: string | null | undefined): string { return id ? (this.drivers().get(id) ?? id) : '—'; }
+
+  protected tripExpenseTotal(m: Manifest): number {
+    return (m.fuelCost ?? 0) + (m.driverAdvance ?? 0) + (m.tollAmount ?? 0) + (m.otherAmount ?? 0);
+  }
 
   view(m: Manifest): void {
     this.router.navigate(['/movement/trip-hire-challan'], { queryParams: { manifestNumber: m.manifestNumber } });

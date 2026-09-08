@@ -4,6 +4,83 @@
 `V48`/`V49`. Integrated into Shipment Movement's own delivery flow
 (`com.courier.modules.shipment`) rather than replacing it — see "Integration point" below.
 
+**2026-09-08 update — POD approval now gates delivery commission; company-level upload;
+POD Dashboard pie:**
+1. **Commission crediting moved off `deliver()` onto POD approval.** `V59` adds
+   `shipments.pod_approved`/`commission_credited`. `ShipmentServiceImpl
+   .creditDeliveryCommissionsIfEligible(shipment, companyId)` (extracted from `deliver()`'s
+   old unconditional block) only fires `DrsChargeApplicable`/
+   `DeliveryWeightCommissionApplicable`/`DeliveryCommissionEarned` when `status ==
+   DELIVERED && podApproved && !commissionCredited` — called from `deliver()` itself and
+   from new `ShipmentService.markPodApproved(shipmentId)`, whichever order the two
+   conditions land in. **This is universal, on direct user confirmation**: a shipment that
+   never gets a POD run never earns this commission, even though POD itself is still not
+   mandatory to complete delivery (2026-09-04's own point 2 is untouched — "Complete
+   Delivery" still shows regardless of verification status). `CodCollectedAtDelivery` (cash
+   actually collected, a debit not a commission) is unaffected. `PodVerificationServiceImpl`
+   calls `markPodApproved()` from `verify()` (AI resolves straight to PASS) and `review()`
+   (approve).
+2. **Approve/reject narrowed to `COMPANY_ADMIN`.** `REVIEWERS` was `hasAnyRole(COMPANY_ADMIN,
+   BRANCH_MANAGER)`; now `hasRole(COMPANY_ADMIN)` only — on direct user request ("approve or
+   reject access should be company level"), since approval now moves money.
+   `BRANCH_MANAGER` keeps `WRITERS` (capture/upload, view the worklist); `pod-review.ts`
+   hides the Approve/Reject form for anyone else client-side, backend is the real gate.
+3. **Company-level upload, no branch context.** New `uploadByCompany(shipmentId, command)`
+   — `COMPANY_ADMIN` only, works against any of the company's own `OUT_FOR_DELIVERY`/
+   `DELIVERED` shipments regardless of branch, skips the AI provider entirely and always
+   writes `PASS` (`aiProvider = "company-direct"`) — the company vouching for it directly,
+   on direct request ("if uploaded by company then it should be direct approved"). New `POST
+   /api/v1/pod/company-upload/{shipmentId}`, new frontend screen
+   `pod-company-upload.ts` (finds the shipment by tracking/shipment number via the existing
+   `GET /shipments/track/{trackingNumber}`), new nav leaf "Upload POD (Company)".
+4. **POD Dashboard pie.** `DashboardServiceImpl` gained `podOverview` (pending upload /
+   pending verification / approved / rejected) on both `CompanyOverviewResponse` (every
+   branch) and `BranchOverviewResponse` (this branch), plus `rejectedPods` on the branch
+   response — a small worklist, each row linking to Delivery's own re-upload flow. Candidate
+   set: every `OUT_FOR_DELIVERY`/`DELIVERED` shipment, current state not month-bound (same
+   philosophy `PENDING_DELIVERY` already uses) — one missing from
+   `latestByShipmentIds` has never had a POD run (`pendingUpload`).
+
+**Verified live (2026-09-08, second session)**: reported symptom "Approve/Reject button not
+visible on POD review page at company login" — not a bug, working as designed. Root cause:
+tester was logged in as `pune@gmail.com` (`BRANCH_MANAGER`), and the same-day change above
+narrowed the Decision form to `COMPANY_ADMIN` only. Confirmed via throwaway `:8082`/`:4300`
+instances (real `:8080`/`:4200` untouched) + a fixture `pod_verification` row (REVIEW/68,
+`ai_provider='manual-fixture'`, shipment `26080000023`) inserted directly since no real
+`REVIEW` row exists yet (still blocked on the storage-backend gap below — fixture row kept
+per [[keep-test-data-in-dev-db]]): logging in as `first.admin@gmail.com` (`COMPANY_ADMIN`,
+`COMPANY-C1`) does render the Approve/Reject buttons on that row's POD Review detail page;
+`pune@gmail.com` sees the "Awaiting a company-level decision" caption instead, exactly as
+`pod-review.ts:218`'s `canDecide()` gate intends. This also closes the "not verified live"
+gap the 2026-08-20 note below left open for the POD-Review-approve-reject click path.
+
+**Same session, continued — `decide()`'s actual POST `.../pod/review` call, and the
+commission-credit side effect, also verified live.** Approved the fixture row as
+`first.admin@gmail.com` via curl (same throwaway `:8082`): 200, `verificationStatus` flipped
+`REVIEW` -> `PASS`, `reviewedBy`/`reviewedAt`/`reviewRemarks` stamped. `shipments.pod_approved`
+and `commission_credited` both flipped `0` -> `1` on `PUNE-000017` (tracking `26080000023`,
+already `DELIVERED`), and `wallet_transactions` gained two real rows at the same instant —
+`DRS` ₹2 and `DWC` (delivery weight commission) ₹15, both `remarks: "... for shipment
+PUNE-000017"` — confirming `markPodApproved()` -> `creditDeliveryCommissionsIfEligible()`
+fires correctly end-to-end on approval, not just that the flags flip. First real, non-fixture
+confirmation of this session's own point 1 (commission-on-approval) actually crediting money.
+
+**Verified live (2026-08-20)**: both the Delivery page's AI-verify flow and the new
+company-upload screen reach and correctly stop at the pre-existing "no storage backend
+configured" gap (`FileStorageConfig`) — same accepted limitation the original build
+already carried, still the only blocker to the real `PASS`/`REVIEW`/`FAIL` path and the
+commission-credit event firing. The POD Dashboard pie renders correctly live for both a
+branch-scoped and a company-wide caller. Found and fixed one real bug in the process:
+`pod-company-upload.ts`'s search box was a bare `FormControl` inside a `<form
+(ngSubmit)="find()">` with no form directive, so `ngSubmit` never bound and clicking the
+`type="submit"` Find button triggered a native, un-prevented page reload instead —
+wrapped the search box in its own `searchForm: FormGroup` instead. See `CHANGELOG.md`'s
+2026-09-08 entry for the full writeup.
+
+See `CHANGELOG.md`'s own 2026-09-08 entry for the full file list. The rest of this document
+(flow diagram, RBAC table's original REVIEWERS row, API table) is otherwise still accurate
+except where superseded by the four points above.
+
 **2026-09-04 update — four fixes, in response to real usage feedback:**
 1. **AI was never a content check.** Reported live: a random unrelated photo scored 85+/100
    (auto-PASS) since the heuristic scorer never looked at pixel *content*, only brightness/
@@ -182,7 +259,7 @@ unused vocabulary:
 |---|---|---|
 | `POD_UPLOAD` + `POD_VERIFY` | `WRITERS` | `COMPANY_ADMIN`, `BRANCH_MANAGER`, `OPERATOR` — same tier `deliver()`/`uploadPodFile` already use |
 | `POD_VIEW` | `READERS` | `isAuthenticated()` |
-| `POD_REVIEW` + `POD_APPROVE` | `REVIEWERS` | `COMPANY_ADMIN`, `BRANCH_MANAGER` only — narrower than `WRITERS`, a delivery operator may capture a POD but not decide their own submission |
+| `POD_REVIEW` + `POD_APPROVE` | `REVIEWERS` | **2026-09-08: `COMPANY_ADMIN` only** (was also `BRANCH_MANAGER`) — approval now credits delivery commission, so narrowed further than `WRITERS`; also gates the new `uploadByCompany` |
 
 ## API
 
@@ -190,7 +267,8 @@ unused vocabulary:
 |---|---|---|
 | `POST` | `/api/v1/shipments/{id}/pod/verify` | multipart `photo` (required), `signature` (optional), `receiverName`, `awbNumber`, `shipmentNumber`, `deliveryDateTime` |
 | `GET` | `/api/v1/shipments/{id}/pod/verification` | latest run for the shipment, 404 if none |
-| `POST` | `/api/v1/shipments/{id}/pod/review` | `{approve, remarks}` — REVIEW-only |
+| `POST` | `/api/v1/shipments/{id}/pod/review` | `{approve, remarks}` — REVIEW-only, `COMPANY_ADMIN` only (2026-09-08) |
+| `POST` | `/api/v1/pod/company-upload/{shipmentId}` | **added 2026-09-08** — multipart `photo`/`signature`/`receiverName`, `COMPANY_ADMIN` only, no branch context, always auto-approved |
 | `GET` | `/api/v1/pod/pending-review` | **added beyond the brief's own API list** — the Manual Review screen's worklist; without it there is no way for a reviewer to discover what needs deciding |
 | `GET` | `/api/v1/pod/delivered` | **added 2026-09-04** — every DELIVERED shipment with its latest POD verification if any; the rewritten POD Review table's source. Same filters as `GET /shipments` (branch/date-range/search), status always forced to DELIVERED |
 

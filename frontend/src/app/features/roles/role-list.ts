@@ -8,6 +8,7 @@ import { Page, PageQuery, emptyPage } from '@core/models/page.model';
 import { SortState } from '@shared/components/ui-table/ui-table';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
@@ -163,12 +164,8 @@ export class RoleList implements OnInit {
 
   private download(rows: CompanyRole[]): void {
     const cols: (keyof CompanyRole)[] = ['roleCode', 'roleName', 'roleType', 'status', 'isSystemRole', 'isDefault', 'permissionCount'];
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `roles-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const lines = rows.map((r) => cols.map((c) => r[c] as string | number | boolean));
+    downloadCsv(`roles-${new Date().toISOString().slice(0, 10)}.csv`, cols, lines, [6]);
     this.notify.info(`Exported ${rows.length} role(s).`);
   }
 }

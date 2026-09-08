@@ -139,6 +139,10 @@ public class BranchServiceImpl implements BranchService {
                 .companyServiceChargePercentage(orDefault(command.companyServiceChargePercentage(),
                         DEFAULT_COMPANY_SERVICE_CHARGE_PERCENTAGE))
                 .drsChargePerQty(orDefault(command.drsChargePerQty(), DEFAULT_DRS_CHARGE_PER_QTY))
+                .deliveryCommissionRatePerKg(orDefault(command.deliveryCommissionRatePerKg(),
+                        DEFAULT_DELIVERY_COMMISSION_RATE_PER_KG))
+                .deliveryCommissionMinWeightKg(orDefault(command.deliveryCommissionMinWeightKg(),
+                        DEFAULT_DELIVERY_COMMISSION_MIN_WEIGHT_KG))
                 .build();
 
         branch.applyInvariants();
@@ -331,6 +335,8 @@ public class BranchServiceImpl implements BranchService {
         branch.setCommissionOnBasicFreight(command.commissionOnBasicFreight());
         branch.setCompanyServiceChargePercentage(command.companyServiceChargePercentage());
         branch.setDrsChargePerQty(command.drsChargePerQty());
+        branch.setDeliveryCommissionRatePerKg(command.deliveryCommissionRatePerKg());
+        branch.setDeliveryCommissionMinWeightKg(command.deliveryCommissionMinWeightKg());
 
         // Same fallback as create(): only when the caller left both blank. An explicit
         // pair (including one that clears a previous geocode) is a deliberate choice and
@@ -375,6 +381,15 @@ public class BranchServiceImpl implements BranchService {
         return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
                 .map(Branch::getDrsChargePerQty)
                 .orElse(BigDecimal.ZERO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public boolean instantCommissionOf(UUID branchId) {
+        return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
+                .map(Branch::isInstantCommission)
+                .orElse(false);
     }
 
     @Override
@@ -634,6 +649,8 @@ public class BranchServiceImpl implements BranchService {
     private static final java.math.BigDecimal DEFAULT_COMMISSION_ON_BASIC_FREIGHT = new java.math.BigDecimal("10.00");
     private static final java.math.BigDecimal DEFAULT_COMPANY_SERVICE_CHARGE_PERCENTAGE = new java.math.BigDecimal("10.00");
     private static final java.math.BigDecimal DEFAULT_DRS_CHARGE_PER_QTY = new java.math.BigDecimal("2.00");
+    private static final java.math.BigDecimal DEFAULT_DELIVERY_COMMISSION_RATE_PER_KG = new java.math.BigDecimal("1.50");
+    private static final java.math.BigDecimal DEFAULT_DELIVERY_COMMISSION_MIN_WEIGHT_KG = new java.math.BigDecimal("10.00");
 
     private static java.math.BigDecimal orDefault(java.math.BigDecimal value, java.math.BigDecimal fallback) {
         return value == null ? fallback : value;
@@ -674,6 +691,8 @@ public class BranchServiceImpl implements BranchService {
         v.put("commissionOnBasicFreight", String.valueOf(b.getCommissionOnBasicFreight()));
         v.put("companyServiceChargePercentage", String.valueOf(b.getCompanyServiceChargePercentage()));
         v.put("drsChargePerQty", String.valueOf(b.getDrsChargePerQty()));
+        v.put("deliveryCommissionRatePerKg", String.valueOf(b.getDeliveryCommissionRatePerKg()));
+        v.put("deliveryCommissionMinWeightKg", String.valueOf(b.getDeliveryCommissionMinWeightKg()));
         return v;
     }
 

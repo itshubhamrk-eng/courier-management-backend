@@ -95,6 +95,15 @@ public record CreateBranchRequest(
         @Schema(description = "DRS charge per item quantity, debited on delivery "
                 + "(drsCharge = drsChargePerQty * qty). Defaults to 2 when omitted.", example = "2")
         BigDecimal drsChargePerQty,
+        @DecimalMin("0.0")
+        @Schema(description = "Delivery commission per kg, credited on delivery "
+                + "(deliveryCommission = rate * max(chargeable weight, deliveryCommissionMinWeightKg)). "
+                + "Defaults to 1.50 when omitted.", example = "1.5")
+        BigDecimal deliveryCommissionRatePerKg,
+        @DecimalMin("0.0")
+        @Schema(description = "Minimum chargeable weight (kg) for delivery commission. "
+                + "Defaults to 10 when omitted.", example = "10")
+        BigDecimal deliveryCommissionMinWeightKg,
 
         @Valid
         @Schema(description = "The branch's login account. Omit to have one derived from "

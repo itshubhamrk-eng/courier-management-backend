@@ -41,7 +41,8 @@ const ADMINS = [AppRole.COMPANY_ADMIN];
  * on purpose (the backend has none either): a branch user always sees their own wallet, and
  * a `COMPANY_ADMIN` — who has no branch of their own — picks one, carried as `?branchId=`
  * so the choice survives a refresh or a link. Shows current / available / hold balances,
- * today's credit + debit, the last recharge, and the most recent ledger entries. Money
+ * today's credit + debit, the last recharge, today's credit commission, booking/delivery
+ * pending commission, and the most recent ledger entries. Money
  * actions (recharge / credit / debit) are gated and open their dialogs, each refreshing the
  * wallet on success. API-only, no mock.
  */
@@ -102,6 +103,17 @@ const ADMINS = [AppRole.COMPANY_ADMIN];
                             [amount]="summary()!.todayDebit" [currency]="cur()" [hint]="today" />
           <app-balance-card label="Last Recharge" icon="add_card" tone="brand"
                             [amount]="summary()!.lastRechargeAmount ?? 0" [currency]="cur()" [hint]="lastRechargeHint()" />
+        </section>
+
+        <section class="wd__grid" data-tour="commission-grid">
+          <app-balance-card label="Today's Credit Commission" icon="paid" tone="success"
+                            [amount]="summary()!.todayCreditCommission" [currency]="cur()" [hint]="today" />
+          <app-balance-card label="Booking Pending Commission" icon="hourglass_top" tone="warning"
+                            [amount]="summary()!.bookingPendingCommission" [currency]="cur()"
+                            hint="Not yet dispatched" />
+          <app-balance-card label="Delivery Pending Commission" icon="hourglass_bottom" tone="warning"
+                            [amount]="summary()!.deliveryPendingCommission" [currency]="cur()"
+                            hint="TO_PAY/COD, not yet delivered" />
         </section>
 
         <app-card title="Recent Transactions" subtitle="The latest activity on this wallet.">

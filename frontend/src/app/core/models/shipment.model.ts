@@ -76,6 +76,27 @@ export interface Shipment {
   deliveredAt?: string | null;
   createdDate?: string | null;
   version: number;
+  /** Current E-Way Bill's invoice number, null where the shipment has none — the THC's
+   *  own INVOICE NO column. */
+  invoiceNumber?: string | null;
+  /** Last IN_SCAN ("received") timestamp — populated on the Bulk Shipment Tracking report
+   *  only; null elsewhere (other list screens don't ask for it). */
+  receivedAt?: string | null;
+}
+
+/** One row of a bulk-track result — mirrors backend `BulkTrackRowResponse`. `shipment` is
+ *  null when `found` is false. */
+export interface BulkTrackRow {
+  number: string;
+  found: boolean;
+  shipment: Shipment | null;
+}
+
+/** Bulk Shipment Tracking report result — mirrors backend `BulkTrackResponse`. */
+export interface BulkTrackResponse {
+  results: BulkTrackRow[];
+  foundCount: number;
+  notFoundCount: number;
 }
 
 /** Full representation, with its item grid — mirrors backend `ShipmentResponse`. */
@@ -110,6 +131,10 @@ export interface ShipmentResponse {
   numberOfPackages: number;
   status: ShipmentStatus;
   remarks?: string | null;
+  appointmentDelivery: boolean;
+  appointmentDate?: string | null;
+  appointmentTimeSlot?: string | null;
+  insuranceApplicable: boolean;
   deliveredAt?: string | null;
   podPhotoUrl?: string | null;
   podSignatureUrl?: string | null;
@@ -221,10 +246,16 @@ export interface ShipmentCharge {
   handlingCharge: number;
   odaCharge: number;
   insuranceCharge: number;
+  /** Sum of ACTIVE charge-module rows (e.g. "Hamali") matched to this shipment's service
+   *  type and weight/distance — GST-inclusive, unlike `appointmentDeliveryCharge`. */
+  applicableCharges: number;
   gstAmount: number;
   discountAmount: number;
   roundOff: number;
   otherCharges: number;
+  /** Manual, typed at booking time when `appointmentDelivery` is checked — deliberately
+   *  GST-free, unlike `otherCharges`. */
+  appointmentDeliveryCharge: number;
   /** Commission breakdown (V28), computed from the booking branch's own charge percentages. */
   commissionOnBasicFreight: number;
   branchCommissionOnOtherAmount: number;
@@ -328,6 +359,19 @@ export interface ShipmentFields {
    *  raises freight (and its GST, on the difference only) above the system-calculated
    *  figure. */
   ratePerKgOverride?: number | null;
+  /** When true, `appointmentDate`/`appointmentTimeSlot` are required — the server refuses
+   *  otherwise. */
+  appointmentDelivery?: boolean | null;
+  /** Required only when `appointmentDelivery` is true. */
+  appointmentDate?: string | null;
+  /** Free text, e.g. "1:00-2:00" — required only when `appointmentDelivery` is true. */
+  appointmentTimeSlot?: string | null;
+  /** Optional, defaults to zero. Deliberately never taxed with GST, unlike `otherCharges`. */
+  appointmentDeliveryCharge?: number | null;
+  /** When true, insurance is charged at 2% of freight instead of the Pricing Engine's own
+   *  rate-driven insurance figure. GST is recomputed server-side on the difference, same as
+   *  `odaCharge`. */
+  insuranceApplicable?: boolean | null;
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
@@ -467,6 +511,9 @@ export interface ChargeBreakup {
   handlingCharge: number;
   odaCharge: number;
   insuranceCharge: number;
+  /** Sum of ACTIVE charge-module rows (e.g. "Hamali") matched to this booking's service
+   *  type and weight/distance — GST-inclusive, unlike appointmentDeliveryCharge. */
+  applicableCharges: number;
   gstAmount: number;
   discount: number;
   roundOff: number;
@@ -513,6 +560,10 @@ export interface Manifest {
   departureTime?: string | null;
   completedAt?: string | null;
   remarks?: string | null;
+  fuelCost?: number | null;
+  driverAdvance?: number | null;
+  tollAmount?: number | null;
+  otherAmount?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   version: number;
@@ -536,6 +587,7 @@ export interface ManifestSummaryStats {
   totalShipments: number;
   totalWeight: number;
   totalPackages: number;
+  totalTripExpenses: number;
 }
 
 export interface ManifestSearchRequest {
@@ -640,6 +692,10 @@ export interface DispatchManifestRequest {
   vehicleId: string;
   driverUserId: string;
   departureTime?: string | null;
+  fuelCost?: number | null;
+  driverAdvance?: number | null;
+  tollAmount?: number | null;
+  otherAmount?: number | null;
 }
 
 export interface DispatchManifestResponse {
@@ -651,6 +707,10 @@ export interface DispatchManifestResponse {
   dispatchedAt?: string | null;
   departureTime?: string | null;
   shipmentCount: number;
+  fuelCost?: number | null;
+  driverAdvance?: number | null;
+  tollAmount?: number | null;
+  otherAmount?: number | null;
 }
 
 /** Body of POST /shipment-movement/in-scan. `manifestNumber` is descriptive only (a

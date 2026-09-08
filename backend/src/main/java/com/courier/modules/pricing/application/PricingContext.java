@@ -118,13 +118,15 @@ public final class PricingContext {
         return charges.getOrDefault(type, BigDecimal.ZERO);
     }
 
-    /** Freight + Fuel + Handling + ODA + Insurance — what GST is computed on. */
+    /** Freight + Fuel + Handling + ODA + Insurance + Applicable Charges — what GST is
+     *  computed on. */
     public BigDecimal subtotalBeforeGst() {
         return charge(ChargeType.FREIGHT)
                 .add(charge(ChargeType.FUEL))
                 .add(charge(ChargeType.HANDLING))
                 .add(charge(ChargeType.ODA))
-                .add(charge(ChargeType.INSURANCE));
+                .add(charge(ChargeType.INSURANCE))
+                .add(charge(ChargeType.APPLICABLE_CHARGES));
     }
 
     /** {@link #subtotalBeforeGst()} + GST — what a discount is computed against. */

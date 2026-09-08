@@ -22,6 +22,7 @@ public enum SubTransactionType {
     SBK(Direction.DEBIT, "Shipment Booking"),
     SRF(Direction.CREDIT, "Shipment Refund"),
     COD(Direction.BOTH, "COD Settlement"),
+    TPY(Direction.DEBIT, "TO_PAY Received At Branch"),
     COM(Direction.BOTH, "Commission"),
     BST(Direction.BOTH, "Branch Settlement"),
     MCR(Direction.CREDIT, "Manual Credit"),
@@ -30,7 +31,8 @@ public enum SubTransactionType {
     TRO(Direction.DEBIT, "Transfer Out"),
     ADJ(Direction.BOTH, "Adjustment"),
     PNL(Direction.DEBIT, "Penalty"),
-    DRS(Direction.CREDIT, "DRS Commission");
+    DRS(Direction.CREDIT, "DRS Commission"),
+    DWC(Direction.CREDIT, "Delivery Weight Commission");
 
     /** Which {@link TransactionType} a reason may be filed under. */
     public enum Direction {

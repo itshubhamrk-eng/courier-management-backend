@@ -232,6 +232,7 @@ public enum AuditAction {
     POD_VERIFICATION_RUN,
     POD_VERIFICATION_APPROVED,
     POD_VERIFICATION_REJECTED,
+    POD_VERIFICATION_COMPANY_UPLOAD,
 
     // --- Communication Center (V50): multi-channel event-driven notifications — see
     // MEMORY/modules/communication.md.
@@ -247,6 +248,20 @@ public enum AuditAction {
     DISTRICT_FREIGHT_DELETED,
     DISTRICT_FREIGHT_STATUS_CHANGED,
     DISTRICT_FREIGHT_IMPORTED,
+
+    // --- Charge & Charge Settings: a standalone pricing/commission configuration module.
+    // Configuration only — not wired into Shipment Booking/Commission/Pricing/Wallet yet;
+    // a future calculation engine will consume these rows.
+    CHARGE_CREATED,
+    CHARGE_UPDATED,
+    CHARGE_ACTIVATED,
+    CHARGE_DEACTIVATED,
+    CHARGE_DELETED,
+    CHARGE_SETTING_CREATED,
+    CHARGE_SETTING_UPDATED,
+    CHARGE_SETTING_DELETED,
+    CHARGE_SETTING_ACTIVATED,
+    CHARGE_SETTING_DEACTIVATED,
 
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,

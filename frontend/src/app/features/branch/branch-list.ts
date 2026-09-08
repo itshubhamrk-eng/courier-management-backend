@@ -18,6 +18,7 @@ import { BranchTable, BranchPerms, BranchAction } from './components/branch-tabl
 import { BranchFilter } from './components/branch-filter';
 import { AssignManagerDialog } from './components/assign-manager-dialog';
 import { BranchService, Lookup } from './branch.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const UPDATERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
 const WRITERS = [AppRole.COMPANY_ADMIN];
@@ -203,17 +204,12 @@ export class BranchList implements OnInit {
   }
 
   private download(rows: Branch[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branchCode', 'branchName', 'branchType', 'city', 'state', 'postalCode', 'manager', 'allowBooking', 'allowDelivery', 'status'];
-    const line = (r: Branch) => [
+    const lines = rows.map((r) => [
       r.branchCode, r.branchName, r.branchType, r.city, r.state, r.postalCode,
       r.managerId ? (this.managerNames().get(r.managerId) ?? r.managerId) : '', r.allowBooking, r.allowDelivery, r.status
-    ].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `branches-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    ]);
+    downloadCsv(`branches-${new Date().toISOString().slice(0, 10)}.csv`, header, lines);
     this.notify.info(`Exported ${rows.length} branch(es).`);
   }
 }

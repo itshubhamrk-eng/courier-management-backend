@@ -9,6 +9,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
  * Vendor Audit Report — one row per company branch (booking-side or delivery-side), the
@@ -172,20 +173,16 @@ export class VendorAuditReport implements OnInit {
   }
 
   private download(rows: VendorAuditRow[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['branch', 'paidOrderCount', 'paidOrderQuantity', 'paidOrderAmount',
       'topayOrderCount', 'topayOrderQuantity', 'topayOrderAmount', 'paidCommission', 'deliveryCommission',
       'totalBookedOrderCount', 'totalDeliveredOrderCount', 'bookingTotalCommission', 'deliveryTotalCommission',
       'odaCharges', 'otherCharges', 'cancelledOrderCount'];
-    const line = (r: VendorAuditRow) => [this.branchLabel(r.branchId), r.paidOrderCount, r.paidOrderQuantity,
+    const lines = rows.map((r) => [this.branchLabel(r.branchId), r.paidOrderCount, r.paidOrderQuantity,
       r.paidOrderAmount, r.topayOrderCount, r.topayOrderQuantity, r.topayOrderAmount, r.paidCommission,
       r.deliveryCommission, r.totalBookedOrderCount, r.totalDeliveredOrderCount, r.bookingTotalCommission,
-      r.deliveryTotalCommission, r.odaCharges, r.otherCharges, r.cancelledOrderCount].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `vendor-audit-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+      r.deliveryTotalCommission, r.odaCharges, r.otherCharges, r.cancelledOrderCount]);
+    downloadCsv(`vendor-audit-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

@@ -12,6 +12,7 @@ public record ChargeBreakup(
         BigDecimal handlingCharge,
         BigDecimal odaCharge,
         BigDecimal insuranceCharge,
+        BigDecimal applicableCharges,
         BigDecimal gstAmount,
         BigDecimal discount,
         BigDecimal roundOff,

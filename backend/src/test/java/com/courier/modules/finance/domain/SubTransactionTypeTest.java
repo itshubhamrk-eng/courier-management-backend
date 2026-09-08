@@ -56,18 +56,19 @@ class SubTransactionTypeTest {
                 .containsExactlyInAnyOrder(SubTransactionType.WRC, SubTransactionType.SRF,
                         SubTransactionType.COD, SubTransactionType.COM, SubTransactionType.BST,
                         SubTransactionType.MCR, SubTransactionType.TRI, SubTransactionType.ADJ,
-                        SubTransactionType.DRS);
+                        SubTransactionType.DRS, SubTransactionType.DWC);
 
         assertThat(SubTransactionType.debitable())
                 .containsExactlyInAnyOrder(SubTransactionType.SBK, SubTransactionType.COD,
-                        SubTransactionType.COM, SubTransactionType.BST, SubTransactionType.MDB,
-                        SubTransactionType.TRO, SubTransactionType.ADJ, SubTransactionType.PNL);
+                        SubTransactionType.TPY, SubTransactionType.COM, SubTransactionType.BST,
+                        SubTransactionType.MDB, SubTransactionType.TRO, SubTransactionType.ADJ,
+                        SubTransactionType.PNL);
     }
 
     @Test
-    @DisplayName("all thirteen codes exist and every one is labelled")
+    @DisplayName("all fifteen codes exist and every one is labelled")
     void catalogueIsComplete() {
-        assertThat(SubTransactionType.values()).hasSize(13);
+        assertThat(SubTransactionType.values()).hasSize(15);
         for (SubTransactionType type : SubTransactionType.values()) {
             assertThat(type.getLabel()).as(type.name()).isNotBlank();
             assertThat(type.name()).as("code is three letters").hasSize(3);

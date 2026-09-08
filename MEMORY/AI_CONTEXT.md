@@ -7,6 +7,341 @@
 
 ## Current Version
 
+`0.53.0` — **Shipment Booking now folds "applicable charges" (the new Charge module,
+e.g. "Hamali") into net amount, GST-inclusive; not yet deployed (V66).** Direct request
+("while shipment booking this should be calculate as freight + added and applicable
+charge slab + insurance + oda + other charge + and gst" + "and appointment booking
+charge also"). Clarified via two questions: Appointment Delivery Charge stays GST-free
+(no change to that pre-existing V60 behavior) and multiple active charges for one
+service type all sum together (not "pick one").
+
+New `PricingEngine` calculator: `ApplicableChargesCalculator` (order 55, between
+Insurance=50 and GST=60), folded into `PricingContext.subtotalBeforeGst()` — so it gets
+GST'd automatically at the matched `Rate`'s own percentage, no delta math needed
+anywhere downstream. Reads `charge`/`ChargeSetting` repositories **directly**,
+bypassing `ChargeServiceImpl`'s `COMPANY_ADMIN`-only `@PreAuthorize` gate — same
+pattern `PricingEngineImpl` already uses toward routes/rates/company-settings, since
+booking a shipment is `WRITERS` tier (`BRANCH_MANAGER`/`OPERATOR` too), not admin-only.
+For each ACTIVE `Charge` matching the booking's `serviceTypeId`, the first ACTIVE
+`ChargeSetting` whose band covers this shipment (`SLAB`/`KG` on chargeable weight,
+`SLAB`/`KM` on the matched route's own `distanceKm`, `SLAB`/`BOTH` on both, `FACTOR`
+unconditionally) contributes its value — `AMOUNT` as-is, `PERCENTAGE` as a percentage
+of `FREIGHT` (an assumption, undocumented anywhere in the `charge` module itself since
+no `PERCENTAGE` charge has been authored yet). All matching charges' values sum.
+
+New `PricingResult.applicableCharges`/`ChargeBreakup.applicableCharges` field (also
+threaded through `PricingMapper`, the Freight-Factor fallback's manual
+`PricingResult` construction — stays 0 there, same as fuel/handling/oda/insurance,
+since that fallback deliberately carries none of those either). New
+`shipment_charges.applicable_charges` column (V66) — unlike freight/ODA/insurance,
+copied straight from `priced.applicableCharges()` in `ShipmentServiceImpl.copyCharge`
+with **no delta-and-GST treatment**, since it is never overridden at booking time (no
+editable input on the frontend) and `priced.gstAmount()`/`priced.netAmount()` already
+taxed and summed it inside the engine. Frontend: `ChargeBreakup`/`ShipmentCharge`
+models, `ChargeSummaryData` (+ new display row in `charge-summary.ts`, between
+Insurance and Other Charges), and every caller that builds one of those objects
+(`shipment-create.ts`, `shipment-charges.ts`, `shipment-view.ts`) updated to match.
+
+**A debugging detour worth remembering**: spent a long stretch chasing what looked
+like the new calculator silently returning 0 — added `System.out.println`/`log.warn`
+debug statements that never appeared in the log at all, even at the top of
+`StandardPricingStrategy.price()` itself. Root cause was **not** a bug in the
+calculator: this company has zero ACTIVE `Rate` rows for the test service type, so
+`PricingEngine.calculate()` was hitting `RouteRateUnavailableException` and falling
+back to `priceByDistanceAndWeight()` (the Freight-Factor grid path) every time — a
+manual code path that never calls `StandardPricingStrategy`/any `ChargeCalculator` at
+all, by design (see that method's own doc). The tell was sitting unnoticed in the very
+first response the whole time: `"appliedFreightFactor":9.0000` is only ever non-null
+on that fallback path. Lesson: check `appliedFreightFactor`/`matchedRouteId` first
+when a `ChargeCalculator`-level change appears to have no effect — it may mean the
+calculator chain never ran at all, not that the calculator itself is wrong.
+
+**Verified**: new `ApplicableChargesCalculatorTest` (8/8 — type/order, no-charge-zero,
+all 4 Hamali KG bands incl. half-open boundary exclusivity, FACTOR AMOUNT always
+applies, FACTOR PERCENTAGE-of-freight, multiple charges summing, KM slab against a
+mocked matched route's distance) plus the existing `PricingEngineImplTest` (8/8),
+`ShipmentServiceImplTest` (34/34), `ChargeServiceImplTest`/`ChargeSettingServiceImplTest`
+(9/9, 6/6) — all green, `mvn -o test-compile` clean, frontend `tsc --noEmit` clean.
+**Also live-verified end to end** on the throwaway `:8082` stack: created a real
+Route+Rate on the Pune→Latur lane (this company otherwise has zero active rates, only
+the Freight-Factor fallback) purely to exercise the real `StandardPricingStrategy`
+path — `POST /pricing/calculate` at 10/30/50/70kg returned `applicableCharges`
+10/15/20/25 exactly matching Hamali's bands, with `gstAmount` exactly
+`18% × (freight + applicableCharges)` each time; then a real `POST /shipments` booking
+at 4kg persisted `applicable_charges=10.0`, `gstAmount=9.0` (`18%×(40+10)`, correct
+even though District Level Freight overrode freight from the engine's own figure —
+the delta-GST math on freight absorbs it transparently), `netAmount=59.2`. Real
+`:8080`/`:4200` untouched throughout (throwaway `:8082` only). Test Route/Rate/
+shipment left in `courier_db` per house rule.
+
+Previously current:
+
+`0.52.0` — **Shipment Booking gained an Insurance Applicable checkbox — 2% of freight,
+not yet deployed (V65).** Direct request ("insurance applicable checkbox... calculate 2%
+of freight value as insurance in charge section"). New `shipments.insurance_applicable`
+boolean (`V65__shipment_insurance_applicable.sql`, same shape as `V60`'s
+`appointment_delivery` flag — no new column on `shipment_charges`, `insurance_charge`
+already exists there from the Pricing Engine's own rate-driven `InsuranceCalculator`,
+which this overrides). When checked, `ShipmentServiceImpl.copyCharge`'s
+`finalInsuranceCharge` becomes `freight * 2%` instead of `priced.insuranceCharge()` —
+same delta-and-tax treatment `odaCharge` already gets: `insuranceChargeDelta` (the
+difference from the engine's own now-possibly-superseded figure) gets fresh GST at the
+booking branch's own `gstPercentage`, both folded into the persisted `gstAmount`/
+`netAmount` alongside the existing freight/ODA/other-charges deltas — unlike
+`appointmentDeliveryCharge`, which is deliberately GST-free, insurance stays taxed
+because the engine's own rate-driven insurance always was. Threaded through
+`CreateShipmentCommand`/`UpdateShipmentCommand`/`CreateShipmentRequest`/
+`UpdateShipmentRequest`/`ShipmentMapper`/`ShipmentResponse` (new `insuranceApplicable`
+field throughout, alongside `appointmentDelivery`'s own fields) and persisted on
+`Shipment` itself (not just the charge row) so an edit re-shows the checkbox state.
+Frontend: `shipment-create.ts` gained the checkbox next to Appointment Delivery plus
+`finalInsuranceCharge()`/`insuranceChargeDelta()`/`gstOnInsuranceChargeDelta()` methods
+mirroring the existing `freightDelta`/`odaChargeDelta` live-preview math exactly, so the
+Booking Summary's Insurance line and Net Amount match what the server persists; wired
+into both the live `<app-charge-summary>` binding and the printed consignment copy's
+charges object. `shipment-edit.ts` gained the same checkbox (a plain typed control, no
+live-preview math there — the page already re-prices entirely server-side on save, same
+as `appointmentDeliveryCharge`). `shipment-view.ts` shows an "Insurance: Applicable (2%
+of freight)" row when set; the existing `charge-summary.ts` Insurance line already
+displays the server-computed figure unchanged, no component edit needed there. `charge-
+summary.ts`'s Insurance row stays read-only (unlike Other Charges/ODA) since this is a
+derived checkbox-driven figure, not a typed override. Verified: full backend `mvn -o
+test` (999 tests, incl. `ShipmentServiceImplTest`'s 34 — its `CreateShipmentCommand`/
+`UpdateShipmentCommand` test-fixture call sites all updated for the new trailing arity)
+and `mvn -o compile`/`test-compile` clean; frontend `tsc -p tsconfig.app.json --noEmit`
+and `ng build --configuration production` both clean. **Verified live** on the real
+`courier_db` (`V65` applied — picked up incidentally by the backend test run's own
+Flyway validation, then confirmed via `SHOW COLUMNS`) through a throwaway `:8082`
+backend (real `:8080`/`:4200` untouched): logged in as `pune@gmail.com`
+(`BRANCH_MANAGER`), booked the same Pune-GPO-area lane (freight `15.00`, Freight Factor
+fallback) twice — without the checkbox (`insuranceCharge: 0`, `gstAmount: 2.70`,
+`netAmount: 17.70`) and with it (`insuranceCharge: 0.30` = exactly 2% of freight,
+`gstAmount: 2.754` = +18% GST on that 0.30 delta, `netAmount: 18.054`) — both persisted
+`GET .../charges` figures matching the hand-computed math exactly. See
+`MEMORY/modules/shipment-booking.md`.
+
+Previously current:
+
+`0.51.0` — **Fixed a pre-existing bug found while live-verifying 0.49.0's Follow-ups
+card: `GET /api/v1/follow-ups` 400'd on any request omitting `overdue`.** Not a
+regression from 0.49.0 — shipped broken since the Follow-up module itself
+(v0.28.4-0.29.2, commit `9e04d53`): `FollowUpSearchRequest.overdue` was a
+primitive `boolean`, and `@ParameterObject`'s record-constructor binding can't
+unbox `null` for a missing query param, so even a bare `?page=0&size=20` 400'd.
+Silently masked in the existing Follow-ups list page (`follow-up-list.ts`) because
+its own default request happens to omit the key too (only sends `overdue: true`
+when the checkbox is checked) — this was broken for that page's default view as
+well, not just the new shipment-view card, just never noticed because a 400 there
+likely read as "no results" rather than a visible error. Fixed by widening
+`FollowUpSearchRequest.overdue` to `Boolean` and null-coalescing to `false` in
+`FollowUpMapper.toCriteria` (`Boolean.TRUE.equals(s.overdue())`) —
+`FollowUpCriteria.overdue` stays primitive, only ever built internally.
+**Verified live** (`:8082`/`:4300`, real `:4200`/backend untouched throughout):
+logged in as both BRANCH_MANAGER (`pune@gmail.com`) and COMPANY_ADMIN
+(`first.admin@gmail.com`); confirmed THC card (present+correct on a dispatched
+manifest, absent on a BOOKED/no-manifest shipment), Tickets card (existing
+fixture ticket + correct empty state), and Follow-ups card (a follow-up raised
+live through the page's own "Create Follow-up" link/form now actually appears,
+after the fix above — before it, the 400 was silently swallowed by the page's own
+`catchError`, so the card always looked "empty" instead of erroring) — every
+card's row link navigates to the right detail page. Also hit the documented
+sandbox quirk where a backgrounded `spring-boot:run` gets SIGTERM'd between agent
+turns mid-verification; restarted inline each time rather than trusting an
+earlier boot was still up. Full detail in `CHANGELOG.md` Unreleased 2026-09-08
+"Shipment view surfaces THC, tickets, and follow-ups" (appended, not a new
+entry).
+
+Previously current:
+
+`0.50.0` — **THC dispatch form gained Fuel Cost / Driver Advance / Toll / Other Amount;
+not yet deployed (V62).** Direct request ("while THC generate add option to enter Fuel
+Cost, Driver advance, toll and other required amount"). Four new nullable
+`DECIMAL(12,2)` columns on `manifests` (`fuel_cost`, `driver_advance`, `toll_amount`,
+`other_amount`) — `V62__manifest_trip_expenses.sql`. `Manifest.dispatch(...)` now takes
+all four alongside vehicle/driver/departureTime and stamps them once, at the same
+point-of-no-return as everything else on that method — no separate edit path, matching
+how vehicle/driver themselves are fixed at dispatch. Threaded through
+`ManifestService`/`ManifestServiceImpl`, `DispatchManifestRequest`/
+`DispatchManifestResponse` (`ShipmentMovementController`'s `/shipment-movement/dispatch`),
+and `ManifestResponse`/`ManifestMapper` too — the latter so a re-fetched manifest (THC's
+own "Preview THC" on an already-dispatched one, via `search()`) carries the amounts, not
+just the immediate dispatch response. Frontend `Manifest`/`DispatchManifestRequest`/
+`DispatchManifestResponse` models, `TripHireChallan`'s "Assign Vehicle & Driver" form
+(4 new number inputs, `Validators.min(0)`, all optional), and its `renderThcHtml` printed
+challan (new `.expenses` grid between the shipment table and Terms & Conditions,
+rendered only when the total is `> 0`) all updated to match. Verified:
+`ManifestServiceImplTest` (all cases, including the 4 call sites updated for the new
+`dispatch(...)` arity) via `mvn -o test -Dtest=ManifestServiceImplTest`; full backend
+`mvn -o compile`/`test-compile` clean; frontend `tsc -p tsconfig.app.json --noEmit`
+clean. **Verified live** on a throwaway stack (`:8083` backend, `:5173` `ng serve` —
+`5173` is already CORS-whitelisted per [[cors-hardcoded-allowed-origins]], so no proxy
+workaround needed; real `:8080`/`:4200` untouched): V62 applied clean against the real
+`courier_db` ("now at version v62"), full curl round-trip (create manifest -> dispatch
+with all four amounts -> response carries them -> re-fetch via `search()` carries them
+too -> `manifests` row confirmed via direct query -> negative `fuelCost` rejected 400
+-> re-dispatch still refused), then the same flow end-to-end through the actual UI
+(logged in as `pune@gmail.com`, filled Fuel Cost/Driver Advance/Toll/Other Amount,
+Dispatch, captured the auto-opened THC tab's HTML by patching `window.open`/
+`document.write` since the popup's `about:blank` URL isn't directly screenshot-able) —
+printed challan's new `.expenses` grid rendered `FUEL COST 1200 / DRIVER ADVANCE 500 /
+TOLL 150 / OTHER 75 / TOTAL EXPENSES 1925`, correct sum. Verification manifests
+(`MFT-260908-9170`, `MFT-260908-7838`) and their shipments left in `courier_db` per
+[[keep-test-data-in-dev-db]]. **Real `:8080` dev backend still pre-V62** — not
+restarted this session (never-kill-dev-ports rule); whoever restarts it next picks up
+V62 automatically via Flyway.
+
+Previously current:
+
+`0.49.0` — **Shipment view (the "shipment tracking page") now shows THC, tickets, and
+follow-ups; not yet deployed (no migration).** Direct request ("add option to
+generate ticket from shipment tracking page"), extended mid-task ("followup against
+shipment show on tracking page, show THC details, and tracking page show followup
+and ticket"). "Tracking page" = `ShipmentView` (`/shipments/:id`) — `TrackBox`
+navigates straight there on a hit, and it already carried "Raise Ticket"/"Create
+Follow-up" action links, just no view of what's already been raised, and no THC info.
+Backend: `Ticket` search gained a `relatedShipmentId` filter (`TicketSearchRequest`/
+`TicketCriteria`/`TicketMapper`/`TicketSpecifications`, all positional records so every
+call site needed the new arg) — follow-up search already had `shipment`, no backend
+change there. Frontend: `ShipmentView` now also loads `TicketService.search
+({relatedShipmentId})` and `FollowUpService.search({shipment})` (5 latest each) into
+new "Tickets"/"Follow-ups" cards linking to their detail pages, and — when
+`shipment.manifestId` is set — `ManifestService.get` + `VehicleService.get` +
+`ShipmentMovementService.userDirectory()` (same lookups `TripHireChallan` itself uses)
+into a new "Trip Hire Challan (THC)" card with a "View THC" link to `/movement
+/trip-hire-challan?manifestNumber=...` (that page already reads the query param).
+Verified: `mvn -o test -Dtest=Ticket*` green, `mvn -o compile` clean, `ng build`
+clean, `tsc --noEmit` clean on `shipment-view.ts`. **Not run against the live dev
+stack this session.** Full detail in `CHANGELOG.md` Unreleased 2026-09-08 "Shipment
+view surfaces THC, tickets, and follow-ups".
+
+Previously current:
+
+`0.48.0` — **TO_PAY debited from delivery branch wallet at THC in-scan, not at
+delivery; dashboard "TO_PAY awaiting delivery" count; not yet deployed (no migration).**
+Direct request ("if delivery branch received THC then debit topay order amount from
+that branch wallet not applicable for crossing branch and show count on dashboard").
+THC = Trip Hire Challan (the dispatching branch's onward-movement document); "received
+THC" means the receiving branch's in-scan against it. New `ShipmentEvent
+.ToPayReceivedAtDeliveryBranch`, published from `ShipmentServiceImpl.scanOneIn`'s
+existing `finalDestination` branch (already the one gated off a crossing hub's in-scan
+— untouched) only for TO_PAY (collects at delivery, not cash-on-delivery). New
+`ShipmentDeliveryWalletListener.on(ToPayReceivedAtDeliveryBranch)` calls new
+`WalletService.debitForToPayReceivedAtBranch` (`SubTransactionType.TPY` — no migration,
+`sub_transaction_type` has no CHECK-constraint enum). `deliver()`'s `CodCollectedAtDelivery`
+debit now fires only for real COD (`isCashOnDelivery()`); TO_PAY no longer double-debits
+at delivery. Dashboard: new `toPayAwaitingDelivery` on `CompanyOverviewResponse`/
+`BranchOverviewResponse` (TO_PAY shipments `IN_SCAN`/`OUT_FOR_DELIVERY` — already
+debited, not yet delivered), new `PaymentModeRepository
+.findByCompanyIdAndCollectAtDeliveryTrueAndCashOnDeliveryFalse` (payment mode is
+company-defined rows, not a fixed enum) and `ShipmentRepository
+.countByCompanyIdAndStatusInAndPaymentModeIdIn`; branch-scoped count reuses the
+already-fetched pending-delivery shipment list, filtered via a `HashSet` (not
+`Set.of`/`copyOf`, which throws on a null `contains()` probe — a shipment with no
+payment mode yet is a real case). **Landed alongside heavy concurrent WIP from three
+other sessions on the exact same dashboard files** (POD approval, delivery-aging
+buckets) — coordinated via cross-session messages rather than racing edits; in
+passing, fixed a pre-existing gap in `company-overview.spec.ts`'s fixture helper
+(missing `podOverview`) that was blocking that file's own compile, unrelated to this
+change. Verified: `ShipmentMovementServiceImplTest` (new in-scan + updated `deliver()`
+cases, 31/34 — 3 pre-existing failures belong to another session's in-progress
+`podApproved` work) and `DashboardServiceImplTest` (3/3, including the null-payment-mode
+edge case) via manual javac+JUnit-launcher; `company-overview.spec.ts` (6/6) via
+`ng test --include`. Full `mvn compile` clean. **Could not get a clean whole-module
+`mvn test`/`ng test` run** — blocked throughout by another session's unrelated,
+still-unresolved `CreateShipmentCommand`/`UpdateShipmentCommand` arity mismatch in
+`ShipmentServiceImplTest`. **Not run against the live dev stack this session.** Full
+detail in `CHANGELOG.md` Unreleased 2026-09-08 "TO_PAY debited from delivery branch
+wallet at THC in-scan, not at delivery".
+
+Previously current:
+
+`0.47.0` — **BranchType enum replaced wholesale: CP/BRANCH/HUB/VENDOR; not yet deployed
+(V61).** Direct request ("branch type should be CP(channel partner), BRANCH, HUB,
+VENDOR"). Old 5 values (`HEAD_OFFICE`, `REGIONAL_OFFICE`, `BOOKING_BRANCH`,
+`DELIVERY_BRANCH`, `BOOKING_DELIVERY_BRANCH`) never carried business logic of their own
+— the `allow*` flags are the operative switches, type is descriptive intent — so this
+was a low-risk rename, confirmed by grep before touching anything. Asked the user how to
+remap `HEAD_OFFICE`/`REGIONAL_OFFICE` (no direct new-value equivalent); they chose both
+-> `HUB`, the three booking/delivery variants -> `BRANCH`. `V61` remaps existing rows
+with a `CASE` UPDATE, then changes the column default to `'BRANCH'`; dev DB had 65 rows,
+all `BOOKING_DELIVERY_BRANCH` (pre-V61 head was V58 — V59/V60 in the working tree are
+someone else's uncommitted WIP, not yet applied). `Branch.branchType` default flipped to
+`BranchType.BRANCH`. Frontend `BranchType`/`BRANCH_TYPES` (branch.model.ts) updated to
+the 4 values; branch-form.ts and branch-filter.ts each got an explicit `TYPE_LABELS` map
+(the old generic snake-case-to-title-case label formatter would have rendered `CP` as
+"Cp"). Fixed stray old-enum references in `PerfDataGeneratorRunner`,
+`BranchServiceImplTest`, `BranchTest`, `AddressDistanceServiceTest`,
+`branch-form.spec.ts`. **Found unrelated pre-existing breakage while verifying**: both
+`mvn compile` and `ng test` fail on someone else's in-progress, uncommitted dashboard/POD
+feature (`DashboardServiceImpl` calls a `ShipmentRepository` method that no longer
+exists; `company-overview.spec.ts` has a stale fixture type) — confirmed via a scoped
+`git stash` (immediately popped back, nothing lost) that this is unrelated to and
+predates this change; left untouched and flagged to the other session via
+cross-session message. Could not get a clean full build/test run because of that;
+verified this change in isolation via `tsc --noEmit` on `tsconfig.app.json` (clean, no
+branch-related errors) and manual review. **Not run against the live dev stack this
+session.** Full detail in `CHANGELOG.md` Unreleased 2026-09-08 "BranchType enum replaced
+wholesale: CP/BRANCH/HUB/VENDOR".
+
+Previously current:
+
+`0.46.0` — **Weight-based delivery commission (rate/kg, per-branch minimum weight); not
+yet deployed.** Direct request: "Delivery commission should be 1.5*kg 1.5 should be
+editable and diff for every branch, minimum chargeable commision weight should be 10kg
+config per branch." Clarified up front: this is a *new*, independent commission — not a
+replacement of the existing `drsChargePerQty` (fixed amount per item quantity, still
+untouched). `V58` adds branch columns `delivery_commission_rate_per_kg` (default 1.50)
+and `delivery_commission_min_weight_kg` (default 10.00), wired through `Branch`,
+`Create/UpdateBranchRequest`/`Command`, `BranchResponse`, `BranchMapper`,
+`BranchServiceImpl` (defaults + audit snapshot) — exact same shape `drsChargePerQty`
+already has. `ShipmentServiceImpl.deliver()` computes `deliveryCommissionRatePerKg *
+max(shipment.chargeableWeight, deliveryCommissionMinWeightKg)` and publishes a new
+`ShipmentEvent.DeliveryWeightCommissionApplicable` (skipped at zero) alongside the
+existing `DrsChargeApplicable` — both fire independently on every delivery. New
+`SubTransactionType.DWC` ("Delivery Weight Commission", credit-only),
+`DeliveryWeightCommissionCreditCommand`, `WalletService.creditForDeliveryWeightCommission`,
+handled by a new `ShipmentDeliveryWalletListener.on(DeliveryWeightCommissionApplicable)`
+(same `AFTER_COMMIT`/`REQUIRES_NEW` shape as the DRS handler). Frontend branch form/view
+Charges card gained the two fields, mirroring DRS Charge per Qty. `mvn test` 953/953
+(new `deliverPublishesDeliveryWeightCommissionEvent`; `SubTransactionTypeTest` bumped to
+14 codes), `ng build` clean, `ng test branch-form.spec.ts` 4/4. **Verified live** on the
+real dev stack same day (edited/saved Pune branch's new fields as `COMPANY_ADMIN`,
+confirmed the round-trip in the DB, reset to defaults) — along the way, fixed an
+unrelated pre-existing `frontend/proxy.conf.json` stale-target bug (`:8100` vs the real
+backend's actual `:8080`) that was 500ing every `/api` call through `:4200`; see
+`CHANGELOG.md`. Full detail in `CHANGELOG.md` Unreleased 2026-09-08 "Weight-based
+delivery commission (rate/kg, per-branch minimum weight)".
+
+Previously current:
+
+`0.45.0` — **Every CSV "Export" download now appends a Total row; frontend only, not
+yet deployed.** Direct request ("every download excel option show last row as total of
+that all column"); asked scope, user chose all 19 export screens (not just financial
+reports). No real Excel/`xlsx` lib anywhere — every "Export" button built its own CSV
+inline. New shared `downloadCsv()` in `frontend/src/app/shared/utils/csv-export.util.ts`
+replaces the 19 duplicated download methods, appends `Total,<col sums>,...` as the last
+row (numeric columns picked by hand per file's real semantics — codes/IDs/ordinals/
+non-additive running balances excluded even when numeric-typed; `master-list`'s numeric
+columns are detected at runtime since it's generic across ~10 master types). `ng build
+--configuration production` clean. Full detail in `CHANGELOG.md` Unreleased 2026-09-07
+"Every CSV/'Export' download now appends a Total row".
+
+Previously current:
+
+`0.44.0` — **Wallet dashboard gained today's credit commission + booking/delivery pending
+commission; not yet deployed.** Direct request. `WalletSummaryResponse` gained three
+fields: `todayCreditCommission` (settled `COM`/`DRS` credits since midnight UTC),
+`bookingPendingCommission` (collect-at-booking shipments not yet `DISPATCHED`),
+`deliveryPendingCommission` (collect-at-delivery/TO_PAY/COD shipments not yet
+`DELIVERED`) — the latter two computed the same way the real commission credit
+(`ShipmentBookingWalletListener`) eventually will, via a new `PendingCommissionPort`
+(Finance owns the interface, `modules/shipment` supplies the adapter, same seam as
+`BranchDirectoryPort`). Frontend `wallet-dashboard.ts` gained a second three-tile row.
+`mvn test` 952/952, `ng build` clean. Full detail in `CHANGELOG.md` Unreleased 2026-09-07
+"Wallet dashboard: today's credit commission + booking/delivery pending commission".
+
+Previously current:
+
 `0.43.0` — **Weight (kg) in the shipment item grid is now a row total, never `qty *
 weight`; not yet deployed (commit `663ba63`).** Direct bug report ("in place of weight in
 kg should not be qty*weight"). Both `item-entry-grid.ts`'s preview and backend

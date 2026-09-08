@@ -16,13 +16,21 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { CompanyProfileService } from '@features/company/company-profile.service';
-import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES } from '@core/models/shipment.model';
+import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES, Manifest } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
+import { emptyPage } from '@core/models/page.model';
+import { TicketService } from '@core/services/ticket.service';
+import { Ticket } from '@core/models/ticket.model';
+import { FollowUpService } from '@core/services/follow-up.service';
+import { FollowUp } from '@core/models/follow-up.model';
+import { ManifestService } from '@features/manifest/manifest.service';
+import { VehicleService } from '@features/manifest/vehicle.service';
+import { ShipmentMovementService } from '@features/shipment-movement/shipment-movement.service';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
 const TIMELINE_ICONS: Record<string, string> = {
@@ -49,7 +57,8 @@ const TIMELINE_ICONS: Record<string, string> = {
       <div class="sv">
         <app-tracking-card [shipmentNumber]="shipment()!.shipmentNumber" [trackingNumber]="shipment()!.trackingNumber"
                            [status]="shipment()!.status" [bookingDate]="shipment()!.bookingDate"
-                           [expectedDeliveryDate]="shipment()!.expectedDeliveryDate ?? null" />
+                           [expectedDeliveryDate]="shipment()!.expectedDeliveryDate ?? null"
+                           [deliveredAt]="shipment()!.deliveredAt ?? null" />
 
         <div class="sv__actions">
           <a class="sv__link" [routerLink]="['/shipments', id, 'history']"><mat-icon>history</mat-icon> History</a>
@@ -120,7 +129,65 @@ const TIMELINE_ICONS: Record<string, string> = {
           </app-card>
         </div>
 
-        @if (!loadingDetails() && charge(); as c) {
+        @if (shipment()!.manifestId) {
+          <app-card title="Trip Hire Challan (THC)">
+            @if (loadingManifest()) {
+              <app-loader [minHeight]="100" caption="Loading…" />
+            } @else if (manifest(); as m) {
+              <dl class="kv">
+                <dt>THC No.</dt><dd>{{ m.manifestNumber }}</dd>
+                <dt>Status</dt><dd>{{ m.status }}</dd>
+                @if (vehicleLabel()) { <dt>Vehicle</dt><dd>{{ vehicleLabel() }}</dd> }
+                @if (driverInfo(); as d) { <dt>Driver</dt><dd>{{ d.name }} · {{ d.mobile }}</dd> }
+                @if (m.departureTime || m.dispatchedAt) {
+                  <dt>Dispatched</dt><dd>{{ (m.departureTime ?? m.dispatchedAt) | date: 'medium' }}</dd>
+                }
+              </dl>
+              <a class="sv__link" [routerLink]="['/movement/trip-hire-challan']" [queryParams]="{ manifestNumber: m.manifestNumber }">
+                <mat-icon>outbound</mat-icon> View THC</a>
+            } @else {
+              <p class="empty">THC not yet raised for this manifest.</p>
+            }
+          </app-card>
+        }
+
+        <div class="sv__grid2">
+          <app-card title="Tickets" [subtitle]="tickets().length + ' raised for this shipment'">
+            @if (loadingRelated()) {
+              <app-loader [minHeight]="80" caption="Loading…" />
+            } @else if (!tickets().length) {
+              <p class="empty">No tickets raised for this shipment.</p>
+            } @else {
+              <div class="rel">
+                @for (t of tickets(); track t.id) {
+                  <a class="rel__row" [routerLink]="['/support/tickets', t.id]">
+                    <span class="rel__title">{{ t.ticketNumber }} — {{ t.subject }}</span>
+                    <span class="tag">{{ t.status }}</span>
+                  </a>
+                }
+              </div>
+            }
+          </app-card>
+
+          <app-card title="Follow-ups" [subtitle]="followUps().length + ' raised for this shipment'">
+            @if (loadingRelated()) {
+              <app-loader [minHeight]="80" caption="Loading…" />
+            } @else if (!followUps().length) {
+              <p class="empty">No follow-ups raised for this shipment.</p>
+            } @else {
+              <div class="rel">
+                @for (f of followUps(); track f.id) {
+                  <a class="rel__row" [routerLink]="['/follow-ups', f.id]">
+                    <span class="rel__title">{{ f.title }}</span>
+                    <span class="tag">{{ f.status }}</span>
+                  </a>
+                }
+              </div>
+            }
+          </app-card>
+        </div>
+
+        @if (!loadingDetails() && isCompanyLevel() && charge(); as c) {
           <app-card title="Booking Branch Commission" subtitle="Computed from the booking branch's own charge percentages.">
             <div class="commission">
               <div class="commission__row"><span>Commission on Basic Freight</span><strong>{{ c.commissionOnBasicFreight | number:'1.2-2' }}</strong></div>
@@ -137,10 +204,20 @@ const TIMELINE_ICONS: Record<string, string> = {
               <dt>Booking Branch</dt><dd>{{ branchLabel(shipment()!.bookingBranchId) }}</dd>
               <dt>Delivery Branch</dt><dd>{{ branchLabel(shipment()!.deliveryBranchId) }}</dd>
               <dt>Pincode</dt><dd>{{ shipment()!.pickupPincode }} → {{ shipment()!.deliveryPincode }}</dd>
+              @if (shipment()!.status !== 'DELIVERED' && shipment()!.currentLocationId) {
+                <dt>Current Stock</dt><dd>Stock at {{ branchLabel(shipment()!.currentLocationId!) }}</dd>
+              }
               <dt>Service Type</dt><dd>{{ serviceTypeLabel(shipment()!.serviceTypeId) }}</dd>
               <dt>Package Type</dt><dd>{{ packageTypeLabel(shipment()!.packageTypeId) }}</dd>
               <dt>Payment Mode</dt><dd>{{ paymentModeLabel(shipment()!.paymentModeId) }}</dd>
               <dt>Shipment Type</dt><dd>{{ shipment()!.shipmentType }}</dd>
+              @if (shipment()!.appointmentDelivery) {
+                <dt>Appointment Delivery</dt>
+                <dd>{{ shipment()!.appointmentDate }} · {{ shipment()!.appointmentTimeSlot }}</dd>
+              }
+              @if (shipment()!.insuranceApplicable) {
+                <dt>Insurance</dt><dd>Applicable (2% of freight)</dd>
+              }
             </dl>
           </app-card>
 
@@ -264,12 +341,23 @@ const TIMELINE_ICONS: Record<string, string> = {
     .commission__row--total strong { color:var(--brand-600); }
     .eway-missing { color:var(--danger); }
     .eway-actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+    .rel { display:flex; flex-direction:column; gap:2px; }
+    .rel__row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 4px;
+      border-bottom:1px solid var(--surface-border); text-decoration:none; color:var(--content-fg); }
+    .rel__row:last-child { border-bottom:0; }
+    .rel__row:hover .rel__title { color:var(--brand-600); }
+    .rel__title { font:500 13px var(--font-sans); }
     @media (max-width:860px){ .sv__grid-parties { grid-template-columns:1fr; } .sv__grid { grid-template-columns:1fr; } .sv__grid app-card:nth-child(3) { grid-column:auto; } .sv__grid2 { grid-template-columns:1fr; } }
   `]
 })
 export class ShipmentView implements OnInit {
   private readonly service = inject(ShipmentService);
   private readonly ewayBillService = inject(EwayBillService);
+  private readonly ticketService = inject(TicketService);
+  private readonly followUpService = inject(FollowUpService);
+  private readonly manifestService = inject(ManifestService);
+  private readonly vehicleService = inject(VehicleService);
+  private readonly movementService = inject(ShipmentMovementService);
   private readonly auth = inject(AuthService);
   private readonly masters = inject(MasterDataService);
   private readonly companyProfile = inject(CompanyProfileService);
@@ -287,6 +375,15 @@ export class ShipmentView implements OnInit {
   readonly charge = signal<ShipmentCharge | null>(null);
   readonly ewayBillBusy = signal(false);
 
+  readonly loadingRelated = signal(true);
+  readonly tickets = signal<Ticket[]>([]);
+  readonly followUps = signal<FollowUp[]>([]);
+
+  readonly loadingManifest = signal(false);
+  readonly manifest = signal<Manifest | null>(null);
+  readonly vehicleLabel = signal<string | null>(null);
+  readonly driverInfo = signal<{ name: string; mobile: string } | null>(null);
+
   private readonly branchOptions = signal<SelectOption[]>([]);
   private readonly serviceTypeOptions = signal<SelectOption[]>([]);
   private readonly packageTypeOptions = signal<SelectOption[]>([]);
@@ -297,6 +394,9 @@ export class ShipmentView implements OnInit {
     cancel: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_CANCEL'] })
   }));
   readonly cancellable = computed(() => !!this.shipment() && CANCELLABLE_STATUSES.includes(this.shipment()!.status));
+  /** Commission is a company-level figure — hidden for branch-level roles tracking
+   *  someone else's shipment (BRANCH_MANAGER, BOOKING_OPERATOR, etc). */
+  readonly isCompanyLevel = computed(() => this.auth.hasAnyRole([AppRole.COMPANY_ADMIN]));
 
   id = '';
 
@@ -317,6 +417,8 @@ export class ShipmentView implements OnInit {
         this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: s.shipmentNumber }]);
         this.loading.set(false);
         this.loadDetails();
+        this.loadRelated();
+        if (s.manifestId) this.loadManifest(s.manifestId);
       },
       error: () => { this.shipment.set(null); this.loading.set(false); }
     });
@@ -334,6 +436,45 @@ export class ShipmentView implements OnInit {
         this.loadingDetails.set(false);
       },
       error: () => this.loadingDetails.set(false)
+    });
+  }
+
+  /** Tickets/follow-ups already raised against this shipment — the create links in
+   *  the actions bar only cover raising a new one. */
+  private loadRelated(): void {
+    this.loadingRelated.set(true);
+    forkJoin({
+      tickets: this.ticketService.search({ page: 0, size: 5, sort: 'createdAt,desc', relatedShipmentId: this.id })
+        .pipe(catchError(() => of(emptyPage<Ticket>()))),
+      followUps: this.followUpService.search({ page: 0, size: 5, sort: 'dueDate,desc', shipment: this.id })
+        .pipe(catchError(() => of(emptyPage<FollowUp>())))
+    }).subscribe(({ tickets, followUps }) => {
+      this.tickets.set(tickets.content);
+      this.followUps.set(followUps.content);
+      this.loadingRelated.set(false);
+    });
+  }
+
+  private loadManifest(manifestId: string): void {
+    this.loadingManifest.set(true);
+    this.manifestService.get(manifestId).subscribe({
+      next: (m) => {
+        this.manifest.set(m);
+        this.loadingManifest.set(false);
+        if (m.vehicleId) {
+          this.vehicleService.get(m.vehicleId).subscribe({
+            next: (v) => this.vehicleLabel.set(v.vehicleNumber),
+            error: () => this.vehicleLabel.set(null)
+          });
+        }
+        if (m.driverUserId) {
+          this.movementService.userDirectory().subscribe({
+            next: (dir) => this.driverInfo.set(dir.get(m.driverUserId!) ?? null),
+            error: () => this.driverInfo.set(null)
+          });
+        }
+      },
+      error: () => { this.manifest.set(null); this.loadingManifest.set(false); }
     });
   }
 
@@ -381,10 +522,11 @@ export class ShipmentView implements OnInit {
         declaredValue: s.declaredValue ?? null,
         charges: {
           freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
-          insuranceCharge: c.insuranceCharge, gstAmount: c.gstAmount, discount: c.discountAmount,
-          roundOff: c.roundOff, netAmount: c.netAmount
+          insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges, gstAmount: c.gstAmount,
+          discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
         },
         otherCharges: c.otherCharges,
+        appointmentDeliveryCharge: c.appointmentDeliveryCharge,
         remarks: s.remarks ?? null,
         createdByName: s.createdByName ?? null
       });

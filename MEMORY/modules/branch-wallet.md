@@ -152,6 +152,42 @@ Finance owns `BranchDirectoryPort` (`findBranch`, `branchOfUser`, `branchManaged
 Finance therefore never imports `Branch`, `BranchRepository` or a company user row — it gets a
 flat `BranchRef`. `BranchRepository` gained one additive query, `findFirstByCompanyIdAndManagerId`.
 
+## Shipment cancellation reversal (2026-09-08, not yet deployed)
+
+`WalletService.reverseForShipment(ShipmentReversalCommand)` — direct request: "shipment
+order cancel then if commission created then it should be debit all type of credited
+amount... debited should be credited to respective wallet." Wired from a new
+`shipmentNumber` field on `ShipmentEvent.Cancelled` (previously id/companyId only) through
+a new `ShipmentCancellationWalletListener` (same `AFTER_COMMIT`/`REQUIRES_NEW`/log-and-continue
+shape as `ShipmentBookingWalletListener`/`ShipmentDeliveryWalletListener`).
+
+Walks every **settled** `WalletTransaction` filed as `(SHIPMENT, shipmentNumber)`
+(`WalletTransactionRepository.findSettledByReferenceWithinCompany`, new) and, for each one
+that is not itself already a reversal, posts the opposite entry on **that same row's own
+wallet** (resolved from the ledger row, not a caller-supplied branch — a shipment's freight
+debit and its commission credit can sit on different branches): a debit (`SBK` freight)
+credits back as `SRF` (the "Shipment Refund" reason declared in `SubTransactionType` since
+day one but never posted by anything until now); a credit (`COM`/`DRS`/`DWC` commission)
+debits back as `ADJ`. `SRF`/`ADJ` entries are skipped as *sources* — a reversal is never
+itself reversed. One entry's failure (inactive wallet, insufficient balance to claw back an
+already-spent commission) is logged and does not block the others, same accepted-gap shape
+`debitForBooking` already documents.
+
+In practice, today, `ShipmentStatus.isCancellable()` only allows cancel from
+`BOOKED`/`READY_FOR_MANIFEST`/`MANIFEST_CREATED` — strictly before `DISPATCHED`, which is
+when `DispatchCommissionEarned` actually fires. So the only entry a cancel can currently
+find to reverse is the `SBK` freight debit from `PrepaidBookingConfirmed`; the commission
+half of this method is exercised by tests, not yet by anything reachable through the API.
+That is deliberate future-proofing per the direct request's own wording ("if commission
+created"), not dead code by accident — if the cancellable window ever widens, no further
+wiring is needed.
+
+New `ShipmentReversalCommand(shipmentNumber, remarks)`. Tests: `WalletServiceImplTest` gained
+four (`reverseCreditsBackADebit`, `reverseDebitsBackACredit`, `reversalsAreNotReReversed`,
+`partialFailureContinues`); `ShipmentServiceImplTest.cancelSucceedsFromBooked` now also
+asserts the published `Cancelled` event carries the shipment's own number. `mvn -o test`:
+1003/1003 green. Not yet deployed / verified live.
+
 ## Concurrency
 
 **Pessimistic, not optimistic.** Every money path loads through
@@ -371,7 +407,9 @@ runtime evidence**. Provision an active `RIVAL_CO` admin and a rival branch, the
       webhook fails signature verification (silently ack'd). Verified live on :8082 against
       real `courier_db` — signature checks (400/401), routing, notes extraction and refusal
       path all confirmed; actual credit not exercisable — no real Razorpay sandbox account.
-- [ ] Refunds — a `SRF`/`REFUNDED` reversal path.
+- [x] Refunds — a `SRF`/`ADJ` reversal path, closed 2026-09-08 as shipment-cancellation
+      reversal (`WalletService.reverseForShipment`) — see its own section above. Not a
+      standalone refund endpoint; triggered only by `ShipmentEvent.Cancelled`.
 - [ ] Low-balance threshold + alert, on `WalletDebited`.
 - [ ] **The frontend contract does not match this module** (`features/branch-wallet`, UI-11):
       it expects `/branch-wallets/{id}`, `CREDIT`/`DEBIT` rather than `CR`/`DR`, and sub-types

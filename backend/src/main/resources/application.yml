@@ -243,6 +243,9 @@ app:
       - http://localhost:3000
       - http://localhost:4200
       - http://localhost:5173
+      # proxy.conf.verify.json's own verification dev server (npx ng serve --port 4300) —
+      # otherwise its login POST gets a bare CORS 403 that renders as "Invalid credentials".
+      - http://localhost:4300
     allow-credentials: false
 
 pod:

@@ -7,14 +7,10 @@
 
 export type BranchStatus = 'ACTIVE' | 'INACTIVE';
 
-/** The branch classification — the backend's stand-in for "vendor type". 5 values. */
-export type BranchType =
-  | 'HEAD_OFFICE' | 'REGIONAL_OFFICE' | 'BOOKING_BRANCH'
-  | 'DELIVERY_BRANCH' | 'BOOKING_DELIVERY_BRANCH';
+/** The branch classification — the backend's stand-in for "vendor type". 4 values. */
+export type BranchType = 'CP' | 'BRANCH' | 'HUB' | 'VENDOR';
 
-export const BRANCH_TYPES: BranchType[] = [
-  'HEAD_OFFICE', 'REGIONAL_OFFICE', 'BOOKING_BRANCH', 'DELIVERY_BRANCH', 'BOOKING_DELIVERY_BRANCH'
-];
+export const BRANCH_TYPES: BranchType[] = ['CP', 'BRANCH', 'HUB', 'VENDOR'];
 
 /**
  * List projection — mirrors backend `BranchSummaryResponse` (GET /branches). Compact: it
@@ -79,6 +75,11 @@ export interface BranchResponse {
   companyServiceChargePercentage: number;
   /** DRS charge per item quantity, debited on delivery (drsCharge = drsChargePerQty * qty). */
   drsChargePerQty: number;
+  /** Delivery commission per kg, credited on delivery (deliveryCommission = rate *
+   *  max(chargeable weight, deliveryCommissionMinWeightKg)). Independent of drsChargePerQty. */
+  deliveryCommissionRatePerKg: number;
+  /** Minimum chargeable weight (kg) for deliveryCommissionRatePerKg. */
+  deliveryCommissionMinWeightKg: number;
   createdBy?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
@@ -171,6 +172,10 @@ export interface CreateBranchRequest {
   companyServiceChargePercentage?: number | null;
   /** Omitted defaults to 2 on the backend. */
   drsChargePerQty?: number | null;
+  /** Omitted defaults to 1.5 on the backend. */
+  deliveryCommissionRatePerKg?: number | null;
+  /** Omitted defaults to 10 on the backend. */
+  deliveryCommissionMinWeightKg?: number | null;
   /** Optional; a branch always gets a user, this only says who it is. */
   branchUser?: BranchUserRequest | null;
 }
@@ -217,6 +222,8 @@ export interface UpdateBranchRequest {
   commissionOnBasicFreight: number;
   companyServiceChargePercentage: number;
   drsChargePerQty: number;
+  deliveryCommissionRatePerKg: number;
+  deliveryCommissionMinWeightKg: number;
   version: number;
 }
 

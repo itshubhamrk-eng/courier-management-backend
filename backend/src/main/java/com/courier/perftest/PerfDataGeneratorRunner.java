@@ -239,7 +239,7 @@ public class PerfDataGeneratorRunner implements CommandLineRunner {
                 branchPs.setBytes(i++, TimeOrderedUuid.toBytes(ctx.companyId));
                 branchPs.setString(i++, branchCode);
                 branchPs.setString(i++, "%s Branch %02d".formatted(city, b));
-                branchPs.setString(i++, "BOOKING_DELIVERY_BRANCH");
+                branchPs.setString(i++, "BRANCH");
                 branchPs.setString(i++, "ACTIVE");
                 branchPs.setString(i++, "branch%02d@t%02d.perf.local".formatted(b, companyIdx));
                 branchPs.setString(i++, "91%08d".formatted(companyIdx * 1000 + b));

@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,6 +15,16 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
             + "and h.companyId = :companyId order by h.changedAt asc")
     List<ShipmentStatusHistory> findAllByShipmentIdWithinCompany(@Param("shipmentId") UUID shipmentId,
                                                                  @Param("companyId") UUID companyId);
+
+    /** Batch "when was each of these shipments last IN_SCAN'd" — the Bulk Shipment Tracking
+     *  report's Received Date column, same "one query, not one per row" shape as
+     *  {@code ShipmentServiceImpl.deliveredAtFor}. A shipment crossing more than one hop can
+     *  have several IN_SCAN entries; the caller picks the latest by {@code changedAt}. */
+    @Query("select h from ShipmentStatusHistory h where h.companyId = :companyId "
+            + "and h.shipmentId in :shipmentIds and h.status = :status")
+    List<ShipmentStatusHistory> findAllByCompanyIdAndShipmentIdInAndStatus(
+            @Param("companyId") UUID companyId, @Param("shipmentIds") Collection<UUID> shipmentIds,
+            @Param("status") ShipmentStatus status);
 
     // -------------------------------------------------------------- dashboard: recent activity
     // Same explicit-companyId discipline as ShipmentRepository (see its own javadoc and

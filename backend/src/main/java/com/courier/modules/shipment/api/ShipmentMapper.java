@@ -59,7 +59,9 @@ public class ShipmentMapper {
                 r.actualWeight(), r.length(), r.width(), r.height(),
                 r.crossing(), r.crossingBranchIds(), r.crossingCharge(),
                 r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
-                r.destinationAreaId(), r.ratePerKgOverride());
+                r.destinationAreaId(), r.ratePerKgOverride(),
+                r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
+                r.appointmentDeliveryCharge(), r.insuranceApplicable());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {
@@ -73,7 +75,9 @@ public class ShipmentMapper {
                 r.remarks(), r.otherCharges(), r.odaCharge(), r.freightFactorOverride(), toItemCommands(r.items()),
                 r.actualWeight(), r.length(), r.width(), r.height(),
                 r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
-                r.destinationAreaId(), r.ratePerKgOverride());
+                r.destinationAreaId(), r.ratePerKgOverride(),
+                r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
+                r.appointmentDeliveryCharge(), r.insuranceApplicable());
     }
 
     /** The shipment's own invoiceValue rides along as the E-Way Bill's invoiceValue too —
@@ -128,6 +132,8 @@ public class ShipmentMapper {
                 s.getShipmentType(), s.getExpectedDeliveryDate(),
                 s.getActualWeight(), s.getVolumetricWeight(), s.getChargeableWeight(),
                 s.getDeclaredValue(), s.getNumberOfPackages(), s.getStatus(), s.getRemarks(),
+                s.isAppointmentDelivery(), s.getAppointmentDate(), s.getAppointmentTimeSlot(),
+                s.isInsuranceApplicable(),
                 pod != null ? pod.getDeliveredAt() : null,
                 latestAssetUrl(assets, ShipmentAssetType.POD, "PHOTO"),
                 latestAssetUrl(assets, ShipmentAssetType.POD, "SIGNATURE"),
@@ -189,7 +195,7 @@ public class ShipmentMapper {
     }
 
     public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,
-                                             Instant deliveredAt) {
+                                             Instant deliveredAt, String invoiceNumber, Instant receivedAt) {
         return new ShipmentSummaryResponse(
                 s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getBookingDate(),
                 s.getBookingBranchId(), s.getDeliveryBranchId(), s.getCurrentLocationId(), s.getNextLocationId(),
@@ -200,7 +206,7 @@ public class ShipmentMapper {
                 charge == null ? null : charge.getCommissionOnBasicFreight(),
                 charge == null ? null : charge.getBranchCommissionOnOtherAmount(),
                 charge == null ? null : charge.getCompanyCommissionOnBasicFreight(),
-                s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion());
+                s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion(), invoiceNumber, receivedAt);
     }
 
     public ShipmentItemResponse toResponse(ShipmentItem i) {
@@ -214,8 +220,10 @@ public class ShipmentMapper {
         return new ShipmentChargeResponse(
                 c.charge().getShipmentId(),
                 c.charge().getFreight(), c.charge().getFuelCharge(), c.charge().getHandlingCharge(),
-                c.charge().getOdaCharge(), c.charge().getInsuranceCharge(), c.charge().getGstAmount(),
+                c.charge().getOdaCharge(), c.charge().getInsuranceCharge(), c.charge().getApplicableCharges(),
+                c.charge().getGstAmount(),
                 c.charge().getDiscountAmount(), c.charge().getRoundOff(), c.charge().getOtherCharges(),
+                c.charge().getAppointmentDeliveryCharge(),
                 c.charge().getCommissionOnBasicFreight(), c.charge().getBranchCommissionOnOtherAmount(),
                 c.charge().getCompanyCommissionOnBasicFreight(), c.charge().getTotalCommission(),
                 c.charge().getNetAmount(),

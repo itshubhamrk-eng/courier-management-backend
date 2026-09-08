@@ -52,7 +52,7 @@ public record CompanySettingsResponse(
     @Schema(name = "FinanceSettings")
     public record Finance(BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,
                           boolean walletEnabled, boolean codEnabled, boolean onlinePaymentEnabled,
-                          boolean autoInvoiceGeneration) {
+                          boolean autoInvoiceGeneration, String roundOffRule) {
     }
 
     @Schema(name = "SlaSettings", description = "Shipment lifecycle SLA hours; breach auto-raises a ticket")

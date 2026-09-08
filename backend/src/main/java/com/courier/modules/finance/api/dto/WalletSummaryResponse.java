@@ -41,6 +41,13 @@ public record WalletSummaryResponse(
         @Schema(description = "Settled credits over the wallet's life") BigDecimal totalCredit,
         @Schema(description = "Settled debits over the wallet's life") BigDecimal totalDebit,
 
+        @Schema(description = "Settled commission (COM/DRS) credits since 00:00 UTC — the "
+                + "commission slice of todayCredit, not a separate pool") BigDecimal todayCreditCommission,
+        @Schema(description = "Commission on collect-at-booking shipments not yet dispatched — "
+                + "earned once Trip Challan dispatch fires, zero until then") BigDecimal bookingPendingCommission,
+        @Schema(description = "Commission on collect-at-delivery (TO_PAY/COD) shipments not yet "
+                + "delivered — earned once delivery fires, zero until then") BigDecimal deliveryPendingCommission,
+
         long transactionCount,
         Instant lastTransactionAt,
         BigDecimal lastRechargeAmount,

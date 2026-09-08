@@ -2,6 +2,7 @@ package com.courier.modules.shipment.application.event;
 
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
+import com.courier.modules.finance.application.command.DeliveryWeightCommissionCreditCommand;
 import com.courier.modules.finance.application.command.DrsChargeCreditCommand;
 import com.courier.shared.company.CompanyContext;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,25 @@ public class ShipmentDeliveryWalletListener {
         }
     }
 
+    /**
+     * The in-scan-time sibling of {@link #on(ShipmentEvent.CodCollectedAtDelivery)} — fires
+     * once {@code scanOneIn}'s own transaction (not {@code deliver}'s) commits, since a
+     * TO_PAY shipment's freight is owed the moment it lands at its final delivery branch.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(ShipmentEvent.ToPayReceivedAtDeliveryBranch event) {
+        try {
+            CompanyContext.runAs(event.companyId(), () -> walletService.debitForToPayReceivedAtBranch(
+                    new CodDeliveryDebitCommand(event.deliveryBranchId(), event.netAmount(),
+                            event.shipmentNumber(), "TO_PAY received at branch for shipment " + event.shipmentNumber())));
+        } catch (RuntimeException e) {
+            log.error("Could not debit delivery branch {} for TO_PAY receipt of shipment {} ({}); the "
+                    + "shipment stays in-scanned, undebited — reconcile manually", event.deliveryBranchId(),
+                    event.shipmentNumber(), event.shipmentId(), e);
+        }
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(ShipmentEvent.DrsChargeApplicable event) {
@@ -57,6 +77,20 @@ public class ShipmentDeliveryWalletListener {
             log.error("Could not credit DRS commission to delivery branch {} for shipment {} ({}); the "
                     + "shipment stays delivered, uncredited — reconcile manually", event.deliveryBranchId(),
                     event.shipmentNumber(), event.shipmentId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(ShipmentEvent.DeliveryWeightCommissionApplicable event) {
+        try {
+            CompanyContext.runAs(event.companyId(), () -> walletService.creditForDeliveryWeightCommission(
+                    new DeliveryWeightCommissionCreditCommand(event.deliveryBranchId(), event.amount(),
+                            event.shipmentNumber(), "Delivery weight commission for shipment " + event.shipmentNumber())));
+        } catch (RuntimeException e) {
+            log.error("Could not credit delivery weight commission to delivery branch {} for shipment {} "
+                    + "({}); the shipment stays delivered, uncredited — reconcile manually",
+                    event.deliveryBranchId(), event.shipmentNumber(), event.shipmentId(), e);
         }
     }
 }

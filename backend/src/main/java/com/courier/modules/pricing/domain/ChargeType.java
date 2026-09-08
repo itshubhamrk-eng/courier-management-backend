@@ -11,6 +11,10 @@ public enum ChargeType {
     HANDLING,
     ODA,
     INSURANCE,
+    /** Sum of every ACTIVE {@code com.courier.modules.charge.domain.Charge} configured
+     *  against this booking's service type (e.g. "Hamali") — see
+     *  {@code com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator}. */
+    APPLICABLE_CHARGES,
     GST,
     DISCOUNT,
     ROUND_OFF

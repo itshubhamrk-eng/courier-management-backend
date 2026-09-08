@@ -54,8 +54,13 @@ public class PodVerificationServiceImpl implements PodVerificationService {
 
     private static final String WRITERS = "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '"
             + Roles.BRANCH_MANAGER + "', '" + Roles.OPERATOR + "')";
-    private static final String REVIEWERS = "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '"
-            + Roles.BRANCH_MANAGER + "')";
+    /** Approve/reject — and the company-direct upload override — are company-level
+     *  decisions, narrower than {@link #WRITERS}: a delivery operator or branch manager may
+     *  capture/run a POD but not decide their own branch's submission, on direct user
+     *  request ("approve or reject access should be company level"). Narrowed from also
+     *  including {@code BRANCH_MANAGER} (this module's original build) once approval started
+     *  crediting delivery commission. */
+    private static final String REVIEWERS = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     private static final String READERS = "isAuthenticated()";
 
     private static final String POD_TICKET_CATEGORY = "POD Verification Issue";
@@ -154,6 +159,14 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         auditService.record(AuditAction.POD_VERIFICATION_RUN, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", shipment.getShipmentNumber(),
                         "status", status.name(), "score", result.score()));
+
+        // Only PASS ever earns delivery commission — markPodApproved() itself credits it
+        // right away if the shipment already happens to be DELIVERED (verify() can also be
+        // reached after "Complete Delivery" was already clicked, since delivery isn't
+        // gated on POD status any more).
+        if (status == PodVerificationStatus.PASS) {
+            shipmentService.markPodApproved(shipmentId);
+        }
 
         // AI is informational, never a delivery blocker (deliver() never reads this table) —
         // so a ticket-raise failure here must not roll back the verification itself. Swallowed
@@ -263,6 +276,68 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         auditService.record(
                 command.approve() ? AuditAction.POD_VERIFICATION_APPROVED : AuditAction.POD_VERIFICATION_REJECTED,
                 ENTITY, saved.getId(), Map.of("shipmentId", shipmentId.toString()));
+
+        if (command.approve()) {
+            shipmentService.markPodApproved(shipmentId);
+        }
+
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(REVIEWERS)
+    public PodVerification uploadByCompany(UUID shipmentId, CompanyUploadPodCommand command) {
+        UUID companyId = requireCompany();
+        Shipment shipment = shipmentService.getById(shipmentId);
+
+        if (shipment.getStatus() != ShipmentStatus.OUT_FOR_DELIVERY && shipment.getStatus() != ShipmentStatus.DELIVERED) {
+            throw new BusinessRuleException("Shipment %s is %s — a company POD upload only applies to "
+                    .formatted(shipment.getShipmentNumber(), shipment.getStatus())
+                    + "an OUT_FOR_DELIVERY or DELIVERED shipment.");
+        }
+        if (command.photoContent() == null || command.photoContent().length == 0) {
+            throw new BusinessRuleException("A delivery photo is required to upload a POD.");
+        }
+
+        String podHash = sha256Hex(command.photoContent());
+
+        String photoUrl = shipmentService.uploadPodFile(shipmentId, new ShipmentService.UploadPodFileCommand(
+                command.photoContent(), command.photoFilename(), command.photoContentType(), "PHOTO"));
+        ShipmentAsset photoAsset = shipmentService.attachPodAsset(shipmentId, "PHOTO", photoUrl);
+        if (command.signatureContent() != null && command.signatureContent().length > 0) {
+            String signatureUrl = shipmentService.uploadPodFile(shipmentId,
+                    new ShipmentService.UploadPodFileCommand(command.signatureContent(),
+                            command.signatureFilename(), command.signatureContentType(), "SIGNATURE"));
+            shipmentService.attachPodAsset(shipmentId, "SIGNATURE", signatureUrl);
+        }
+
+        // A company-direct upload is always auto-approved, on direct user request ("if
+        // uploaded by company then it should be direct approved") — no AI call, no REVIEW
+        // step. Skips the AI provider entirely rather than routing through it only to
+        // override its result, since the whole point is the company vouching for it directly.
+        PodVerification verification = PodVerification.builder()
+                .shipmentId(shipmentId)
+                .podDocumentId(photoAsset.getId())
+                .verificationStatus(PodVerificationStatus.PASS)
+                .verificationScore(100)
+                .signatureDetected(command.signatureContent() != null && command.signatureContent().length > 0)
+                .detectedReceiverName(command.receiverName())
+                .podHash(podHash)
+                .aiProvider("company-direct")
+                .aiModel("n/a")
+                .verifiedAt(Instant.now())
+                .reviewedBy(SecurityUtils.getCurrentUserId().orElse(null))
+                .reviewedAt(Instant.now())
+                .reviewRemarks("Uploaded and auto-approved by company")
+                .build();
+        verification.reasons(List.of("Uploaded directly by company — auto-approved, no AI review."));
+        PodVerification saved = podVerificationRepository.save(verification);
+
+        auditService.record(AuditAction.POD_VERIFICATION_COMPANY_UPLOAD, ENTITY, saved.getId(),
+                Map.of("shipmentNumber", shipment.getShipmentNumber()));
+
+        shipmentService.markPodApproved(shipmentId);
 
         return saved;
     }

@@ -24,6 +24,7 @@ import { AssignBranchDialog } from './components/assign-branch-dialog';
 import { AssignHubDialog } from './components/assign-hub-dialog';
 import { ResetPasswordDialog } from './components/reset-password-dialog';
 import { Lookup, UserService } from './user.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const ADMIN = [AppRole.COMPANY_ADMIN];
 // A branch manager staffs their own branch: create/update/assign-role, scoped server-side
@@ -243,12 +244,8 @@ export class UserList implements OnInit {
 
   private download(rows: AppUser[]): void {
     const cols: (keyof AppUser)[] = ['employeeCode', 'displayName', 'email', 'username', 'mobile', 'designation', 'department', 'status'];
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const lines = rows.map((r) => cols.map((c) => r[c] as string | number | boolean));
+    downloadCsv(`users-${new Date().toISOString().slice(0, 10)}.csv`, cols, lines);
     this.notify.info(`Exported ${rows.length} user(s).`);
   }
 }

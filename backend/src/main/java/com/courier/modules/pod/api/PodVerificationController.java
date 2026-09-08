@@ -111,6 +111,25 @@ public class PodVerificationController {
         return ApiResponse.success(toResponse(verification), request.approve() ? "POD approved" : "POD rejected");
     }
 
+    @PostMapping(value = "/api/v1/pod/company-upload/{shipmentId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Company-level POD upload — no branch login required",
+            description = "COMPANY_ADMIN only. Uploads a POD for any of the company's own "
+                    + "OUT_FOR_DELIVERY/DELIVERED shipments, independent of branch context, "
+                    + "and always auto-approves it — no AI call, no REVIEW step.")
+    public ApiResponse<PodVerificationResponse> uploadByCompany(
+            @PathVariable UUID shipmentId,
+            @RequestParam("photo") MultipartFile photo,
+            @RequestParam(value = "signature", required = false) MultipartFile signature,
+            @RequestParam("receiverName") String receiverName) {
+
+        var verification = podVerificationService.uploadByCompany(shipmentId,
+                new PodVerificationService.CompanyUploadPodCommand(
+                        readBytes(photo), originalFilename(photo), contentType(photo),
+                        readBytes(signature), originalFilename(signature), contentType(signature),
+                        receiverName));
+        return ApiResponse.success(toResponse(verification), "POD uploaded and approved");
+    }
+
     @GetMapping("/api/v1/pod/pending-review")
     @Operation(summary = "Manual Review worklist",
             description = "Every POD verification currently REVIEW-status, oldest first — the "
@@ -141,9 +160,10 @@ public class PodVerificationController {
         Map<UUID, PodVerification> verifications = podVerificationService.latestByShipmentIds(ids);
         Map<UUID, List<ShipmentAsset>> podAssets = shipmentService.podAssetsFor(ids);
         Map<UUID, Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        Map<UUID, Instant> receivedAt = shipmentService.receivedAtFor(ids);
 
         return ApiResponse.success(PageResponse.from(page, s -> mapper.toDeliveredRow(
-                s, verifications.get(s.getId()), deliveredAt.get(s.getId()),
+                s, verifications.get(s.getId()), receivedAt.get(s.getId()), deliveredAt.get(s.getId()),
                 podAssets.getOrDefault(s.getId(), List.of()))));
     }
 

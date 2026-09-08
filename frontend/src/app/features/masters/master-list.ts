@@ -13,6 +13,7 @@ import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 import { MasterDataService } from './master-data.service';
 import { MasterFilter } from './components/master-filter';
 import { MasterAction, MasterPerms, MasterTable } from './components/master-table';
@@ -277,18 +278,13 @@ export class MasterList {
   }
 
   private download(def: MasterDefinition, rows: MasterRecord[]): void {
-    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = def.exportColumns.join(',');
-    const lines = rows.map((row) => def.exportColumns.map((key) => escape(row[key])).join(','));
-
-    const url = URL.createObjectURL(
-      new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' })
-    );
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${def.key}-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const lines = rows.map((row) => def.exportColumns.map((key) => row[key] as string | number | boolean));
+    // Master field types vary per definition (country/state/city/vehicle-type/...), so numeric
+    // columns are detected from the actual data rather than a hardcoded index list.
+    const numericCols = def.exportColumns
+      .map((key, i) => (rows.some((row) => typeof row[key] === 'number') ? i : -1))
+      .filter((i) => i >= 0);
+    downloadCsv(`${def.key}-${new Date().toISOString().slice(0, 10)}.csv`, def.exportColumns, lines, numericCols);
     this.notify.info(`Exported ${rows.length} row(s).`);
   }
 }

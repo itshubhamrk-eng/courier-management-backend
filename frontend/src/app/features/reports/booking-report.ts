@@ -17,6 +17,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentFilter } from '../shipment/components/shipment-filter';
 import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badge';
 import { ShipmentService } from '../shipment/shipment.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
  * Booking Report — every shipment booked in the date range/branch/status the filter picks,
@@ -199,22 +200,17 @@ export class BookingReport implements OnInit {
   }
 
   private download(rows: Shipment[]): void {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
       'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount',
       'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
       'companyCommissionOnBasicFreight', 'status'];
-    const line = (r: Shipment) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
+    const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
       r.chargeableWeight, r.netAmount ?? '',
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
-      r.companyCommissionOnBasicFreight ?? '', r.status].map(esc).join(',');
-    const csv = [header.join(','), ...rows.map(line)].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `booking-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+      r.companyCommissionOnBasicFreight ?? '', r.status]);
+    downloadCsv(`booking-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [9, 10, 11, 12, 13, 14]);
     this.notify.info(`Exported ${rows.length} booking(s).`);
   }
 }

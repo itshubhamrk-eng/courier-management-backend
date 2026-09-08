@@ -46,6 +46,11 @@ public record UpdateShipmentCommand(
         BigDecimal invoiceValue,
         EwayBillDataCommand ewayBill,
         UUID destinationAreaId,
-        BigDecimal ratePerKgOverride
+        BigDecimal ratePerKgOverride,
+        Boolean appointmentDelivery,
+        LocalDate appointmentDate,
+        String appointmentTimeSlot,
+        BigDecimal appointmentDeliveryCharge,
+        Boolean insuranceApplicable
 ) {
 }

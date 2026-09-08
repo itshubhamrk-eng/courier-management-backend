@@ -126,6 +126,10 @@ class ShipmentMovementServiceImplTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Default: collect-at-booking, so scanOneIn's finalDestination branch (which now
+        // unconditionally reads the payment mode) doesn't publish ToPayReceivedAtDeliveryBranch
+        // for tests that don't care about payment mode at all. Overridden per test below.
+        when(paymentModeService.getById(any())).thenReturn(paymentMode(true));
     }
 
     @AfterEach
@@ -349,6 +353,59 @@ class ShipmentMovementServiceImplTest {
         assertThat(shipment.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
     }
 
+    @Test
+    @DisplayName("inScan at the shipment's own final delivery branch publishes a TO_PAY wallet-debit "
+            + "event immediately, ahead of actual delivery")
+    void inScanAtFinalDestinationPublishesToPayEvent() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+        ShipmentCharge charge = ShipmentCharge.builder().netAmount(new BigDecimal("300.0000")).build();
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(charge));
+
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().deliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
+        assertThat(captor.getValue().netAmount()).isEqualByComparingTo("300.0000");
+    }
+
+    @Test
+    @DisplayName("inScan at the shipment's own final delivery branch never publishes the TO_PAY "
+            + "event for COD — the consignee's amount, only real once actually collected at delivery")
+    void inScanAtFinalDestinationSkipsToPayEventForCod() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(codPaymentMode());
+
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
+    }
+
+    @Test
+    @DisplayName("inScan at a crossing hub never publishes the TO_PAY event even for a TO_PAY "
+            + "shipment — only its own final delivery branch's in-scan does")
+    void inScanAtCrossingHubSkipsToPayEvent() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        shipment.setCurrentLocationId(BOOKING_BRANCH);
+        shipment.setNextLocationId(CROSSING_BRANCH);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(crossingService.arriveAt(shipment.getId(), CROSSING_BRANCH))
+                .thenReturn(Optional.of(SECOND_CROSSING_BRANCH));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+
+        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
+    }
+
     // -------------------------------------------------------------------- assignOutForDelivery
 
     @Test
@@ -440,9 +497,13 @@ class ShipmentMovementServiceImplTest {
 
     @Test
     @DisplayName("deliver publishes a DRS charge debit event for the delivery branch, "
-            + "drsChargePerQty * total item quantity")
+            + "drsChargePerQty * total item quantity — once POD is already approved")
     void deliverPublishesDrsChargeEvent() {
         Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        // Commission crediting is gated on podApproved (2026-09-08) — this test covers the
+        // "POD already approved before delivery" ordering; see
+        // deliverDoesNotPublishCommissionEventsWhenPodNotApproved for the gate itself.
+        shipment.setPodApproved(true);
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
         DeliveryAssignment assignment = DeliveryAssignment.builder()
@@ -471,8 +532,75 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
-    @DisplayName("deliver publishes a wallet-debit event for the delivery branch when the payment mode collects at delivery")
+    @DisplayName("deliver publishes a weight-based delivery commission event, rate * "
+            + "max(chargeable weight, branch's minimum chargeable weight)")
+    void deliverPublishesDeliveryWeightCommissionEvent() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        // Commission crediting is gated on podApproved (2026-09-08) — this test covers the
+        // "POD already approved before delivery" ordering.
+        shipment.setPodApproved(true);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(true));
+        // shipment's own chargeableWeight is 5.000 (see shipment()) — below the branch's
+        // 10.00 kg floor, so the floor, not the actual weight, drives the amount.
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE")
+                        .deliveryCommissionRatePerKg(new BigDecimal("1.50"))
+                        .deliveryCommissionMinWeightKg(new BigDecimal("10.00")).build());
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DeliveryWeightCommissionApplicable.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().deliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
+        assertThat(captor.getValue().amount()).isEqualByComparingTo("15.0000");
+    }
+
+    @Test
+    @DisplayName("deliver publishes a wallet-debit event for the delivery branch for a real COD "
+            + "(cash-on-delivery) payment mode")
     void deliverCollectAtDeliveryPublishesCodEvent() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(codPaymentMode());
+        ShipmentCharge charge = ShipmentCharge.builder().netAmount(new BigDecimal("450.0000")).build();
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(charge));
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE").build());
+        when(branchService.getById(BOOKING_BRANCH))
+                .thenReturn(Branch.builder().branchCode("MUMBAI").build());
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.CodCollectedAtDelivery.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().deliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
+        assertThat(captor.getValue().netAmount()).isEqualByComparingTo("450.0000");
+    }
+
+    @Test
+    @DisplayName("deliver does NOT publish CodCollectedAtDelivery for TO_PAY — its freight was "
+            + "already debited earlier, at in-scan")
+    void deliverSkipsCodEventForToPay() {
         Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
@@ -494,11 +622,7 @@ class ShipmentMovementServiceImplTest {
         service.deliver(shipment.getId(),
                 new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
 
-        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.CodCollectedAtDelivery.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().deliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
-        assertThat(captor.getValue().shipmentNumber()).isEqualTo(shipment.getShipmentNumber());
-        assertThat(captor.getValue().netAmount()).isEqualByComparingTo("450.0000");
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.CodCollectedAtDelivery.class));
     }
 
     @Test
@@ -506,6 +630,9 @@ class ShipmentMovementServiceImplTest {
             + "(not the company's) once payment is actually collected, when instantCommission is on")
     void deliverCollectAtDeliveryPublishesCommissionWhenInstant() {
         Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        // Commission crediting is gated on podApproved (2026-09-08) — this test covers the
+        // "POD already approved before delivery" ordering.
+        shipment.setPodApproved(true);
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
         DeliveryAssignment assignment = DeliveryAssignment.builder()
@@ -569,6 +696,104 @@ class ShipmentMovementServiceImplTest {
                 new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryCommissionEarned.class));
+    }
+
+    @Test
+    @DisplayName("deliver publishes no delivery commission at all (DRS, weight, or booking-branch "
+            + "commission) when POD hasn't been approved yet — commission crediting is gated on "
+            + "podApproved (2026-09-08), not just DELIVERED")
+    void deliverDoesNotPublishCommissionEventsWhenPodNotApproved() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        // podApproved defaults false — this shipment has never had a POD run against it.
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+        ShipmentCharge charge = ShipmentCharge.builder()
+                .netAmount(new BigDecimal("450.0000"))
+                .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                .build();
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(charge));
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE")
+                        .drsChargePerQty(new BigDecimal("5.00"))
+                        .deliveryCommissionRatePerKg(new BigDecimal("1.50"))
+                        .deliveryCommissionMinWeightKg(new BigDecimal("10.00")).build());
+        when(branchService.getById(BOOKING_BRANCH))
+                .thenReturn(Branch.builder().branchCode("MUMBAI").instantCommission(true).build());
+        when(itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(List.of(ShipmentItem.builder().quantity(2).build()));
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryCommissionEarned.class));
+        assertThat(shipment.isCommissionCredited()).isFalse();
+    }
+
+    @Test
+    @DisplayName("markPodApproved credits delivery commission for an already-DELIVERED shipment "
+            + "that had no POD approved at delivery time")
+    void markPodApprovedCreditsCommissionForAlreadyDeliveredShipment() {
+        Shipment shipment = shipment(ShipmentStatus.DELIVERED);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(true));
+        when(branchService.getById(shipment.getDeliveryBranchId()))
+                .thenReturn(Branch.builder().branchCode("PUNE")
+                        .drsChargePerQty(new BigDecimal("5.00"))
+                        .deliveryCommissionRatePerKg(BigDecimal.ZERO)
+                        .deliveryCommissionMinWeightKg(BigDecimal.ZERO).build());
+        when(itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(List.of(ShipmentItem.builder().quantity(3).build()));
+
+        service.markPodApproved(shipment.getId());
+
+        assertThat(shipment.isPodApproved()).isTrue();
+        assertThat(shipment.isCommissionCredited()).isTrue();
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DrsChargeApplicable.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().drsCharge()).isEqualByComparingTo("15.00");
+    }
+
+    @Test
+    @DisplayName("markPodApproved is idempotent — a second call for an already-credited shipment "
+            + "publishes nothing more")
+    void markPodApprovedIsIdempotent() {
+        Shipment shipment = shipment(ShipmentStatus.DELIVERED);
+        shipment.setPodApproved(true);
+        shipment.setCommissionCredited(true);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        service.markPodApproved(shipment.getId());
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
+    }
+
+    @Test
+    @DisplayName("markPodApproved on a not-yet-delivered shipment only sets the flag — no commission "
+            + "to credit until it's actually delivered")
+    void markPodApprovedOnUndeliveredShipmentOnlySetsFlag() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        service.markPodApproved(shipment.getId());
+
+        assertThat(shipment.isPodApproved()).isTrue();
+        assertThat(shipment.isCommissionCredited()).isFalse();
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
     }
 
     @Test
@@ -709,11 +934,24 @@ class ShipmentMovementServiceImplTest {
         return shipment;
     }
 
+    /** {@code collectAtBooking=false} here means collect-at-delivery generically — in
+     *  practice this is a TO_PAY-shaped mode ({@code cashOnDelivery} left false). Use
+     *  {@link #codPaymentMode()} for a real cash-on-delivery mode. */
     private static PaymentMode paymentMode(boolean collectAtBooking) {
         PaymentMode paymentMode = new PaymentMode();
-        paymentMode.setCode(collectAtBooking ? "PAID" : "COD");
+        paymentMode.setCode(collectAtBooking ? "PAID" : "TO_PAY");
         paymentMode.setCollectAtBooking(collectAtBooking);
         paymentMode.setCollectAtDelivery(!collectAtBooking);
+        return paymentMode;
+    }
+
+    /** A real cash-on-delivery mode — collects at delivery, and {@code cashOnDelivery} is
+     *  the consignee's amount, not the freight. */
+    private static PaymentMode codPaymentMode() {
+        PaymentMode paymentMode = new PaymentMode();
+        paymentMode.setCode("COD");
+        paymentMode.setCollectAtDelivery(true);
+        paymentMode.setCashOnDelivery(true);
         return paymentMode;
     }
 }

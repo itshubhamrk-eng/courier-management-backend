@@ -24,6 +24,7 @@ public record TicketCriteria(
         UUID categoryId,
         UUID subCategoryId,
         UUID relatedBranchId,
+        UUID relatedShipmentId,
         UUID assigneeUserId,
         Instant createdFrom,
         Instant createdTo,
@@ -32,24 +33,24 @@ public record TicketCriteria(
         UUID visibleBranchId
 ) {
     public static TicketCriteria none() {
-        return new TicketCriteria(null, false, null, null, null, null, null, null, null, null, null, null, null);
+        return new TicketCriteria(null, false, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public TicketCriteria scopedTo(UUID enforcedCompanyId) {
         return new TicketCriteria(enforcedCompanyId, false, status, priority, categoryId, subCategoryId,
-                relatedBranchId, assigneeUserId, createdFrom, createdTo, search,
+                relatedBranchId, relatedShipmentId, assigneeUserId, createdFrom, createdTo, search,
                 requesterOrAssignee, visibleBranchId);
     }
 
     /** SUPER_ADMIN, no company named — every tenant, fails-open by design. */
     public TicketCriteria crossTenantScope() {
         return new TicketCriteria(companyId, true, status, priority, categoryId, subCategoryId,
-                relatedBranchId, assigneeUserId, createdFrom, createdTo, search,
+                relatedBranchId, relatedShipmentId, assigneeUserId, createdFrom, createdTo, search,
                 requesterOrAssignee, visibleBranchId);
     }
 
     public TicketCriteria restrictedTo(UUID userId, UUID branchId) {
         return new TicketCriteria(companyId, crossTenant, status, priority, categoryId, subCategoryId,
-                relatedBranchId, assigneeUserId, createdFrom, createdTo, search, userId, branchId);
+                relatedBranchId, relatedShipmentId, assigneeUserId, createdFrom, createdTo, search, userId, branchId);
     }
 }

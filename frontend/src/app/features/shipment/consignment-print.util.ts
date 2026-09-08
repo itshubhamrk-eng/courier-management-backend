@@ -57,6 +57,9 @@ export interface ConsignmentPrintData {
   charges: ChargeBreakup;
   /** Manual, typed at booking time — not part of the Pricing Engine's own `ChargeBreakup`. */
   otherCharges: number;
+  /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
+   *  GST-free, unlike {@link otherCharges}. Zero/absent when not an appointment booking. */
+  appointmentDeliveryCharge?: number;
   /** Booking form's remarks field — printed as the LR's "Special Instruction" line. */
   remarks: string | null;
   /** Booked-by user's name — `ShipmentResponse.createdByName`, absent if the booking user
@@ -126,7 +129,7 @@ type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Cop
 
 function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
-  const total = d.charges.netAmount + d.otherCharges;
+  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0);
   const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
   const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
@@ -218,7 +221,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
           <span class="lrbox-label">LR No</span>
           <span class="lrbox-no">${esc(d.trackingNumber)}</span>
           <div class="lrbox-barcode">${barcodeSvg(d.trackingNumber)}</div>
-          <div class="lrbox-qr">${qrSvg(d.trackingNumber)}</div>
+          <div class="lrbox-qr">${qrSvg(d.shipmentNumber)}</div>
         </div>
       </div>
 
@@ -262,6 +265,22 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
         </div>
         <div class="right">${amountSection}
         </div>
+      </div>
+
+      <!-- TERMS & CONDITIONS -->
+      <div class="terms">
+        <div class="t-title">Terms &amp; Conditions</div>
+        1. The Company acts only as a carrier; its liability is limited to the declared value of the
+        shipment or the freight charges paid, whichever is lower.
+        2. All shipments are carried entirely at the consignor's risk.
+        3. Claims for loss, damage or shortage must be lodged in writing within 7 days of delivery
+        (or of the expected delivery date, if undelivered) — no claim is entertained thereafter.
+        4. The Company is not liable for any delay caused by circumstances beyond its control, including
+        natural calamity, strike, riot or government action.
+        5. Prohibited, hazardous, fragile, or valuable articles (cash, jewellery, negotiable instruments)
+        are not covered unless separately declared and accepted in writing at booking.
+        6. Any dispute is subject to the exclusive jurisdiction of the courts at the booking branch's
+        location only.
       </div>
 
       <!-- FOOTER -->
@@ -343,6 +362,10 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .zero{border:1px solid var(--line);border-top:0;text-align:right;padding:6px 8px;font-size:14px;font-weight:700}
   .note{border:1px solid var(--line);border-top:0;padding:8px;font-size:11px;font-weight:700;line-height:1.5}
   .small td{font-size:11px;padding:3px 8px}
+
+  /* terms & conditions */
+  .terms{border-top:2px solid var(--line);padding:6px 10px;font-size:9px;line-height:1.5;color:var(--muted);text-align:justify}
+  .terms .t-title{font-weight:700;font-size:10px;color:var(--ink);margin-bottom:2px}
 
   /* footer */
   .footer{padding:6px 10px 10px;font-size:11px;line-height:1.4}

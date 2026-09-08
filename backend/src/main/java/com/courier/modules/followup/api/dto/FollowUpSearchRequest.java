@@ -15,7 +15,8 @@ public record FollowUpSearchRequest(
         FollowUpType type,
         UUID assignedUser,
         Instant dueDate,
-        @Schema(description = "true narrows to overdue (past due date, not completed/cancelled)") boolean overdue,
+        @Schema(description = "true narrows to overdue (past due date, not completed/cancelled); "
+                + "omitted/null is the same as false") Boolean overdue,
         UUID customer,
         UUID shipment,
         UUID branch,

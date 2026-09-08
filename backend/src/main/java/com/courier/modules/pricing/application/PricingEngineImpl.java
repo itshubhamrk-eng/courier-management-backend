@@ -14,6 +14,7 @@ import com.courier.modules.pricing.application.validation.RouteValidation;
 import com.courier.modules.pricing.application.validation.WeightValidation;
 import com.courier.modules.pricing.domain.ChargeableWeightCalculator;
 import com.courier.modules.pricing.domain.PricingConfiguration;
+import com.courier.modules.pricing.domain.RoundingRule;
 import com.courier.modules.pricing.domain.VolumetricCalculator;
 import com.courier.modules.pricing.domain.WeightCalculator;
 import com.courier.modules.rate.domain.Rate;
@@ -72,7 +73,11 @@ public class PricingEngineImpl implements PricingEngine {
             LocalDate bookingDate = bookingValidation.validate(command);
             List<Rate> candidates = rateValidation.validate(route.getId(), command, bookingDate);
 
-            PricingContext context = new PricingContext(command, configuration);
+            // Resolved only on the priced (non-fallback) path — Freight Factor's own
+            // fallback below deliberately carries no round-off (see priceByDistanceAndWeight),
+            // so it has no reason to pay for a CompanySettings lookup it will not use.
+            PricingContext context = new PricingContext(
+                    command, configuration.withRoundingRule(resolveRoundingRule()));
             context.matchedRoute(route);
             context.candidates(candidates);
             context.bookingDate(bookingDate);
@@ -94,8 +99,8 @@ public class PricingEngineImpl implements PricingEngine {
      * distance) — every caller of this engine (Shipment Booking, the frontend's own live
      * pricing preview, any future Quotation/mobile consumer) gets it for free, not just
      * whichever one remembers to catch {@link RouteRateUnavailableException} itself. No
-     * fuel/handling/ODA/insurance/discount/round-off — Freight Factor deliberately carries
-     * none of those. GST is still statutory here too: applied on top of the freight sum at
+     * fuel/handling/ODA/insurance/applicable-charges/discount/round-off — Freight Factor
+     * deliberately carries none of those. GST is still statutory here too: applied on top of the freight sum at
      * the company's own {@code CompanySettings.gstPercentage}, since there is no matched
      * {@link Rate} to read a per-lane percentage off of. A gap in the Freight Factor grid
      * itself, or an unresolvable branch-pair distance, still fails the call with its own
@@ -116,6 +121,26 @@ public class PricingEngineImpl implements PricingEngine {
      * is), so a stale geocode on either branch must never block a real booking. See
      * {@code FreightFactorServiceImpl.tryCalculate}.
      */
+    /**
+     * The final net amount's round-off is company-configurable ({@code
+     * CompanySettings.roundOffRule}), overriding the deployment-wide {@code
+     * PricingProperties.roundingRule} default when the company has set one. Stored as a
+     * plain string on {@code CompanySettings} (so that module stays free of a dependency
+     * on this one) — resolved to the real enum here, falling back to the deployment
+     * default on a blank or since-renamed value rather than failing the whole booking.
+     */
+    private RoundingRule resolveRoundingRule() {
+        String stored = companySettingsService.get().getRoundOffRule();
+        if (stored == null || stored.isBlank()) {
+            return properties.getRoundingRule();
+        }
+        try {
+            return RoundingRule.valueOf(stored);
+        } catch (IllegalArgumentException invalid) {
+            return properties.getRoundingRule();
+        }
+    }
+
     private PricingResult priceByDistanceAndWeight(PricingCommand command, BigDecimal actualWeight,
                                                     BigDecimal volumetricWeight, BigDecimal chargeableWeight) {
         var matchOutcome = freightFactorService.tryCalculate(new FreightCalculationCommand(
@@ -139,6 +164,6 @@ public class PricingEngineImpl implements PricingEngine {
         BigDecimal netAmount = chargesSubtotal.add(gstAmount);
         return new PricingResult(null, null, actualWeight, volumetricWeight, chargeableWeight,
                 chargesSubtotal, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                gstAmount, BigDecimal.ZERO, BigDecimal.ZERO, netAmount, effectiveFactor);
+                BigDecimal.ZERO, gstAmount, BigDecimal.ZERO, BigDecimal.ZERO, netAmount, effectiveFactor);
     }
 }

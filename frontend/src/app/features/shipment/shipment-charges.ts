@@ -31,9 +31,11 @@ import { ShipmentService } from './shipment.service';
                   [subtitle]="(charges()!.matchedRouteCode ? 'Route ' + charges()!.matchedRouteCode + ' · ' : '') + (charges()!.matchedRateCode ? 'Rate ' + charges()!.matchedRateCode : '')">
           <app-charge-summary [charges]="{
             freight: charges()!.freight, fuelCharge: charges()!.fuelCharge, handlingCharge: charges()!.handlingCharge,
-            odaCharge: charges()!.odaCharge, insuranceCharge: charges()!.insuranceCharge, gstAmount: charges()!.gstAmount,
+            odaCharge: charges()!.odaCharge, insuranceCharge: charges()!.insuranceCharge,
+            applicableCharges: charges()!.applicableCharges, gstAmount: charges()!.gstAmount,
             discountAmount: charges()!.discountAmount, roundOff: charges()!.roundOff,
-            otherCharges: charges()!.otherCharges, netAmount: charges()!.netAmount
+            otherCharges: charges()!.otherCharges, appointmentDeliveryCharge: charges()!.appointmentDeliveryCharge,
+            netAmount: charges()!.netAmount
           }" />
         </app-card>
         <app-card title="Booking Branch Commission" subtitle="Computed from the booking branch's own charge percentages.">

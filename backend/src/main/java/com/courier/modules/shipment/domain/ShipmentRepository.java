@@ -32,11 +32,24 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     Optional<Shipment> findByCompanyIdAndTrackingNumber(UUID companyId, String trackingNumber);
 
+    /** Bulk Shipment Tracking report: one query for every number pasted in, matched against
+     *  either column since the caller can't reliably tell an AWB from a shipment number. */
+    @Query("select s from Shipment s where s.companyId = :companyId "
+            + "and (s.trackingNumber in :numbers or s.shipmentNumber in :numbers)")
+    List<Shipment> findAllByCompanyIdAndTrackingNumberInOrShipmentNumberIn(
+            @Param("companyId") UUID companyId, @Param("numbers") Collection<String> numbers);
+
     boolean existsByCompanyIdAndShipmentNumber(UUID companyId, String shipmentNumber);
 
     List<Shipment> findAllByCompanyIdAndIdIn(UUID companyId, Collection<UUID> ids);
 
     List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);
+
+    /** One booking branch's still-open shipments in a given set of statuses — the wallet
+     *  dashboard's pending-commission figures walk this to find what hasn't crossed the
+     *  dispatch/delivery trigger yet. */
+    List<Shipment> findAllByCompanyIdAndBookingBranchIdAndStatusIn(
+            UUID companyId, UUID bookingBranchId, Collection<ShipmentStatus> statuses);
 
     // -------------------------------------------------------------- cross-tenant
     // Unfiltered on purpose — only ever safe to call from inside a
@@ -79,6 +92,13 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByCompanyIdAndStatusIn(UUID companyId, Collection<ShipmentStatus> statuses);
 
+    /** Backs the Company Overview "TO_PAY awaiting delivery" tile — a subset of {@code
+     *  statuses} further filtered to TO_PAY-shaped payment modes, whose ids the caller
+     *  looks up via {@code PaymentModeRepository} first (payment mode is company-defined
+     *  rows, not a fixed enum, so there's no column to filter on directly). */
+    long countByCompanyIdAndStatusInAndPaymentModeIdIn(UUID companyId, Collection<ShipmentStatus> statuses,
+                                                        Collection<UUID> paymentModeIds);
+
     long countByCompanyIdAndStatusAndBookingDateBetween(UUID companyId, ShipmentStatus status,
                                                          LocalDate start, LocalDate end);
 
@@ -87,8 +107,24 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByCompanyId(UUID companyId);
 
-    long countByCompanyIdAndDeliveryBranchIdAndStatusIn(UUID companyId, UUID deliveryBranchId,
-                                                         Collection<ShipmentStatus> statuses);
+    /** Row-returning, not a count — the dashboard's Pending Delivery tile needs the total
+     *  ({@code .size()}) and the Delivery Pending aging breakdown needs each shipment's own
+     *  id to look up its received (IN_SCAN) timestamp, from the exact same query. */
+    List<Shipment> findByCompanyIdAndDeliveryBranchIdAndStatusIn(UUID companyId, UUID deliveryBranchId,
+                                                                  Collection<ShipmentStatus> statuses);
+
+    /** Id-only projections for the POD Dashboard pie (pending upload / pending verification /
+     *  approved / rejected) — avoids materialising every OUT_FOR_DELIVERY/DELIVERED shipment
+     *  as a full row just to cross-reference against {@code pod_verification} by id. */
+    @Query("select s.id from Shipment s where s.companyId = :companyId and s.status in :statuses")
+    List<UUID> findIdsByCompanyIdAndStatusIn(@Param("companyId") UUID companyId,
+                                              @Param("statuses") Collection<ShipmentStatus> statuses);
+
+    @Query("select s.id from Shipment s where s.companyId = :companyId "
+            + "and s.deliveryBranchId = :deliveryBranchId and s.status in :statuses")
+    List<UUID> findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(@Param("companyId") UUID companyId,
+                                                                 @Param("deliveryBranchId") UUID deliveryBranchId,
+                                                                 @Param("statuses") Collection<ShipmentStatus> statuses);
 
     List<Shipment> findTop5ByCompanyIdOrderByCreatedAtDesc(UUID companyId);
 

@@ -25,6 +25,13 @@ public record ShipmentSummaryResponse(
         BigDecimal chargeableWeight, BigDecimal netAmount,
         BigDecimal totalCommission, BigDecimal commissionOnBasicFreight,
         BigDecimal branchCommissionOnOtherAmount, BigDecimal companyCommissionOnBasicFreight,
-        ShipmentStatus status, Instant deliveredAt, Instant createdDate, Long version
+        ShipmentStatus status, Instant deliveredAt, Instant createdDate, Long version,
+        /** Current E-Way Bill's invoice number, null where the shipment has none —
+         *  the THC's own INVOICE NO column. */
+        String invoiceNumber,
+        /** When the shipment was last IN_SCAN'd (received at a branch/hub) — the latest of
+         *  possibly several such entries if it crossed more than one hop. Null until it's
+         *  been received anywhere. */
+        Instant receivedAt
 ) {
 }

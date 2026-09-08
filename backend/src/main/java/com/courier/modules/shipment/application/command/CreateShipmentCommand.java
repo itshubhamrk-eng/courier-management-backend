@@ -45,6 +45,16 @@ import java.util.UUID;
  *                          on the difference only, same delta-algebra {@code odaCharge}
  *                          already uses) above the system-calculated figure. Null keeps the
  *                          system rate unchanged.
+ * @param appointmentDelivery when true, {@code appointmentDate}/{@code appointmentTimeSlot}
+ *                          are required — refused otherwise
+ * @param appointmentDate   required only when {@code appointmentDelivery} is true
+ * @param appointmentTimeSlot free text, e.g. {@code "1:00-2:00"} — required only when
+ *                          {@code appointmentDelivery} is true
+ * @param appointmentDeliveryCharge optional, defaults to zero — deliberately never taxed
+ *                          with GST, unlike {@code otherCharges}
+ * @param insuranceApplicable when true, insurance is charged at 2% of freight instead of
+ *                          the Pricing Engine's own rate-driven insurance figure — same
+ *                          delta-algebra as {@code odaCharge}, taxed like {@code otherCharges}
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
@@ -80,6 +90,11 @@ public record CreateShipmentCommand(
         BigDecimal invoiceValue,
         EwayBillDataCommand ewayBill,
         UUID destinationAreaId,
-        BigDecimal ratePerKgOverride
+        BigDecimal ratePerKgOverride,
+        Boolean appointmentDelivery,
+        LocalDate appointmentDate,
+        String appointmentTimeSlot,
+        BigDecimal appointmentDeliveryCharge,
+        Boolean insuranceApplicable
 ) {
 }

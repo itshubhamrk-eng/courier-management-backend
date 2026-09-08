@@ -71,6 +71,11 @@ public record CompanySettingsRequest(
         Boolean codEnabled,
         Boolean onlinePaymentEnabled,
         Boolean autoInvoiceGeneration,
+        @Pattern(regexp = "^$|^(NONE|NEAREST_ONE|NEAREST_FIVE|NEAREST_TEN)$",
+                flags = Pattern.Flag.CASE_INSENSITIVE,
+                message = "must be one of NONE, NEAREST_ONE, NEAREST_FIVE, NEAREST_TEN")
+        @Schema(description = "How Shipment Booking's final amount is rounded")
+        String roundOffRule,
 
         // --- SLA (shipment lifecycle) — hours a shipment may sit in one status
         // before an auto-ticket is raised; capped at 720h (30 days)

@@ -37,7 +37,7 @@ describe('BranchForm — the branchUser block', () => {
     fixture.detectChanges();
 
     group().patchValue({
-      branchCode: 'LATUR', branchName: 'Latur', branchType: 'BOOKING_BRANCH'
+      branchCode: 'LATUR', branchName: 'Latur', branchType: 'BRANCH'
     });
   });
 

@@ -113,7 +113,7 @@ class ManifestServiceImplTest {
                 .thenReturn(Optional.of(manifest));
         when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("no shipment");
         verify(vehicleService, never()).getById(any());
@@ -132,7 +132,7 @@ class ManifestServiceImplTest {
                 .active(false).build();
         when(vehicleService.getById(vehicleId)).thenReturn(inactive);
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), vehicleId, UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), vehicleId, UUID.randomUUID(), null, null, null, null, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("not active");
     }
@@ -154,7 +154,7 @@ class ManifestServiceImplTest {
         when(vehicleService.getById(vehicleId)).thenReturn(active);
         when(userService.getById(driverId)).thenReturn(mock(User.class));
 
-        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId, null);
+        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId, null, null, null, null, null);
 
         assertThat(dispatched.getStatus()).isEqualTo(ManifestStatus.DISPATCHED);
         assertThat(dispatched.getVehicleId()).isEqualTo(vehicleId);
@@ -170,7 +170,7 @@ class ManifestServiceImplTest {
         when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
                 .thenReturn(Optional.of(manifest));
 
-        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("already been dispatched");
         verify(shipmentService, never()).findManifestCreatedShipments(any());

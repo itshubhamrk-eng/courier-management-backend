@@ -33,13 +33,14 @@ public class ManifestMapper {
         return new ManifestResponse(m.getId(), m.getManifestNumber(), m.getBookingBranchId(),
                 m.getDeliveryBranchId(), m.getVehicleId(), m.getDriverUserId(), m.getStatus(),
                 m.getDispatchedAt(), m.getDepartureTime(), m.getCompletedAt(), m.getRemarks(),
+                m.getFuelCost(), m.getDriverAdvance(), m.getTollAmount(), m.getOtherAmount(),
                 m.getCreatedAt(), m.getUpdatedAt(), m.getVersion(),
                 aggregate.shipmentCount(), aggregate.totalWeight(), aggregate.totalPackages());
     }
 
     public ManifestSummaryStatsResponse toSummaryStats(ManifestSummaryStats s) {
         return new ManifestSummaryStatsResponse(
-                s.totalManifests(), s.totalShipments(), s.totalWeight(), s.totalPackages());
+                s.totalManifests(), s.totalShipments(), s.totalWeight(), s.totalPackages(), s.totalTripExpenses());
     }
 
     public CreateVehicleCommand toCommand(CreateVehicleRequest r) {

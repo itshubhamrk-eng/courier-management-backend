@@ -34,8 +34,8 @@ public class TicketMapper {
             return TicketCriteria.none();
         }
         return new TicketCriteria(s.companyId(), false, s.status(), s.priority(), s.categoryId(),
-                s.subCategoryId(), s.relatedBranchId(), s.assigneeUserId(), s.createdFrom(), s.createdTo(),
-                s.search(), null, null);
+                s.subCategoryId(), s.relatedBranchId(), s.relatedShipmentId(), s.assigneeUserId(),
+                s.createdFrom(), s.createdTo(), s.search(), null, null);
     }
 
     public TicketResponse toResponse(Ticket t) {

@@ -15,6 +15,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
 import { PlanTable, PlanPerms, PlanAction } from './components/plan-table';
 import { PlanFilter } from './components/plan-filter';
 import { SubscriptionPlanService } from './subscription-plan.service';
+import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const WRITERS = [AppRole.SUPER_ADMIN];
 
@@ -162,12 +163,9 @@ export class PlanList implements OnInit {
 
   private download(rows: SubscriptionPlan[]): void {
     const cols: (keyof SubscriptionPlan)[] = ['planCode', 'planName', 'planType', 'monthlyPrice', 'yearlyPrice', 'currency', 'trialDays', 'isActive', 'displayOrder'];
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `subscription-plans-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    const lines = rows.map((r) => cols.map((c) => r[c] as string | number | boolean));
+    // displayOrder (index 8) is an ordinal rank, not additive — excluded from the total.
+    downloadCsv(`subscription-plans-${new Date().toISOString().slice(0, 10)}.csv`, cols, lines, [3, 4, 6]);
     this.notify.info(`Exported ${rows.length} plan(s).`);
   }
 }

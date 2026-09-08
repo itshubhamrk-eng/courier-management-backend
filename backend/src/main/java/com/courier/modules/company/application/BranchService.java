@@ -66,6 +66,12 @@ public interface BranchService {
      */
     BigDecimal drsChargePerQtyOf(UUID branchId);
 
+    /** Same not-visibility-gated shape as {@link #drsChargePerQtyOf} — the wallet
+     *  dashboard's pending-commission figures need this for the booking branch, which is
+     *  not always the caller's own branch (a {@code COMPANY_ADMIN} picking another
+     *  branch's wallet). False for a branch id absent from the caller's company. */
+    boolean instantCommissionOf(UUID branchId);
+
     Page<Branch> search(BranchCriteria criteria, Pageable pageable);
 
     /**

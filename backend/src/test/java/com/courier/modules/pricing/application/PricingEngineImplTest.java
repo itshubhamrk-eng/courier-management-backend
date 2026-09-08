@@ -78,10 +78,12 @@ class PricingEngineImplTest {
         when(rateValidation.validate(route.getId(), command, bookingDate))
                 .thenReturn(List.of(rate));
         when(pricingFactory.resolve(any())).thenReturn(strategy);
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder().build());
         PricingResult expected = new PricingResult(route, rate, new BigDecimal("1.200"),
                 new BigDecimal("1.200"), new BigDecimal("1.200"), BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null);
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null);
         when(strategy.price(any())).thenReturn(expected);
 
         PricingResult result = engine.calculate(command);
@@ -99,6 +101,68 @@ class PricingEngineImplTest {
         assertThat(context.volumetricWeight()).isEqualByComparingTo("1.200");
         assertThat(context.chargeableWeight()).isEqualByComparingTo("1.200");
         assertThat(context.configuration().roundingRule()).isEqualTo(RoundingRule.NEAREST_FIVE);
+    }
+
+    @Test
+    void calculate_usesTheCompanysRoundOffRule_overridingTheDeploymentDefault() {
+        Route route = new Route();
+        route.setId(UUID.randomUUID());
+        route.setStatus(MasterStatus.ACTIVE);
+        Rate rate = com.courier.modules.pricing.application.PricingTestSupport
+                .rate("RATE1", "0.000", "5.000");
+        LocalDate bookingDate = LocalDate.of(2026, 6, 1);
+
+        PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
+                "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                new BigDecimal("1.000"), new BigDecimal("30"), new BigDecimal("20"),
+                new BigDecimal("10"), null, bookingDate, null, null, null);
+
+        when(routeValidation.validate(command)).thenReturn(route);
+        when(bookingValidation.validate(command)).thenReturn(bookingDate);
+        when(rateValidation.validate(route.getId(), command, bookingDate))
+                .thenReturn(List.of(rate));
+        when(pricingFactory.resolve(any())).thenReturn(strategy);
+        when(strategy.price(any())).thenReturn(dummyResult());
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .roundOffRule("NEAREST_TEN").build());
+
+        engine.calculate(command);
+
+        ArgumentCaptor<PricingContext> captor = ArgumentCaptor.forClass(PricingContext.class);
+        verify(strategy).price(captor.capture());
+        assertThat(captor.getValue().configuration().roundingRule()).isEqualTo(RoundingRule.NEAREST_TEN);
+    }
+
+    @Test
+    void calculate_fallsBackToTheDeploymentDefault_whenTheCompanysRoundOffRuleIsBlankOrInvalid() {
+        Route route = new Route();
+        route.setId(UUID.randomUUID());
+        route.setStatus(MasterStatus.ACTIVE);
+        Rate rate = com.courier.modules.pricing.application.PricingTestSupport
+                .rate("RATE1", "0.000", "5.000");
+        LocalDate bookingDate = LocalDate.of(2026, 6, 1);
+
+        PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
+                "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                new BigDecimal("1.000"), new BigDecimal("30"), new BigDecimal("20"),
+                new BigDecimal("10"), null, bookingDate, null, null, null);
+
+        when(routeValidation.validate(command)).thenReturn(route);
+        when(bookingValidation.validate(command)).thenReturn(bookingDate);
+        when(rateValidation.validate(route.getId(), command, bookingDate))
+                .thenReturn(List.of(rate));
+        when(pricingFactory.resolve(any())).thenReturn(strategy);
+        when(strategy.price(any())).thenReturn(dummyResult());
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .roundOffRule("SOME_RETIRED_VALUE").build());
+
+        engine.calculate(command);
+
+        ArgumentCaptor<PricingContext> captor = ArgumentCaptor.forClass(PricingContext.class);
+        verify(strategy).price(captor.capture());
+        assertThat(captor.getValue().configuration().roundingRule()).isEqualTo(RoundingRule.NEAREST_FIVE);
     }
 
     @Test
@@ -225,5 +289,11 @@ class PricingEngineImplTest {
         assertThat(result.freight()).isEqualByComparingTo("0");
         assertThat(result.netAmount()).isEqualByComparingTo("0");
         assertThat(result.appliedFreightFactor()).isNull();
+    }
+
+    private static PricingResult dummyResult() {
+        return new PricingResult(null, null, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null);
     }
 }

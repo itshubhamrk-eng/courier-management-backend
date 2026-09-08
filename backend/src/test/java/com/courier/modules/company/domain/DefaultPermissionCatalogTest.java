@@ -36,12 +36,14 @@ class DefaultPermissionCatalogTest {
         // gained ACTIVATE/DEACTIVATE, which every other master-shaped module already had,
         // plus the new CALCULATE action for pricing a shipment without editing the rate
         // card), V17 a further 1 (SHIPMENT gained UPLOAD, for Shipment Booking's
-        // document-upload endpoint), and V47 a further 8 (the new EWAY_BILL module: CREATE/
+        // document-upload endpoint), V47 a further 8 (the new EWAY_BILL module: CREATE/
         // READ/UPDATE/SEARCH/EXPORT/UPLOAD/VALIDATE/CANCEL, the last two new
-        // PermissionAction values E-Way Bill Management needed). All generated from this
-        // matrix. If someone adds a module or action here without a follow-up migration,
-        // this is the tripwire.
-        assertThat(DefaultPermissionCatalog.size()).isEqualTo(231);
+        // PermissionAction values E-Way Bill Management needed), and V63 a further 9 (the
+        // new CHARGE module: CREATE/READ/UPDATE/DELETE/SEARCH/IMPORT/EXPORT/ACTIVATE/
+        // DEACTIVATE, the same MASTER shape ROUTE_MASTER already has). All generated from
+        // this matrix. If someone adds a module or action here without a follow-up
+        // migration, this is the tripwire.
+        assertThat(DefaultPermissionCatalog.size()).isEqualTo(240);
     }
 
     @Test

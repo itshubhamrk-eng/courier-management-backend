@@ -88,6 +88,7 @@ public class WalletMapper {
                 w.getAvailableBalance(), w.getHoldBalance(), w.getTotalBalance(),
                 s.todayCredit(), s.todayDebit(), s.monthCredit(), s.monthDebit(),
                 s.totalCredit(), s.totalDebit(),
+                s.todayCreditCommission(), s.bookingPendingCommission(), s.deliveryPendingCommission(),
                 s.transactionCount(), s.lastTransactionAt(),
                 s.lastRechargeAmount(), s.lastRechargeAt());
     }

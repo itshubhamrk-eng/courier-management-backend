@@ -1,6 +1,9 @@
 package com.courier.modules.shipment.api;
 
 import com.courier.modules.shipment.api.dto.AddShipmentDocumentRequest;
+import com.courier.modules.shipment.api.dto.BulkTrackRequest;
+import com.courier.modules.shipment.api.dto.BulkTrackResponse;
+import com.courier.modules.shipment.api.dto.BulkTrackRowResponse;
 import com.courier.modules.shipment.api.dto.CreateShipmentRequest;
 import com.courier.modules.shipment.api.dto.ShipmentChargeResponse;
 import com.courier.modules.shipment.api.dto.ShipmentDocumentResponse;
@@ -44,6 +47,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -137,6 +142,44 @@ public class ShipmentController {
                 shipmentService.getEwayBill(shipment.getId()).orElse(null)));
     }
 
+    @PostMapping("/track/bulk")
+    @Operation(summary = "Bulk Shipment Tracking",
+            description = "Look up many shipments at once by pasting their tracking or "
+                    + "shipment numbers (up to 200). Each number is matched against either "
+                    + "column and returned as its own row, in the order submitted "
+                    + "(duplicates collapsed) — a number with no match comes back with "
+                    + "`found: false` and no `shipment` rather than failing the whole call.")
+    public ApiResponse<BulkTrackResponse> bulkTrack(@Valid @RequestBody BulkTrackRequest request) {
+        List<String> numbers = new LinkedHashSet<>(request.numbers().stream().map(String::trim).toList())
+                .stream().toList();
+        List<Shipment> matches = shipmentService.bulkTrack(numbers);
+        List<UUID> ids = matches.stream().map(Shipment::getId).toList();
+        Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
+        Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> charges = shipmentService.chargesFor(ids);
+        Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
+        Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
+
+        Map<String, ShipmentSummaryResponse> byTrackingNumber = new LinkedHashMap<>();
+        Map<String, ShipmentSummaryResponse> byShipmentNumber = new LinkedHashMap<>();
+        for (Shipment s : matches) {
+            ShipmentSummaryResponse row = mapper.toSummary(s, netAmounts.get(s.getId()),
+                    charges.get(s.getId()), deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()),
+                    receivedAt.get(s.getId()));
+            byTrackingNumber.put(s.getTrackingNumber(), row);
+            byShipmentNumber.put(s.getShipmentNumber(), row);
+        }
+
+        List<BulkTrackRowResponse> results = numbers.stream()
+                .map(n -> {
+                    ShipmentSummaryResponse row = byTrackingNumber.getOrDefault(n, byShipmentNumber.get(n));
+                    return new BulkTrackRowResponse(n, row != null, row);
+                })
+                .toList();
+        long foundCount = results.stream().filter(BulkTrackRowResponse::found).count();
+        return ApiResponse.success(new BulkTrackResponse(results, foundCount, results.size() - foundCount));
+    }
+
     @GetMapping
     @Operation(summary = "List shipments",
             description = """
@@ -153,8 +196,11 @@ public class ShipmentController {
         Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
         Map<UUID, com.courier.modules.shipment.domain.ShipmentCharge> charges = shipmentService.chargesFor(ids);
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
+        Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
         return ApiResponse.success(PageResponse.from(page,
-                s -> mapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()), deliveredAt.get(s.getId()))));
+                s -> mapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()), deliveredAt.get(s.getId()),
+                        invoiceNumbers.get(s.getId()), receivedAt.get(s.getId()))));
     }
 
     @GetMapping("/summary")

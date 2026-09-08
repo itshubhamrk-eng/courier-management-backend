@@ -128,6 +128,12 @@ export const NAVIGATION: NavNode[] = [
   // Master, so the same role tier (company + branch) is reused.
   { id: 'address-distance', title: 'Address Distance', icon: 'social_distance', route: '/distances', order: 2.8, roles: COMPANY_AND_BRANCH },
 
+  // Charge & Charge Settings: a standalone pricing/commission configuration module,
+  // independent of Rate Master and not yet consumed by Shipment Booking. COMPANY_ADMIN
+  // only, the same "own back-office setup" tier Masters/Branches/Settings/Pricing use —
+  // unlike Rate Master, no branch role reads it today.
+  { id: 'charges', title: 'Charges', icon: 'toll', route: '/charges', permission: 'CHARGE_READ', roles: COMPANY_ONLY, order: 2.9 },
+
   {
     id: 'masters', title: 'Masters', icon: 'inventory_2', order: 3,
     children: [
@@ -194,7 +200,11 @@ export const NAVIGATION: NavNode[] = [
       // POD Auto Verification's Manual Review screen — reviewer tier only, narrower than
       // OPS_DELIVERY_DESK (which also admits the delivery operator who captures a POD but
       // must not decide their own submission). See MEMORY/modules/pod-verification.md.
-      { id: 'pod-review', title: 'POD Review', icon: 'fact_check', route: '/movement/pod-review', permission: 'POD_REVIEW', roles: COMPANY_AND_BRANCH }
+      { id: 'pod-review', title: 'POD Review', icon: 'fact_check', route: '/movement/pod-review', permission: 'POD_REVIEW', roles: COMPANY_AND_BRANCH },
+      // Company-level upload, no branch login required — always auto-approved. Narrower
+      // than pod-review's own COMPANY_AND_BRANCH: mirrors uploadByCompany's
+      // hasRole('COMPANY_ADMIN') gate exactly.
+      { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', permission: 'POD_UPLOAD', roles: COMPANY_ONLY }
     ]
   },
 
@@ -259,7 +269,8 @@ export const NAVIGATION: NavNode[] = [
       // Company-level audit — every branch side by side, so gated same as Finance Reports, not per-branch reports.
       { id: 'vendor-audit-report', title: 'Vendor Audit Report', icon: 'fact_check', route: '/reports/vendor-audit', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
       { id: 'customer-report', title: 'Customer Report', icon: 'groups', route: '/reports/customers', permission: 'REPORT_VIEW', roles: COMPANY_ROLES.filter((r) => r !== AppRole.BRANCH_MANAGER) },
-      { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS }
+      { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
+      { id: 'bulk-tracking-report', title: 'Bulk Shipment Tracking', icon: 'checklist', route: '/reports/bulk-tracking', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS }
     ]
   },
 

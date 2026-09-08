@@ -30,6 +30,8 @@ public record ShipmentResponse(
         BigDecimal declaredValue, Integer numberOfPackages,
         ShipmentStatus status,
         String remarks,
+        boolean appointmentDelivery, LocalDate appointmentDate, String appointmentTimeSlot,
+        boolean insuranceApplicable,
         Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
         BigDecimal invoiceValue, boolean ewayBillRequired, EwayBillInfo ewayBill,
         UUID createdBy, String createdByName, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,

@@ -28,6 +28,7 @@ public record UpdateBranchCommand(
         BigDecimal gstPercentage, BigDecimal commissionOnOtherCharges,
         BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
         BigDecimal drsChargePerQty,
+        BigDecimal deliveryCommissionRatePerKg, BigDecimal deliveryCommissionMinWeightKg,
         Long expectedVersion
 ) {
 }

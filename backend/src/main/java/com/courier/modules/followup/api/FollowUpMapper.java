@@ -33,7 +33,7 @@ public class FollowUpMapper {
             return FollowUpCriteria.none();
         }
         return new FollowUpCriteria(null, s.status(), s.priority(), s.type(), s.assignedUser(), s.dueDate(),
-                s.overdue(), s.customer(), s.shipment(), s.branch(), s.search(), null, null);
+                Boolean.TRUE.equals(s.overdue()), s.customer(), s.shipment(), s.branch(), s.search(), null, null);
     }
 
     public FollowUpResponse toResponse(FollowUp f) {

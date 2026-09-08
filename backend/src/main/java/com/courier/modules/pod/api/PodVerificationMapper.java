@@ -29,11 +29,12 @@ public class PodVerificationMapper {
 
     /** One POD Review table row — {@code v} and {@code deliveredAt} are null for a delivered
      *  shipment with no POD verification ever run. */
-    public DeliveredShipmentPodResponse toDeliveredRow(Shipment s, PodVerification v, Instant deliveredAt,
-                                                         List<ShipmentAsset> podAssets) {
+    public DeliveredShipmentPodResponse toDeliveredRow(Shipment s, PodVerification v, Instant receivedAt,
+                                                         Instant deliveredAt, List<ShipmentAsset> podAssets) {
         return new DeliveredShipmentPodResponse(
-                s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getDeliveryBranchId(),
-                s.getReceiverName(), deliveredAt,
+                s.getId(), s.getShipmentNumber(), s.getTrackingNumber(),
+                s.getBookingBranchId(), s.getDeliveryBranchId(),
+                s.getReceiverName(), receivedAt, deliveredAt,
                 v == null ? null : v.getId(),
                 v == null ? null : v.getVerificationStatus().name(),
                 v == null ? null : v.getVerificationScore(),

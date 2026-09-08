@@ -40,8 +40,10 @@ export interface DeliveredShipmentPod {
   shipmentId: string;
   shipmentNumber: string;
   trackingNumber: string;
+  bookingBranchId: string;
   deliveryBranchId: string;
   receiverName: string | null;
+  receivedAt: string | null;
   deliveredAt: string | null;
   podVerificationId: string | null;
   verificationStatus: PodVerificationStatus | null;

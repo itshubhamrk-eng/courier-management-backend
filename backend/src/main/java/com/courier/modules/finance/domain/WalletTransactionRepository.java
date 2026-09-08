@@ -100,6 +100,26 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             """)
     long countByWallet(@Param("walletId") UUID walletId, @Param("companyId") UUID companyId);
 
+    /**
+     * Same shape as {@link #sumSettledSince}, narrowed to a set of reasons — the wallet
+     * dashboard's "today's credit commission" wants only {@code COM}/{@code DRS}, not every
+     * credit reason {@code sumSettledSince} sums.
+     */
+    @Query("""
+            select sum(t.amount) from WalletTransaction t
+            where t.walletId = :walletId and t.companyId = :companyId
+              and t.transactionType = :type
+              and t.subTransactionType in :subTypes
+              and (t.paymentStatus is null or t.paymentStatus = :settled)
+              and t.createdAt >= :from
+            """)
+    BigDecimal sumSettledSinceForSubTypes(@Param("walletId") UUID walletId,
+                               @Param("companyId") UUID companyId,
+                               @Param("type") TransactionType type,
+                               @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
+                               @Param("from") Instant from,
+                               @Param("settled") PaymentStatus settled);
+
     /** Newest entries first — the statement head and the dashboard's "recent activity". */
     @Query("""
             select t from WalletTransaction t
@@ -118,6 +138,24 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     List<WalletTransaction> findTop5ByOrderByCreatedAtDesc();
 
     List<WalletTransaction> findTop5ByCompanyIdOrderByCreatedAtDesc(UUID companyId);
+
+    /**
+     * Every settled entry filed against one reference — the reversal lookup a shipment
+     * cancellation walks to know what to undo. Settled only: a still-{@code PENDING} gateway
+     * intent never moved money, so there is nothing to reverse.
+     */
+    @Query("""
+            select t from WalletTransaction t
+            where t.companyId = :companyId and t.referenceType = :referenceType
+              and t.referenceId = :referenceId
+              and (t.paymentStatus is null or t.paymentStatus = :settled)
+            order by t.createdAt asc
+            """)
+    List<WalletTransaction> findSettledByReferenceWithinCompany(
+            @Param("referenceType") ReferenceType referenceType,
+            @Param("referenceId") String referenceId,
+            @Param("companyId") UUID companyId,
+            @Param("settled") PaymentStatus settled);
 
     /** Most recent settled entry of one reason — used for "last recharge". */
     @Query("""

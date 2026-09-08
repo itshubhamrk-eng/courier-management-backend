@@ -17,7 +17,7 @@ class BranchTest {
         return Branch.builder()
                 .branchCode("  pune main ")
                 .branchName("  Pune Main  ")
-                .branchType(BranchType.BOOKING_DELIVERY_BRANCH)
+                .branchType(BranchType.BRANCH)
                 .status(BranchStatus.ACTIVE)
                 .email("  PUNE@Legacy.test ");
     }

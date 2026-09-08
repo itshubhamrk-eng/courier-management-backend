@@ -19,10 +19,16 @@ export const API = {
   branches: '/branches',
   customers: '/customers',
   rates: '/rates',
+  /** Charge & Charge Settings — standalone pricing/commission configuration, scoped to
+   *  one Service Type per charge. Not yet wired into Shipment Booking. */
+  charges: '/charges',
+  chargeSettings: (chargeId: string) => `/charges/${chargeId}/settings`,
   shipments: '/shipments',
   /** POD Auto Verification — verify/{id}, verification/{id}, review/{id}. See
    *  MEMORY/modules/pod-verification.md. */
   pod: (shipmentId: string) => `/shipments/${shipmentId}/pod`,
+  /** Company-level POD upload — no branch/delivery-assignment context, COMPANY_ADMIN only. */
+  podCompanyUpload: (shipmentId: string) => `/pod/company-upload/${shipmentId}`,
   /** The Pricing Engine's one endpoint — no frontend module of its own, called here for
    *  the booking wizard's live preview. See core/models/shipment.model.ts. */
   pricing: '/pricing',

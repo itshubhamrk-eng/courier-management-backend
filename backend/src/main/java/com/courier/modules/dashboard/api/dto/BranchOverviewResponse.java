@@ -16,6 +16,10 @@ public record BranchOverviewResponse(
         long readyForManifest,
         long manifestsAwaitingDispatch,
         long pendingDelivery,
-        long delayedShipments
+        long delayedShipments,
+        List<DeliveryAgingBucketResponse> deliveryPendingAging,
+        PodOverviewResponse podOverview,
+        List<RejectedPodResponse> rejectedPods,
+        long toPayAwaitingDelivery
 ) {
 }

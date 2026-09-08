@@ -62,6 +62,14 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal insuranceCharge = BigDecimal.ZERO;
 
+    /** Sum of ACTIVE {@code charge} module rows matched to this shipment's service type
+     *  and weight/distance at booking time (e.g. a "Hamali" KG-slab charge) — GST-
+     *  inclusive, part of the Pricing Engine's own pre-GST subtotal, unlike
+     *  {@link #appointmentDeliveryCharge}. */
+    @Column(name = "applicable_charges", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal applicableCharges = BigDecimal.ZERO;
+
     @Column(name = "gst_amount", nullable = false, precision = 19, scale = 4)
     @Builder.Default
     private BigDecimal gstAmount = BigDecimal.ZERO;
@@ -77,6 +85,14 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Column(name = "other_charges", nullable = false, precision = 19, scale = 4)
     @Builder.Default
     private BigDecimal otherCharges = BigDecimal.ZERO;
+
+    /** Manual, typed at booking time when {@code Shipment.appointmentDelivery} is
+     *  checked — deliberately carries no GST of its own (direct user request), unlike
+     *  {@link #otherCharges}: added straight into {@link #netAmount}, never folded into
+     *  {@link #gstAmount}. */
+    @Column(name = "appointment_delivery_charge", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal appointmentDeliveryCharge = BigDecimal.ZERO;
 
     /** {@code freight * commissionOnBasicFreight%} — the booking branch's own percentage
      *  ({@code Branch}) at booking time. */

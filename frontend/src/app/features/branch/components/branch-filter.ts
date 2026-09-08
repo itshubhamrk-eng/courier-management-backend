@@ -5,9 +5,10 @@ import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { BranchSearchRequest, BranchStatus, BranchType, BRANCH_TYPES } from '@core/models/branch.model';
 
-const TYPES: SelectOption[] = BRANCH_TYPES.map((t) => ({
-  value: t, label: t.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
-}));
+const TYPE_LABELS: Record<BranchType, string> = {
+  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', VENDOR: 'Vendor'
+};
+const TYPES: SelectOption[] = BRANCH_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
 const STATUSES: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }];
 const CAP: SelectOption[] = [{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }];
 

@@ -49,6 +49,23 @@ public interface PodVerificationService {
      */
     PodVerification review(UUID shipmentId, ReviewPodCommand command);
 
+    /**
+     * Company-level POD upload — no branch/delivery-assignment context needed, unlike
+     * {@link #verify}. On direct user request: {@code COMPANY_ADMIN} can upload a POD for
+     * any of the company's own shipments this way, and it is always auto-approved (no AI
+     * call, no {@code REVIEW} step) — the company vouching for it directly.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException the shipment is not
+     *         {@code OUT_FOR_DELIVERY}/{@code DELIVERED}, or the photo is missing/unreadable
+     */
+    PodVerification uploadByCompany(UUID shipmentId, CompanyUploadPodCommand command);
+
+    record CompanyUploadPodCommand(
+            byte[] photoContent, String photoFilename, String photoContentType,
+            byte[] signatureContent, String signatureFilename, String signatureContentType,
+            String receiverName) {
+    }
+
     record VerifyPodCommand(
             byte[] photoContent, String photoFilename, String photoContentType,
             byte[] signatureContent, String signatureFilename, String signatureContentType,

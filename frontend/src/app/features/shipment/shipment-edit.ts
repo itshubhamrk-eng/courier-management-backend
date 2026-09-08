@@ -95,6 +95,27 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
               <label class="fld"><span class="fld__l">Other Charges</span>
                 <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
             </div>
+            <div class="spacer"></div>
+            <label class="chk">
+              <input type="checkbox" [formControl]="c('appointmentDelivery')" />
+              <span>Appointment Delivery</span>
+            </label>
+            @if (c('appointmentDelivery').value) {
+              <div class="spacer"></div>
+              <div class="grid3">
+                <label class="fld"><span class="fld__l">Appointment Date</span>
+                  <input class="fld__i" type="date" [formControl]="c('appointmentDate')" /></label>
+                <label class="fld"><span class="fld__l">Time Slot</span>
+                  <input class="fld__i" [formControl]="c('appointmentTimeSlot')" placeholder="e.g. 1:00-2:00" maxlength="20" /></label>
+                <label class="fld"><span class="fld__l">Appointment Delivery Charge <span class="fld__h">(no GST)</span></span>
+                  <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('appointmentDeliveryCharge')" /></label>
+              </div>
+            }
+            <div class="spacer"></div>
+            <label class="chk">
+              <input type="checkbox" [formControl]="c('insuranceApplicable')" />
+              <span>Insurance Applicable <span class="fld__h">(2% of freight)</span></span>
+            </label>
           </app-card>
 
           <app-card title="Items">
@@ -105,6 +126,9 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
             <textarea class="ta" rows="2" [formControl]="c('remarks')" maxlength="500"></textarea>
           </app-card>
 
+          @if (appointmentDeliveryReason(); as reason) {
+            <p class="err">{{ reason }}</p>
+          }
           <div class="ef__bar">
             <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
             <app-button icon="save" [loading]="saving()" [disabled]="!canSave()" (pressed)="save()">Save Changes</app-button>
@@ -127,6 +151,9 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
     @media (max-width:700px){ .parties { grid-template-columns:1fr; } }
     .fld { display:flex; flex-direction:column; gap:6px; }
     .fld__l { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .fld__h { font:400 11px var(--font-sans); color:var(--content-muted); }
+    .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
+    .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
     .fld__i { height:42px; padding:0 12px; background:var(--surface); border:1px solid var(--surface-border);
       border-radius:var(--r-field); font:400 14px var(--font-sans); color:var(--content-fg); }
     .ta { width:100%; padding:10px 12px; background:var(--surface); border:1px solid var(--surface-border);
@@ -139,6 +166,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
     .ef__bar { position:sticky; bottom:0; display:flex; align-items:center; justify-content:flex-end;
       gap:10px; padding:14px 16px; background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); }
     .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:24px; }
+    .err { font:500 13px var(--font-sans); color:var(--danger); padding:10px 12px; background:var(--danger-bg); border-radius:var(--r-field); margin:0; }
     @media (max-width:760px){ .grid2, .grid3 { grid-template-columns:1fr; } }
   `]
 })
@@ -196,7 +224,12 @@ export class ShipmentEdit implements OnInit {
     numberOfPackages: [1],
     declaredValue: [null as number | null],
     otherCharges: [null as number | null],
-    remarks: ['', Validators.maxLength(500)]
+    remarks: ['', Validators.maxLength(500)],
+    appointmentDelivery: [false],
+    appointmentDate: [null as string | null],
+    appointmentTimeSlot: ['', Validators.maxLength(20)],
+    appointmentDeliveryCharge: [null as number | null],
+    insuranceApplicable: [false]
   });
 
   /**
@@ -211,6 +244,7 @@ export class ShipmentEdit implements OnInit {
       && v.senderName && v.senderAddress && v.senderContact
       && v.receiverName && v.receiverAddress && v.receiverContact
       && this.items().length > 0 && this.weight().chargeable > 0
+      && this.appointmentDeliveryReason() === null
     );
   }
 
@@ -226,7 +260,26 @@ export class ShipmentEdit implements OnInit {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
       }
     });
+    // Unchecking Appointment Delivery clears its date/slot/charge — same "hidden stale
+    // value never submits" rule as `ShipmentCreate`.
+    this.form.get('appointmentDelivery')?.valueChanges.subscribe((on) => {
+      if (!on) {
+        this.form.get('appointmentDate')?.setValue(null);
+        this.form.get('appointmentTimeSlot')?.setValue('');
+        this.form.get('appointmentDeliveryCharge')?.setValue(null);
+      }
+    });
     this.load();
+  }
+
+  /** Null once nothing blocks saving; otherwise the reason — mirrors
+   *  `ShipmentCreate.appointmentDeliveryReason`, UX only, the backend re-checks it. */
+  appointmentDeliveryReason(): string | null {
+    const v = this.form.getRawValue();
+    if (!v.appointmentDelivery) return null;
+    if (!v.appointmentDate) return 'Pick an appointment delivery date.';
+    if (!(v.appointmentTimeSlot ?? '').trim()) return 'Enter an appointment delivery time slot.';
+    return null;
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -244,7 +297,9 @@ export class ShipmentEdit implements OnInit {
           receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
           serviceTypeId: s.serviceTypeId, packageTypeId: s.packageTypeId,
           paymentModeId: s.paymentModeId, shipmentType: s.shipmentType, bookingDate: s.bookingDate,
-          numberOfPackages: s.numberOfPackages, declaredValue: s.declaredValue, remarks: s.remarks ?? ''
+          numberOfPackages: s.numberOfPackages, declaredValue: s.declaredValue, remarks: s.remarks ?? '',
+          appointmentDelivery: s.appointmentDelivery, appointmentDate: s.appointmentDate ?? null,
+          appointmentTimeSlot: s.appointmentTimeSlot ?? '', insuranceApplicable: s.insuranceApplicable
         });
         this.hydrateItems.set(s.items.map((i) => ({
           itemName: i.itemName, quantity: i.quantity, weight: i.weight, lengthCm: i.lengthCm,
@@ -254,7 +309,10 @@ export class ShipmentEdit implements OnInit {
         // Other Charges lives on the persisted charge row, not ShipmentResponse itself —
         // fetched separately so an edit doesn't silently reset it to zero on save.
         this.service.charges(this.id).subscribe({
-          next: (c) => this.form.patchValue({ otherCharges: c.otherCharges || null }),
+          next: (c) => this.form.patchValue({
+            otherCharges: c.otherCharges || null,
+            appointmentDeliveryCharge: c.appointmentDeliveryCharge || null
+          }),
           error: () => {}
         });
         this.loading.set(false);
@@ -276,7 +334,12 @@ export class ShipmentEdit implements OnInit {
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
       shipmentType: v.shipmentType, bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
-      remarks: v.remarks || null, otherCharges: v.otherCharges || null, items: this.items()
+      remarks: v.remarks || null, otherCharges: v.otherCharges || null, items: this.items(),
+      appointmentDelivery: v.appointmentDelivery || null,
+      appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
+      appointmentTimeSlot: v.appointmentDelivery ? (v.appointmentTimeSlot?.trim() || null) : null,
+      appointmentDeliveryCharge: v.appointmentDelivery ? (v.appointmentDeliveryCharge || null) : null,
+      insuranceApplicable: v.insuranceApplicable || null
     };
 
     this.saving.set(true);

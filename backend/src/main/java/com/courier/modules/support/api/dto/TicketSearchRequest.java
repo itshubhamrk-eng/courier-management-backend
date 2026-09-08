@@ -14,6 +14,7 @@ public record TicketSearchRequest(
         UUID categoryId,
         UUID subCategoryId,
         UUID relatedBranchId,
+        UUID relatedShipmentId,
         UUID assigneeUserId,
         Instant createdFrom,
         Instant createdTo,
@@ -22,6 +23,6 @@ public record TicketSearchRequest(
         UUID companyId
 ) {
     public static TicketSearchRequest empty() {
-        return new TicketSearchRequest(null, null, null, null, null, null, null, null, null, null);
+        return new TicketSearchRequest(null, null, null, null, null, null, null, null, null, null, null);
     }
 }
