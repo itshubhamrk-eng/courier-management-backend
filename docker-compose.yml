@@ -1,18 +1,38 @@
 # =============================================================================
-# Dev stack: MySQL 8, Spring Boot backend, Angular served by Nginx.
+# Dev stack: MySQL 8, Redis, Spring Boot backend, Angular served by Nginx.
 #
 #   cp .env.example .env   # fill in passwords/JWT_SECRET first
 #   docker compose up --build
 #
-# No Redis here on purpose: RedisTokenRevocationChecker fails open (see its
-# javadoc) and Lettuce connects lazily, so the app runs without it — degraded
-# (access-token revocation not enforced), not down. Add a redis service the
-# same shape as docker/docker-compose.yml's if that trade stops being fine.
+# Redis is small on purpose (maxmemory 32mb, no AOF): it only backs
+# RedisTokenRevocationChecker's revocation cache, which is all TTL'd and
+# expendable — losing it on a restart just means a brief return to the
+# fails-open degraded mode (see that class's javadoc), not data loss. The
+# 256mb/appendonly-yes shape in docker/docker-compose.yml assumes a box with
+# real headroom; this one doesn't, so don't copy that config here.
 # =============================================================================
 
 name: courier-dev
 
 services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: courier-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 32mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - courier-net
 
   mysql:
     image: mysql:8.0
@@ -55,6 +75,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_HOST: mysql
@@ -63,6 +85,9 @@ services:
       DB_USERNAME: ${DB_USERNAME:-courier}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set - see .env.example}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # No default: the app must not start with a guessable signing key.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set - see .env.example}
       # No default: unset only bites when a company saves its own Razorpay key secret
