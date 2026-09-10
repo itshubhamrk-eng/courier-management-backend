@@ -1,6 +1,7 @@
 package com.courier.modules.manifest.application;
 
 import com.courier.modules.company.application.UserService;
+import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
@@ -60,6 +61,7 @@ public class ManifestServiceImpl implements ManifestService {
     private final VehicleService vehicleService;
     private final UserService userService;
     private final AuditService auditService;
+    private final EwayBillService ewayBillService;
 
     @Override
     @Transactional
@@ -167,9 +169,22 @@ public class ManifestServiceImpl implements ManifestService {
         manifest.dispatch(vehicleId, driverUserId, departureTime, fuelCost, driverAdvance, tollAmount, otherAmount);
         Manifest saved = manifestRepository.save(manifest);
 
+        List<UUID> dispatchedShipmentIds = readyShipments.stream().map(Shipment::getId).toList();
         shipmentService.transitionToDispatched(
-                readyShipments.stream().map(Shipment::getId).toList(),
-                saved.getId(), vehicleId, saved.getBookingBranchId());
+                dispatchedShipmentIds, saved.getId(), vehicleId, saved.getBookingBranchId());
+
+        // Part-B: vehicle details are now available, so every shipment on this manifest
+        // that already has a Part-A-generated E-Way Bill gets its transport details
+        // completed. Defensively wrapped even though EwayBillServiceImpl itself never
+        // throws for a provider-side reason — a manifest dispatch must never fail
+        // because of an E-Way Bill provider outage.
+        try {
+            ewayBillService.triggerPartBForShipments(dispatchedShipmentIds, vehicle.getVehicleNumber(),
+                    null, "ROAD");
+        } catch (Exception e) {
+            log.error("E-Way Bill Part-B trigger failed for manifest {} ({}) in company {}: {}",
+                    saved.getManifestNumber(), saved.getId(), companyId, e.getMessage());
+        }
 
         log.info("Manifest {} ({}) dispatched in company {} with vehicle {} by {}",
                 saved.getManifestNumber(), saved.getId(), companyId, vehicleId, currentActor());

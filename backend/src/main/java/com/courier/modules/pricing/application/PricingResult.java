@@ -1,9 +1,11 @@
 package com.courier.modules.pricing.application;
 
 import com.courier.modules.master.domain.Route;
+import com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator;
 import com.courier.modules.rate.domain.Rate;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * The priced outcome of {@link PricingEngine#calculate}. Assembled by
@@ -26,6 +28,10 @@ public record PricingResult(
          *  none of their slabs cover this shipment. Null-free/never negative, same as
          *  every other line here. */
         BigDecimal applicableCharges,
+        /** {@code applicableCharges} broken out by the matched {@code Charge}'s own name —
+         *  see {@link ApplicableChargesCalculator.Line}. Empty, never null, when nothing
+         *  matched. */
+        List<ApplicableChargesCalculator.Line> applicableChargeLines,
         BigDecimal gstAmount,
         BigDecimal discountAmount,
         BigDecimal roundOff,

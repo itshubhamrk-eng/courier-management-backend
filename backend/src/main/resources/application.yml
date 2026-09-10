@@ -209,6 +209,23 @@ app:
       connect-timeout: 5s
       read-timeout: 15s
 
+  ewaybill:
+    gsp:
+      # Off by default and no default credentials: a deployment without a real GSP
+      # integration gets UnconfiguredEwayBillProvider, which fails E-Way Bill generation
+      # gracefully (a shipment/manifest is never blocked by it) instead of fabricating a
+      # fake E-Way Bill number. Enabling this without base-url/client-id/client-secret
+      # fails at startup, not at the first booking. See EwayBillGspProperties.
+      enabled: ${EWAYBILL_GSP_ENABLED:false}
+      base-url: ${EWAYBILL_GSP_BASE_URL:}
+      client-id: ${EWAYBILL_GSP_CLIENT_ID:}
+      client-secret: ${EWAYBILL_GSP_CLIENT_SECRET:}
+      username: ${EWAYBILL_GSP_USERNAME:}
+      password: ${EWAYBILL_GSP_PASSWORD:}
+      gstin: ${EWAYBILL_GSP_GSTIN:}
+      connect-timeout: 5s
+      read-timeout: 15s
+
   communication:
     # Each channel defaults to log-only (LogOnlyWhatsAppProvider/LogOnlySmsProvider/
     # LogOnlyEmailProvider) — no dev-environment vendor account exists to call for real.

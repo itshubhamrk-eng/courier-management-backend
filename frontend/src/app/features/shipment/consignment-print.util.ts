@@ -60,6 +60,10 @@ export interface ConsignmentPrintData {
   /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
    *  GST-free, unlike {@link otherCharges}. Zero/absent when not an appointment booking. */
   appointmentDeliveryCharge?: number;
+  /** Manual, typed at booking time when Delivery Type is DOOR — taxed with GST (folded
+   *  into `charges.gstAmount`), unlike {@link appointmentDeliveryCharge}. Zero/absent when
+   *  Office Delivery. */
+  doorDeliveryCharge?: number;
   /** Booking form's remarks field — printed as the LR's "Special Instruction" line. */
   remarks: string | null;
   /** Booked-by user's name — `ShipmentResponse.createdByName`, absent if the booking user
@@ -129,7 +133,7 @@ type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Cop
 
 function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
-  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0);
+  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
   const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
   const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
@@ -316,7 +320,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
 
   /* header */
   .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid var(--line)}
-  .head > div{padding:10px 12px}
+  .head > div{padding:7px 10px}
   .head .brand{display:flex;align-items:center;justify-content:center}
   .logo{line-height:1;text-align:center}
   .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
@@ -346,7 +350,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
 
   /* shared table look */
   table{width:100%;border-collapse:collapse}
-  td,th{border:1px solid var(--line);padding:5px 8px;font-size:12px;vertical-align:middle}
+  td,th{border:1px solid var(--line);padding:4px 8px;font-size:12px;vertical-align:middle}
   .lbl{font-weight:700;white-space:nowrap}
 
   .party{border-top:0}
@@ -361,17 +365,17 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .charges .total td{font-size:15px;font-weight:700}
   .zero{border:1px solid var(--line);border-top:0;text-align:right;padding:6px 8px;font-size:14px;font-weight:700}
   .note{border:1px solid var(--line);border-top:0;padding:8px;font-size:11px;font-weight:700;line-height:1.5}
-  .small td{font-size:11px;padding:3px 8px}
+  .small td{font-size:11px;padding:2px 8px}
 
   /* terms & conditions */
-  .terms{border-top:2px solid var(--line);padding:6px 10px;font-size:9px;line-height:1.5;color:var(--muted);text-align:justify}
+  .terms{border-top:2px solid var(--line);padding:4px 10px;font-size:9px;line-height:1.3;color:var(--muted);text-align:justify}
   .terms .t-title{font-weight:700;font-size:10px;color:var(--ink);margin-bottom:2px}
 
   /* footer */
-  .footer{padding:6px 10px 10px;font-size:11px;line-height:1.4}
+  .footer{padding:4px 10px 6px;font-size:11px;line-height:1.4}
   .footer .createdby{font-weight:700;font-size:12px;margin-bottom:4px}
   .footer .gen{font-weight:700}
-  .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:20px}
+  .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:10px}
 
   @media print{
     body{background:#fff}

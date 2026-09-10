@@ -1,7 +1,6 @@
 package com.courier.modules.auth.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -26,10 +25,10 @@ public record LoginRequest(
                 example = "acme-couriers")
         String companyCode,
 
-        @NotBlank(message = "Email is required")
-        @Email(message = "Must be a valid email address")
+        @Schema(description = "Email address, or a registered mobile number — either signs in.",
+                example = "ops@acme.test")
+        @NotBlank(message = "Email or mobile number is required")
         @Size(max = 255)
-        @Schema(example = "ops@acme.test")
         String email,
 
         // No @Size minimum: the policy is enforced when a password is *set*, and

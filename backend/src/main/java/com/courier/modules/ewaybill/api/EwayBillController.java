@@ -34,14 +34,14 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * E-Way Bill Management. Standalone CRUD + lifecycle for attaching, amending, validating,
+ * E-Way Bill Management. Standalone CRUD + lifecycle for amending, retrying,
  * documenting and cancelling an E-Way Bill against an already-booked shipment.
  *
- * <p>The booking-time gate itself — invoice value over the company's own threshold blocks
- * AWB generation until an E-Way Bill validates — is enforced inside {@code POST}/
- * {@code PUT /shipments} (see {@code ShipmentController}), not here; these endpoints are
- * for managing an E-Way Bill afterward (or optionally attaching/amending one for a
- * shipment that never needed one at booking time).
+ * <p>Auto-generation itself — Part-A at booking, Part-B at Manifest dispatch — happens
+ * inside {@code POST}/{@code PUT /shipments} and {@code ManifestServiceImpl.dispatch},
+ * not here (see {@code ShipmentController}/{@code ManifestController}); these endpoints
+ * are for inspecting an E-Way Bill afterward, retrying a failed generation, or manually
+ * attaching/amending one (e.g. a number already obtained outside this application).
  */
 @RestController
 @RequestMapping("/api/v1/eway-bills")
@@ -90,13 +90,14 @@ public class EwayBillController {
         return ApiResponse.success(PageResponse.from(page, mapper::toResponse));
     }
 
-    @PostMapping("/{id}/validate")
-    @Operation(summary = "Validate an E-Way Bill",
-            description = "Re-checks the row's own current fields and moves it to "
-                    + "`VALIDATED` or `INVALID`. Only a `VALIDATED` E-Way Bill lets AWB "
-                    + "generation proceed for a shipment where one is mandatory.")
-    public ApiResponse<EwayBillResponse> validate(@PathVariable UUID id) {
-        return ApiResponse.success(mapper.toResponse(service.validate(id)), "E-Way Bill validated");
+    @PostMapping("/{id}/retry")
+    @Operation(summary = "Retry a failed/expired E-Way Bill",
+            description = "Re-attempts whichever stage last failed — Part-A when no "
+                    + "E-Way Bill number was ever issued, Part-B otherwise (or a fresh "
+                    + "Part-A when `EXPIRED`). Refused unless the row is `FAILED`/`EXPIRED`; "
+                    + "throws with the provider's own reason if the retry itself fails.")
+    public ApiResponse<EwayBillResponse> retry(@PathVariable UUID id) {
+        return ApiResponse.success(mapper.toResponse(service.retry(id)), "E-Way Bill retried");
     }
 
     @PostMapping("/{id}/upload")

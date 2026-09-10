@@ -14,6 +14,7 @@ interface BranchSummary {
   branchCode: string;
   branchName: string;
   status: string;
+  city?: string | null;
   postalCode: string;
   gstPercentage: number;
 }

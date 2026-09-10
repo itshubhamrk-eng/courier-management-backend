@@ -55,6 +55,9 @@ import java.util.UUID;
  * <p>All credential failures — unknown email, wrong password — surface as the
  * identical {@code 401 INVALID_CREDENTIALS}. Only lock, disable and verification
  * states differ, and those are states the legitimate user must be told about.
+ *
+ * <p>{@code LoginCommand#email} accepts a mobile number too, resolved to its
+ * account's real email before authentication — see {@link #resolveLoginEmail}.
  */
 @Slf4j
 @Service
@@ -114,11 +117,13 @@ public class AuthService {
      * rather than just buying more headroom against it).
      */
     public AuthResult login(LoginCommand command) {
-        String email = User.normaliseEmail(command.email());
-        UUID companyId = resolveCompany(command, email);
+        String identifier = command.email() == null ? null : command.email().trim();
+        UUID companyId = resolveCompany(command, User.normaliseEmail(identifier));
 
         // Bind before the first repository call — everything below is company-scoped.
         CompanyContext.setCompanyId(companyId);
+
+        String email = resolveLoginEmail(identifier);
 
         loginAttemptService.assertNotThrottled(email, command.ipAddress());
 
@@ -226,6 +231,43 @@ public class AuthService {
                 user.getId(), companyId, session.getId(), command.rememberMe());
 
         return new AuthResult(user, tokens, session, companyBrand(companyId));
+    }
+
+    /**
+     * Resolves the typed login identifier to the account's own email — the only
+     * identifier {@link com.courier.modules.auth.infrastructure.security.AuthUserDetailsService}
+     * and every downstream bookkeeping call (lock counters, audit, login history)
+     * understands. Direct request ("user able to login using there contact number
+     * as well"): when the identifier is mobile-shaped, the matching account's
+     * mobile number — {@code company.User}'s own column, read here as a
+     * shared-kernel field the same way {@link User#getBranchId()}/{@link
+     * User#getHubId()} already are — is looked up within the company just bound
+     * above, and its email substituted for {@code authenticate(...)} below.
+     *
+     * <p>An unmatched or non-mobile-shaped identifier is returned unchanged, which
+     * naturally fails the email lookup in {@code AuthUserDetailsService} with the
+     * same generic {@code INVALID_CREDENTIALS} the wrong-email path already gives
+     * — no separate error branch, and no timing difference between "no such
+     * mobile" and "no such email" for an attacker to distinguish.
+     */
+    private String resolveLoginEmail(String identifier) {
+        if (!looksLikeMobile(identifier)) {
+            return User.normaliseEmail(identifier);
+        }
+        return userRepository.findFirstByMobileOrderByCreatedAtAsc(identifier)
+                .map(User::getEmail)
+                .orElse(identifier);
+    }
+
+    /** Digits only (an optional leading {@code +}), at least 7 of them, no {@code @} —
+     *  deliberately loose since an unmatched identifier degrades gracefully (see
+     *  {@link #resolveLoginEmail}) rather than needing to reject anything up front. */
+    private static boolean looksLikeMobile(String identifier) {
+        if (identifier == null || identifier.isBlank() || identifier.contains("@")) {
+            return false;
+        }
+        String digits = identifier.startsWith("+") ? identifier.substring(1) : identifier;
+        return digits.length() >= 7 && digits.chars().allMatch(Character::isDigit);
     }
 
     private String lockMessage(User user) {

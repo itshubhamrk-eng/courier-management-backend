@@ -144,6 +144,14 @@ public interface ShipmentService {
     Map<UUID, String> invoiceNumbersFor(Collection<UUID> shipmentIds);
 
     /**
+     * Current E-Way Bill's own provider-issued number per shipment (distinct from
+     * {@link #invoiceNumbersFor}) — the THC's own E-WAY BILL NO column and the DRS's
+     * own row. A shipment missing from the returned map has no E-Way Bill, or one whose
+     * Part-A has not (yet) succeeded.
+     */
+    Map<UUID, String> ewayBillNumbersFor(Collection<UUID> shipmentIds);
+
+    /**
      * Every POD-kind asset (photo + signature, every historical upload, newest first) per
      * shipment, for the POD Review table's photo-preview column — batch-fetched the same way
      * as {@link #netAmountsFor}. A shipment missing from the returned map has no POD asset at
@@ -229,9 +237,17 @@ public interface ShipmentService {
                               String remarks) {
     }
 
-    /** The persisted charge row plus the resolved route/rate codes, for a display-ready response. */
+    /** The persisted charge row plus the resolved route/rate codes, for a display-ready
+     *  response. {@code applicableChargeLines} is resolved live off the shipment's own
+     *  stored booking/delivery branch, chargeable weight and freight — not persisted, the
+     *  same "recompute at read time" treatment {@code matchedRouteCode}/{@code
+     *  matchedRateCode} already get — so a charge/setting renamed or reconfigured after
+     *  booking still shows correctly; {@code charge.applicableCharges} (the persisted sum)
+     *  is untouched and remains the source of truth for the actual net amount. */
     record ShipmentCharges(com.courier.modules.shipment.domain.ShipmentCharge charge,
-                           String matchedRouteCode, String matchedRateCode) {
+                           String matchedRouteCode, String matchedRateCode,
+                           java.util.List<com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator.Line>
+                                   applicableChargeLines) {
     }
 
     // =================================================================== Shipment Movement (V19)
@@ -358,7 +374,8 @@ public interface ShipmentService {
     record DrsShipmentRow(UUID shipmentId, String shipmentNumber, String trackingNumber,
                           String receiverName, String receiverContact, UUID paymentModeId,
                           BigDecimal netAmount, com.courier.modules.shipment.domain.ShipmentStatus status,
-                          java.time.Instant deliveredAt) {
+                          java.time.Instant deliveredAt, String ewayBillNumber,
+                          String fromCity, String toCity) {
     }
 
     record DrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,

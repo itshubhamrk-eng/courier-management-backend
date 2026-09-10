@@ -31,6 +31,8 @@ public record CreateEwayBillRequest(
         Instant validFrom,
         Instant validUntil,
         @Size(max = 1000) String documentUrl,
-        @Size(max = 500) String remarks
+        @Size(max = 500) String remarks,
+        @Size(max = 15) String consignorGstin,
+        @Size(max = 15) String consigneeGstin
 ) {
 }

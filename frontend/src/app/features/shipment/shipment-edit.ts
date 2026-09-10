@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -7,12 +7,12 @@ import { NotificationService } from '@core/services/notification.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
-import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import {
-  ShipmentResponse, ShipmentItemRequest, ShipmentType, SHIPMENT_TYPES, UpdateShipmentRequest
+  ShipmentResponse, ShipmentItemRequest, ShipmentType, SHIPMENT_TYPES, UpdateShipmentRequest,
+  DeliveryType, DELIVERY_TYPES
 } from '@core/models/shipment.model';
 import { ItemEntryGrid } from './components/item-entry-grid';
 import { ShipmentService } from './shipment.service';
@@ -30,7 +30,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
   selector: 'app-shipment-edit',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton, UiCard, UiLoader, ItemEntryGrid],
+  imports: [ReactiveFormsModule, UiSelect, UiButton, UiCard, UiLoader, ItemEntryGrid],
   template: `
     <div class="page">
       <header class="page__head">
@@ -46,7 +46,6 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
           <app-card title="Booking Branch">
             <div class="grid2">
               <div class="stat"><span class="stat__l">Booking Branch</span><span class="stat__v">{{ branchLabel(shipment()!.bookingBranchId) }}</span><span class="stat__h">Immutable once booked</span></div>
-              <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="deliveryBranchOptions()" placeholder="Search delivery branch…" />
               <label class="fld"><span class="fld__l">From Pincode</span>
                 <input class="fld__i" [formControl]="c('pickupPincode')" placeholder="e.g. 411001" maxlength="10" /></label>
               <label class="fld"><span class="fld__l">To Pincode</span>
@@ -95,6 +94,22 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
               <label class="fld"><span class="fld__l">Other Charges</span>
                 <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
             </div>
+            <div class="spacer"></div>
+            <div class="fld"><span class="fld__l">Delivery Type</span>
+              <div class="radio-row">
+                @for (type of deliveryTypes; track type) {
+                  <label class="radio">
+                    <input type="radio" name="deliveryType" [value]="type" [formControl]="c('deliveryType')" />
+                    <span>{{ type === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+            @if (c('deliveryType').value === 'DOOR') {
+              <div class="spacer"></div>
+              <label class="fld fld--sm"><span class="fld__l">Door Delivery Charge</span>
+                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('doorDeliveryCharge')" /></label>
+            }
             <div class="spacer"></div>
             <label class="chk">
               <input type="checkbox" [formControl]="c('appointmentDelivery')" />
@@ -154,6 +169,9 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
     .fld__h { font:400 11px var(--font-sans); color:var(--content-muted); }
     .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
     .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
+    .radio-row { display:flex; gap:16px; align-items:center; }
+    .radio { display:flex; gap:6px; align-items:center; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
+    .radio input { width:16px; height:16px; accent-color:var(--brand-600); }
     .fld__i { height:42px; padding:0 12px; background:var(--surface); border:1px solid var(--surface-border);
       border-radius:var(--r-field); font:400 14px var(--font-sans); color:var(--content-fg); }
     .ta { width:100%; padding:10px 12px; background:var(--surface); border:1px solid var(--surface-border);
@@ -181,16 +199,13 @@ export class ShipmentEdit implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly typeOptions = TYPE_OPTIONS;
+  protected readonly deliveryTypes = DELIVERY_TYPES;
 
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly shipment = signal<ShipmentResponse | null>(null);
 
   readonly branchOptions = signal<SelectOption[]>([]);
-  /** Delivery Branch picker options — excludes the (immutable) Booking Branch, same rule
-   *  as `ShipmentCreate`: a shipment cannot be booked and delivered from the same branch. */
-  readonly deliveryBranchOptions = computed(() =>
-    this.branchOptions().filter((o) => o.value !== this.shipment()?.bookingBranchId));
   readonly serviceTypeOptions = signal<SelectOption[]>([]);
   readonly packageTypeOptions = signal<SelectOption[]>([]);
   readonly paymentModeOptions = signal<SelectOption[]>([]);
@@ -207,7 +222,6 @@ export class ShipmentEdit implements OnInit {
   private id = '';
 
   protected readonly form: FormGroup = this.fb.group({
-    deliveryBranchId: [null as string | null, Validators.required],
     pickupPincode: ['', Validators.maxLength(10)],
     deliveryPincode: ['', Validators.maxLength(10)],
     senderName: ['', [Validators.required, Validators.maxLength(150)]],
@@ -229,7 +243,9 @@ export class ShipmentEdit implements OnInit {
     appointmentDate: [null as string | null],
     appointmentTimeSlot: ['', Validators.maxLength(20)],
     appointmentDeliveryCharge: [null as number | null],
-    insuranceApplicable: [false]
+    insuranceApplicable: [false],
+    deliveryType: ['DOOR' as DeliveryType],
+    doorDeliveryCharge: [null as number | null]
   });
 
   /**
@@ -240,7 +256,7 @@ export class ShipmentEdit implements OnInit {
   canSave(): boolean {
     const v = this.form.getRawValue();
     return !!(
-      v.deliveryBranchId && v.serviceTypeId && v.packageTypeId && v.paymentModeId
+      v.serviceTypeId && v.packageTypeId && v.paymentModeId
       && v.senderName && v.senderAddress && v.senderContact
       && v.receiverName && v.receiverAddress && v.receiverContact
       && this.items().length > 0 && this.weight().chargeable > 0
@@ -269,6 +285,13 @@ export class ShipmentEdit implements OnInit {
         this.form.get('appointmentDeliveryCharge')?.setValue(null);
       }
     });
+    // Picking Office Delivery clears the Door Delivery Charge, same rule — it never
+    // charges extra, and a stale figure must never ride along in the payload.
+    this.form.get('deliveryType')?.valueChanges.subscribe((type) => {
+      if (type !== 'DOOR') {
+        this.form.get('doorDeliveryCharge')?.setValue(null);
+      }
+    });
     this.load();
   }
 
@@ -292,14 +315,15 @@ export class ShipmentEdit implements OnInit {
         this.shipment.set(s);
         this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: s.shipmentNumber, route: `/shipments/${this.id}` }, { label: 'Edit' }]);
         this.form.patchValue({
-          deliveryBranchId: s.deliveryBranchId, pickupPincode: s.pickupPincode, deliveryPincode: s.deliveryPincode,
+          pickupPincode: s.pickupPincode, deliveryPincode: s.deliveryPincode,
           senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
           receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
           serviceTypeId: s.serviceTypeId, packageTypeId: s.packageTypeId,
           paymentModeId: s.paymentModeId, shipmentType: s.shipmentType, bookingDate: s.bookingDate,
           numberOfPackages: s.numberOfPackages, declaredValue: s.declaredValue, remarks: s.remarks ?? '',
           appointmentDelivery: s.appointmentDelivery, appointmentDate: s.appointmentDate ?? null,
-          appointmentTimeSlot: s.appointmentTimeSlot ?? '', insuranceApplicable: s.insuranceApplicable
+          appointmentTimeSlot: s.appointmentTimeSlot ?? '', insuranceApplicable: s.insuranceApplicable,
+          deliveryType: s.deliveryType
         });
         this.hydrateItems.set(s.items.map((i) => ({
           itemName: i.itemName, quantity: i.quantity, weight: i.weight, lengthCm: i.lengthCm,
@@ -311,7 +335,8 @@ export class ShipmentEdit implements OnInit {
         this.service.charges(this.id).subscribe({
           next: (c) => this.form.patchValue({
             otherCharges: c.otherCharges || null,
-            appointmentDeliveryCharge: c.appointmentDeliveryCharge || null
+            appointmentDeliveryCharge: c.appointmentDeliveryCharge || null,
+            doorDeliveryCharge: c.doorDeliveryCharge || null
           }),
           error: () => {}
         });
@@ -327,7 +352,7 @@ export class ShipmentEdit implements OnInit {
     const v = this.form.getRawValue();
 
     const body: UpdateShipmentRequest = {
-      version: s.version, deliveryBranchId: v.deliveryBranchId,
+      version: s.version,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
       receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
@@ -339,7 +364,9 @@ export class ShipmentEdit implements OnInit {
       appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
       appointmentTimeSlot: v.appointmentDelivery ? (v.appointmentTimeSlot?.trim() || null) : null,
       appointmentDeliveryCharge: v.appointmentDelivery ? (v.appointmentDeliveryCharge || null) : null,
-      insuranceApplicable: v.insuranceApplicable || null
+      insuranceApplicable: v.insuranceApplicable || null,
+      deliveryType: v.deliveryType,
+      doorDeliveryCharge: v.deliveryType === 'DOOR' ? (v.doorDeliveryCharge || null) : null
     };
 
     this.saving.set(true);

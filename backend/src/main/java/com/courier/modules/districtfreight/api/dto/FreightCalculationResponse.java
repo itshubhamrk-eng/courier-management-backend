@@ -11,6 +11,9 @@ public record FreightCalculationResponse(
         UUID bookingBranchId, String bookingBranchCode, String bookingBranchName,
         UUID districtId, String districtCode, String districtName,
         String destinationPincode,
+        @Schema(description = "The destination pincode/area's resolved city — shown at "
+                + "booking instead of a Delivery Branch picker")
+        String destinationCityName,
         BigDecimal chargeableWeight,
         String weightSlabLabel,
         BigDecimal ratePerKg,

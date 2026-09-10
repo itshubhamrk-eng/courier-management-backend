@@ -168,7 +168,8 @@ export class LoadingSheet implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
     this.masterData.branchDirectory().subscribe((list) => {
-      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+      this.branchNames.set(new Map(list.map((b) =>
+        [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
       this.loadEligibleDeliveryBranches();
     });
     this.createForm.get('deliveryBranchId')!.valueChanges.subscribe((id) => this.loadBooked(id));
@@ -227,7 +228,7 @@ export class LoadingSheet implements OnInit {
         const names = this.branchNames();
         const eligible = new Set(
           p.content.map((s) => s.nextLocationId ?? s.deliveryBranchId)
-            .filter((id) => id !== this.myBranchId));
+            .filter((id): id is string => !!id && id !== this.myBranchId));
         const options = [...eligible]
           .map((id) => ({ value: id, label: names.get(id) ?? id }))
           .sort((a, b) => a.label.localeCompare(b.label));

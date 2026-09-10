@@ -48,6 +48,9 @@ public class PricingMapper {
                 result.odaCharge(),
                 result.insuranceCharge(),
                 result.applicableCharges(),
+                result.applicableChargeLines().stream()
+                        .map(l -> new ChargeBreakup.ApplicableChargeLine(l.chargeName(), l.amount()))
+                        .toList(),
                 result.gstAmount(),
                 result.discountAmount(),
                 result.roundOff(),

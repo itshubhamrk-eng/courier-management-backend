@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The conditional shape a charge setting must satisfy — FACTOR vs. SLAB x {KG, KM,
- * BOTH} — and the half-open overlap rule.
+ * BOTH} — and the closed [from,to] overlap rule.
  */
 class ChargeSettingTest {
 
@@ -132,15 +132,18 @@ class ChargeSettingTest {
     // ------------------------------------------------------------------ overlap
 
     @Test
-    @DisplayName("KG slabs overlap only when their bands share weight, half-open")
-    void kgOverlapHalfOpen() {
+    @DisplayName("KG slabs overlap only when their bands share weight, closed [from,to] both "
+            + "ends inclusive — touching bands now count as overlapping")
+    void kgOverlapClosedInclusive() {
         ChargeSetting a = kg("0", "5");
         ChargeSetting b = kg("5", "10");
         ChargeSetting c = kg("4", "8");
+        ChargeSetting d = kg("6", "10");
 
-        assertThat(a.overlaps(b)).isFalse();
+        assertThat(a.overlaps(b)).isTrue();
         assertThat(a.overlaps(c)).isTrue();
         assertThat(b.overlaps(c)).isTrue();
+        assertThat(a.overlaps(d)).isFalse();
     }
 
     @Test
@@ -163,8 +166,8 @@ class ChargeSettingTest {
     @DisplayName("BOTH overlaps only when both dimensions overlap")
     void bothRequiresBothDimensionsToOverlap() {
         ChargeSetting a = both("0", "50", "0", "5");
-        ChargeSetting sameKmDifferentKg = both("0", "50", "5", "10");
-        ChargeSetting differentKmSameKg = both("50", "100", "0", "5");
+        ChargeSetting sameKmDifferentKg = both("0", "50", "6", "10");
+        ChargeSetting differentKmSameKg = both("51", "100", "0", "5");
         ChargeSetting overlapsBoth = both("25", "75", "2", "7");
 
         assertThat(a.overlaps(sameKmDifferentKg)).isFalse();

@@ -105,14 +105,27 @@ class ChargeSettingServiceImplTest {
     }
 
     @Test
-    @DisplayName("an adjacent KG slab (touching, not overlapping) is accepted")
-    void adjacentKgSlabAccepted() {
+    @DisplayName("a touching KG slab (shares a boundary) is now refused — bands are closed "
+            + "[from,to], both ends inclusive, so a shared boundary double-matches")
+    void touchingKgSlabRejected() {
         ChargeSetting existing = kgSetting("0", "5");
         when(repository.findByCompanyIdAndChargeIdAndStatus(COMPANY, CHARGE, ChargeStatus.ACTIVE))
                 .thenReturn(List.of(existing));
 
-        ChargeSetting created = service.create(kgCommand("5", "10"));
-        assertThat(created.getFromKg()).isEqualByComparingTo(new BigDecimal("5"));
+        assertThatThrownBy(() -> service.create(kgCommand("5", "10")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("overlaps");
+    }
+
+    @Test
+    @DisplayName("a KG slab with a gap after an existing one is accepted")
+    void gappedKgSlabAccepted() {
+        ChargeSetting existing = kgSetting("0", "5");
+        when(repository.findByCompanyIdAndChargeIdAndStatus(COMPANY, CHARGE, ChargeStatus.ACTIVE))
+                .thenReturn(List.of(existing));
+
+        ChargeSetting created = service.create(kgCommand("6", "10"));
+        assertThat(created.getFromKg()).isEqualByComparingTo(new BigDecimal("6"));
     }
 
     @Test

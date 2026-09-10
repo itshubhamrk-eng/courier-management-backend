@@ -2,6 +2,7 @@ package com.courier.modules.ewaybill.application;
 
 import com.courier.modules.company.application.CompanySettingsService;
 import com.courier.modules.company.domain.CompanySettings;
+import com.courier.modules.ewaybill.application.EwayBillService.ShipmentEwayBillContext;
 import com.courier.modules.ewaybill.application.command.CreateEwayBillCommand;
 import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
 import com.courier.modules.ewaybill.application.provider.EwayBillProvider;
@@ -28,6 +29,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -37,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,115 +90,216 @@ class EwayBillServiceImplTest {
     // ------------------------------------------------------------- isRequired / gate
 
     @Test
-    @DisplayName("invoice value at or under the threshold is never mandatory")
+    @DisplayName("E-Way Bill not required: invoice value at or under the threshold")
     void notRequiredAtOrUnderThreshold() {
         assertThat(service.isRequired(new BigDecimal("50000.00"))).isFalse();
         assertThat(service.isRequired(new BigDecimal("100.00"))).isFalse();
         assertThat(service.isRequired(null)).isFalse();
+
+        service.requireBookingData(new BigDecimal("100.00"), null);
+        // no exception — optional, booking proceeds with no E-Way Bill at all
     }
 
     @Test
-    @DisplayName("invoice value over the threshold is mandatory")
+    @DisplayName("E-Way Bill required: invoice value over the threshold")
     void requiredOverThreshold() {
         assertThat(service.isRequired(new BigDecimal("50000.01"))).isTrue();
     }
 
     @Test
-    @DisplayName("optional E-Way Bill: booking proceeds with no E-Way Bill at all")
-    void optionalAllowsNoEwayBill() {
-        service.enforceBookingRequirement(new BigDecimal("100.00"), null);
-        // no exception
-    }
-
-    @Test
-    @DisplayName("mandatory E-Way Bill missing entirely — booking is refused with the exact wording")
-    void mandatoryMissingRefused() {
-        assertThatThrownBy(() -> service.enforceBookingRequirement(new BigDecimal("60000"), null))
+    @DisplayName("mandatory but the minimum Part-A data is missing entirely — booking is refused")
+    void mandatoryMissingDataRefused() {
+        assertThatThrownBy(() -> service.requireBookingData(new BigDecimal("60000"), null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("E-Way Bill is mandatory because invoice value exceeds ₹50,000.");
     }
 
     @Test
-    @DisplayName("mandatory E-Way Bill supplied but fails provider validation — booking is refused")
-    void mandatoryInvalidRefused() {
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.invalid("bad number"));
+    @DisplayName("mandatory but invoice number is blank — booking is refused")
+    void mandatoryMissingInvoiceNumberRefused() {
+        EwayBillDataCommand incomplete = new EwayBillDataCommand(null, "  ", LocalDate.now(),
+                new BigDecimal("60000"), null, null, null, null, null, null, null, null, null, null, null, null);
 
-        assertThatThrownBy(() -> service.enforceBookingRequirement(new BigDecimal("60000"), sampleData()))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("mandatory")
-                .hasMessageContaining("bad number");
+        assertThatThrownBy(() -> service.requireBookingData(new BigDecimal("60000"), incomplete))
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
-    @DisplayName("mandatory E-Way Bill supplied and valid — booking proceeds")
-    void mandatoryValidPasses() {
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.ok());
+    @DisplayName("mandatory with the minimum data present — booking proceeds, no provider call")
+    void mandatoryWithDataPasses() {
+        service.requireBookingData(new BigDecimal("60000"), sampleData());
 
-        service.enforceBookingRequirement(new BigDecimal("60000"), sampleData());
-        // no exception
+        verify(provider, never()).generatePartA(any());
     }
 
-    // ------------------------------------------------------------- upsertForShipment
+    // ------------------------------------------------------------- Part-A generation
 
     @Test
-    @DisplayName("upsertForShipment is a no-op when no E-Way Bill data is given")
-    void upsertNoopWhenNull() {
-        EwayBill result = service.upsertForShipment(SHIPMENT, null);
-
-        assertThat(result).isNull();
-        verify(repository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("upsertForShipment creates a fresh VALIDATED row when none exists yet")
-    void upsertCreatesWhenNone() {
+    @DisplayName("Part-A generation success moves the row to PART_A_GENERATED with the provider's number")
+    void partAGenerationSuccess() {
         when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of());
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.ok());
+        when(provider.generatePartA(any())).thenReturn(EwayBillProvider.PartAResult.success(
+                "123456789012", Instant.now(), Instant.now().plusSeconds(86400), "GSP", "ref-1"));
 
-        EwayBill saved = service.upsertForShipment(SHIPMENT, sampleData());
+        EwayBill saved = service.generatePartAForShipment(SHIPMENT, sampleData(), sampleContext());
 
-        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.VALIDATED);
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.PART_A_GENERATED);
+        assertThat(saved.getEwayBillNumber()).isEqualTo("123456789012");
         assertThat(saved.getShipmentId()).isEqualTo(SHIPMENT);
     }
 
     @Test
-    @DisplayName("upsertForShipment updates the existing non-cancelled row in place")
-    void upsertUpdatesExisting() {
-        EwayBill existing = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.PENDING)
-                .invoiceNumber("OLD-INV").invoiceDate(LocalDate.now()).invoiceValue(BigDecimal.TEN).build();
+    @DisplayName("Part-A generation failure marks the row FAILED without throwing — booking must still commit")
+    void partAGenerationFailureDoesNotThrow() {
+        when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of());
+        when(provider.generatePartA(any())).thenReturn(EwayBillProvider.PartAResult.failure("GSP", "GSTIN mismatch"));
+
+        EwayBill saved = service.generatePartAForShipment(SHIPMENT, sampleData(), sampleContext());
+
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.FAILED);
+        assertThat(saved.getLastError()).contains("GSTIN mismatch");
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a provider timeout/exception is caught and stored as FAILED, never rethrown")
+    void providerTimeoutDoesNotThrow() {
+        when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of());
+        when(provider.generatePartA(any())).thenThrow(new RuntimeException("connect timed out"));
+
+        EwayBill saved = service.generatePartAForShipment(SHIPMENT, sampleData(), sampleContext());
+
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.FAILED);
+        assertThat(saved.getLastError()).contains("provider error");
+    }
+
+    @Test
+    @DisplayName("duplicate generation for the same shipment+invoice is refused — no second provider call")
+    void duplicateGenerationPrevented() {
+        EwayBill existing = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.PART_A_GENERATED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000"))
+                .ewayBillNumber("123456789012").build();
         existing.setId(UUID.randomUUID());
         when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of(existing));
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.ok());
 
-        EwayBill saved = service.upsertForShipment(SHIPMENT, sampleData());
+        EwayBill result = service.generatePartAForShipment(SHIPMENT, sampleData(), sampleContext());
 
-        assertThat(saved.getId()).isEqualTo(existing.getId());
-        assertThat(saved.getInvoiceNumber()).isEqualTo("INV-001");
+        assertThat(result.getId()).isEqualTo(existing.getId());
+        verify(provider, never()).generatePartA(any());
     }
 
     @Test
-    @DisplayName("upsertForShipment issues a fresh row when the only existing one is cancelled")
-    void upsertReissuesAfterCancellation() {
-        EwayBill cancelled = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.CANCELLED)
-                .invoiceNumber("OLD-INV").invoiceDate(LocalDate.now()).invoiceValue(BigDecimal.TEN).build();
-        cancelled.setId(UUID.randomUUID());
-        when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of(cancelled));
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.ok());
+    @DisplayName("a null command is a no-op")
+    void nullDataIsNoop() {
+        assertThat(service.generatePartAForShipment(SHIPMENT, null, sampleContext())).isNull();
+        verify(repository, never()).save(any());
+    }
 
-        EwayBill saved = service.upsertForShipment(SHIPMENT, sampleData());
+    // ------------------------------------------------------------- Part-B (dispatch)
 
-        assertThat(saved.getId()).isNotEqualTo(cancelled.getId());
+    @Test
+    @DisplayName("vehicle assignment triggers Part-B for a shipment sitting at PART_A_GENERATED")
+    void vehicleAssignmentTriggersPartB() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.PART_A_GENERATED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000"))
+                .ewayBillNumber("123456789012").build();
+        bill.setId(UUID.randomUUID());
+        when(repository.findAllByShipmentIdInWithinCompany(List.of(SHIPMENT), COMPANY)).thenReturn(List.of(bill));
+        when(provider.updatePartB(any())).thenReturn(EwayBillProvider.PartBResult.success("ref-2"));
+
+        service.triggerPartBForShipments(List.of(SHIPMENT), "MH12AB1234", null, "ROAD");
+
+        assertThat(bill.getStatus()).isEqualTo(EwayBillStatus.GENERATED);
+        assertThat(bill.getVehicleNumber()).isEqualTo("MH12AB1234");
     }
 
     @Test
-    @DisplayName("upsertForShipment marks the row INVALID when the provider refuses it, without throwing")
-    void upsertMarksInvalidWithoutThrowing() {
-        when(repository.findAllByShipmentIdWithinCompany(SHIPMENT, COMPANY)).thenReturn(List.of());
-        when(provider.validate(any())).thenReturn(EwayBillProvider.ValidationOutcome.invalid("bad"));
+    @DisplayName("Part-B failure marks FAILED without throwing — dispatch must still commit")
+    void partBFailureDoesNotThrow() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.PART_A_GENERATED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000"))
+                .ewayBillNumber("123456789012").build();
+        bill.setId(UUID.randomUUID());
+        when(repository.findAllByShipmentIdInWithinCompany(List.of(SHIPMENT), COMPANY)).thenReturn(List.of(bill));
+        when(provider.updatePartB(any())).thenReturn(EwayBillProvider.PartBResult.failure("vehicle not registered"));
 
-        EwayBill saved = service.upsertForShipment(SHIPMENT, sampleData());
+        service.triggerPartBForShipments(List.of(SHIPMENT), "MH12AB1234", null, "ROAD");
 
-        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.INVALID);
+        assertThat(bill.getStatus()).isEqualTo(EwayBillStatus.FAILED);
+        assertThat(bill.getLastError()).contains("vehicle not registered");
+    }
+
+    @Test
+    @DisplayName("a shipment with no E-Way Bill, or one not past Part-A, is silently skipped at dispatch")
+    void notPastPartAIsSkipped() {
+        service.triggerPartBForShipments(List.of(SHIPMENT), "MH12AB1234", null, "ROAD");
+
+        verify(provider, never()).updatePartB(any());
+    }
+
+    // ------------------------------------------------------------- retry
+
+    @Test
+    @DisplayName("retry refuses a row that is not FAILED/EXPIRED")
+    void retryRefusesNonFailedRow() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.PART_A_GENERATED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(BigDecimal.TEN)
+                .ewayBillNumber("123456789012").build();
+        UUID id = UUID.randomUUID();
+        bill.setId(id);
+        when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(bill));
+
+        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    @DisplayName("retry re-attempts Part-A when the row never got a number")
+    void retryReattemptsPartA() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.FAILED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000")).build();
+        UUID id = UUID.randomUUID();
+        bill.setId(id);
+        when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(bill));
+        when(provider.generatePartA(any())).thenReturn(EwayBillProvider.PartAResult.success(
+                "123456789012", Instant.now(), Instant.now().plusSeconds(86400), "GSP", "ref-1"));
+
+        EwayBill saved = service.retry(id);
+
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.PART_A_GENERATED);
+        verify(provider, times(1)).generatePartA(any());
+        verify(provider, never()).updatePartB(any());
+    }
+
+    @Test
+    @DisplayName("retry re-attempts Part-B when Part-A already succeeded")
+    void retryReattemptsPartB() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.FAILED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000"))
+                .ewayBillNumber("123456789012").vehicleNumber("MH12AB1234").build();
+        UUID id = UUID.randomUUID();
+        bill.setId(id);
+        when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(bill));
+        when(provider.updatePartB(any())).thenReturn(EwayBillProvider.PartBResult.success("ref-2"));
+
+        EwayBill saved = service.retry(id);
+
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.GENERATED);
+        verify(provider, never()).generatePartA(any());
+    }
+
+    @Test
+    @DisplayName("a failed retry throws — unlike the booking/dispatch flows, the user must see it")
+    void retryThrowsOnRepeatedFailure() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.FAILED)
+                .invoiceNumber("INV-001").invoiceDate(LocalDate.now()).invoiceValue(new BigDecimal("60000")).build();
+        UUID id = UUID.randomUUID();
+        bill.setId(id);
+        when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(bill));
+        when(provider.generatePartA(any())).thenReturn(EwayBillProvider.PartAResult.failure("GSP", "still invalid"));
+
+        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("still invalid");
+        assertThat(bill.getStatus()).isEqualTo(EwayBillStatus.FAILED);
     }
 
     // ------------------------------------------------------------- standalone lifecycle
@@ -223,20 +327,28 @@ class EwayBillServiceImplTest {
     }
 
     @Test
-    @DisplayName("validate refuses a cancelled row")
-    void validateRefusesCancelled() {
-        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.CANCELLED)
-                .invoiceNumber("INV").invoiceDate(LocalDate.now()).invoiceValue(BigDecimal.TEN).build();
+    @DisplayName("cancel calls the provider when a number was already issued")
+    void cancelCallsProviderWhenNumberIssued() {
+        EwayBill bill = EwayBill.builder().shipmentId(SHIPMENT).status(EwayBillStatus.GENERATED)
+                .invoiceNumber("INV").invoiceDate(LocalDate.now()).invoiceValue(BigDecimal.TEN)
+                .ewayBillNumber("123456789012").build();
         UUID id = UUID.randomUUID();
         bill.setId(id);
         when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(bill));
+        when(provider.cancel("123456789012", "done")).thenReturn(EwayBillProvider.CancelResult.ok());
 
-        assertThatThrownBy(() -> service.validate(id))
-                .isInstanceOf(BusinessRuleException.class);
+        EwayBill saved = service.cancel(id, "done");
+
+        assertThat(saved.getStatus()).isEqualTo(EwayBillStatus.CANCELLED);
     }
 
     private EwayBillDataCommand sampleData() {
-        return new EwayBillDataCommand("123456789012", "INV-001", LocalDate.now(), new BigDecimal("60000"),
-                "INVOICE", null, null, null, "MH12AB1234", 120, null, null, null, null);
+        return new EwayBillDataCommand(null, "INV-001", LocalDate.now(), new BigDecimal("60000"),
+                "INVOICE", null, null, null, null, null, null, null, null, null, "27AAAAA0000A1Z5", "27BBBBB0000B1Z5");
+    }
+
+    private ShipmentEwayBillContext sampleContext() {
+        return new ShipmentEwayBillContext("Sender Co", "123 Sender St", "411001",
+                "Receiver Co", "456 Receiver St", "560001", "Electronics");
     }
 }

@@ -1,20 +1,26 @@
 package com.courier.modules.ewaybill.domain;
 
 /**
- * Lifecycle of one E-Way Bill row.
+ * Lifecycle of one E-Way Bill row, matching the auto-generation workflow end to end:
+ * booking decides {@code REQUIRED}/{@code NOT_REQUIRED}, Shipment Booking then drives
+ * {@code PART_A_PENDING} -&gt; {@code PART_A_GENERATED} (or {@code FAILED}), and Manifest
+ * dispatch (vehicle assignment) drives {@code PART_B_PENDING} -&gt; {@code GENERATED}
+ * (or {@code FAILED}). {@code EXPIRED} means the provider's own validity window has
+ * lapsed; retrying from it requests a fresh E-Way Bill number, same as retrying a
+ * {@code FAILED} row whose Part-A never succeeded. {@code CANCELLED} is terminal.
  *
- * <p>{@code NOT_REQUIRED}/{@code REQUIRED} describe intent before any data has been typed
- * — a placeholder row a booking screen can create the instant the invoice value crosses
- * the mandatory threshold, before the operator has filled in a number. {@code CANCELLED}
- * is terminal: an E-Way Bill is withdrawn, never deleted.
+ * <p>Which stage a {@code FAILED}/{@code EXPIRED} row retries into is not encoded in the
+ * status itself — {@code EwayBillServiceImpl.retry} decides by checking whether the row
+ * already carries a provider-issued {@code ewayBillNumber}.
  */
 public enum EwayBillStatus {
     NOT_REQUIRED,
     REQUIRED,
-    PENDING,
-    UPLOADED,
-    VALIDATED,
-    INVALID,
+    PART_A_PENDING,
+    PART_A_GENERATED,
+    PART_B_PENDING,
+    GENERATED,
+    FAILED,
     EXPIRED,
     CANCELLED;
 
@@ -41,13 +47,16 @@ public enum EwayBillStatus {
             return false;
         }
         return switch (this) {
-            case NOT_REQUIRED, REQUIRED ->
-                    next == PENDING || next == UPLOADED || next == VALIDATED || next == CANCELLED;
-            case PENDING -> next == UPLOADED || next == VALIDATED || next == INVALID || next == CANCELLED;
-            case UPLOADED -> next == VALIDATED || next == INVALID || next == CANCELLED;
-            case VALIDATED -> next == EXPIRED || next == CANCELLED;
-            case INVALID -> next == UPLOADED || next == VALIDATED || next == CANCELLED;
-            case EXPIRED -> next == CANCELLED;
+            case NOT_REQUIRED, REQUIRED -> next == PART_A_PENDING || next == CANCELLED;
+            case PART_A_PENDING -> next == PART_A_GENERATED || next == FAILED || next == CANCELLED;
+            case PART_A_GENERATED -> next == PART_B_PENDING || next == EXPIRED || next == CANCELLED;
+            case PART_B_PENDING -> next == GENERATED || next == FAILED || next == CANCELLED;
+            case GENERATED -> next == EXPIRED || next == CANCELLED;
+            // Retryable from either stage: no ewayBillNumber yet means Part-A never
+            // succeeded (-> PART_A_PENDING); one already issued means only Part-B was
+            // outstanding (-> PART_B_PENDING). See EwayBillServiceImpl.retry.
+            case FAILED -> next == PART_A_PENDING || next == PART_B_PENDING || next == CANCELLED;
+            case EXPIRED -> next == PART_A_PENDING || next == CANCELLED;
             case CANCELLED -> false;
         };
     }

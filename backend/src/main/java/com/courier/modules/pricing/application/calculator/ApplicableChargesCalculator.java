@@ -9,10 +9,13 @@ import com.courier.modules.charge.domain.ChargeSlabType;
 import com.courier.modules.charge.domain.ChargeSpecifications;
 import com.courier.modules.charge.domain.ChargeStatus;
 import com.courier.modules.charge.domain.ChargeValueType;
+import com.courier.modules.distance.application.AddressDistanceService;
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.domain.ChargeType;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.exception.BusinessRuleException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -41,13 +44,27 @@ import java.util.UUID;
  * runs at 55, right after Insurance) — an assumption made in the absence of any
  * documented base in the {@code charge} module itself, since no {@code PERCENTAGE}
  * charge has been authored yet. Revisit if that turns out wrong once one is.
+ *
+ * <p>{@code distanceKm} is resolved directly off {@code AddressDistanceService
+ * .resolveBranchDistance(bookingBranchId, deliveryBranchId)} — never off {@code
+ * context.matchedRoute()}. A matched {@code Route} only exists when Rate Master's own
+ * Route/Rate lookup succeeded; most lanes price through District Level Freight's own
+ * fallback instead (see {@code PricingEngineImpl}'s Freight Factor fallback), which never
+ * sets {@code matchedRoute} at all — a KM-slab (or BOTH-slab) {@code ChargeSetting} would
+ * silently never match on any of those bookings otherwise, exactly the same gap Freight
+ * Factor's own distance resolution already had to work around. Same graceful-null
+ * treatment as that fallback: a same-branch pair, an ungeocoded branch, or any other
+ * {@code BusinessRuleException} from the lookup degrades to "no KM known" rather than
+ * blocking the booking — a KM/BOTH-slab charge setting simply doesn't match that shipment.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ApplicableChargesCalculator implements ChargeCalculator {
 
     private final ChargeRepository chargeRepository;
     private final ChargeSettingRepository chargeSettingRepository;
+    private final AddressDistanceService addressDistanceService;
 
     @Override
     public ChargeType type() {
@@ -66,20 +83,39 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
 
     @Override
     public BigDecimal calculate(PricingContext context) {
-        UUID serviceTypeId = context.command().serviceTypeId();
+        return resolve(context.command().serviceTypeId(), context.chargeableWeight(),
+                context.command().bookingBranchId(), context.command().deliveryBranchId(),
+                context.charge(ChargeType.FREIGHT))
+                .stream()
+                .map(Line::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** One matched {@code Charge}'s own name and the amount it contributed — e.g. "Hamali",
+     *  10.00 — kept alongside {@link #calculate} rather than replacing it, since most
+     *  callers (the pricing chain itself) only ever need the sum. Used to show a shipment's
+     *  applicable charges by name instead of one lumped total. */
+    public record Line(String chargeName, BigDecimal amount) {
+    }
+
+    /** Plain-parameter core of this calculator — no {@link PricingContext} required, so a
+     *  read-time caller (a shipment's own stored booking/delivery branch, chargeable
+     *  weight and freight, none of which need a fresh pricing run) can ask for the same
+     *  breakdown a booking itself would have gotten, live, without reconstructing one. */
+    public List<Line> resolve(UUID serviceTypeId, BigDecimal weight, UUID bookingBranchId,
+                              UUID deliveryBranchId, BigDecimal freight) {
         if (serviceTypeId == null) {
-            return BigDecimal.ZERO.setScale(2);
+            return List.of();
         }
 
         UUID companyId = CompanyContext.requireCompanyId();
         List<Charge> charges = chargeRepository.findAll(ChargeSpecifications.matching(
                 new ChargeCriteria(Set.of(serviceTypeId), Set.of(ChargeStatus.ACTIVE), null)));
 
-        BigDecimal weight = context.chargeableWeight();
-        BigDecimal distanceKm = context.matchedRoute() == null ? null : context.matchedRoute().getDistanceKm();
-        BigDecimal freight = context.charge(ChargeType.FREIGHT);
+        BigDecimal distanceKm = resolveDistanceKm(bookingBranchId, deliveryBranchId);
 
-        BigDecimal total = BigDecimal.ZERO;
+        List<Line> lines = new java.util.ArrayList<>();
         for (Charge charge : charges) {
             List<ChargeSetting> settings = chargeSettingRepository
                     .findByCompanyIdAndChargeIdAndStatus(companyId, charge.getId(), ChargeStatus.ACTIVE);
@@ -87,11 +123,28 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
                 if (!applies(setting, weight, distanceKm)) {
                     continue;
                 }
-                total = total.add(valueOf(setting, freight));
+                lines.add(new Line(charge.getChargeName(),
+                        valueOf(setting, freight).setScale(2, RoundingMode.HALF_UP)));
                 break;
             }
         }
-        return total.setScale(2, RoundingMode.HALF_UP);
+        return lines;
+    }
+
+    /** Null whenever a real branch-pair distance can't be resolved (either id missing, the
+     *  same branch on both ends, or an ungeocoded branch) — never thrown, see the class doc. */
+    private BigDecimal resolveDistanceKm(UUID bookingBranchId, UUID deliveryBranchId) {
+        if (bookingBranchId == null || deliveryBranchId == null || bookingBranchId.equals(deliveryBranchId)) {
+            return null;
+        }
+        try {
+            return addressDistanceService.resolveBranchDistance(bookingBranchId, deliveryBranchId).getDistanceKm();
+        } catch (BusinessRuleException e) {
+            log.debug("Applicable Charges: no branch-pair distance for {} -> {} ({}) — "
+                    + "KM/BOTH-slab charge settings won't match this booking.",
+                    bookingBranchId, deliveryBranchId, e.getMessage());
+            return null;
+        }
     }
 
     private BigDecimal valueOf(ChargeSetting setting, BigDecimal freight) {
@@ -114,8 +167,13 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
         return kgOk && kmOk;
     }
 
-    /** Half-open {@code [from, to)}, the same slab convention {@code ChargeSetting} itself documents. */
+    /** Closed {@code [from, to]}, both ends inclusive — direct request ("use 1&lt;= w and
+     *  w&lt;=20"): a band typed as "1-20" must include 20 itself, matching how a company
+     *  admin naturally reads a slab row, not a half-open convention that silently drops the
+     *  boundary. {@link ChargeSetting#overlaps} enforces the matching invariant at write
+     *  time — adjacent bands must leave a gap (1-20, 21-40), never share a boundary (1-20,
+     *  20-40 is now rejected as overlapping, since 20 would match both). */
     private boolean inRange(BigDecimal value, BigDecimal from, BigDecimal to) {
-        return value.compareTo(from) >= 0 && value.compareTo(to) < 0;
+        return value.compareTo(from) >= 0 && value.compareTo(to) <= 0;
     }
 }

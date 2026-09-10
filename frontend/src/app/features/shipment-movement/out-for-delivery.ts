@@ -68,6 +68,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
                         <th>Tracking No.</th>
                         <th>Receiver</th>
                         <th>Contact</th>
+                        <th>From → To</th>
                         <th class="tbl--right">Amount</th>
                       </tr>
                     </thead>
@@ -79,6 +80,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
                           <td>{{ s.trackingNumber }}</td>
                           <td>{{ s.receiverName }}</td>
                           <td>{{ s.receiverContact }}</td>
+                          <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                           <td class="tbl--right">{{ s.netAmount ?? 0 }}</td>
                         </tr>
                       }
@@ -251,8 +253,11 @@ export class OutForDelivery implements OnInit {
     const tableRows = rows.map((s, i) => `<tr>
       <td>${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
+      <td>${this.esc(s.ewayBillNumber) || '—'}</td>
       <td>${this.esc(s.receiverName)}</td>
       <td>${this.esc(s.receiverContact)}</td>
+      <td>${this.esc(s.fromCity) || '—'}</td>
+      <td>${this.esc(s.toCity) || '—'}</td>
       <td>${this.esc(this.label(s.paymentModeId, this.paymentModeOptions()))}</td>
       <td style="text-align:right">${collectAmount(s) ?? '—'}</td>
       <td></td>
@@ -291,9 +296,9 @@ export class OutForDelivery implements OnInit {
         <div><span>Date</span><span>${this.esc(new Date().toLocaleDateString())}</span></div>
         <div><span>Shipments</span><span>${rows.length}</span></div>
       </div>
-      <table><thead><tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Contact</th><th>Payment</th><th style="text-align:right">Amount</th><th>Receiver Sign</th><th>Stamp</th></tr></thead>
+      <table><thead><tr><th>#</th><th>Tracking No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Contact</th><th>From City</th><th>To City</th><th>Payment</th><th style="text-align:right">Amount</th><th>Receiver Sign</th><th>Stamp</th></tr></thead>
       <tbody>${tableRows}</tbody>
-      <tfoot><tr><td colspan="5">Total to Collect</td><td style="text-align:right">${totalAmount}</td><td></td><td></td></tr></tfoot></table>
+      <tfoot><tr><td colspan="8">Total to Collect</td><td style="text-align:right">${totalAmount}</td><td></td><td></td></tr></tfoot></table>
     </body></html>`);
     win.document.close();
     win.focus();

@@ -58,13 +58,14 @@ class ManifestServiceImplTest {
     @Mock private VehicleService vehicleService;
     @Mock private UserService userService;
     @Mock private AuditService auditService;
+    @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
 
     private ManifestServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new ManifestServiceImpl(manifestRepository, shipmentService, vehicleService,
-                userService, auditService);
+                userService, auditService, ewayBillService);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");

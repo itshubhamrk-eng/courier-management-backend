@@ -1,6 +1,7 @@
 package com.courier.modules.shipment.application.command;
 
 import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentType;
 
 import java.math.BigDecimal;
@@ -18,7 +19,6 @@ import java.util.UUID;
  */
 public record UpdateShipmentCommand(
         Long expectedVersion,
-        UUID deliveryBranchId,
         String pickupPincode,
         String deliveryPincode,
         String senderName,
@@ -51,6 +51,8 @@ public record UpdateShipmentCommand(
         LocalDate appointmentDate,
         String appointmentTimeSlot,
         BigDecimal appointmentDeliveryCharge,
-        Boolean insuranceApplicable
+        Boolean insuranceApplicable,
+        DeliveryType deliveryType,
+        BigDecimal doorDeliveryCharge
 ) {
 }

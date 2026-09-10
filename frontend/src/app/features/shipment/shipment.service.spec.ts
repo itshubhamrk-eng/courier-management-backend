@@ -23,7 +23,7 @@ describe('ShipmentService', () => {
 
   it('books a shipment with POST to the collection', () => {
     service.create({
-      bookingBranchId: 'b-1', deliveryBranchId: 'b-2', pickupPincode: '411001', deliveryPincode: '400008',
+      bookingBranchId: 'b-1', pickupPincode: '411001', deliveryPincode: '400008',
       senderName: 'Asha Shah', senderAddress: '221B Baker Street, Pune', senderContact: '9876543210',
       receiverName: 'Rahul Verma', receiverAddress: '12 MG Road, Mumbai', receiverContact: '9876500000',
       serviceTypeId: 's-1', packageTypeId: 'p-1',
@@ -38,7 +38,7 @@ describe('ShipmentService', () => {
 
   it('updates with PUT carrying the version', () => {
     service.update('shp-1', {
-      version: 3, deliveryBranchId: 'b-2', pickupPincode: '411001', deliveryPincode: '400008',
+      version: 3, pickupPincode: '411001', deliveryPincode: '400008',
       senderName: 'Asha Shah', senderAddress: '221B Baker Street, Pune', senderContact: '9876543210',
       receiverName: 'Rahul Verma', receiverAddress: '12 MG Road, Mumbai', receiverContact: '9876500000',
       serviceTypeId: 's-1', packageTypeId: 'p-1',

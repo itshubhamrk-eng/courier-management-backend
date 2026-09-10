@@ -43,7 +43,8 @@ import { AuthService } from '@core/auth/auth.service';
     .um__caret { color:var(--content-muted); }
     .um__head { display:flex; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--surface-border); }
     .um__id { min-width:0; }
-    .um__id-name { margin:0; font:700 14px var(--font-sans); color:var(--content-fg); }
+    .um__id-name { margin:0; font:700 14px var(--font-sans); color:var(--content-fg);
+      max-width:180px; overflow-wrap:break-word; }
     .um__id-mail { margin:2px 0 0; font:400 12px var(--font-sans); color:var(--content-muted);
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
     .um__id-role { display:inline-block; margin-top:6px; padding:2px 8px; border-radius:999px;

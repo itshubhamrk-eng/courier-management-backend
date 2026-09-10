@@ -162,12 +162,16 @@ public enum AuditAction {
     SHIPMENT_DOCUMENT_UPLOADED,
     SHIPMENT_IMAGE_UPLOADED,
 
-    // --- E-Way Bill Management (V47)
+    // --- E-Way Bill Management (V47, auto-generation V68)
     EWAY_BILL_CREATED,
     EWAY_BILL_UPDATED,
     EWAY_BILL_VALIDATED,
     EWAY_BILL_UPLOADED,
     EWAY_BILL_CANCELLED,
+    EWAY_BILL_PART_A_GENERATED,
+    EWAY_BILL_PART_B_GENERATED,
+    EWAY_BILL_GENERATION_FAILED,
+    EWAY_BILL_RETRIED,
 
     // --- shipment movement (V19: minimal Manifest + the movement pipeline on top of it)
     VEHICLE_CREATED,

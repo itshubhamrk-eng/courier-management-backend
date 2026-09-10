@@ -120,9 +120,11 @@ public class ManifestController {
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
         Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
         Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
+        Map<UUID, String> ewayBillNumbers = shipmentService.ewayBillNumbersFor(ids);
         List<ShipmentSummaryResponse> summaries = page.getContent().stream()
                 .map(s -> shipmentMapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()),
-                        deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()), receivedAt.get(s.getId())))
+                        deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()), receivedAt.get(s.getId()),
+                        ewayBillNumbers.get(s.getId())))
                 .toList();
         return ApiResponse.success(summaries);
     }

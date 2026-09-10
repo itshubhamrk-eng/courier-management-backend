@@ -103,6 +103,8 @@ class ShipmentMovementServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private com.courier.modules.districtfreight.application.FreightCalculationService freightCalculationService;
+    @Mock private com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
+    @Mock private com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
@@ -118,7 +120,8 @@ class ShipmentMovementServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, freightCalculationService, auditService, eventPublisher, fileStoragePort,
+                ewayBillService, freightCalculationService, branchPincodeMappingService,
+                applicableChargesCalculator, auditService, eventPublisher, fileStoragePort,
                 shipmentAssetRepository);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(

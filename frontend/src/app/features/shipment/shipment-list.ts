@@ -158,7 +158,7 @@ export class ShipmentList implements OnInit {
     });
   }
 
-  private branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id; }
+  private branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
 
   private download(rows: Shipment[]): void {
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',

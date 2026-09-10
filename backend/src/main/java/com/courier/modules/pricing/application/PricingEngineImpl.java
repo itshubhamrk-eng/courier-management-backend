@@ -5,6 +5,7 @@ import com.courier.modules.freight.application.FreightCalculationResult;
 import com.courier.modules.freight.application.FreightFactorService;
 import com.courier.modules.freight.application.command.FreightCalculationCommand;
 import com.courier.modules.master.domain.Route;
+import com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator;
 import com.courier.modules.pricing.application.command.PricingCommand;
 import com.courier.modules.pricing.application.factory.PricingFactory;
 import com.courier.modules.pricing.application.strategy.PricingStrategy;
@@ -54,6 +55,7 @@ public class PricingEngineImpl implements PricingEngine {
     private final PricingProperties properties;
     private final FreightFactorService freightFactorService;
     private final CompanySettingsService companySettingsService;
+    private final ApplicableChargesCalculator applicableChargesCalculator;
 
     @Override
     @PreAuthorize("isAuthenticated()")
@@ -99,12 +101,19 @@ public class PricingEngineImpl implements PricingEngine {
      * distance) — every caller of this engine (Shipment Booking, the frontend's own live
      * pricing preview, any future Quotation/mobile consumer) gets it for free, not just
      * whichever one remembers to catch {@link RouteRateUnavailableException} itself. No
-     * fuel/handling/ODA/insurance/applicable-charges/discount/round-off — Freight Factor
-     * deliberately carries none of those. GST is still statutory here too: applied on top of the freight sum at
-     * the company's own {@code CompanySettings.gstPercentage}, since there is no matched
-     * {@link Rate} to read a per-lane percentage off of. A gap in the Freight Factor grid
-     * itself, or an unresolvable branch-pair distance, still fails the call with its own
-     * exception — there is no third fallback tier.
+     * fuel/handling/ODA/insurance/discount/round-off — those are Rate-card-driven
+     * percentages with no other source once there is no matched {@link Rate} — Freight
+     * Factor deliberately carries none of those. Applicable Charges is the one exception:
+     * {@link ApplicableChargesCalculator} is keyed on the {@code charge} module's own
+     * weight/distance-slab configuration, not a matched Route/Rate at all (see its own
+     * class doc), so it still runs here — a company's configured Hamali/fuel-surcharge
+     * charges must not silently vanish just because this lane has no Rate Master entry,
+     * which is the common case once Shipment Booking stopped requiring an explicit
+     * Delivery Branch pick. GST is still statutory here too: applied on top of freight +
+     * Applicable Charges at the company's own {@code CompanySettings.gstPercentage}, since
+     * there is no matched {@link Rate} to read a per-lane percentage off of. A gap in the
+     * Freight Factor grid itself, or an unresolvable branch-pair distance, still fails the
+     * call with its own exception — there is no third fallback tier.
      *
      * <p>{@code command.freightFactorOverride()} lets a caller raise the matched cell's own
      * factor before freight is computed — never lower it. A smaller override is refused
@@ -158,12 +167,31 @@ public class PricingEngineImpl implements PricingEngine {
             effectiveFactor = command.freightFactorOverride();
             chargesSubtotal = effectiveFactor.multiply(chargeableWeight).setScale(2, RoundingMode.HALF_UP);
         }
+        List<ApplicableChargesCalculator.Line> applicableChargeLines =
+                applicableChargeLines(command, chargeableWeight, chargesSubtotal);
+        BigDecimal applicableCharges = applicableChargeLines.stream()
+                .map(ApplicableChargesCalculator.Line::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxableSubtotal = chargesSubtotal.add(applicableCharges);
         BigDecimal gstPercentage = companySettingsService.get().getGstPercentage();
-        BigDecimal gstAmount = chargesSubtotal.multiply(gstPercentage)
+        BigDecimal gstAmount = taxableSubtotal.multiply(gstPercentage)
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP);
-        BigDecimal netAmount = chargesSubtotal.add(gstAmount);
+        BigDecimal netAmount = taxableSubtotal.add(gstAmount);
         return new PricingResult(null, null, actualWeight, volumetricWeight, chargeableWeight,
                 chargesSubtotal, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, gstAmount, BigDecimal.ZERO, BigDecimal.ZERO, netAmount, effectiveFactor);
+                applicableCharges, applicableChargeLines, gstAmount, BigDecimal.ZERO, BigDecimal.ZERO,
+                netAmount, effectiveFactor);
+    }
+
+    /** {@link ApplicableChargesCalculator} needs only service type, booking/delivery
+     *  branch, chargeable weight and freight (for a PERCENTAGE-type charge) — none of
+     *  which require a matched Route/Rate, so it runs unchanged from the standard chain
+     *  even on this fallback path. See the class doc above. */
+    private List<ApplicableChargesCalculator.Line> applicableChargeLines(PricingCommand command,
+                                                                         BigDecimal chargeableWeight,
+                                                                         BigDecimal freight) {
+        return applicableChargesCalculator.resolve(command.serviceTypeId(), chargeableWeight,
+                command.bookingBranchId(), command.deliveryBranchId(), freight);
     }
 }

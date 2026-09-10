@@ -20,7 +20,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { Customer } from '@core/models/customer.model';
 import {
-  ShipmentItemRequest, CreateShipmentRequest, PricingResponse
+  ShipmentItemRequest, CreateShipmentRequest, PricingResponse, DeliveryType, DELIVERY_TYPES
 } from '@core/models/shipment.model';
 import { FreightCalculationResponse } from '@core/models/district-level-freight.model';
 import { ItemEntryGrid } from './components/item-entry-grid';
@@ -43,16 +43,6 @@ function today(): string {
 type PriceOutcome = { ok: true; data: PricingResponse } | { ok: false; message: string | null };
 type FreightOutcome =
   { ok: true; data: FreightCalculationResponse } | { ok: false; message: string | null };
-
-/** A native `<input type="date">` value (`yyyy-MM-dd`) has no time-of-day; the backend's
- *  `validFrom`/`validUntil` are `Instant`, so a bare date is widened to the start/end of
- *  that day in UTC. */
-function toInstantStart(date: string | null | undefined): string | null {
-  return date ? `${date}T00:00:00Z` : null;
-}
-function toInstantEnd(date: string | null | undefined): string | null {
-  return date ? `${date}T23:59:59Z` : null;
-}
 
 /**
  * Create Shipment — a single page, not a step wizard: Booking Details, Parties,
@@ -102,7 +92,10 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   <span class="fld__i fld__i--hint">{{ destinationAreaError() ?? 'Enter a destination pincode first' }}</span>
                 }
               </div>
-              <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search delivery branch…" />
+              <label class="fld"><span class="fld__l">From City</span>
+                <input class="fld__i" [value]="myBranchCity() ?? '—'" disabled /></label>
+              <label class="fld"><span class="fld__l">To City</span>
+                <input class="fld__i" [value]="freightCalc()?.destinationCityName ?? (freightCalcLoading() ? 'Resolving…' : '—')" disabled /></label>
               <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
               <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
                 <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
@@ -130,25 +123,6 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('crossingCharge')" /></label>
               </div>
             }
-            <div class="spacer"></div>
-            <label class="chk">
-              <input type="checkbox" [formControl]="c('appointmentDelivery')" />
-              <span>Appointment Delivery</span>
-            </label>
-            @if (c('appointmentDelivery').value) {
-              <div class="spacer"></div>
-              <div class="grid3">
-                <label class="fld"><span class="fld__l">Appointment Date</span>
-                  <input class="fld__i" type="date" [formControl]="c('appointmentDate')" /></label>
-                <label class="fld"><span class="fld__l">Time Slot</span>
-                  <input class="fld__i" [formControl]="c('appointmentTimeSlot')" placeholder="e.g. 1:00-2:00" maxlength="20" /></label>
-              </div>
-            }
-            <div class="spacer"></div>
-            <label class="chk">
-              <input type="checkbox" [formControl]="c('insuranceApplicable')" />
-              <span>Insurance Applicable <span class="hint">(2% of freight)</span></span>
-            </label>
           </app-card>
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
@@ -162,6 +136,55 @@ function toInstantEnd(date: string | null | undefined): string | null {
             <div class="spacer"></div>
             <label class="fld"><span class="fld__l">Remarks</span>
               <textarea class="ta" rows="2" placeholder="Handle with care, deliver before noon…" maxlength="500" [formControl]="c('remarks')"></textarea></label>
+          </app-card>
+
+          <app-card title="Delivery Preferences" subtitle="How this shipment is delivered, and any add-ons.">
+            <div class="pref-grid">
+              <div class="pref-box">
+                <span class="pref-box__title">Delivery Type</span>
+                <div class="radio-row">
+                  @for (type of deliveryTypes; track type) {
+                    <label class="radio">
+                      <input type="radio" name="deliveryType" [value]="type" [formControl]="c('deliveryType')" />
+                      <span>{{ type === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</span>
+                    </label>
+                  }
+                </div>
+                @if (c('deliveryType').value === 'DOOR') {
+                  <label class="fld pref-box__sub"><span class="fld__l">Door Delivery Charge</span>
+                    <input class="fld__i" type="number" min="0" step="0.01" [value]="doorDeliveryCharge()"
+                      (input)="doorDeliveryCharge.set($any($event.target).valueAsNumber || 0)" /></label>
+                }
+              </div>
+
+              <div class="pref-box">
+                <label class="chk pref-box__title">
+                  <input type="checkbox" [formControl]="c('appointmentDelivery')" />
+                  <span>Appointment Delivery</span>
+                </label>
+                @if (c('appointmentDelivery').value) {
+                  <div class="pref-box__sub pref-box__sub--grid">
+                    <label class="fld"><span class="fld__l">Appointment Date</span>
+                      <input class="fld__i" type="date" [formControl]="c('appointmentDate')" /></label>
+                    <label class="fld"><span class="fld__l">Time Slot</span>
+                      <input class="fld__i" [formControl]="c('appointmentTimeSlot')" placeholder="e.g. 1:00-2:00" maxlength="20" /></label>
+                    <label class="fld"><span class="fld__l">Appointment Charge <span class="hint">(no GST)</span></span>
+                      <input class="fld__i" type="number" min="0" step="0.01" [value]="appointmentDeliveryCharge()"
+                        (input)="appointmentDeliveryCharge.set($any($event.target).valueAsNumber || 0)" /></label>
+                  </div>
+                } @else {
+                  <p class="hint pref-box__note">Book a fixed date/time window with the receiver.</p>
+                }
+              </div>
+
+              <div class="pref-box">
+                <label class="chk pref-box__title">
+                  <input type="checkbox" [formControl]="c('insuranceApplicable')" />
+                  <span>Insurance Applicable</span>
+                </label>
+                <p class="hint pref-box__note">2% of freight value, added to charges automatically.</p>
+              </div>
+            </div>
           </app-card>
 
           <app-card title="Parties">
@@ -246,7 +269,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
             </div>
           </app-card>
 
-          <app-card title="E-Way Bill" subtitle="Required over the mandatory invoice value; optional below it.">
+          <app-card title="E-Way Bill" subtitle="Required over the mandatory invoice value; optional below it. Generated automatically after booking.">
             <div class="grid3">
               <label class="fld"><span class="fld__l">Invoice Value</span>
                 <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('invoiceValue')" placeholder="0.00" /></label>
@@ -265,19 +288,19 @@ function toInstantEnd(date: string | null | undefined): string | null {
               <app-button variant="stroked" (pressed)="addEwayBill()">+ Add E-Way Bill</app-button>
             } @else {
               <div class="spacer"></div>
+              <p class="hint">The E-Way Bill number and validity are issued automatically once the shipment is
+                booked (Part-A); vehicle/transport details (Part-B) are filled in when the shipment is dispatched
+                on a manifest. Only the invoice details below are needed now.</p>
+              <div class="spacer"></div>
               <div class="grid3">
-                <label class="fld"><span class="fld__l">E-Way Bill Number</span>
-                  <input class="fld__i" [formControl]="c('ewayBillNumber')" placeholder="12-digit number" maxlength="30" /></label>
                 <label class="fld"><span class="fld__l">Invoice Number</span>
                   <input class="fld__i" [formControl]="c('ewayBillInvoiceNumber')" placeholder="e.g. INV-1042" maxlength="50" /></label>
                 <label class="fld"><span class="fld__l">Invoice Date</span>
                   <input class="fld__i" type="date" [formControl]="c('ewayBillInvoiceDate')" /></label>
-                <label class="fld"><span class="fld__l">Vehicle Number</span>
-                  <input class="fld__i" [formControl]="c('ewayBillVehicleNumber')" placeholder="e.g. MH12AB1234" maxlength="20" /></label>
-                <label class="fld"><span class="fld__l">Valid From</span>
-                  <input class="fld__i" type="date" [formControl]="c('ewayBillValidFrom')" /></label>
-                <label class="fld"><span class="fld__l">Valid Until</span>
-                  <input class="fld__i" type="date" [formControl]="c('ewayBillValidUntil')" /></label>
+                <label class="fld"><span class="fld__l">Sender GSTIN <span class="hint">(optional)</span></span>
+                  <input class="fld__i" [formControl]="c('ewayBillConsignorGstin')" placeholder="e.g. 27AAAAA0000A1Z5" maxlength="15" /></label>
+                <label class="fld"><span class="fld__l">Receiver GSTIN <span class="hint">(optional)</span></span>
+                  <input class="fld__i" [formControl]="c('ewayBillConsigneeGstin')" placeholder="e.g. 27BBBBB0000B1Z5" maxlength="15" /></label>
               </div>
               <div class="spacer"></div>
               <label class="fld"><span class="fld__l">Remarks</span>
@@ -289,7 +312,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   <button type="button" class="eway-doc__remove" (click)="removeEwayBillFile()"><mat-icon>close</mat-icon></button>
                 } @else {
                   <button type="button" class="img__btn" (click)="ewayBillFile.click()">
-                    <mat-icon>upload_file</mat-icon> Upload document (PDF/JPG/PNG)
+                    <mat-icon>upload_file</mat-icon> Attach a document (PDF/JPG/PNG, optional)
                   </button>
                 }
                 <input #ewayBillFile type="file" accept=".pdf,.jpg,.jpeg,.png" hidden (change)="onEwayBillFile($event)" />
@@ -327,7 +350,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
             <h2 class="sum__title">Booking Summary</h2>
 
             <span class="sum__lbl">Route</span>
-            <span class="sum__val">{{ myBranchLabel() }} → {{ branchLabel(c('deliveryBranchId').value) }}</span>
+            <span class="sum__val">{{ myBranchCity() ?? myBranchLabel() }} → {{ freightCalc()?.destinationCityName ?? '—' }}</span>
 
             <span class="sum__lbl">Load</span>
             <span class="sum__val">{{ c('numberOfPackages').value || 1 }} pkg · {{ weight().chargeable | number: '1.3-3' }} kg</span>
@@ -371,7 +394,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
               @if (!myBranchIdPresent()) {
                 <p class="err">Your account has no branch assigned — ask an admin before booking.</p>
               } @else if (!readyToPrice()) {
-                <p class="hint">Select a delivery branch and add at least one item's weight to see pricing.</p>
+                <p class="hint">Enter a destination pincode and add at least one item's weight to see pricing.</p>
               } @else if (pricingLoading()) {
                 <p class="hint">Pricing…</p>
               } @else if (pricingError()) {
@@ -387,19 +410,23 @@ function toInstantEnd(date: string | null | undefined): string | null {
                   odaCharge: odaChargeOverride() ?? freightCalc()?.odaCharge ?? p.chargeBreakup.odaCharge,
                   insuranceCharge: finalInsuranceCharge(),
                   applicableCharges: p.chargeBreakup.applicableCharges,
+                  applicableChargeLines: p.chargeBreakup.applicableChargeLines,
                   gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta()
-                    + gstOnInsuranceChargeDelta(),
+                    + gstOnInsuranceChargeDelta() + gstOnDoorDeliveryCharge(),
                   discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
                   otherCharges: otherCharges(),
                   appointmentDeliveryCharge: c('appointmentDelivery').value ? appointmentDeliveryCharge() : undefined,
-                  netAmount: (manualNetAmount() ?? p.chargeBreakup.netAmount) + otherCharges() + gstOnOtherCharges()
+                  doorDeliveryCharge: c('deliveryType').value === 'DOOR' ? doorDeliveryCharge() : undefined,
+                  netAmount: manualNetAmount() ?? (p.chargeBreakup.netAmount + otherCharges() + gstOnOtherCharges()
                     + odaChargeDelta() + gstOnOdaChargeDelta() + freightDelta() + gstOnFreightDelta()
                     + (c('appointmentDelivery').value ? appointmentDeliveryCharge() : 0)
-                    + insuranceChargeDelta() + gstOnInsuranceChargeDelta()
+                    + (c('deliveryType').value === 'DOOR' ? doorDeliveryCharge() : 0) + gstOnDoorDeliveryCharge()
+                    + insuranceChargeDelta() + gstOnInsuranceChargeDelta())
                 }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
                   (otherChargesChange)="otherCharges.set($event)"
                   (odaChargeChange)="odaChargeOverride.set($event)"
-                  (appointmentDeliveryChargeChange)="appointmentDeliveryCharge.set($event)" />
+                  (appointmentDeliveryChargeChange)="appointmentDeliveryCharge.set($event)"
+                  (doorDeliveryChargeChange)="doorDeliveryCharge.set($event)" />
               }
             </div>
 
@@ -457,6 +484,13 @@ function toInstantEnd(date: string | null | undefined): string | null {
     .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
     .grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 16px; }
     .parties { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .pref-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:start; }
+    .pref-box { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field);
+      padding:14px; display:flex; flex-direction:column; gap:10px; }
+    .pref-box__title { font:700 13px var(--font-sans); color:var(--content-fg); }
+    .pref-box__sub { margin-top:2px; }
+    .pref-box__sub--grid { display:grid; grid-template-columns:1fr; gap:10px; }
+    .pref-box__note { margin:0; }
     .party { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); padding:12px; }
     .party--sender { border-top:3px solid var(--info); }
     .party--receiver { border-top:3px solid var(--brand-600); }
@@ -466,6 +500,9 @@ function toInstantEnd(date: string | null | undefined): string | null {
     .fld { display:flex; flex-direction:column; gap:4px; }
     .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
     .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
+    .radio-row { display:flex; gap:16px; align-items:center; }
+    .radio { display:flex; gap:6px; align-items:center; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
+    .radio input { width:16px; height:16px; accent-color:var(--brand-600); }
     .crossing-hops { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
     .crossing-hop { display:flex; align-items:flex-end; gap:8px; }
     .crossing-hop app-autocomplete { flex:1; }
@@ -508,7 +545,7 @@ function toInstantEnd(date: string | null | undefined): string | null {
       background:var(--surface); color:var(--content-fg); display:grid; place-items:center; cursor:pointer; flex-shrink:0; }
     .eway-doc__remove mat-icon { font-size:16px; width:16px; height:16px; }
     @media (max-width:960px){ .lr { grid-template-columns:1fr; } .lr__sum { position:static; } }
-    @media (max-width:760px){ .grid2, .grid3, .parties { grid-template-columns:1fr; } }
+    @media (max-width:760px){ .grid2, .grid3, .parties, .pref-grid { grid-template-columns:1fr; } }
   `]
 })
 export class ShipmentCreate implements OnInit {
@@ -538,6 +575,8 @@ export class ShipmentCreate implements OnInit {
   /** The caller's own branch label, read from the unfiltered list before it's excluded
    *  above — `myBranchLabel()` needs it even though `branchOptions()` no longer carries it. */
   protected readonly myBranchName = signal<string | null>(null);
+  /** The booking branch's own city — shown as "From City" instead of a branch picker. */
+  protected readonly myBranchCity = signal<string | null>(null);
   protected readonly serviceTypeOptions = signal<SelectOption[]>([]);
   protected readonly packageTypeOptions = signal<SelectOption[]>([]);
   protected readonly paymentModeOptions = signal<SelectOption[]>([]);
@@ -591,6 +630,14 @@ export class ShipmentCreate implements OnInit {
    *  GST-free (direct user request), unlike {@link otherCharges}. Reset to zero whenever
    *  the checkbox is unchecked, see `ngOnInit`. */
   protected readonly appointmentDeliveryCharge = signal<number>(0);
+
+  protected readonly deliveryTypes = DELIVERY_TYPES;
+
+  /** Manual, typed at booking time when Delivery Type is DOOR — taxed with GST, same
+   *  treatment as {@link otherCharges} (see {@link gstOnDoorDeliveryCharge}), unlike
+   *  {@link appointmentDeliveryCharge}. Reset to zero whenever Office Delivery is picked,
+   *  see `ngOnInit`. */
+  protected readonly doorDeliveryCharge = signal<number>(0);
 
   /** Set only when the current preview priced through the Freight Factor fallback (no
    *  route/rate for this lane) — gates the "Freight Factor" input in the summary. */
@@ -674,7 +721,11 @@ export class ShipmentCreate implements OnInit {
   protected readonly form: FormGroup = this.fb.group({
     bookingBranchId: [this.myBranchId, Validators.required],
     manualShipmentNumber: ['', Validators.maxLength(30)],
-    deliveryBranchId: [null as string | null, Validators.required],
+    // No longer picked by the operator (see the From City/To City display fields) — still
+    // auto-resolved from the typed Destination Pincode below, driving the live pricing
+    // preview exactly as a picked Delivery Branch used to. Not required: an unmapped
+    // pincode no longer blocks booking, same as the backend's own relaxed invariant.
+    deliveryBranchId: [null as string | null],
     pickupPincode: ['', Validators.maxLength(10)],
     deliveryPincode: ['', Validators.maxLength(10)],
     destinationPincode: ['', Validators.maxLength(10)],
@@ -699,13 +750,12 @@ export class ShipmentCreate implements OnInit {
     appointmentDate: [null as string | null],
     appointmentTimeSlot: ['', Validators.maxLength(20)],
     insuranceApplicable: [false],
+    deliveryType: ['DOOR' as DeliveryType],
     invoiceValue: [null as number | null],
-    ewayBillNumber: ['', Validators.maxLength(30)],
     ewayBillInvoiceNumber: ['', Validators.maxLength(50)],
     ewayBillInvoiceDate: [today()],
-    ewayBillVehicleNumber: ['', Validators.maxLength(20)],
-    ewayBillValidFrom: [null as string | null],
-    ewayBillValidUntil: [null as string | null],
+    ewayBillConsignorGstin: ['', Validators.maxLength(15)],
+    ewayBillConsigneeGstin: ['', Validators.maxLength(15)],
     ewayBillRemarks: ['', Validators.maxLength(500)]
   });
 
@@ -772,6 +822,7 @@ export class ShipmentCreate implements OnInit {
         this.form.get('pickupPincode')?.setValue(mine.postalCode);
       }
       if (mine?.gstPercentage != null) this.myBranchGstPercentage.set(mine.gstPercentage);
+      if (mine?.city) this.myBranchCity.set(mine.city);
     });
     this.form.get('deliveryBranchId')?.valueChanges.subscribe((id) => {
       if (!id) return;
@@ -877,6 +928,13 @@ export class ShipmentCreate implements OnInit {
         this.form.get('appointmentDate')?.setValue(null);
         this.form.get('appointmentTimeSlot')?.setValue('');
         this.appointmentDeliveryCharge.set(0);
+      }
+    });
+    // Picking Office Delivery clears the Door Delivery Charge, same rule — it never
+    // charges extra, and a stale figure must never ride along in the payload.
+    this.form.get('deliveryType')?.valueChanges.subscribe((type) => {
+      if (type !== 'DOOR') {
+        this.doorDeliveryCharge.set(0);
       }
     });
     this.masters.options('service-types').subscribe((o) => {
@@ -1035,6 +1093,14 @@ export class ShipmentCreate implements OnInit {
     return (this.otherCharges() * this.myBranchGstPercentage()) / 100;
   }
 
+  /** Manual Door Delivery Charge (DOOR only) is taxed with GST, same branch GST% as
+   *  {@link gstOnOtherCharges} — mirrors `ShipmentServiceImpl.copyCharge`'s
+   *  `gstOnDoorDeliveryCharge`. Zero when Delivery Type isn't DOOR. */
+  protected gstOnDoorDeliveryCharge(): number {
+    if (this.c('deliveryType').value !== 'DOOR') return 0;
+    return (this.doorDeliveryCharge() * this.myBranchGstPercentage()) / 100;
+  }
+
   /** ODA Charge is normally the Pricing Engine's own figure (GST on it already folded into
    *  `chargeBreakup.gstAmount`) — once the operator types an override, only the *difference*
    *  from the engine's figure needs fresh GST, same branch GST% as {@link gstOnOtherCharges}.
@@ -1142,16 +1208,16 @@ export class ShipmentCreate implements OnInit {
   }
 
   /** Null once nothing blocks booking; otherwise the reason shown next to the Book
-   *  button. Mirrors `LocalEwayBillProvider`'s own field checks for instant feedback —
-   *  the backend re-runs the real check server-side regardless, since this is UX only. */
+   *  button. Mirrors `EwayBillServiceImpl.requireBookingData`'s own minimum-data check
+   *  for instant feedback — the backend re-runs the real check server-side regardless,
+   *  since this is UX only. The E-Way Bill number itself is no longer typed here: it is
+   *  issued automatically by the provider once the shipment books. */
   protected ewayBillReason(): string | null {
     if (!this.ewayBillMandatory()) return null;
     if (!this.ewayBillOpen()) {
       return 'E-Way Bill is mandatory because invoice value exceeds the configured threshold — add one below.';
     }
-    const number = (this.c('ewayBillNumber').value ?? '').trim();
     const invoiceNumber = (this.c('ewayBillInvoiceNumber').value ?? '').trim();
-    if (!/^\d{12}$/.test(number)) return 'E-Way Bill number must be exactly 12 digits.';
     if (!invoiceNumber) return 'An E-Way Bill invoice number is required.';
     if (!this.c('ewayBillInvoiceDate').value) return 'An E-Way Bill invoice date is required.';
     return null;
@@ -1172,12 +1238,10 @@ export class ShipmentCreate implements OnInit {
 
   protected removeEwayBill(): void {
     this.ewayBillOpen.set(false);
-    this.c('ewayBillNumber').setValue('');
     this.c('ewayBillInvoiceNumber').setValue('');
     this.c('ewayBillInvoiceDate').setValue(today());
-    this.c('ewayBillVehicleNumber').setValue('');
-    this.c('ewayBillValidFrom').setValue(null);
-    this.c('ewayBillValidUntil').setValue(null);
+    this.c('ewayBillConsignorGstin').setValue('');
+    this.c('ewayBillConsigneeGstin').setValue('');
     this.c('ewayBillRemarks').setValue('');
     this.selectedEwayBillFile.set(null);
   }
@@ -1347,7 +1411,6 @@ export class ShipmentCreate implements OnInit {
 
     const body: CreateShipmentRequest = {
       bookingBranchId: v.bookingBranchId, manualShipmentNumber: v.manualShipmentNumber?.trim() || null,
-      deliveryBranchId: v.deliveryBranchId,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
       receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
@@ -1368,14 +1431,14 @@ export class ShipmentCreate implements OnInit {
       appointmentTimeSlot: v.appointmentDelivery ? (v.appointmentTimeSlot?.trim() || null) : null,
       appointmentDeliveryCharge: v.appointmentDelivery ? (this.appointmentDeliveryCharge() || null) : null,
       insuranceApplicable: v.insuranceApplicable || null,
-      ewayBill: this.ewayBillOpen() && (v.ewayBillNumber?.trim() || v.ewayBillInvoiceNumber?.trim()) ? {
-        ewayBillNumber: v.ewayBillNumber?.trim() || null,
+      deliveryType: v.deliveryType,
+      doorDeliveryCharge: v.deliveryType === 'DOOR' ? (this.doorDeliveryCharge() || null) : null,
+      ewayBill: this.ewayBillOpen() && v.ewayBillInvoiceNumber?.trim() ? {
         invoiceNumber: v.ewayBillInvoiceNumber?.trim() || '',
         invoiceDate: v.ewayBillInvoiceDate || today(),
         documentType: 'INVOICE',
-        vehicleNumber: v.ewayBillVehicleNumber?.trim() || null,
-        validFrom: toInstantStart(v.ewayBillValidFrom),
-        validUntil: toInstantEnd(v.ewayBillValidUntil),
+        consignorGstin: v.ewayBillConsignorGstin?.trim() || null,
+        consigneeGstin: v.ewayBillConsigneeGstin?.trim() || null,
         remarks: v.ewayBillRemarks?.trim() || null
       } : null
     };
@@ -1409,7 +1472,8 @@ export class ShipmentCreate implements OnInit {
             companyWebsite: company?.website ?? null,
             shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
             expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-            bookingBranchLabel: this.myBranchLabel(), deliveryBranchLabel: this.branchLabel(v.deliveryBranchId),
+            bookingBranchLabel: this.myBranchCity() ?? this.myBranchLabel(),
+            deliveryBranchLabel: f.destinationCityName ?? '—',
             bookingPincode: v.pickupPincode || null,
             bookingDistrict: bookingGeo?.districtName ?? null,
             bookingArea: bookingGeo?.areaName ?? null,
@@ -1429,13 +1493,14 @@ export class ShipmentCreate implements OnInit {
               odaCharge: this.odaChargeOverride() ?? f.odaCharge,
               insuranceCharge: this.finalInsuranceCharge(),
               gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
-                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta(),
+                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge(),
               netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
                 + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
-                + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta()
+                + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
             },
             otherCharges: this.otherCharges(),
             appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,
+            doorDeliveryCharge: v.deliveryType === 'DOOR' ? this.doorDeliveryCharge() : undefined,
             remarks: v.remarks || null,
             createdByName: s.createdByName ?? null
           });

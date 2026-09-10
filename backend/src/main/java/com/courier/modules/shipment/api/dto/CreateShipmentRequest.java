@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -18,7 +19,9 @@ import java.util.UUID;
  * Body of {@code POST /api/v1/shipments}.
  *
  * <p>Not accepted: {@code companyId} (from the JWT), {@code trackingNumber} (always
- * generated), {@code status} (a new shipment starts {@code BOOKED}),
+ * generated), {@code status} (a new shipment starts {@code BOOKED}), {@code
+ * deliveryBranchId} (no longer picked at booking — resolved server-side off {@code
+ * deliveryPincode}'s own branch mapping; see {@code ShipmentServiceImpl}),
  * {@code actualWeight}/{@code volumetricWeight}/{@code chargeableWeight} as top-level
  * writes (computed from {@code items}; the bare {@code actualWeight}/dimension fields here
  * are the fallback used only when {@code items} is empty — see
@@ -27,7 +30,6 @@ import java.util.UUID;
 @Schema(name = "CreateShipmentRequest", description = "New shipment booking")
 public record CreateShipmentRequest(
         @NotNull UUID bookingBranchId,
-        @NotNull UUID deliveryBranchId,
         @Schema(description = "Optional — enter a specific shipment number instead of "
                 + "the auto-generated \"<BRANCH_CODE>-<serial>\" one. Must be unique "
                 + "within the company; booking is refused with a 422 if it's already in use.")
@@ -107,6 +109,12 @@ public record CreateShipmentRequest(
         @Schema(description = "When true, insurance is charged at 2% of freight instead of "
                 + "the Pricing Engine's own rate-driven insurance figure. GST is recomputed "
                 + "on the difference, same as odaCharge.")
-        Boolean insuranceApplicable
+        Boolean insuranceApplicable,
+        @Schema(description = "Defaults to DOOR. OFFICE never charges extra — "
+                + "doorDeliveryCharge is ignored server-side when this is OFFICE.")
+        DeliveryType deliveryType,
+        @Schema(description = "Optional, defaults to zero, meaningful only when deliveryType "
+                + "is DOOR. Deliberately never taxed with GST, unlike otherCharges.")
+        @DecimalMin(value = "0") BigDecimal doorDeliveryCharge
 ) {
 }

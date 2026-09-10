@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentStatus;
 import com.courier.modules.shipment.domain.ShipmentType;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -19,6 +20,10 @@ public record ShipmentResponse(
         String shipmentNumber, String trackingNumber,
         LocalDate bookingDate,
         UUID bookingBranchId, UUID deliveryBranchId, UUID manifestId,
+        @Schema(description = "The booking branch's own city, shown at booking instead of "
+                + "a branch picker") String fromCity,
+        @Schema(description = "The destination pincode/area's resolved city, shown at "
+                + "booking instead of a Delivery Branch picker") String toCity,
         UUID currentLocationId, UUID nextLocationId,
         String pickupPincode, String deliveryPincode,
         String senderName, String senderAddress, String senderContact,
@@ -31,7 +36,7 @@ public record ShipmentResponse(
         ShipmentStatus status,
         String remarks,
         boolean appointmentDelivery, LocalDate appointmentDate, String appointmentTimeSlot,
-        boolean insuranceApplicable,
+        boolean insuranceApplicable, DeliveryType deliveryType,
         Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
         BigDecimal invoiceValue, boolean ewayBillRequired, EwayBillInfo ewayBill,
         UUID createdBy, String createdByName, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
@@ -42,6 +47,6 @@ public record ShipmentResponse(
      *  package, only its application interface (see {@code ShipmentMapper}). */
     @Schema(name = "ShipmentEwayBillInfo")
     public record EwayBillInfo(UUID id, String ewayBillNumber, String status, BigDecimal invoiceValue,
-                               Instant validFrom, Instant validUntil, String documentUrl) {
+                               Instant validFrom, Instant validUntil, String documentUrl, String lastError) {
     }
 }

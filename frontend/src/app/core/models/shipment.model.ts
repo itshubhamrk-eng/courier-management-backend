@@ -9,6 +9,11 @@
 export type ShipmentType = 'DOCUMENT' | 'NON_DOCUMENT' | 'CARGO';
 export const SHIPMENT_TYPES: ShipmentType[] = ['DOCUMENT', 'NON_DOCUMENT', 'CARGO'];
 
+/** DOOR (default) may carry a manual, GST-taxed doorDeliveryCharge; OFFICE never charges
+ *  extra, enforced server-side regardless of what was typed. */
+export type DeliveryType = 'DOOR' | 'OFFICE';
+export const DELIVERY_TYPES: DeliveryType[] = ['DOOR', 'OFFICE'];
+
 /**
  * Renamed in V19 (Shipment Movement) to match that module's own vocabulary exactly:
  * `MANIFESTED` -> `MANIFEST_CREATED`, `RECEIVED` -> `IN_SCAN`, `RETURN_INITIATED` folded
@@ -50,7 +55,13 @@ export interface Shipment {
   trackingNumber: string;
   bookingDate: string;
   bookingBranchId: string;
-  deliveryBranchId: string;
+  /** No longer picked at booking — resolved server-side off the destination pincode's own
+   *  branch mapping (null when that pincode isn't mapped yet). See `fromCity`/`toCity`. */
+  deliveryBranchId?: string | null;
+  /** The booking branch's own city. */
+  fromCity?: string | null;
+  /** The destination pincode/area's resolved city. */
+  toCity?: string | null;
   /** Where the shipment physically is right now — same as `bookingBranchId` unless it has
    *  moved past a crossing hop. */
   currentLocationId?: string | null;
@@ -82,6 +93,9 @@ export interface Shipment {
   /** Last IN_SCAN ("received") timestamp — populated on the Bulk Shipment Tracking report
    *  only; null elsewhere (other list screens don't ask for it). */
   receivedAt?: string | null;
+  /** The government-issued E-Way Bill number itself (distinct from `invoiceNumber`) —
+   *  null until Part-A has actually succeeded. The THC's own E-WAY BILL NO column. */
+  ewayBillNumber?: string | null;
 }
 
 /** One row of a bulk-track result — mirrors backend `BulkTrackRowResponse`. `shipment` is
@@ -107,7 +121,14 @@ export interface ShipmentResponse {
   trackingNumber: string;
   bookingDate: string;
   bookingBranchId: string;
-  deliveryBranchId: string;
+  /** No longer picked at booking — resolved server-side off the destination pincode's own
+   *  branch mapping (null when that pincode isn't mapped yet). See `fromCity`/`toCity`. */
+  deliveryBranchId?: string | null;
+  /** The booking branch's own city, shown at booking instead of a branch picker. */
+  fromCity?: string | null;
+  /** The destination pincode/area's resolved city, shown at booking instead of a Delivery
+   *  Branch picker. */
+  toCity?: string | null;
   manifestId?: string | null;
   currentLocationId?: string | null;
   nextLocationId?: string | null;
@@ -135,6 +156,7 @@ export interface ShipmentResponse {
   appointmentDate?: string | null;
   appointmentTimeSlot?: string | null;
   insuranceApplicable: boolean;
+  deliveryType: DeliveryType;
   deliveredAt?: string | null;
   podPhotoUrl?: string | null;
   podSignatureUrl?: string | null;
@@ -159,18 +181,27 @@ export interface ShipmentResponse {
  * E-Way Bill Management (`com.courier.modules.ewaybill`) — integrated into Shipment
  * Booking: an invoice value over the company's own configurable threshold
  * (`CompanySettings.ewayBillMandatoryValue`, default 50000.00, see
- * `GET /company-settings`'s `ewayBill` section) makes an E-Way Bill mandatory before AWB
- * generation; at or under it, one is optional. The backend enforces this inside
- * `POST`/`PUT /shipments` — the frontend's own checks below are UX only, never the real
- * gate. See MEMORY/modules/eway-bill.md.
+ * `GET /company-settings`'s `ewayBill` section) makes an E-Way Bill mandatory. Once
+ * mandatory, Part-A (invoice/consignor/consignee) is generated automatically through
+ * `EwayBillProvider` right after booking, and Part-B (vehicle/transport) automatically
+ * once the shipment is dispatched on a Manifest — nothing here is manually typed except
+ * the invoice details. The backend enforces all of this inside `POST`/`PUT /shipments`
+ * and `ManifestServiceImpl.dispatch` — the frontend's own checks below are UX only,
+ * never the real gate. See MEMORY/modules/eway-bill.md.
  */
 export type EwayBillStatus =
-  | 'NOT_REQUIRED' | 'REQUIRED' | 'PENDING' | 'UPLOADED' | 'VALIDATED' | 'INVALID'
-  | 'EXPIRED' | 'CANCELLED';
+  | 'NOT_REQUIRED' | 'REQUIRED' | 'PART_A_PENDING' | 'PART_A_GENERATED' | 'PART_B_PENDING'
+  | 'GENERATED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
 
 /** The E-Way Bill data a booking screen supplies inline, in the same call that books or
  *  edits a shipment — mirrors backend `EwayBillBookingRequest`. Its own `invoiceValue`
- *  is not repeated here; the shipment's own `invoiceValue` carries it. */
+ *  is not repeated here; the shipment's own `invoiceValue` carries it.
+ *
+ *  `ewayBillNumber`/`transporterId`/`vehicleNumber`/`distance`/`validFrom`/`validUntil`
+ *  are ignored on the mandatory auto-generation path — the number is provider-issued,
+ *  and transport details are filled in at Manifest dispatch. They stay on the wire only
+ *  for a non-mandatory manual attach (an operator already holding a number obtained
+ *  outside this application). */
 export interface EwayBillBookingRequest {
   ewayBillNumber?: string | null;
   invoiceNumber: string;
@@ -185,6 +216,10 @@ export interface EwayBillBookingRequest {
   validUntil?: string | null;
   documentUrl?: string | null;
   remarks?: string | null;
+  /** Sender's GSTIN, optional — Shipment itself carries no GST fields. */
+  consignorGstin?: string | null;
+  /** Receiver's GSTIN, optional. */
+  consigneeGstin?: string | null;
 }
 
 /** The shipment's current E-Way Bill, read-only — mirrors backend
@@ -197,6 +232,8 @@ export interface ShipmentEwayBillInfo {
   validFrom?: string | null;
   validUntil?: string | null;
   documentUrl?: string | null;
+  /** The provider's own sanitized failure reason — set only when `status` is `FAILED`. */
+  lastError?: string | null;
 }
 
 /** Full standalone E-Way Bill record — mirrors backend `EwayBillResponse`, the
@@ -211,12 +248,21 @@ export interface EwayBill {
   documentType: string;
   documentNumber?: string | null;
   documentDate?: string | null;
+  consignorGstin?: string | null;
+  consigneeGstin?: string | null;
   transporterId?: string | null;
   vehicleNumber?: string | null;
+  transportMode?: string | null;
   distance?: number | null;
   validFrom?: string | null;
   validUntil?: string | null;
   status: EwayBillStatus;
+  providerName?: string | null;
+  providerReference?: string | null;
+  partAGeneratedAt?: string | null;
+  partBGeneratedAt?: string | null;
+  lastError?: string | null;
+  retryCount: number;
   documentUrl?: string | null;
   remarks?: string | null;
   createdBy?: string | null;
@@ -238,6 +284,12 @@ export interface UpdateEwayBillRequest extends EwayBillBookingRequest {
   version: number;
 }
 
+/** One named applicable-charge line — e.g. `{ chargeName: "Hamali", amount: 10.00 }`. */
+export interface ApplicableChargeLine {
+  chargeName: string;
+  amount: number;
+}
+
 /** The Pricing Engine's own charge breakup, persisted at booking time — GET /shipments/{id}/charges. */
 export interface ShipmentCharge {
   shipmentId: string;
@@ -249,6 +301,11 @@ export interface ShipmentCharge {
   /** Sum of ACTIVE charge-module rows (e.g. "Hamali") matched to this shipment's service
    *  type and weight/distance — GST-inclusive, unlike `appointmentDeliveryCharge`. */
   applicableCharges: number;
+  /** `applicableCharges` broken out by the charge module's own name (e.g. "Hamali",
+   *  "Fuel Surcharge") — resolved live off this shipment's own booking/delivery branch,
+   *  chargeable weight and freight, not persisted. Empty when no charge is configured for
+   *  this shipment's service type. */
+  applicableChargeLines: ApplicableChargeLine[];
   gstAmount: number;
   discountAmount: number;
   roundOff: number;
@@ -256,6 +313,10 @@ export interface ShipmentCharge {
   /** Manual, typed at booking time when `appointmentDelivery` is checked — deliberately
    *  GST-free, unlike `otherCharges`. */
   appointmentDeliveryCharge: number;
+  /** Manual, typed at booking time when `deliveryType` is DOOR — taxed with GST (folded
+   *  into `gstAmount`), unlike `appointmentDeliveryCharge`. Zero when `deliveryType` is
+   *  OFFICE. */
+  doorDeliveryCharge: number;
   /** Commission breakdown (V28), computed from the booking branch's own charge percentages. */
   commissionOnBasicFreight: number;
   branchCommissionOnOtherAmount: number;
@@ -311,7 +372,6 @@ export interface ShipmentItemRequest {
 
 /** Fields shared by create and update — mirrors the overlap of Create/UpdateShipmentRequest. */
 export interface ShipmentFields {
-  deliveryBranchId: string;
   pickupPincode: string;
   deliveryPincode: string;
   senderName: string;
@@ -372,6 +432,12 @@ export interface ShipmentFields {
    *  rate-driven insurance figure. GST is recomputed server-side on the difference, same as
    *  `odaCharge`. */
   insuranceApplicable?: boolean | null;
+  /** Defaults to DOOR server-side when omitted. OFFICE never charges extra —
+   *  `doorDeliveryCharge` is ignored server-side when this is OFFICE. */
+  deliveryType?: DeliveryType | null;
+  /** Optional, defaults to zero, meaningful only when `deliveryType` is DOOR. Deliberately
+   *  never taxed with GST, unlike `otherCharges`. */
+  doorDeliveryCharge?: number | null;
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
@@ -514,6 +580,9 @@ export interface ChargeBreakup {
   /** Sum of ACTIVE charge-module rows (e.g. "Hamali") matched to this booking's service
    *  type and weight/distance — GST-inclusive, unlike appointmentDeliveryCharge. */
   applicableCharges: number;
+  /** `applicableCharges` broken out by charge name. Empty when none is configured for
+   *  this lane's service type. */
+  applicableChargeLines: ApplicableChargeLine[];
   gstAmount: number;
   discount: number;
   roundOff: number;
@@ -772,6 +841,13 @@ export interface DrsShipmentRow {
   netAmount: number | null;
   status: ShipmentStatus;
   deliveredAt?: string | null;
+  /** The shipment's E-Way Bill number, null where none exists or Part-A hasn't
+   *  succeeded yet. */
+  ewayBillNumber?: string | null;
+  /** The booking branch's own city. */
+  fromCity?: string | null;
+  /** The destination pincode/area's resolved city. */
+  toCity?: string | null;
 }
 
 /** Body of GET /shipment-movement/drs/detail — mirrors `DrsDetailResponse`. */

@@ -51,7 +51,12 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
  *  batch-fetched server-side by `/manifests/{id}/shipments` the same "one query, not one
  *  per row" way as `netAmount`/`deliveredAt` already are (see `ShipmentService
  *  .invoiceNumbersFor`) — blank ("—") for a shipment with no E-Way Bill, the normal case
- *  below the mandatory-value threshold. The QR code encodes the challan number as plain
+ *  below the mandatory-value threshold. E-WAY BILL NO is the distinct, government-issued
+ *  number itself (`Shipment.ewayBillNumber`, `ShipmentService.ewayBillNumbersFor`) — also
+ *  blank until Part-A has actually succeeded, which for a shipment dispatched right after
+ *  booking may still be in flight or `FAILED`; Part-B (this dispatch's own vehicle/
+ *  transport details) is filled in server-side right after this THC is generated, not
+ *  reflected on the printed copy itself. The QR code encodes the challan number as plain
  *  text (same `qrcode-generator` lib `consignment-print.util.ts` already uses for the LR's
  *  own QR, no CDN dependency). */
 @Component({
@@ -114,7 +119,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
               <div class="tbl__wrap">
                 <table class="tbl">
                   <thead>
-                    <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th></tr>
+                    <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From → To</th><th class="tbl--right">Weight</th></tr>
                   </thead>
                   <tbody>
                     @for (s of manifestShipments(); track s.id; let i = $index) {
@@ -123,6 +128,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
                         <td>{{ i + 1 }}</td>
                         <td>{{ s.trackingNumber }}</td>
                         <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                        <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                         <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                       </tr>
                     }
@@ -248,7 +254,8 @@ export class TripHireChallan implements OnInit {
       this.driverOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
     this.movementService.userDirectory().subscribe((m) => this.driverDirectory.set(m));
     this.masterData.branchDirectory().subscribe((list) => {
-      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+      this.branchNames.set(new Map(list.map((b) =>
+        [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
       this.branchCodes.set(new Map(list.map((b) => [b.id, b.branchCode])));
     });
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
@@ -412,13 +419,14 @@ export class TripHireChallan implements OnInit {
       <td class="center">${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
       <td>${this.esc(s.invoiceNumber) || '—'}</td>
+      <td>${this.esc(s.ewayBillNumber) || '—'}</td>
       <td>${this.esc(s.senderName)}</td>
       <td>${this.esc(s.receiverName)}</td>
+      <td>${this.esc(s.fromCity) || '—'}</td>
+      <td>${this.esc(s.toCity) || '—'}</td>
       <td class="center">${bookingDate(s)}</td>
       <td class="right">${s.chargeableWeight}</td>
       <td class="right">${topayFreight(s) ?? ''}</td>
-      <td></td>
-      <td></td>
     </tr>`).join('');
     const dispatched = m.departureTime ?? m.dispatchedAt;
     const dispatchedDate = dispatched ? new Date(dispatched) : null;
@@ -461,7 +469,6 @@ export class TripHireChallan implements OnInit {
         .c-sr { width: 30px; }
         .c-date { width: 75px; }
         .c-weight, .c-freight { width: 75px; }
-        .c-sign { width: 60px; }
         .total-row td { font-weight: bold; height: 22px; }
         .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
         .footer-left { padding: 5px; border-right: 1px solid #777; }
@@ -515,21 +522,20 @@ export class TripHireChallan implements OnInit {
             <th class="c-sr">SR<br>NO.</th>
             <th>TRACKING NO</th>
             <th>INVOICE NO</th>
+            <th>E-WAY BILL NO</th>
             <th>CONSIGNOR NAME</th>
             <th>CONSIGNEE NAME</th>
+            <th>FROM CITY</th>
+            <th>TO CITY</th>
             <th class="c-date">BOOKING<br>DATE</th>
             <th class="c-weight">WEIGHT</th>
             <th class="c-freight">TO PAY<br>FREIGHT</th>
-            <th class="c-sign">RECEIVER<br>SIGN</th>
-            <th class="c-sign">STAMP</th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="10" class="center">No shipments</td></tr>'}</tbody>
           <tfoot><tr class="total-row">
-            <td colspan="6" class="right">Total</td>
+            <td colspan="8" class="right">Total</td>
             <td class="right">${totalWeight}</td>
             <td class="right">${totalFreight}</td>
-            <td></td>
-            <td></td>
           </tr></tfoot>
         </table>
 
