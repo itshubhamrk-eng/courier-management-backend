@@ -1,4 +1,4 @@
-import { ChargeBreakup } from '@core/models/shipment.model';
+import { ChargeBreakup, DeliveryType } from '@core/models/shipment.model';
 import { CompanyLetterhead } from '@features/company/company-profile.service';
 import JsBarcode from 'jsbarcode';
 import qrcode from 'qrcode-generator';
@@ -15,8 +15,7 @@ export function companyAddressLine(c: CompanyLetterhead | null | undefined): str
  *  real booking form and the price it was actually booked at (same `PricingResponse` the
  *  live preview showed, since the server prices what it books). Laid out to match a real
  *  courier LR template (SmartPost-style) row for row — see `copy()` below for which of its
- *  fields (Parcel Received, Consignee GST, Delivery Type) this system doesn't track and
- *  prints as "—". */
+ *  fields (Parcel Received, Consignee GST) this system doesn't track and prints as "—". */
 export interface ConsignmentPrintData {
   companyName: string;
   /** Company branding, `AuthService.companyLogo()` — absent falls back to the text wordmark. */
@@ -51,6 +50,7 @@ export interface ConsignmentPrintData {
   serviceTypeLabel: string;
   packageTypeLabel: string;
   paymentModeLabel: string;
+  deliveryType: DeliveryType;
   numberOfPackages: number;
   chargeableWeight: number;
   declaredValue: number | null;
@@ -69,6 +69,14 @@ export interface ConsignmentPrintData {
   /** Booked-by user's name — `ShipmentResponse.createdByName`, absent if the booking user
    *  no longer resolves (deleted, cross-tenant). */
   createdByName: string | null;
+  /** `ShipmentResponse.invoiceValue` / the booking form's Invoice Value field — the
+   *  E-Way Bill threshold figure, distinct from `declaredValue` (insurance). Used by
+   *  `ambox-consignment-print.util.ts`'s "Invoice Value" field. */
+  invoiceValue: number | null;
+  /** Packed items — carries only what `ambox-consignment-print.util.ts` needs to derive
+   *  actual (non-chargeable) weight and box dimensions, neither tracked as a single
+   *  shipment-level field. */
+  items: Array<{ weight: number; lengthCm?: number | null; widthCm?: number | null; heightCm?: number | null }>;
 }
 
 const esc = (s: string): string =>
@@ -78,7 +86,7 @@ const esc = (s: string): string =>
  *  built off-DOM and serialized, so the printed page needs no script of its own to draw it
  *  (`printConsignmentCopies` writes plain HTML into a fresh iframe document). CODE128
  *  handles the tracking number's full alnum/digit range with no character-set gate. */
-function barcodeSvg(value: string): string {
+export function barcodeSvg(value: string): string {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   JsBarcode(svg, value, {
     format: 'CODE128', displayValue: false, margin: 0, height: 34, width: 1.6
@@ -92,7 +100,7 @@ function barcodeSvg(value: string): string {
  *  POD photo itself; see `HeuristicPodVerificationProvider`'s `qrScanValue` check. Type 0 lets
  *  the library auto-pick the smallest QR version that fits `value`; 'M' error correction
  *  tolerates real-world print/photo degradation without bloating the module count. */
-function qrSvg(value: string): string {
+export function qrSvg(value: string): string {
   const qr = qrcode(0, 'M');
   qr.addData(value);
   qr.make();
@@ -114,7 +122,7 @@ function threeDigitWords(n: number): string {
 }
 /** Indian numbering (Lakh/Crore) — this LR template prints the payable amount in words
  *  the way physical courier receipts traditionally do, e.g. "Two Hundred Fifteen Only". */
-function amountInWords(amount: number): string {
+export function amountInWords(amount: number): string {
   let n = Math.round(amount);
   if (n === 0) return 'Zero Only';
   const crore = Math.floor(n / 1e7); n %= 1e7;
@@ -264,7 +272,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
           <table class="small">
             <tr><td colspan="2">Special Instruction :&nbsp; ${esc(d.remarks ?? '—')}</td></tr>
             <tr><td colspan="2">Consignee GST Number :&nbsp; —</td></tr>
-            <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
+            <tr><td colspan="2">Delivery Type :&nbsp; ${d.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery'}</td></tr>
           </table>
         </div>
         <div class="right">${amountSection}

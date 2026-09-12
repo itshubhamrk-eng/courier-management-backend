@@ -50,7 +50,8 @@ const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_
 
       <app-shipment-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
         [startIndex]="page().page * page().size"
-                          [branchOptions]="branchOptions()" (sortChange)="onSort($event)" (action)="onAction($event)" />
+                          [branchOptions]="branchOptions()" [paymentModeOptions]="paymentModeOptions()"
+                          (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
 
@@ -80,6 +81,7 @@ export class ShipmentList implements OnInit {
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
 
   readonly branchOptions = signal<SelectOption[]>([]);
+  readonly paymentModeOptions = signal<SelectOption[]>([]);
   readonly loading = signal(true);
   readonly exporting = signal(false);
   readonly filterOpen = signal(false);
@@ -101,6 +103,7 @@ export class ShipmentList implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+    this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
     this.load();
   }
 
@@ -110,7 +113,7 @@ export class ShipmentList implements OnInit {
       ...this.query, ...(size ? { size, page: 0 } : {}),
       status: f.status as unknown as string | undefined,
       bookingBranchId: this.myBranchId ?? f.bookingBranchId, deliveryBranchId: f.deliveryBranchId,
-      bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo
+      bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo, paymentModeId: f.paymentModeId
     };
   }
 

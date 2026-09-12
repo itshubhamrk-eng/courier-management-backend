@@ -4,7 +4,6 @@ import { RouterLink } from '@angular/router';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { BranchOverview as BranchOverviewData } from '../models/dashboard.model';
-import { PodStatusPie } from './pod-status-pie';
 
 interface ActionItem {
   key: string;
@@ -33,7 +32,7 @@ const STAGE_TONES: Record<string, 'brand' | 'info' | 'warning' | 'success'> = {
   selector: 'app-branch-overview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, RouterLink, UiCard, UiLoader, PodStatusPie],
+  imports: [MatIconModule, RouterLink, UiCard, UiLoader],
   template: `
     @if (loading()) {
       <app-card title="Branch Overview">
@@ -95,10 +94,6 @@ const STAGE_TONES: Record<string, 'brand' | 'info' | 'warning' | 'success'> = {
           </div>
         </app-card>
       }
-
-      <app-pod-status-pie tone="info" title="POD Overview — This Branch"
-        subtitle="This branch's own delivery proof, current state"
-        [loading]="loading()" [data]="data()!.podOverview" />
 
       @if (data()!.rejectedPods.length) {
         <app-card tone="danger" title="Rejected POD" subtitle="Needs a re-upload">

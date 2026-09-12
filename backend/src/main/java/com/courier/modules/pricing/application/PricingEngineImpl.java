@@ -1,6 +1,7 @@
 package com.courier.modules.pricing.application;
 
 import com.courier.modules.company.application.CompanySettingsService;
+import com.courier.modules.company.domain.CompanySettings;
 import com.courier.modules.freight.application.FreightCalculationResult;
 import com.courier.modules.freight.application.FreightFactorService;
 import com.courier.modules.freight.application.command.FreightCalculationCommand;
@@ -101,10 +102,13 @@ public class PricingEngineImpl implements PricingEngine {
      * distance) — every caller of this engine (Shipment Booking, the frontend's own live
      * pricing preview, any future Quotation/mobile consumer) gets it for free, not just
      * whichever one remembers to catch {@link RouteRateUnavailableException} itself. No
-     * fuel/handling/ODA/insurance/discount/round-off — those are Rate-card-driven
-     * percentages with no other source once there is no matched {@link Rate} — Freight
-     * Factor deliberately carries none of those. Applicable Charges is the one exception:
-     * {@link ApplicableChargesCalculator} is keyed on the {@code charge} module's own
+     * fuel/handling/ODA/insurance/discount — those are Rate-card-driven percentages with
+     * no other source once there is no matched {@link Rate} — Freight Factor deliberately
+     * carries none of those. Round-off and Applicable Charges are the two exceptions.
+     * Round-off is a company-level preference ({@code CompanySettings.roundOffRule}), not
+     * Rate-card-driven, so it still applies here the same way GST does (see {@code
+     * resolveRoundingRule}). {@link ApplicableChargesCalculator} is keyed on the {@code
+     * charge} module's own
      * weight/distance-slab configuration, not a matched Route/Rate at all (see its own
      * class doc), so it still runs here — a company's configured Hamali/fuel-surcharge
      * charges must not silently vanish just because this lane has no Rate Master entry,
@@ -139,7 +143,11 @@ public class PricingEngineImpl implements PricingEngine {
      * default on a blank or since-renamed value rather than failing the whole booking.
      */
     private RoundingRule resolveRoundingRule() {
-        String stored = companySettingsService.get().getRoundOffRule();
+        return resolveRoundingRule(companySettingsService.get());
+    }
+
+    private RoundingRule resolveRoundingRule(CompanySettings settings) {
+        String stored = settings.getRoundOffRule();
         if (stored == null || stored.isBlank()) {
             return properties.getRoundingRule();
         }
@@ -174,13 +182,15 @@ public class PricingEngineImpl implements PricingEngine {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
         BigDecimal taxableSubtotal = chargesSubtotal.add(applicableCharges);
-        BigDecimal gstPercentage = companySettingsService.get().getGstPercentage();
-        BigDecimal gstAmount = taxableSubtotal.multiply(gstPercentage)
+        var settings = companySettingsService.get();
+        BigDecimal gstAmount = taxableSubtotal.multiply(settings.getGstPercentage())
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP);
-        BigDecimal netAmount = taxableSubtotal.add(gstAmount);
+        BigDecimal preRoundNetAmount = taxableSubtotal.add(gstAmount);
+        BigDecimal netAmount = resolveRoundingRule(settings).apply(preRoundNetAmount);
+        BigDecimal roundOff = netAmount.subtract(preRoundNetAmount);
         return new PricingResult(null, null, actualWeight, volumetricWeight, chargeableWeight,
                 chargesSubtotal, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                applicableCharges, applicableChargeLines, gstAmount, BigDecimal.ZERO, BigDecimal.ZERO,
+                applicableCharges, applicableChargeLines, gstAmount, BigDecimal.ZERO, roundOff,
                 netAmount, effectiveFactor);
     }
 

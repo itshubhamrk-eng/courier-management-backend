@@ -27,11 +27,13 @@ import org.mockito.quality.Strictness;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -51,6 +53,10 @@ class ApplicableChargesCalculatorTest {
     @Mock private AddressDistanceService addressDistanceService;
 
     private ApplicableChargesCalculator calculator;
+    // Every stubbed setting across stubSettings() calls, filtered per-invocation the same
+    // way the real findByCompanyIdAndChargeIdInAndStatus batch query would — mirrors
+    // ApplicableChargesCalculator now fetching all charges' settings in one round trip.
+    private final List<ChargeSetting> allSettings = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -59,6 +65,13 @@ class ApplicableChargesCalculatorTest {
         // Harmless default for every test that doesn't care about distance (KG/FACTOR
         // charges) — the two KM-specific tests below override it per case.
         lenient().when(addressDistanceService.resolveBranchDistance(any(), any())).thenReturn(distance("0"));
+        lenient().when(chargeSettingRepository.findByCompanyIdAndChargeIdInAndStatus(
+                eq(COMPANY), anyCollection(), eq(ChargeStatus.ACTIVE)))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    var chargeIds = (java.util.Collection<UUID>) invocation.getArgument(1);
+                    return allSettings.stream().filter(s -> chargeIds.contains(s.getChargeId())).toList();
+                });
     }
 
     @AfterEach
@@ -211,8 +224,10 @@ class ApplicableChargesCalculatorTest {
     }
 
     private void stubSettings(UUID chargeId, ChargeSetting... settings) {
-        lenient().when(chargeSettingRepository.findByCompanyIdAndChargeIdAndStatus(
-                eq(COMPANY), eq(chargeId), eq(ChargeStatus.ACTIVE))).thenReturn(List.of(settings));
+        for (ChargeSetting setting : settings) {
+            setting.setChargeId(chargeId);
+        }
+        allSettings.addAll(List.of(settings));
     }
 
     private Charge charge(UUID id) {

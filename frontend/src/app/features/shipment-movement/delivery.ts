@@ -166,6 +166,9 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                 </div>
               </div>
               <div class="df__bar">
+                <app-button variant="stroked" icon="task_alt" [loading]="delivering()" [disabled]="!photo()" (pressed)="deliver()">
+                  Mark as Delivered
+                </app-button>
                 <app-button icon="smart_toy" [loading]="verifying()" [disabled]="!photo()" (pressed)="runVerification()">
                   Run AI Verification
                 </app-button>
@@ -528,6 +531,7 @@ export class Delivery implements OnInit {
   deliver(): void {
     const shipment = this.shipment();
     if (!shipment || this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (!this.photo()) { this.notify.error('A delivery photo is required.'); return; }
     const v = this.form.getRawValue();
     this.delivering.set(true);
     this.movementService.deliver({

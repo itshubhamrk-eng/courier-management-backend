@@ -30,6 +30,7 @@ import java.util.UUID;
  *                          on {@code Shipment} itself, so the service resolves it via a
  *                          separate id lookup rather than a predicate on this entity
  * @param deliveredDateTo   inclusive
+ * @param paymentModeId    the shipment's payment mode (Paid / To-Pay / Credit)
  * @param search           free text over shipment number and tracking number
  */
 public record ShipmentCriteria(
@@ -43,10 +44,11 @@ public record ShipmentCriteria(
         LocalDate bookingDateTo,
         LocalDate deliveredDateFrom,
         LocalDate deliveredDateTo,
+        UUID paymentModeId,
         String search
 ) {
 
     public static ShipmentCriteria none() {
-        return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null);
+        return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null, null);
     }
 }

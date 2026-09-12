@@ -108,7 +108,7 @@ public class ShipmentMapper {
         return new ShipmentCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(),
                 safe.currentLocationId(), safe.nextLocationId(),
                 safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
-                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.search());
+                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.paymentModeId(), safe.search());
     }
 
     public ShipmentService.AddDocumentCommand toCommand(AddShipmentDocumentRequest r) {
@@ -204,7 +204,7 @@ public class ShipmentMapper {
                 s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getBookingDate(),
                 s.getBookingBranchId(), s.getDeliveryBranchId(), s.getCurrentLocationId(), s.getNextLocationId(),
                 s.getFromCity(), s.getToCity(),
-                s.getManifestId(), s.getPaymentModeId(),
+                s.getManifestId(), s.getPaymentModeId(), s.getDeliveryType(),
                 s.getSenderName(), s.getSenderContact(), s.getReceiverName(), s.getReceiverContact(),
                 s.getChargeableWeight(), netAmount,
                 charge == null ? null : charge.getTotalCommission(),

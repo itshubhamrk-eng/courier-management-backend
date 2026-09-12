@@ -50,6 +50,15 @@ public class RedisConfig {
         mapper.activateDefaultTyping(
                 mapper.getPolymorphicTypeValidator(),
                 ObjectMapper.DefaultTyping.NON_FINAL);
+        // ALL/ANY visibility above picks up every JPA entity's inherited
+        // BaseEntity.isNew() as a "new" property on write — there's no matching
+        // setter to read it back into, so without this a cached entity throws
+        // UnrecognizedPropertyException on the very next read. Cache entries are
+        // reconstructed by JPA identity anyway, so silently dropping fields neither
+        // side recognises (this one included) is the correct, general behaviour for
+        // a cache — not something to special-case per entity.
+        mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature
+                .FAIL_ON_UNKNOWN_PROPERTIES, false);
         return mapper;
     }
 

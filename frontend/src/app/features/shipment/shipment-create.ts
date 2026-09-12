@@ -29,7 +29,8 @@ import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { FreightCalculationService } from './freight-calculation.service';
-import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
+import { companyAddressLine } from './consignment-print.util';
+import { printPerformaBillCopies } from './performa-bill-print.util';
 import { parseVoiceBooking } from './voice-booking.util';
 
 /** `yyyy-MM-dd` in the local timezone — a native `<input type="date">` value, and what
@@ -1463,7 +1464,7 @@ export class ShipmentCreate implements OnInit {
             ? this.masters.pincodeGeo(v.deliveryPincode).pipe(catchError(() => of(null)))
             : of(null)
         }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
-          printConsignmentCopies({
+          printPerformaBillCopies({
             companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
             companyLogo: company?.logo ?? this.auth.companyLogo(),
             companyAddress: companyAddressLine(company),
@@ -1485,6 +1486,7 @@ export class ShipmentCreate implements OnInit {
             serviceTypeLabel: this.labelOf(this.serviceTypeOptions(), v.serviceTypeId),
             packageTypeLabel: this.labelOf(this.packageTypeOptions(), v.packageTypeId),
             paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
+            deliveryType: v.deliveryType,
             numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,
             declaredValue: v.declaredValue || null,
             charges: {
@@ -1502,7 +1504,9 @@ export class ShipmentCreate implements OnInit {
             appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,
             doorDeliveryCharge: v.deliveryType === 'DOOR' ? this.doorDeliveryCharge() : undefined,
             remarks: v.remarks || null,
-            createdByName: s.createdByName ?? null
+            createdByName: s.createdByName ?? null,
+            invoiceValue: v.invoiceValue || null,
+            items: this.items().map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
           });
         });
         const image = this.selectedImageFile();

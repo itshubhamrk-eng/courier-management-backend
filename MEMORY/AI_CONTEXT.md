@@ -7,6 +7,257 @@
 
 ## Current Version
 
+`0.58.2` — **Shipment Booking Pricing perf: fixed a real N+1 and wired the Company
+Settings cache Redis already had sitting unused.** Direct report ("pricing getting
+slow"). Audited every DB call `PricingEngineImpl.calculate` makes rather than guessing
+first — `master_routes`/`rate_master` are already indexed exactly right for
+`RouteValidation`/`RateValidation`'s queries (`uk_master_routes_pair`,
+`idx_rate_master_combo`; V56 on 2026-09-04 already covered the real gaps elsewhere), so
+**no new migration this time**. Two real problems instead: (1)
+`ApplicableChargesCalculator.resolve()` queried `chargeSettingRepository` once per
+matched `Charge` — N charges under a service type meant N+1 round trips on every
+`/pricing/calculate` call, including the frontend's debounced live-preview keystrokes
+during booking. New `ChargeSettingRepository
+.findByCompanyIdAndChargeIdInAndStatus(companyId, chargeIds, ACTIVE)` batches it to one
+query, grouped by `chargeId` in memory afterward — `idx_charge_settings_charge`
+`(company_id, charge_id, status)` already serves the `IN` form fine. (2)
+`CompanySettingsService.get()` — read up to twice per pricing call (GST%, then
+round-off, as two separate fetches in the Freight Factor fallback; collapsed to one) and
+again by nearly every other module — had zero caching, despite `RedisConfig` (2026-08-17,
+Redis added to the compose stack) already declaring a `CACHE_COMPANY_CONFIG` bucket for
+exactly this that nothing had ever actually used (`grep -r @Cacheable` across the whole
+codebase came back empty before this). Wired `@Cacheable`/`@CacheEvict` — keyed on
+`CompanyContext.requireCompanyId()` — onto `get()` and all nine write methods (`replace`
++ eight `patch*`), explicit eviction on every write rather than relying on the 10-minute
+TTL alone. `CompanySettings` is a flat entity (no JPA associations), safe to round-trip
+through the existing `GenericJackson2JsonRedisSerializer`. Deliberately left
+`CACHE_RATE_CARDS` (also declared, also unused) alone — Route/Rate reads were already
+fast and wiring safe eviction across `RateServiceImpl`'s several write paths wasn't
+justified without a concrete slowness signal there; a correctness risk on a
+billing-relevant value isn't worth taking speculatively. Found along the way: two
+`PricingEngineImplTest` cases had gone stale against an earlier, already-uncommitted
+change (present before this task started) that added round-off to the Freight Factor
+fallback — fixed the expected values (`NEAREST_FIVE` default: 37.50→40.00, 56.05→55.00)
+so the suite builds green; out of this task's own scope but the fix was trivial and
+obviously correct once traced. `mvn compile` clean, `mvn test` 1031/1031. **Not
+load-tested** — no before/after timing capture (this account's tables are still small,
+same honesty note V56 already gave); the N+1 fix's win scales with charges-per-service-
+type, the cache's win scales with concurrent booking-desk request volume. Full detail in
+`CHANGELOG.md` 2026-09-12 "Shipment Booking Pricing perf".
+
+Previously current:
+
+`0.58.1` — **Print 3 follow-up, same session as 0.58.0**: three direct requests after
+live-verifying 0.58.0 on the real `:4200` (restarted on request — frontend-only change,
+real backend `:8100` left untouched, existing sessions survived). (1) "font should be
+same as print 1" — `performa-bill-print.util.ts`'s body font swapped from bare
+`Arial,Helvetica,sans-serif` to `"Segoe UI",Calibri,Arial,Helvetica,sans-serif`,
+matching `consignment-print.util.ts` exactly. (2) "padding spacing margin should be
+standard" — cell padding/font-size bumped from the ad hoc 11px/mixed-padding first pass
+to Print 1's baseline (`padding:4px 8px`, `font-size:12px`); outer `@page` margin
+already matched. (3) "add terms and condition as well" — added the identical Terms &
+Conditions block (same six clauses, same wording) Print 1 already has, styled to
+Print 3's black-line convention instead of Print 1's CSS-variable one.
+
+Fourth request, same session: **"amount show logic should be same as print 1 on print
+3"** — Print 3's amount column previously always showed a flat "Net Total" row
+regardless of copy label or payment mode. Ported `consignment-print.util.ts`'s exact
+`amountMode` logic (`normal`/`paid`/`omitted`/`collect`, keyed on paid-vs-ToPay and the
+copy label) verbatim into `performa-bill-print.util.ts`'s `sheet()` — same charge-line
+placeholder rows, same "Total Paid"/"ToPay"/omitted branches, same `amountInWords`
+call. Along the way, re-examined the "doorDeliveryCharge double-counted" finding
+flagged in 0.58.0: it's **not a Print-3-specific bug** — `consignment-print.util.ts`
+(Print 1, shipped since 0.28.8) has the exact same `total` formula, so whatever this
+is, it's pre-existing and now — correctly, per this request — identical across all
+three print buttons rather than something Print 3 diverged on.
+
+**Verified live**, real `:4200`, shipment `PUNE-000043` (Paid, Door Delivery ₹100),
+actual "Print 3" button click (not simulated) — same `Node.prototype.appendChild`
+iframe-capture technique as 0.58.0 to dodge a real `window.print()` dialog. Confirmed
+all four copy/mode combinations render correctly: Customer/Office copies show "Total
+Paid ₹341.90 (Paid)"; Driver copy's amount block is empty (nothing left to collect,
+matches Print 1's rule); Delivery copy shows "ToPay ₹0.00" (already Paid, so nothing
+outstanding) — byte-for-byte the same branching Print 1 produces for this booking.
+`tsc --noEmit` clean both times.
+
+Three more same-session follow-ups, each live-verified the same way (real `:4200`,
+real booking, captured iframe HTML, no real print dialog triggered):
+
+- **"header should be same as print 1"** — Print 3's masthead (decorative "Smart POST"
+  wordmark + company block + booking-branch corner) replaced with Print 1's exact
+  3-column header: logo/wordmark, company name+address+GST+contact+website, and an LR
+  box. Newly exported `barcodeSvg` from `consignment-print.util.ts` (previously
+  module-private) to reuse it here, same pattern as the already-exported `qrSvg`/
+  `amountInWords`. Dropped the amount-section's own QR (now redundant with the header's)
+  to match Print 1's single-QR convention.
+- **"border should be same as print 1"** — Print 1 nests a `.copy` (3px border, 10px
+  padding) around a `.receipt-inner` (2px border) for a double-frame look; Print 3 had
+  only a single 2px border flush to the content. Added the same nested wrapper
+  (`.sheet` outer 3px+padding, new `.receipt-inner` inner 2px).
+- **"only add QR code not barcode"** — immediately reversed part of the header change
+  above: dropped the barcode (`barcodeSvg` import removed again, `.lrbox-barcode`
+  markup/CSS deleted), kept just the QR, sized up 48px->64px to fill the space.
+
+Two more: **"all line size should be same"** — every internal grid line in Print 3 was
+already 1px except `.terms{border-top:2px}`, a stray inherited from an earlier edit;
+fixed to 1px (the outer `.sheet`/`.receipt-inner` double-frame from the border request
+above is intentionally different and untouched). **"QR data should be shipment no, and
+show shipment number below QR"** — the QR already encoded `d.shipmentNumber` (unchanged
+since 0.58.0), just needed the visible label; added `<span class="lrbox-shipno">`
+under `.lrbox-qr`.
+
+Then a reversal: **"remove extra border from print 3 ... border is not align proper"**
+— the double-frame from the "border same as Print 1" request (outer `.sheet` 3px +
+10px padding, inner `.receipt-inner` 2px) was exactly what read as misaligned: a white
+gap between two differently-inset frames instead of one flush border. Un-nested it
+back to a single `.sheet{border:2px}` with no padding, content flush against it — same
+as 0.58.0's original single-frame design, just with the header/border/amount-logic
+changes above layered on top of it.
+
+While live-verifying this one, hit an **unrelated compile error** from a concurrent
+edit to `shipment-table.ts` (`Property 'paymentModeLabel' does not exist on type
+'ShipmentTable'`) — not something this session touched, someone/something else editing
+the same repo live. It briefly blocked the ng serve overlay and, separately, a real
+`window.print()` fired once (the `appendChild`-patch script and the button click landed
+in two separate JS calls, and a background HMR reload silently wiped the patch in
+between) — tab froze, recovered with a same-tab `navigate` per
+`[[print-popup-freezes-chrome-automation]]`. Fix going forward: patch-and-click in one
+atomic `javascript_exec` call, never split across two.
+
+One more: **"page size should be same as print 1"** — Print 3 was A4 portrait at a
+fixed `7.6in` sheet width; switched to Print 1's exact `@page{size:A4 landscape}` and
+`width:1100px;max-width:100%`. The flexible columns (`.co`, `f1`/`f2`, `.party`) just
+stretch to fill the extra width since they were already `flex:`-based, not fixed —
+only the few inch-fixed columns (logo, LR box, `f3`-`f5`, `.amount`) keep their size.
+
+One more: **"add created by same as print 1"** — Print 3's footer was missing the
+"Created By" line Print 1 has; added `<div class="createdby">Created By :&nbsp;
+${d.createdByName ?? '—'}</div>` above the disclaimer line. Verified live: "Created By
+: Pune User" (real `createdByName` off the booking).
+
+One more: **"add more required information that need for shipment print that we are
+fill during shipment booking"** — cross-checked `ConsignmentPrintData` against what
+Print 3 actually rendered and found five booking-form fields Print 1 already surfaces
+that Print 3 didn't: `serviceTypeLabel`, an explicit `deliveryType` label (Print 3 only
+showed a conditional "Door Delivery" badge, never "Office Delivery" for the other
+case), `expectedDeliveryDate`, booking-side pincode/area/district, and delivery-side
+pincode/area/district (`remarks`/Special Instruction was already there since 0.58.0).
+Added three new rows between the article/weight row and the item table: Service
+Type/Delivery Type/Expected Delivery, Booking/Delivery Pincode-Area-District, and
+Special Instruction. Verified live with real data: "Express (EXP)", "Door Delivery",
+"2026-09-11", "411001, C D A (O), Pune", "413520, Almala, Latur".
+
+Follow-up question then request: "invoice details added on print 3?" — answered no
+(only a silent `declaredValue ?? invoiceValue` fallback in the Goods Value cell, never
+labeled, and no invoice *number* tracked anywhere in the system — same gap
+`ambox-consignment-print.util.ts` already documents). Then: **"just add invoice no and
+appointment delivery details if appointment delivery and applied gst"** — added
+"Invoice No : —" (same "not tracked" convention, fourth cell on the Service
+Type/Delivery Type/Expected Delivery row) and a new row for "GST Applied :
+₹{charges.gstAmount}" (always shown) plus "Appointment Delivery : ₹
+{appointmentDeliveryCharge}" (only when truthy — `PUNE-000043` has none, so that cell
+correctly renders absent, not a zero). Hit the 15-minute access-token expiry again
+mid-check; same re-login recipe.
+
+Two more: **"shipment book then show print 3 in place of print 1"** — the booking
+flow's own auto-print (`shipment-create.ts`, fires right after `service.create()`
+succeeds) was still calling `printConsignmentCopies` (Print 1) directly, untouched by
+any of the work above (which only ever touched the shipment-*view*'s three buttons).
+Swapped its import/call to `printPerformaBillCopies`. **Live-verified with an actual
+new booking**, not just the view page: logged in as `pune@gmail.com` (BRANCH_MANAGER —
+`first.admin@gmail.com`/COMPANY_ADMIN has no branch assigned and can't book), filled
+the New Shipment form via JS (Pune -> Osmanabad, Express, Door Delivery, Paid), hit one
+real validation snag — the default 20kg item weight exceeds package type DOC's 5kg
+cap (`BUSINESS_RULE_VIOLATION`, found by patching `XMLHttpRequest.prototype.send`
+since the app doesn't use `window.fetch`) — dropped it to 2kg and it booked clean as
+`PUNE-000044`. The same `appendChild`-patch from the shipment-view checks survives the
+in-app (non-reload) navigation from `/shipments/new` to `/shipments/:id` that follows a
+successful booking, since it's still the same document/window. Captured HTML confirmed
+Print 3's Performa layout auto-fired for a genuinely fresh booking, real data
+throughout (LR `26090000059`, ₹125.96, Door Delivery, First Company header).
+
+Then: **"rename print 1 as Delivery Receipt, print 3 as Booking Receipt"** — relabeled
+the two `shipment-view.ts` buttons (`print` -> "Delivery Receipt", `print3` ->
+"Booking Receipt"); `print2`'s "Print 2" label untouched, not mentioned in the request.
+Only the button text changed, not the method names or the print utils themselves.
+
+`tsc --noEmit` clean after each. One incidental finding while iterating: a stale,
+already-rendered preview `<iframe id="preview-iframe">` left in the DOM from a prior
+verification round sat at `z-index:99999` over the real page and silently absorbed the
+next `Print 3` click — no error, just nothing captured. Fix was removing it
+(`document.getElementById('preview-iframe')?.remove()`) before every subsequent
+click, and past that, driving the click via `querySelector('app-button')` +
+`.click()` in the same JS call proved more reliable than a separate coordinate-based
+`computer` click when timing against Angular's HMR reload. Also hit a real 15-minute
+access-token expiry mid-session (unrelated to the `:4200` restart) — plain re-login,
+no data implications.
+
+Previously current:
+
+`0.58.0` — **"Print 3" — a third consignment-note layout matching a real courier bill
+supplied as a reference file.** Direct request: "Bill_26091054986.pdf generate print 3
+as like this" (file found in `~/Downloads`, a SmartPost "Performa Invoice -
+Consignment Note" for a PUNE SWARGATE -> Chhatrapati Sambhajinagar booking).
+
+New `frontend/src/app/features/shipment/performa-bill-print.util.ts`, wired as a third
+button next to "Print LR" and "Print 2" on `shipment-view.ts` (`print3()` ->
+`printPerformaBillCopies()`, same `buildPrintData()` the other two share — no new data
+plumbing). Same `ConsignmentPrintData` shape as `consignment-print.util.ts`/
+`ambox-consignment-print.util.ts`; reuses their `qrSvg` and (newly exported)
+`amountInWords` rather than duplicating them. Reference's masthead has two blocks that
+don't map to this app's data: a courier network's own logo (left) — hardcoded
+"Smart POST" wordmark, decorative furniture same as `ambox-...`'s "AMBOX" fallback —
+and the booking branch shown as its own corner block (right), mapped honestly to
+`bookingBranchLabel`. "Km" (route distance) isn't tracked anywhere in this system and
+prints "—". Four copies per booking (Customer/Office/Driver/Delivery), matching the
+other two utils' copy set — the reference itself only shows one ("Customer Copy") but
+the label is just interpolated text in the doc-type cell, so the same rotation applies
+cleanly.
+
+**Verified (static, synthetic data)**: `tsc --noEmit` clean. No dev stack was running
+yet, so first pass was static-rendered rather than click-tested — same technique as
+0.28.9's original verification: exported `renderPerformaHtml` (pure string builder, no
+DOM deps besides `qrSvg`'s off-DOM SVG generation), bundled with `esbuild` to CommonJS,
+ran in Node with synthetic data matching the reference PDF's own numbers (LR
+`26091054986`, Pune Swargate -> Chhatrapati Sambhajinagar, ₹290 net), served the static
+output over a throwaway local HTTP server and screenshotted it in `claude-in-chrome` —
+header, route bar, item table, consignor/consignee block, QR, Door Delivery box, and
+signature footer all render correctly across all four copies.
+
+**Verified live, real data binding (same day, follow-up: "test it live with all data
+binding")**: booted a throwaway `:8082`/`:4300` stack. Hit a real `DB_PORT` gotcha
+booting `:8082` — repo root `.env` sets `DB_PORT=3307` (a Docker MySQL that's never
+actually installed; Homebrew `mysql@8.0` is really on `3306`) and sourcing the whole
+`.env` for its `JWT_SECRET`/`SECRETS_ENCRYPTION_KEY` while only overriding `DB_HOST`/
+`DB_USERNAME`/`DB_PASSWORD` left the stale `DB_PORT=3307` in effect — pure `Connection
+refused` at Flyway init with zero hint it was a port mismatch; new memory
+`local-dev-environment`'s 2026-09-11 entry. Logged into the real UI as
+`pune@gmail.com`/`COMPANY-C1` (JS-driven form fill + read-back, not `form_input`, per
+`[[dev-login-credential]]`'s known field-corruption gotcha), opened a real booked
+shipment (`PUNE-000043`, Pune->Latur, Door Delivery charge ₹100) and clicked the actual
+"Print 3" button — not a simulation. To avoid the real `window.print()` native-dialog
+freeze risk (`[[print-popup-freezes-chrome-automation]]`), patched `Node.prototype
+.appendChild` to catch the print util's hidden iframe the instant it's inserted and
+stub its `contentWindow.print`, capturing the exact production-rendered HTML instead of
+letting a real print dialog fire — same spirit as that memory's `window.open` capture
+trick, applied to this iframe-based mechanism instead. Real company name/address,
+branch labels, sender/receiver, AWB, and QR all bound correctly.
+
+**Found a real (pre-existing, not introduced here) bug while doing this**: the shared
+`total` formula (`netAmount + otherCharges + appointmentDeliveryCharge +
+doorDeliveryCharge`), copied identically into `consignment-print.util.ts`'s `copy()`,
+`ambox-consignment-print.util.ts`'s `sheet()`, and this file's `sheet()`, double-counts
+`doorDeliveryCharge` whenever it's non-zero — the charge summary card already shows
+`netAmount` (₹241.90 on `PUNE-000043`) as the *sum including* Door Delivery (₹100) and
+its GST, but all three print utils then add `doorDeliveryCharge` a second time, printing
+₹341.90. Confirmed by reading the shared formula (identical in all three files) rather
+than needing to re-click Print LR/Print 2 — same bug, same root cause, present since
+0.28.8. Not fixed — out of scope for a print-3-addition task and affects two other
+files this task didn't otherwise touch; flagged to the user rather than silently
+patched.
+
+Previously current:
+
 `0.57.0` — **Login now accepts a registered mobile number, not just email.** Direct
 request: "user able to login using there contact number as well".
 

@@ -21,8 +21,10 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Sums every ACTIVE {@code com.courier.modules.charge.domain.Charge} configured against
@@ -112,13 +114,24 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
         UUID companyId = CompanyContext.requireCompanyId();
         List<Charge> charges = chargeRepository.findAll(ChargeSpecifications.matching(
                 new ChargeCriteria(Set.of(serviceTypeId), Set.of(ChargeStatus.ACTIVE), null)));
+        if (charges.isEmpty()) {
+            return List.of();
+        }
 
         BigDecimal distanceKm = resolveDistanceKm(bookingBranchId, deliveryBranchId);
 
+        // One round trip for every charge's settings instead of one per charge — this
+        // runs on every pricing preview keystroke during booking, so N charges used to
+        // mean N+1 queries.
+        List<UUID> chargeIds = charges.stream().map(Charge::getId).toList();
+        Map<UUID, List<ChargeSetting>> settingsByCharge = chargeSettingRepository
+                .findByCompanyIdAndChargeIdInAndStatus(companyId, chargeIds, ChargeStatus.ACTIVE)
+                .stream()
+                .collect(Collectors.groupingBy(ChargeSetting::getChargeId));
+
         List<Line> lines = new java.util.ArrayList<>();
         for (Charge charge : charges) {
-            List<ChargeSetting> settings = chargeSettingRepository
-                    .findByCompanyIdAndChargeIdAndStatus(companyId, charge.getId(), ChargeStatus.ACTIVE);
+            List<ChargeSetting> settings = settingsByCharge.getOrDefault(charge.getId(), List.of());
             for (ChargeSetting setting : settings) {
                 if (!applies(setting, weight, distanceKm)) {
                     continue;

@@ -66,7 +66,7 @@ export class PodStatusPie {
 
   readonly title = input('POD Overview');
   readonly subtitle = input('Pending upload, pending verification, approved, rejected');
-  readonly tone = input<'brand' | 'warning' | 'danger' | 'info' | 'success'>('info');
+  readonly tone = input<'brand' | 'warning' | 'danger' | 'info' | 'success' | 'none'>('none');
   readonly data = input<PodOverview | null>(null);
   readonly loading = input(false);
 

@@ -938,7 +938,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     public List<Shipment> findManifestCreatedShipments(UUID manifestId) {
         ShipmentCriteria criteria = new ShipmentCriteria(
                 java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, null, null, manifestId,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         return shipmentRepository.findAll(ShipmentSpecifications.matching(criteria));
     }
 

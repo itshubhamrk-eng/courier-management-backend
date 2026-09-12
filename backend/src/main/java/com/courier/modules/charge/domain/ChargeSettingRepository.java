@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +24,12 @@ public interface ChargeSettingRepository extends JpaRepository<ChargeSetting, UU
 
     /** The candidate set for the overlap check: every ACTIVE setting under one charge. */
     List<ChargeSetting> findByCompanyIdAndChargeIdAndStatus(UUID companyId, UUID chargeId, ChargeStatus status);
+
+    /** Batched form of {@link #findByCompanyIdAndChargeIdAndStatus} for every charge in one
+     *  set — one round trip instead of one per charge, e.g. {@code
+     *  ApplicableChargesCalculator} pricing against several charges under one service type. */
+    List<ChargeSetting> findByCompanyIdAndChargeIdInAndStatus(
+            UUID companyId, Collection<UUID> chargeIds, ChargeStatus status);
 
     /** Delete-guard for a Charge: does it still have any live (non-deleted) setting? */
     long countByCompanyIdAndChargeId(UUID companyId, UUID chargeId);

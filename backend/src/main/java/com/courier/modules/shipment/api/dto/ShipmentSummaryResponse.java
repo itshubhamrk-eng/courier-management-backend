@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -25,7 +26,7 @@ public record ShipmentSummaryResponse(
         String fromCity,
         /** The destination pincode/area's resolved city. */
         String toCity,
-        UUID manifestId, UUID paymentModeId,
+        UUID manifestId, UUID paymentModeId, DeliveryType deliveryType,
         String senderName, String senderContact, String receiverName, String receiverContact,
         BigDecimal chargeableWeight, BigDecimal netAmount,
         BigDecimal totalCommission, BigDecimal commissionOnBasicFreight,

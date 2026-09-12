@@ -3,7 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -22,7 +22,9 @@ import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
-import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
+import { printConsignmentCopies, companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
+import { printAmboxCopies } from './ambox-consignment-print.util';
+import { printPerformaBillCopies } from './performa-bill-print.util';
 import { emptyPage } from '@core/models/page.model';
 import { TicketService } from '@core/services/ticket.service';
 import { Ticket } from '@core/models/ticket.model';
@@ -71,7 +73,9 @@ const TIMELINE_ICONS: Record<string, string> = {
             <mat-icon>event_repeat</mat-icon> Create Follow-up</a>
           <span class="sv__spacer"></span>
           @if (charge(); as c) {
-            <app-button variant="stroked" icon="print" (pressed)="print(c)">Print LR</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print(c)">Delivery Receipt</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print2(c)">Print 2</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print3(c)">Booking Receipt</app-button>
           }
           @if (can().update && shipment()!.status === 'BOOKED') {
             <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button>
@@ -498,9 +502,9 @@ export class ShipmentView implements OnInit {
 
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }
 
-  print(c: ShipmentCharge): void {
+  private buildPrintData(c: ShipmentCharge) {
     const s = this.shipment()!;
-    forkJoin({
+    return forkJoin({
       company: this.companyProfile.get().pipe(catchError(() => of(null))),
       bookingGeo: s.pickupPincode
         ? this.masters.pincodeGeo(s.pickupPincode).pipe(catchError(() => of(null)))
@@ -508,42 +512,55 @@ export class ShipmentView implements OnInit {
       deliveryGeo: s.deliveryPincode
         ? this.masters.pincodeGeo(s.deliveryPincode).pipe(catchError(() => of(null)))
         : of(null)
-    }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
-      printConsignmentCopies({
-        companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
-        companyLogo: company?.logo ?? this.auth.companyLogo(),
-        companyAddress: companyAddressLine(company),
-        companyGst: company?.gstNumber ?? null,
-        companyContact: company?.mobile ?? null,
-        companyWebsite: company?.website ?? null,
-        shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-        expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-        bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
-        bookingPincode: s.pickupPincode || null,
-        bookingDistrict: bookingGeo?.districtName ?? null,
-        bookingArea: bookingGeo?.areaName ?? null,
-        deliveryPincode: s.deliveryPincode || null,
-        deliveryDistrict: deliveryGeo?.districtName ?? null,
-        deliveryArea: deliveryGeo?.areaName ?? null,
-        senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
-        receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
-        serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
-        paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
-        numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
-        declaredValue: s.declaredValue ?? null,
-        charges: {
-          freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
-          insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges,
-          applicableChargeLines: c.applicableChargeLines, gstAmount: c.gstAmount,
-          discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
-        },
-        otherCharges: c.otherCharges,
-        appointmentDeliveryCharge: c.appointmentDeliveryCharge,
-        doorDeliveryCharge: c.doorDeliveryCharge,
-        remarks: s.remarks ?? null,
-        createdByName: s.createdByName ?? null
-      });
-    });
+    }).pipe(map(({ company, bookingGeo, deliveryGeo }): ConsignmentPrintData => ({
+      companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
+      companyLogo: company?.logo ?? this.auth.companyLogo(),
+      companyAddress: companyAddressLine(company),
+      companyGst: company?.gstNumber ?? null,
+      companyContact: company?.mobile ?? null,
+      companyWebsite: company?.website ?? null,
+      shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+      expectedDeliveryDate: s.expectedDeliveryDate ?? null,
+      bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
+      bookingPincode: s.pickupPincode || null,
+      bookingDistrict: bookingGeo?.districtName ?? null,
+      bookingArea: bookingGeo?.areaName ?? null,
+      deliveryPincode: s.deliveryPincode || null,
+      deliveryDistrict: deliveryGeo?.districtName ?? null,
+      deliveryArea: deliveryGeo?.areaName ?? null,
+      senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
+      receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
+      serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
+      paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
+      deliveryType: s.deliveryType,
+      numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
+      declaredValue: s.declaredValue ?? null,
+      charges: {
+        freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
+        insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges,
+        applicableChargeLines: c.applicableChargeLines, gstAmount: c.gstAmount,
+        discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
+      },
+      otherCharges: c.otherCharges,
+      appointmentDeliveryCharge: c.appointmentDeliveryCharge,
+      doorDeliveryCharge: c.doorDeliveryCharge,
+      remarks: s.remarks ?? null,
+      createdByName: s.createdByName ?? null,
+      invoiceValue: s.invoiceValue ?? null,
+      items: s.items.map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
+    })));
+  }
+
+  print(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printConsignmentCopies(data));
+  }
+
+  print2(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printAmboxCopies(data));
+  }
+
+  print3(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printPerformaBillCopies(data));
   }
 
   // ------------------------------------------------------------------- E-Way Bill

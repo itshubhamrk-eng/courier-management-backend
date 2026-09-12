@@ -195,7 +195,9 @@ class PricingEngineImplTest {
         assertThat(result.matchedRate()).isNull();
         assertThat(result.freight()).isEqualByComparingTo("37.50");
         assertThat(result.fuelCharge()).isEqualByComparingTo("0");
-        assertThat(result.netAmount()).isEqualByComparingTo("37.50");
+        // NEAREST_FIVE round-off (the default PricingProperties.roundingRule, no company
+        // override stubbed here) applies here too — see resolveRoundingRule's class doc.
+        assertThat(result.netAmount()).isEqualByComparingTo("40.00");
         assertThat(result.appliedFreightFactor()).isEqualByComparingTo("7.50");
         verify(pricingFactory, never()).resolve(any());
     }
@@ -232,7 +234,9 @@ class PricingEngineImplTest {
         assertThat(result.applicableCharges()).isEqualByComparingTo("10.00");
         // GST is on freight + Applicable Charges, same as the standard chain's subtotalBeforeGst.
         assertThat(result.gstAmount()).isEqualByComparingTo("8.55");
-        assertThat(result.netAmount()).isEqualByComparingTo("56.05");
+        // 56.05 pre-round -> NEAREST_FIVE (the default PricingProperties.roundingRule).
+        assertThat(result.netAmount()).isEqualByComparingTo("55.00");
+        assertThat(result.roundOff()).isEqualByComparingTo("-1.05");
     }
 
     @Test

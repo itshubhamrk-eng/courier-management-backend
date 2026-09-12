@@ -70,6 +70,7 @@ export interface Shipment {
   nextLocationId?: string | null;
   manifestId?: string | null;
   paymentModeId: string;
+  deliveryType: DeliveryType;
   senderName: string;
   senderContact: string;
   receiverName: string;
@@ -475,6 +476,7 @@ export interface ShipmentSearchRequest {
    *  delivered, not when it was booked. */
   deliveredDateFrom?: string;
   deliveredDateTo?: string;
+  paymentModeId?: string;
   search?: string;
 }
 

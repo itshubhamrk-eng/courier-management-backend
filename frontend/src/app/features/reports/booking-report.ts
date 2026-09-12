@@ -64,6 +64,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
           <td>{{ branchLabel(s.deliveryBranchId) }}</td>
           <td>{{ s.senderName }}</td>
           <td>{{ s.receiverName }}</td>
+          <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
           <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
           <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
@@ -107,6 +108,7 @@ export class BookingReport implements OnInit {
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
 
   protected readonly branchOptions = signal<SelectOption[]>([]);
+  protected readonly paymentModeOptions = signal<SelectOption[]>([]);
   protected readonly loading = signal(true);
   protected readonly exporting = signal(false);
   protected readonly filterOpen = signal(false);
@@ -127,6 +129,7 @@ export class BookingReport implements OnInit {
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
     { key: 'senderName', header: 'Sender' },
     { key: 'receiverName', header: 'Receiver' },
+    { key: 'paymentModeId', header: 'Payment Mode' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', align: 'right' },
     { key: 'netAmount', header: 'Amount', align: 'right' },
     { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },
@@ -144,6 +147,7 @@ export class BookingReport implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Reports' }, { label: 'Booking Report' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+    this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
     this.load();
     this.loadSummary();
   }
@@ -190,6 +194,7 @@ export class BookingReport implements OnInit {
   view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
   protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected paymentModeLabel(id: string | null | undefined): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   exportCsv(): void {
     this.exporting.set(true);
@@ -201,16 +206,16 @@ export class BookingReport implements OnInit {
 
   private download(rows: Shipment[]): void {
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
-      'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount',
+      'sender', 'senderContact', 'receiver', 'receiverContact', 'paymentMode', 'chargeableWeight', 'netAmount',
       'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
       'companyCommissionOnBasicFreight', 'status'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
-      r.senderName, r.senderContact, r.receiverName, r.receiverContact,
+      r.senderName, r.senderContact, r.receiverName, r.receiverContact, this.paymentModeLabel(r.paymentModeId),
       r.chargeableWeight, r.netAmount ?? '',
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
       r.companyCommissionOnBasicFreight ?? '', r.status]);
-    downloadCsv(`booking-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [9, 10, 11, 12, 13, 14]);
+    downloadCsv(`booking-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [10, 11, 12, 13, 14, 15]);
     this.notify.info(`Exported ${rows.length} booking(s).`);
   }
 }

@@ -4,7 +4,6 @@ import { RouterLink } from '@angular/router';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { CompanyOverview as CompanyOverviewData } from '../models/dashboard.model';
-import { PodStatusPie } from './pod-status-pie';
 
 interface ActionItem {
   key: string;
@@ -28,7 +27,7 @@ const money = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   selector: 'app-company-overview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, RouterLink, UiCard, UiLoader, PodStatusPie],
+  imports: [MatIconModule, RouterLink, UiCard, UiLoader],
   template: `
     @if (loading()) {
       <app-card title="Company Overview">
@@ -101,11 +100,6 @@ const money = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
           </ul>
         }
       </app-card>
-
-      <!-- POD Dashboard pie — every branch -->
-      <app-pod-status-pie tone="info" title="POD Overview — All Branches"
-        subtitle="Every branch's own delivery proof, current state"
-        [loading]="loading()" [data]="data()!.podOverview" />
 
       <!-- Top routes -->
       <app-card tone="info" title="Top Routes" subtitle="This month, by shipment count">

@@ -28,11 +28,12 @@ public record ShipmentSearchRequest(
         @Schema(description = "Delivery Report filter — matched against when the shipment was actually delivered")
         LocalDate deliveredDateFrom,
         LocalDate deliveredDateTo,
+        UUID paymentModeId,
         @Size(max = 100)
         @Schema(description = "Free text over shipment number and tracking number")
         String search
 ) {
     public static ShipmentSearchRequest empty() {
-        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null);
+        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null, null);
     }
 }

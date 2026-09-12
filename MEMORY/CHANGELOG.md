@@ -8,6 +8,192 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-12 — Shipment Booking Pricing perf: N+1 query + wired the unused Company Settings cache (0.58.2)
+
+Direct report ("shipment booking Pricing getting slow"). Audited every DB call on
+`PricingEngineImpl.calculate`'s hot path (Route/Rate lookups, Company Settings,
+Applicable Charges) rather than guessing. **Indexes were already fine** — `master_routes`
+(`uk_master_routes_pair`) and `rate_master` (`idx_rate_master_combo`) both already carry
+exact composite indexes for the queries `RouteValidation`/`RateValidation` run (V56,
+2026-09-04, already covered the other real gaps); no new migration needed here.
+
+Two real problems found instead:
+
+1. **N+1 in `ApplicableChargesCalculator.resolve()`** (runs on every `/pricing/calculate`
+   call, including the frontend's live debounced preview during booking): one
+   `chargeSettingRepository` query per matched `Charge`, so a service type with N active
+   charges cost N+1 round trips every keystroke. New batched
+   `ChargeSettingRepository.findByCompanyIdAndChargeIdInAndStatus`, one query for every
+   charge's settings, grouped by `chargeId` in memory (`idx_charge_settings_charge`
+   already covers `(company_id, charge_id, status)`, so this is index-friendly for the
+   `IN` list too). Behavior unchanged — same matching logic, fewer round trips.
+
+2. **`CompanySettingsService.get()` had no cache**, despite `RedisConfig` already
+   provisioning a `CACHE_COMPANY_CONFIG` bucket for exactly this (declared 2026-08-17
+   alongside Redis, never wired to anything — `grep` found zero `@Cacheable` in the whole
+   codebase). `PricingEngineImpl`'s Freight Factor fallback path called `get()` twice per
+   request on top of that (GST%, then round-off, as two separate reads); collapsed to one
+   fetch reused for both. Wired `@Cacheable`/`@CacheEvict` (keyed on
+   `CompanyContext.requireCompanyId()`) onto `CompanySettingsServiceImpl.get()` and all
+   nine write methods (`replace` + eight `patch*`) — explicit eviction on every write, the
+   10-minute TTL `RedisConfig` already sets is the fallback safety net, not the primary
+   mechanism. `CompanySettings` is a flat entity (no associations), safe to round-trip
+   through the existing `GenericJackson2JsonRedisSerializer`.
+
+Left `CACHE_RATE_CARDS` (also provisioned, also unused) alone — Route/Rate lookups were
+already fast (indexed composite lookups on small per-company tables) and rate-card
+eviction across `RateServiceImpl`'s several write paths is real complexity for a query
+that isn't actually the bottleneck; not worth the staleness risk on a billing-relevant
+value without a concrete slowness signal there.
+
+**Found and fixed along the way**: two `PricingEngineImplTest` cases had stale
+assertions from an earlier, already-uncommitted change that added round-off to the
+Freight Factor fallback path (`NEAREST_FIVE` by default) — they still expected the raw
+pre-round amount. Not part of this task's scope, but the suite doesn't build green
+without the fix, so corrected the expected values (37.50 → 40.00, 56.05 → 55.00, added a
+`roundOff` assertion) rather than leave it broken.
+
+`mvn compile` clean, `mvn test` 1031/1031. **Not load-tested** — no before/after timing
+capture, since this account's tables are still small (the same honesty note V56 gave);
+the N+1 fix's win scales with charge count per service type, the cache's win scales with
+concurrent booking-desk traffic. Full detail in `AI_CONTEXT.md` 0.58.2.
+
+---
+
+## Added 2026-09-11 — "Print 3" consignment-note layout (0.58.0)
+
+New third print variant on the shipment view (`Print LR` / `Print 2` / `Print 3`),
+matching a real SmartPost "Performa Invoice - Consignment Note" bill supplied as a
+reference file (`Bill_26091054986.pdf`). New
+`frontend/src/app/features/shipment/performa-bill-print.util.ts`, wired into
+`shipment-view.ts`'s existing `buildPrintData()` — no backend/data changes. Four
+copies (Customer/Office/Driver/Delivery), same convention as the other two print
+utils. `tsc --noEmit` clean; static-rendered against synthetic data first, then
+**live-verified against a real booking** (`PUNE-000043`) on a throwaway `:8082`/
+`:4300` stack, real login, actual "Print 3" button click (iframe captured via a
+`Node.prototype.appendChild` patch instead of letting a real print dialog fire).
+
+**Found while live-verifying (not fixed, pre-existing)**: all three print utils'
+shared `total` formula double-counts `doorDeliveryCharge` — `netAmount` already
+includes it, then it's added again, so a Door Delivery booking's printed total (and
+amount-in-words) runs high by exactly that charge (₹341.90 vs the real ₹241.90 on
+`PUNE-000043`). Affects `consignment-print.util.ts`, `ambox-consignment-print.util.ts`,
+and this new file identically, since the formula was copied unchanged. Flagged, not
+patched — out of scope for this task.
+
+Full detail in `AI_CONTEXT.md` 0.58.0.
+
+---
+
+## Changed 2026-09-11 — Print 3 polish, same-session follow-up (0.58.1)
+
+Six direct requests against the new Print 3, each live-verified on the real `:4200`
+(restarted on request, frontend-only) against shipment `PUNE-000043`: font matched to
+Print 1 (`"Segoe UI",Calibri,Arial,Helvetica,sans-serif`); cell padding/font-size
+standardized to Print 1's baseline; the same Terms & Conditions block added; amount
+section rebuilt to reuse Print 1's exact Paid/ToPay/Driver-omit/Delivery-collect mode
+logic (confirming the "double-counted doorDeliveryCharge" 0.58.0 finding is shared,
+pre-existing behavior across all three print utils, not a Print 3-specific bug);
+header replaced with Print 1's exact logo+company+LR-box layout (`barcodeSvg` exported
+from `consignment-print.util.ts` for reuse); double-frame border added to match Print
+1's nested `.copy`/`.receipt-inner`; then the header's barcode was removed again on a
+final request, keeping only the QR. `tsc --noEmit` clean throughout. Full detail in
+`AI_CONTEXT.md` 0.58.1.
+
+---
+
+## Fixed + deployed 2026-09-10 — Company Settings "An unexpected error occurred" on vendor.amazinglpl.com
+
+Direct report ("company setting still getting An unexpected error occurred ... not
+getting in vendor.amazinglpl.com"). Local repro against the dev DB came back clean
+(schema at V69, matches code) — so the bug had to be in prod's own data, not the
+migrations. Logged into `vendor.amazinglpl.com` live as `ashwin@amazinglpl.com`
+(company `AMAZING_LOGISTICS`, user-supplied creds) and reproduced it directly: the
+Settings page's `GET /api/v1/company-razorpay-config` call 500s, which is what the
+generic toast comes from (`ErrorCode.INTERNAL_ERROR`). SSH'd into prod
+(`35.154.220.116`) and read `courier-backend`'s own logs for the exact stack —
+`javax.crypto.AEADBadTagException: Tag mismatch` inside `EncryptedStringConverter`,
+meaning this company's stored `key_secret_encrypted` no longer decrypts under prod's
+current `SECRETS_ENCRYPTION_KEY` (rotated at some point after they saved their
+Razorpay secret, or the row predates the key currently running). The same
+`CompanyRazorpayConfigRepository.findByCompanyId` call is also used by
+`CompanyPaymentGatewayResolver` for actual wallet-recharge checkout — so this one bad
+row was silently a live-payments outage for this company too, not just a settings-page
+cosmetic bug.
+
+Fix: `CompanyRazorpayConfigServiceImpl.get()` and `CompanyPaymentGatewayResolver
+.resolve()` both now catch the decrypt failure (`DataAccessException`/
+`IllegalStateException`) and degrade to "not configured"/platform-gateway instead of
+throwing — a masked read of a secret shouldn't 500 the whole settings page, and a
+broken company-owned gateway should fail over to the platform one rather than break
+checkout outright. Logged as a `WARN` with the company id so it isn't silently
+invisible. Underlying data is still corrupt — `ashwin@amazinglpl.com` has to re-enter
+their Key ID/Secret on the Settings page to actually restore their own gateway; this
+fix only stops it from crashing requests.
+
+New test `CompanyRazorpayConfigServiceImplTest` (2 cases: `DataAccessException` and
+bare `IllegalStateException` from the repository both fall back cleanly). `mvn test`
+1031/1031, `mvn compile` clean.
+
+**Deployed same turn**: rsync'd the two changed files to prod, `docker compose build
+backend` (~1 min, clean), `docker compose up -d backend` (recreated, healthy in
+~25s). Verified against the *server's own* nginx access log (`docker logs
+courier-frontend`), not just the browser — `GET /api/v1/company-razorpay-config`
+now returns a clean `200 189` every time post-deploy, where it was `500` before.
+Chrome's own network-request reporting showed spurious `503`s / "Request failed (0)"
+a few times right after the restart (cold JIT/connection-pool) that never actually
+reached the server — nginx's access log never logged a single 5xx for any endpoint in
+that window, so those were client-side noise, not a real regression; cross-checked by
+re-running the same request a few seconds later and against the raw server log
+directly, both clean.
+
+---
+
+## Deployed 2026-09-10 — commit `ffb9f17` shipped to prod (35.154.220.116)
+
+Direct request ("commit and deploy latest changes" / "on prod"). Bundled everything
+pending on the tree into one commit (see that commit's own message for the full
+feature list — E-Way Bill auto-generation, Delivery Type/Appointment/Insurance card,
+From/To City, Applicable Charges fixes, Door Delivery GST, mobile-number login,
+V67-V69) and pushed it live. Pre-flight: `mvn clean package -DskipTests` (test-compile,
+not just `compile`, per the 2026-09-02 incident that missed a stale test constructor),
+`mvn test` 1029/1029, `tsc --noEmit` clean.
+
+Deploy: rsync'd `backend/`/`frontend/`, built+recreated **backend first, then
+frontend** — sequentially, not together, given the box's 909MB RAM ceiling (baseline
+before starting: 74Mi free / 193Mi available, 1.1Gi swap already in use, no stray host
+processes). Backend build ~1min, `healthy` in ~30s; Flyway applied all 3 new migrations
+cleanly in ~2.5s. Frontend build ~85s. RAM never dropped further during either build —
+no thrash, no swap growth. `docker compose up -d --force-recreate <service>` scoped to
+one service each time correctly left mysql/redis alone. Verified via
+`/actuator/health/{readiness,liveness}` (`UP`) and `https://amazing.skra.in/` (`200`),
+not just container health status. See `[[prod-ec2-deployment]]` for the full detail.
+
+**Same-turn "test it live on prod"**: real production data, so no DB-row mutation this
+time (unlike the local `:8082` verification above, which freely flips a seeded test
+account's `email_verified`) — found the one real user with a `mobile` populated
+(`siddeshkhade07@gmail.com`, `7756825208`, company `AMAZING_LOGISTICS`) via a read-only
+query through the running `mysql` container (never read `.env` — that request was
+correctly blocked by the permission classifier as a secrets file). Tested the
+failure-path only: one deliberate wrong-password attempt via the mobile number, and one
+via an unknown mobile — both returned the same generic `INVALID_CREDENTIALS`, proving
+the mobile-lookup code path runs cleanly against real prod data with no crash, well
+under the 5-attempt lockout threshold. Then a real browser click-through on
+`https://amazing.skra.in/login` (no submit): the "Email or Mobile Number" label and
+placeholder render on the production build, and typing `7756825208` into the field
+was accepted with no format-rejection.
+
+**Same-turn follow-up, "it should test on vendor.amazinglpl.com"**: repeated on the
+other production domain (same backend, `companyCodeForHostname` auto-locks the
+company field to `AMAZING_LOGISTICS` here). This time submitted for real — mobile
+`7756825208` + a deliberately wrong password — and got the expected "Invalid email
+or password" toast back from the live form, confirming the mobile-login path works
+end-to-end through this domain too, not just via `curl`/the sibling domain. Second
+wrong-password attempt against this real account this session, still well under the
+5-attempt lockout threshold.
+
+---
+
 ## [Unreleased] — 2026-09-10 — Login accepts a registered mobile number, not just email
 
 Direct request: "user able to login using there contact number as well". The login
@@ -38,7 +224,7 @@ branch. `LoginRequest.email` dropped its `@Email` validation (`@NotBlank` +
 to the matched account's email before authenticating; an unmatched mobile
 degrades to the same generic `INVALID_CREDENTIALS`; an email-shaped identifier
 never triggers a mobile lookup at all). `tsc --noEmit` clean. Live via `curl`
-against a throwaway `:8082` stack (real `courier_db` data, `ganesh@gmail.com`,
+against a throwaway `:8082` stack (real local `courier_db` data, `ganesh@gmail.com`,
 mobile `7878787878`, COMPANY-C1): mobile+password gave the exact same response
 as email+password (`EMAIL_NOT_VERIFIED`, that account's own pre-existing state,
 unrelated) — proof the password check passed, since it only runs after

@@ -12,8 +12,11 @@ import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.Roles;
 import com.courier.shared.security.SecurityUtils;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.config.RedisConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -49,6 +52,13 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
     private static final String WRITERS = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     // Everyone in the company reads settings; the values drive many modules' behaviour.
     private static final String READERS = "isAuthenticated()";
+    // get() is on the Pricing Engine's hot path (freight round-off + GST%, read up to a
+    // few times per /pricing/calculate call) — cached under the bucket RedisConfig
+    // already provisions for exactly this. Keyed by company, not by user: the same row
+    // for every caller in a company. 10-minute TTL from RedisConfig is the safety net if
+    // an eviction path is ever missed; every write method below evicts explicitly so that
+    // isn't normally relied on.
+    private static final String CACHE_KEY = "T(com.courier.shared.company.CompanyContext).requireCompanyId()";
 
     private final CompanySettingsRepository repository;
     private final CompanyRepository companyRepository;
@@ -56,6 +66,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @Cacheable(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(READERS)
     public CompanySettings get() {
         return loadOrCreate();
@@ -63,6 +74,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings replace(CompanySettingsCommand command) {
         CompanySettings settings = loadOrCreate();
@@ -83,6 +95,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchGeneral(CompanySettingsCommand command) {
         return patch("general", command, s -> applyGeneral(s, command));
@@ -90,6 +103,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchShipment(CompanySettingsCommand command) {
         return patch("shipment", command, s -> applyShipment(s, command));
@@ -97,6 +111,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchFinance(CompanySettingsCommand command) {
         return patch("finance", command, s -> applyFinance(s, command));
@@ -104,6 +119,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchSla(CompanySettingsCommand command) {
         return patch("sla", command, s -> applySla(s, command));
@@ -111,6 +127,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchEwayBill(CompanySettingsCommand command) {
         return patch("ewayBill", command, s -> applyEwayBill(s, command));
@@ -118,6 +135,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchSecurity(CompanySettingsCommand command) {
         return patch("security", command, s -> applySecurity(s, command));
@@ -125,6 +143,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchNotification(CompanySettingsCommand command) {
         return patch("notification", command, s -> applyNotification(s, command));
@@ -132,6 +151,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = RedisConfig.CACHE_COMPANY_CONFIG, key = CACHE_KEY)
     @PreAuthorize(WRITERS)
     public CompanySettings patchBranding(CompanySettingsCommand command) {
         return patch("branding", command, s -> applyBranding(s, command));

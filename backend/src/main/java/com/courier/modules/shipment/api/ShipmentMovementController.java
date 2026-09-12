@@ -70,7 +70,7 @@ public class ShipmentMovementController {
         // count them by that status rather than MANIFEST_CREATED, which none of them are anymore.
         ShipmentCriteria dispatchedOnThisManifest = new ShipmentCriteria(
                 Set.of(ShipmentStatus.DISPATCHED), null, null, null, null, manifest.getId(),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         int dispatchedCount = (int) shipmentService.search(dispatchedOnThisManifest, Pageable.unpaged())
                 .getTotalElements();
         return ApiResponse.success(new DispatchManifestResponse(
