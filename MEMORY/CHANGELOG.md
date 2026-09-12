@@ -8,6 +8,29 @@ All notable changes to this project. Format based on
 
 ---
 
+## Deployed 2026-09-12 — commit `f07f202` shipped to prod (35.154.220.116)
+
+Direct request ("commit and deployed on prod"). Committed everything pending on the
+tree (0.58.2 pricing perf fix — N+1 in Applicable Charges + Company Settings cache
+wiring, Print 3 layout + polish, Razorpay decrypt-failure hardening already live since
+2026-09-10, shipment From/To City support) as `f07f202`. `frontend/proxy.verify.json`
+(local verify-stack scratch config) left out of the commit and out of the rsync.
+
+Deploy: rsync'd `backend/`/`frontend/` to `~/courier` (prod's tree is a git checkout
+pinned at `7d1200c` with the last several commits' content applied as uncommitted
+rsync'd changes, not a git-pull deploy — matches the 2026-09-10 pattern, so this rsync
+layered on top of that same way). Built+recreated **backend first, then frontend**,
+sequentially, per the box's tight RAM (started at 96Mi free / 583Mi available, 737Mi
+swap already in use). Backend build ~53s, healthy in ~2min; Flyway validated 69
+migrations, none new (this commit shipped no schema change). Frontend build ~59s,
+healthy in ~12s. RAM recovered to 941Mi free / 1.3Gi available after both restarts —
+no thrash.
+
+Verified via `docker ps` (both containers `healthy`) and a real HTTPS request to each
+prod domain: `amazing.skra.in` and `vendor.amazinglpl.com` both `200`.
+
+---
+
 ## Fixed 2026-09-12 — Shipment Booking Pricing perf: N+1 query + wired the unused Company Settings cache (0.58.2)
 
 Direct report ("shipment booking Pricing getting slow"). Audited every DB call on
