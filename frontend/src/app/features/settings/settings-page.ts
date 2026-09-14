@@ -142,6 +142,19 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                             (click)="saveRoundOff()">{{ savingRoundOff() ? 'Saving…' : 'Save' }}</button>
                   </div>
                 </div>
+                <div class="dcw">
+                  <label class="text-caption">Net Amount edit bounds (Shipment Booking's editable preview)</label>
+                  <div class="dcw__row">
+                    <input class="dcw__i" type="number" min="0" max="100" step="0.01"
+                           placeholder="Max decrease %"
+                           [value]="netAmountMaxDecreaseInput() ?? ''" (input)="onNetAmountMaxDecreaseInput($event)" />
+                    <input class="dcw__i" type="number" min="0" max="999.99" step="0.01"
+                           placeholder="Max increase %"
+                           [value]="netAmountMaxIncreaseInput() ?? ''" (input)="onNetAmountMaxIncreaseInput($event)" />
+                    <button type="button" class="dcw__save" [disabled]="savingNetAmountBounds()"
+                            (click)="saveNetAmountBounds()">{{ savingNetAmountBounds() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
               }
             </app-card>
           }
@@ -156,7 +169,7 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
     .kv__v{font:600 13px var(--font-sans);color:var(--content-fg);text-align:right}
     .edit{border:1px solid var(--surface-border);background:var(--surface);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;cursor:pointer;color:var(--content-muted)}
     .dcw{margin-top:12px;padding-top:12px;border-top:1px solid var(--surface-border);display:flex;flex-direction:column;gap:6px}
-    .dcw__row{display:flex;gap:8px}
+    .dcw__row{display:flex;gap:8px;flex-wrap:wrap}
     .dcw__i{flex:1;height:36px;padding:0 10px;background:var(--surface);border:1px solid var(--surface-border);border-radius:8px;font:400 13px var(--font-sans);color:var(--content-fg)}
     .dcw__i:focus{outline:0;border-color:var(--brand-500)}
     .dcw__save{height:36px;padding:0 14px;border:0;border-radius:8px;background:var(--brand-600);color:#fff;font:600 13px var(--font-sans);cursor:pointer}
@@ -196,6 +209,13 @@ export class SettingsPage implements OnInit {
   readonly roundOffRuleInput = signal('NEAREST_FIVE');
   readonly savingRoundOff = signal(false);
 
+  /** Finance's third inline field — bounds on Shipment Booking's editable Net Amount
+   *  preview (see `ShipmentCreate.manualNetAmount`), same "no full edit dialog yet"
+   *  treatment as Razorpay/Round Off above. */
+  readonly netAmountMaxDecreaseInput = signal<number | null>(10);
+  readonly netAmountMaxIncreaseInput = signal<number | null>(50);
+  readonly savingNetAmountBounds = signal(false);
+
   readonly sections: Section[] = [
     { key: 'general', title: 'General', icon: 'business', desc: 'Identity, contact and regional defaults.' },
     { key: 'shipment', title: 'Shipment', icon: 'local_shipping', desc: 'AWB prefixes, units and booking rules.' },
@@ -215,9 +235,17 @@ export class SettingsPage implements OnInit {
         if (shipment?.defaultChargeableWeightKg != null) {
           this.defaultWeightInput.set(Number(shipment.defaultChargeableWeightKg));
         }
-        const finance = (d as { finance?: { roundOffRule?: string } })?.finance;
+        const finance = (d as { finance?: {
+          roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
+        } })?.finance;
         if (finance?.roundOffRule) {
           this.roundOffRuleInput.set(finance.roundOffRule);
+        }
+        if (finance?.netAmountMaxDecreasePercent != null) {
+          this.netAmountMaxDecreaseInput.set(Number(finance.netAmountMaxDecreasePercent));
+        }
+        if (finance?.netAmountMaxIncreasePercent != null) {
+          this.netAmountMaxIncreaseInput.set(Number(finance.netAmountMaxIncreasePercent));
         }
         this.loading.set(false);
       },
@@ -300,6 +328,34 @@ export class SettingsPage implements OnInit {
         this.notify.success('Round off rule updated');
       },
       error: () => this.savingRoundOff.set(false)
+    });
+  }
+
+  onNetAmountMaxDecreaseInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.netAmountMaxDecreaseInput.set(v === '' ? null : Number(v));
+  }
+
+  onNetAmountMaxIncreaseInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.netAmountMaxIncreaseInput.set(v === '' ? null : Number(v));
+  }
+
+  saveNetAmountBounds(): void {
+    const decrease = this.netAmountMaxDecreaseInput();
+    const increase = this.netAmountMaxIncreaseInput();
+    if (decrease == null || increase == null) return;
+    this.savingNetAmountBounds.set(true);
+    this.service.patchSection('finance', {
+      netAmountMaxDecreasePercent: decrease, netAmountMaxIncreasePercent: increase
+    }).subscribe({
+      next: (d) => {
+        const finance = (d as { finance?: unknown })?.finance;
+        if (finance) this.data.update((prev) => ({ ...prev, finance }));
+        this.savingNetAmountBounds.set(false);
+        this.notify.success('Net Amount edit bounds updated');
+      },
+      error: () => this.savingNetAmountBounds.set(false)
     });
   }
 

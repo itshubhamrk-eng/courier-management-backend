@@ -24,6 +24,12 @@ public enum PermissionModule {
     /** Platform-tier accounts: the operators who act above every company. */
     SUPER_ADMIN_USER("Platform Operators", 24),
     USER("Users", 30),
+    /**
+     * Which roles a new user in a department may hold — see
+     * {@code com.courier.modules.company.domain.Department}. Sits with Users and Roles: a
+     * department is a grouping of the two, not a master-data catalogue.
+     */
+    DEPARTMENT("Departments", 35),
     ROLE("Roles", 40),
     PERMISSION("Permissions", 50),
     /**

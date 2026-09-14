@@ -27,6 +27,8 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td>{{ s.bookingDate }}</td>
         <td>{{ branchLabel(s.bookingBranchId) }}</td>
         <td>{{ branchLabel(s.deliveryBranchId) }}</td>
+        <td>{{ s.fromCity || '—' }}</td>
+        <td>{{ s.toCity || '—' }}</td>
         <td>{{ s.senderName }}</td>
         <td class="mono">{{ s.senderContact }}</td>
         <td>{{ s.receiverName }}</td>
@@ -86,6 +88,8 @@ export class ShipmentTable {
     { key: 'bookingDate', header: 'Booking Date', sortable: true },
     { key: 'bookingBranchId', header: 'Booking Branch' },
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
+    { key: 'fromCity', header: 'From City' },
+    { key: 'toCity', header: 'To City' },
     { key: 'senderName', header: 'Sender' },
     { key: 'senderContact', header: 'Sender Contact' },
     { key: 'receiverName', header: 'Receiver' },

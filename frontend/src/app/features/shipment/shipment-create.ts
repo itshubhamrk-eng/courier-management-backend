@@ -414,16 +414,12 @@ type FreightOutcome =
                   applicableChargeLines: p.chargeBreakup.applicableChargeLines,
                   gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta()
                     + gstOnInsuranceChargeDelta() + gstOnDoorDeliveryCharge(),
-                  discountAmount: p.chargeBreakup.discount, roundOff: p.chargeBreakup.roundOff,
+                  discountAmount: p.chargeBreakup.discount, roundOff: computedRoundOff(),
                   otherCharges: otherCharges(),
                   appointmentDeliveryCharge: c('appointmentDelivery').value ? appointmentDeliveryCharge() : undefined,
                   doorDeliveryCharge: c('deliveryType').value === 'DOOR' ? doorDeliveryCharge() : undefined,
-                  netAmount: manualNetAmount() ?? (p.chargeBreakup.netAmount + otherCharges() + gstOnOtherCharges()
-                    + odaChargeDelta() + gstOnOdaChargeDelta() + freightDelta() + gstOnFreightDelta()
-                    + (c('appointmentDelivery').value ? appointmentDeliveryCharge() : 0)
-                    + (c('deliveryType').value === 'DOOR' ? doorDeliveryCharge() : 0) + gstOnDoorDeliveryCharge()
-                    + insuranceChargeDelta() + gstOnInsuranceChargeDelta())
-                }" [editable]="true" (netAmountChange)="manualNetAmount.set($event)"
+                  netAmount: manualNetAmount() ?? computedNetAmount()
+                }" [editable]="true" (netAmountChange)="onManualNetAmountChange($event)"
                   (otherChargesChange)="otherCharges.set($event)"
                   (odaChargeChange)="odaChargeOverride.set($event)"
                   (appointmentDeliveryChargeChange)="appointmentDeliveryCharge.set($event)"
@@ -611,8 +607,21 @@ export class ShipmentCreate implements OnInit {
 
   /** A manual override of the previewed Net Amount — display only, cleared whenever the
    *  underlying price is recomputed. Never sent to the server: the booking is always
-   *  priced server-side from the actual booking fields, not from what was shown here. */
+   *  priced server-side from the actual booking fields, not from what was shown here.
+   *  Bounded by {@link netAmountMaxDecreasePercent}/{@link netAmountMaxIncreasePercent} —
+   *  see {@link onManualNetAmountChange}. */
   protected readonly manualNetAmount = signal<number | null>(null);
+
+  /** Company's Round Off rule (`CompanySettings.roundOffRule`) — mirrors
+   *  `ShipmentServiceImpl.roundOffRule` so this preview's Round Off/Net Amount matches
+   *  what actually gets persisted once Other Charges/ODA/Door Delivery are edited. */
+  protected readonly companyRoundOffRule = signal<string>('NEAREST_FIVE');
+
+  /** How far the editable Net Amount preview may be typed below/above the computed amount
+   *  (`CompanySettings.netAmountMaxDecreasePercent`/`netAmountMaxIncreasePercent`) — see
+   *  {@link onManualNetAmountChange}. */
+  protected readonly netAmountMaxDecreasePercent = signal<number>(10);
+  protected readonly netAmountMaxIncreasePercent = signal<number>(50);
 
   /** Other Charges — a manual, typed-at-booking amount (e.g. packing, handling extras) on
    *  top of the Pricing Engine's own rate-driven breakup. Unlike {@link manualNetAmount}
@@ -799,6 +808,18 @@ export class ShipmentCreate implements OnInit {
       const ewayBill = (d as { ewayBill?: { ewayBillMandatoryValue?: number } })?.ewayBill;
       if (ewayBill?.ewayBillMandatoryValue != null) {
         this.ewayBillThreshold.set(Number(ewayBill.ewayBillMandatoryValue));
+      }
+      const finance = (d as { finance?: {
+        roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
+      } })?.finance;
+      if (finance?.roundOffRule) {
+        this.companyRoundOffRule.set(finance.roundOffRule);
+      }
+      if (finance?.netAmountMaxDecreasePercent != null) {
+        this.netAmountMaxDecreasePercent.set(Number(finance.netAmountMaxDecreasePercent));
+      }
+      if (finance?.netAmountMaxIncreasePercent != null) {
+        this.netAmountMaxIncreasePercent.set(Number(finance.netAmountMaxIncreasePercent));
       }
     });
     // Auto-opens the E-Way Bill section the moment invoice value crosses the threshold —
@@ -1157,6 +1178,67 @@ export class ShipmentCreate implements OnInit {
     return (this.insuranceChargeDelta() * this.myBranchGstPercentage()) / 100;
   }
 
+  /** Every line `ShipmentServiceImpl.copyCharge`'s own `totalBeforeRoundOff` sums, before
+   *  rounding — the Pricing Engine's own (now-stale) round-off is subtracted back out
+   *  first, since Other Charges/ODA/Door Delivery/Freight/Insurance deltas move the total
+   *  after the engine already rounded its own figure. See {@link computedNetAmount}. */
+  protected preRoundNetAmount(): number {
+    const p = this.pricing();
+    if (!p) return 0;
+    const appointmentCharge = this.c('appointmentDelivery').value ? this.appointmentDeliveryCharge() : 0;
+    const doorCharge = this.c('deliveryType').value === 'DOOR' ? this.doorDeliveryCharge() : 0;
+    return p.chargeBreakup.netAmount - p.chargeBreakup.roundOff
+      + this.otherCharges() + this.gstOnOtherCharges()
+      + this.odaChargeDelta() + this.gstOnOdaChargeDelta()
+      + this.freightDelta() + this.gstOnFreightDelta()
+      + appointmentCharge
+      + doorCharge + this.gstOnDoorDeliveryCharge()
+      + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta();
+  }
+
+  /** Rounds `amount` per the company's {@link companyRoundOffRule} — mirrors backend
+   *  `RoundingRule.apply` (HALF_UP) exactly so this preview matches what
+   *  `ShipmentServiceImpl.roundOffRule` persists. */
+  protected applyRoundOffRule(amount: number): number {
+    switch (this.companyRoundOffRule()) {
+      case 'NEAREST_ONE': return Math.round(amount);
+      case 'NEAREST_FIVE': return Math.round(amount / 5) * 5;
+      case 'NEAREST_TEN': return Math.round(amount / 10) * 10;
+      default: return Math.round(amount * 100) / 100;
+    }
+  }
+
+  /** Freshly recomputed Round Off — replaces the Pricing Engine's own (now-stale once any
+   *  charge below it is edited) `chargeBreakup.roundOff`. */
+  protected computedRoundOff(): number {
+    const total = this.preRoundNetAmount();
+    return this.applyRoundOffRule(total) - total;
+  }
+
+  /** Freshly recomputed, rounded Net Amount — what actually gets persisted (before any
+   *  {@link manualNetAmount} preview override). */
+  protected computedNetAmount(): number {
+    return this.applyRoundOffRule(this.preRoundNetAmount());
+  }
+
+  /** Bounds a typed Net Amount preview to {@link netAmountMaxDecreasePercent}/{@link
+   *  netAmountMaxIncreasePercent} either side of {@link computedNetAmount} — company-
+   *  configurable guardrail (Company Settings → Finance), direct request. Display only,
+   *  same as {@link manualNetAmount} itself; clamps rather than rejecting outright. */
+  protected onManualNetAmountChange(value: number): void {
+    const computed = this.computedNetAmount();
+    const minAllowed = computed * (1 - this.netAmountMaxDecreasePercent() / 100);
+    const maxAllowed = computed * (1 + this.netAmountMaxIncreasePercent() / 100);
+    if (value < minAllowed) {
+      this.notify.error(`Net Amount cannot be decreased by more than ${this.netAmountMaxDecreasePercent()}% — minimum ₹${minAllowed.toFixed(2)}.`);
+      value = minAllowed;
+    } else if (value > maxAllowed) {
+      this.notify.error(`Net Amount cannot be increased by more than ${this.netAmountMaxIncreasePercent()}% — maximum ₹${maxAllowed.toFixed(2)}.`);
+      value = maxAllowed;
+    }
+    this.manualNetAmount.set(value);
+  }
+
   /** `freightCalc().baseFreight` unless the operator raised Rate/KG above the matched
    *  slab's own rate — the server refuses a lower one (see `requireRateNotDecreased`),
    *  this is just the live preview echoing that same math. Zero until a freight preview
@@ -1496,9 +1578,17 @@ export class ShipmentCreate implements OnInit {
               insuranceCharge: this.finalInsuranceCharge(),
               gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
                 + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge(),
+              // `roundOff`/`netAmount` deliberately exclude raw otherCharges/appointmentDeliveryCharge/
+              // doorDeliveryCharge here (unlike the sidebar preview) — this file's own `total`
+              // (performa-bill-print.util.ts `sheet()`) adds those three back on top of
+              // `charges.netAmount` itself, so including them here would double-count them on the
+              // printed bill. Only the round-off delta is folded in, so the printed total still lands
+              // on the company's own rounding rule once Other Charges/ODA/Freight/Insurance are edited.
+              roundOff: this.computedRoundOff(),
               netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
                 + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
                 + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
+                + (this.computedRoundOff() - p.chargeBreakup.roundOff)
             },
             otherCharges: this.otherCharges(),
             appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,

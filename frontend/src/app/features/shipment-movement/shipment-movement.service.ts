@@ -23,11 +23,29 @@ export class ShipmentMovementService {
   dispatch(body: DispatchManifestRequest) {
     return this.api.post<DispatchManifestResponse>(`${API.shipmentMovement}/dispatch`, body);
   }
+  /** Sends a 6-digit OTP to the assigned driver's mobile — must be verified before
+   *  `dispatch()` accepts that driver. */
+  requestDispatchOtp(manifestId: string, driverUserId: string) {
+    return this.api.post<{ maskedMobile: string; expiresInMinutes: number }>(
+      `${API.shipmentMovement}/dispatch-otp/request`, { manifestId, driverUserId });
+  }
+  verifyDispatchOtp(manifestId: string, driverUserId: string, otp: string) {
+    return this.api.post<void>(`${API.shipmentMovement}/dispatch-otp/verify`, { manifestId, driverUserId, otp });
+  }
   inScan(body: InScanRequest) {
     return this.api.post<BulkMovementResult>(`${API.shipmentMovement}/in-scan`, body);
   }
   outForDelivery(body: OutForDeliveryRequest) {
     return this.api.post<BulkMovementResult>(`${API.shipmentMovement}/out-for-delivery`, body);
+  }
+  /** Sends a 4-digit OTP to the delivery user's mobile — same optional-verification
+   *  pattern as the driver dispatch OTP; does not gate outForDelivery(). */
+  requestDeliveryOtp(deliveryUserId: string) {
+    return this.api.post<{ maskedMobile: string; expiresInMinutes: number }>(
+      `${API.shipmentMovement}/delivery-otp/request`, { deliveryUserId });
+  }
+  verifyDeliveryOtp(deliveryUserId: string, otp: string) {
+    return this.api.post<void>(`${API.shipmentMovement}/delivery-otp/verify`, { deliveryUserId, otp });
   }
   deliver(body: DeliverRequest) {
     return this.api.post<ShipmentResponse>(`${API.shipmentMovement}/deliver`, body);

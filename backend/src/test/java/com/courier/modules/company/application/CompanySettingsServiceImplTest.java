@@ -79,7 +79,7 @@ class CompanySettingsServiceImplTest {
         return new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -151,7 +151,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                new BigDecimal("12.50"), "inv", null, Boolean.TRUE, null, null, null, "nearest_ten",
+                new BigDecimal("12.50"), "inv", null, Boolean.TRUE, null, null, null, "nearest_ten", null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -184,7 +184,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, WeightUnit.POUND, null, null, null, null,
                 new BigDecimal("30.000"),
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,
@@ -211,7 +211,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, "HELP@Legacy.test", null, null, null, null, "inr", null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 Boolean.TRUE, null, null, null,
@@ -238,7 +238,7 @@ class CompanySettingsServiceImplTest {
         CompanySettingsCommand cmd = new CompanySettingsCommand(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null,
                 null,
                 null, null, null, null,

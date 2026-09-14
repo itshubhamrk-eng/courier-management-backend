@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
@@ -7,6 +8,7 @@ import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomple
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { CreateUserRequest, UpdateUserRequest, UserProfile } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
+import { Department } from '@core/models/department.model';
 import { Lookup } from '../user.service';
 
 const PHONE = /^[+]?[0-9 \-]{7,20}$/;
@@ -34,7 +36,8 @@ const GENDERS: SelectOption[] = [
       <app-card title="Basic Information" subtitle="Identity and name.">
         <div class="grid">
           @if (isCreate()) {
-            <app-input [control]="c('employeeCode')" label="Employee Code" placeholder="EMP001" [maxLength]="50" />
+            <app-input [control]="c('employeeCode')" label="Employee Code"
+                       [placeholder]="branchSelected() ? 'Auto-generated from branch' : 'EMP001'" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Employee Code</span>
               <span class="stat__v">{{ user()?.employeeCode || '—' }}</span><span class="stat__h">Immutable</span></div>
@@ -77,8 +80,8 @@ const GENDERS: SelectOption[] = [
           <app-select [control]="c('gender')" label="Gender" [options]="genders" placeholder="Select" />
           <label class="dt"><span class="dt__l">Date of Birth</span>
             <input class="dt__i" type="date" [formControl]="c('dateOfBirth')" [max]="today" /></label>
-          <app-input [control]="c('designation')" label="Designation" placeholder="Operations Executive" [maxLength]="100" />
-          <app-input [control]="c('department')" label="Department" placeholder="Operations" [maxLength]="100" />
+          <app-select [control]="c('departmentId')" label="Department" [options]="departmentOptions()"
+                      [allowEmpty]="true" emptyLabel="Unassigned" placeholder="Select a department" />
           <label class="dt"><span class="dt__l">Joining Date</span>
             <input class="dt__i" type="date" [formControl]="c('joiningDate')" /></label>
           <app-select [control]="c('reportingManagerId')" label="Reporting Manager" [options]="managerOptions()"
@@ -94,7 +97,7 @@ const GENDERS: SelectOption[] = [
                       [allowEmpty]="true" emptyLabel="Unassigned" placeholder="Select a hub" />
           @if (isCreate()) {
             <app-select [control]="c('roleIds')" label="Roles" [options]="roleOptions()" [multiple]="true"
-                        placeholder="Default role if left empty" />
+                        [placeholder]="departmentSelected() ? 'Pick from the department\\'s roles' : 'Default role if left empty'" />
           }
         </div>
       </app-card>
@@ -142,6 +145,7 @@ export class UserForm {
   readonly mode = input<'create' | 'edit'>('create');
   readonly user = input<UserProfile | null>(null);
   readonly roles = input<CompanyRole[]>([]);
+  readonly departments = input<Department[]>([]);
   readonly branches = input<Lookup[]>([]);
   readonly hubs = input<Lookup[]>([]);
   readonly managers = input<Lookup[]>([]);
@@ -156,9 +160,25 @@ export class UserForm {
   private hydrated = signal(false);
 
   protected readonly form: FormGroup = this.build();
+  protected readonly branchSelected = toSignal(
+    this.form.get('branchId')!.valueChanges, { initialValue: this.form.get('branchId')!.value }
+  );
+  protected readonly departmentSelected = toSignal<string | null>(
+    this.form.get('departmentId')!.valueChanges, { initialValue: this.form.get('departmentId')!.value }
+  );
 
-  protected readonly roleOptions = computed<SelectOption[]>(() =>
-    this.roles().filter((r) => r.status === 'ACTIVE').map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` })));
+  protected readonly departmentOptions = computed<SelectOption[]>(() =>
+    this.departments().map((d) => ({ value: d.id, label: d.departmentName })));
+  /** All active roles, unless a department is picked — then just the roles it offers, so
+   *  a user can only be given one of the roles its own department grants. */
+  protected readonly roleOptions = computed<SelectOption[]>(() => {
+    const departmentId = this.departmentSelected();
+    const department = departmentId ? this.departments().find((d) => d.id === departmentId) : null;
+    if (department) {
+      return department.roles.map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` }));
+    }
+    return this.roles().filter((r) => r.status === 'ACTIVE').map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` }));
+  });
   protected readonly branchOptions = computed<SelectOption[]>(() =>
     this.branches().map((b) => ({ value: b.id, label: b.hint ? `${b.label} · ${b.hint}` : b.label })));
   protected readonly hubOptions = computed<SelectOption[]>(() =>
@@ -178,6 +198,26 @@ export class UserForm {
         control.updateValueAndValidity({ emitEvent: false });
       }
     });
+    // A branch placement makes the server auto-generate <branchCode>-<sequence> as the
+    // employeeCode, overriding whatever's typed here — disable the field so that's obvious
+    // rather than silently discarding a manually-typed value.
+    effect(() => {
+      if (!this.isCreate()) return;
+      const control = this.c('employeeCode');
+      if (this.branchSelected()) control.disable({ emitEvent: false });
+      else control.enable({ emitEvent: false });
+    });
+    // Switching (or clearing) the department can narrow the role picker out from under
+    // whatever was already selected — drop any role no longer on offer rather than submit
+    // a combination the backend would reject.
+    effect(() => {
+      const allowed = new Set(this.roleOptions().map((o) => o.value));
+      const roleIds = this.c('roleIds').value as string[] | null;
+      const filtered = (roleIds ?? []).filter((id) => allowed.has(id));
+      if (filtered.length !== (roleIds ?? []).length) {
+        this.c('roleIds').setValue(filtered, { emitEvent: false });
+      }
+    });
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -187,8 +227,8 @@ export class UserForm {
     this.form.patchValue({
       firstName: u.firstName ?? '', middleName: u.middleName ?? '', lastName: u.lastName ?? '',
       displayName: u.displayName ?? '', mobile: u.mobile ?? '', alternateMobile: u.alternateMobile ?? '',
-      gender: u.gender ?? null, dateOfBirth: u.dateOfBirth ?? '', designation: u.designation ?? '',
-      department: u.department ?? '', joiningDate: u.joiningDate ?? '',
+      gender: u.gender ?? null, dateOfBirth: u.dateOfBirth ?? '', departmentId: u.departmentId ?? null,
+      joiningDate: u.joiningDate ?? '',
       reportingManagerId: u.reportingManagerId ?? null, branchId: u.branchId ?? null, hubId: u.hubId ?? null,
       remarks: u.remarks ?? ''
     }, { emitEvent: false });
@@ -214,8 +254,7 @@ export class UserForm {
       alternateMobile: ['', Validators.pattern(PHONE)],
       gender: [null as string | null],
       dateOfBirth: [''],
-      designation: ['', Validators.maxLength(100)],
-      department: ['', Validators.maxLength(100)],
+      departmentId: [null as string | null],
       joiningDate: [''],
       reportingManagerId: [null as string | null],
       branchId: [null as string | null],
@@ -236,7 +275,7 @@ export class UserForm {
         displayName: trim(v.displayName), email: v.email.trim(), username: trim(v.username),
         mobile: trim(v.mobile), alternateMobile: trim(v.alternateMobile),
         password: trim(v.password), gender: v.gender || null, dateOfBirth: trim(v.dateOfBirth),
-        designation: trim(v.designation), department: trim(v.department), joiningDate: trim(v.joiningDate),
+        departmentId: v.departmentId || null, joiningDate: trim(v.joiningDate),
         reportingManagerId: v.reportingManagerId || null, branchId: v.branchId || null, hubId: v.hubId || null,
         remarks: trim(v.remarks), roleIds: v.roleIds ?? []
       } as CreateUserRequest);
@@ -244,8 +283,8 @@ export class UserForm {
       this.saved.emit({
         firstName: v.firstName.trim(), middleName: trim(v.middleName), lastName: trim(v.lastName),
         displayName: trim(v.displayName), mobile: trim(v.mobile), alternateMobile: trim(v.alternateMobile),
-        gender: v.gender || null, dateOfBirth: trim(v.dateOfBirth), designation: trim(v.designation),
-        department: trim(v.department), joiningDate: trim(v.joiningDate),
+        gender: v.gender || null, dateOfBirth: trim(v.dateOfBirth),
+        departmentId: v.departmentId || null, joiningDate: trim(v.joiningDate),
         reportingManagerId: v.reportingManagerId || null, branchId: v.branchId || null, hubId: v.hubId || null,
         remarks: trim(v.remarks), version: this.user()!.version
       } as UpdateUserRequest);

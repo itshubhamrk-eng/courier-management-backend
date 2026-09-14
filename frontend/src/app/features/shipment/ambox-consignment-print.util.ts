@@ -88,7 +88,7 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
         <div class="fields">
           <div class="r"><div class="k lbl pad">DATE</div><div class="v pad">${esc(d.bookingDate)}</div></div>
           <div class="r"><div class="k lbl pad">FROM</div><div class="v pad">${esc(d.bookingBranchLabel)}</div></div>
-          <div class="r"><div class="k lbl pad">DESTINATION</div><div class="v pad">${esc(d.deliveryBranchLabel)}</div></div>
+          <div class="r"><div class="k lbl pad">DESTINATION</div><div class="v pad">${esc(d.deliveryBranchLabel)}${d.deliveryArea ? ` (${esc(d.deliveryArea)})` : ''}</div></div>
           <div class="r"><div class="k lbl pad">CONSIGNEE</div><div class="v pad">${esc(d.receiverName)}</div></div>
         </div>
         <div class="docno">

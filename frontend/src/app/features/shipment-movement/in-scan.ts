@@ -57,7 +57,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
         <app-card>
           <div class="mh">
             <div><strong>{{ rm.manifestNumber }}</strong>
-              <span class="text-caption">Uncheck any shipment not physically in this THC before receiving.</span></div>
+              <span class="text-caption">{{ branchNames().get(rm.bookingBranchId) || '—' }} → {{ branchNames().get(rm.deliveryBranchId) || '—' }} &nbsp;·&nbsp; Uncheck any shipment not physically in this THC before receiving.</span></div>
             <app-button variant="stroked" icon="close" (pressed)="cancelReceive()">Cancel</app-button>
           </div>
         </app-card>
@@ -71,7 +71,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th><th>Status</th></tr>
+                  <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th></tr>
                 </thead>
                 <tbody>
                   @for (s of receivingManifestShipments(); track s.id; let i = $index) {
@@ -80,6 +80,8 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
                       <td>{{ i + 1 }}</td>
                       <td>{{ s.trackingNumber }}</td>
                       <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                      <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                       <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                       <td><app-status-badge value="PENDING" label="Pending" tone="warning" /></td>
                     </tr>

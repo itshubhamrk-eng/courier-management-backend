@@ -59,6 +59,10 @@ public record CreateUserRequest(
         @Size(max = 100) String designation,
         @Size(max = 100) String department,
 
+        @Schema(description = "Department master row this user is placed in. When roleIds "
+                + "is also given, every id must be one of that department's own role grants.")
+        UUID departmentId,
+
         LocalDate joiningDate,
 
         @Schema(description = "Another user of the same company") UUID reportingManagerId,

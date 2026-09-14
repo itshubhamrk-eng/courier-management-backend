@@ -185,6 +185,19 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private String roundOffRule = "NEAREST_FIVE";
 
+    /** Shipment Booking's editable Net Amount preview (frontend {@code ChargeSummary},
+     *  display-only — see its own doc comment) may not be typed lower than this percentage
+     *  below the engine-computed amount. {@code DECIMAL(5,2)}, percentage 0–100. */
+    @Column(name = "net_amount_max_decrease_percent", precision = 5, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal netAmountMaxDecreasePercent = new BigDecimal("10.00");
+
+    /** Same guard as {@link #netAmountMaxDecreasePercent}, for the upper bound — Net Amount
+     *  may not be typed higher than this percentage above the engine-computed amount. */
+    @Column(name = "net_amount_max_increase_percent", precision = 5, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal netAmountMaxIncreasePercent = new BigDecimal("50.00");
+
     // === SLA (shipment lifecycle) ===========================================
     // Hours a shipment may sit in one status before the sweep (ShipmentSlaSweepJob)
     // raises an auto-ticket. Each field is the outbound leg of the status named,

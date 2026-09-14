@@ -21,6 +21,7 @@ const COPY_LABELS: CopyLabel[] = ['Customer Copy', 'Office Copy', 'Driver Copy',
 function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
   const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
+  const taxableAmount = total - d.charges.gstAmount;
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
   const statusTag = isPaid ? 'Paid' : isToPay ? 'To Pay' : d.paymentModeLabel;
@@ -36,10 +37,13 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   // to collect), the Delivery copy always shows the ToPay-to-collect figure (0 once
   // Paid), and ToPay orders omit the amount block on every copy (undisclosed until
   // actual delivery).
+  // Taxable Amount / GST Applied print on every copy regardless of amount-visibility mode
+  // (ToPay's undisclosed-until-delivery rule and Paid/collect's collapsed rows only ever
+  // applied to the final payable figure, not to the tax breakdown itself).
+  const taxRowsHtml = `<tr><td>Taxable Amount</td><td>&#8377; ${taxableAmount.toFixed(2)}</td></tr>` +
+    `<tr><td>GST Applied</td><td>&#8377; ${d.charges.gstAmount.toFixed(2)}</td></tr>`;
   const chargeRows: Array<[string, number]> = [
-    ['Booking Side Total', total],
     ['Unloading Delivery Charges', 0],
-    ['GST On Hamali', 0],
     ['Demurrage Charge', 0],
     ['Reschedule Fine', 0]
   ];
@@ -50,14 +54,20 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     isPaid ? 'paid' : 'normal';
   const collectTotal = isPaid ? 0 : total;
 
-  const amountSection = amountMode === 'omitted' ? '' : amountMode === 'paid' ? `
+  const amountSection = amountMode === 'omitted' ? `
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>
+          ${taxRowsHtml}
+        </table>` : amountMode === 'paid' ? `
+        <table class="desc">
+          <tr><th>Description</th><th>Amount</th></tr>
+          ${taxRowsHtml}
           <tr class="total"><td>Total Paid</td><td>&#8377; ${total.toFixed(2)}</td></tr>
         </table>
         <div class="words">Rs. ${esc(amountInWords(total))} (Paid)</div>` : `
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>
+          ${taxRowsHtml}
           ${amountMode === 'collect'
             ? `<tr><td>ToPay</td><td>&#8377; ${collectTotal.toFixed(2)}</td></tr>`
             : chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('') +
@@ -129,13 +139,12 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
       <div class="cell h3"><span class="k">Invoice No :</span> —</div>
     </div>
 
-    <!-- GST APPLIED / APPOINTMENT DELIVERY -->
-    <div class="row fields">
-      <div class="cell h1"><span class="k">GST Applied :</span> &#8377; ${d.charges.gstAmount.toFixed(2)}</div>
-      ${d.appointmentDeliveryCharge
-        ? `<div class="cell h2"><span class="k">Appointment Delivery :</span> &#8377; ${d.appointmentDeliveryCharge.toFixed(2)}</div>`
-        : ''}
-    </div>
+    <!-- APPOINTMENT DELIVERY -->
+    ${d.appointmentDeliveryCharge
+      ? `<div class="row fields">
+      <div class="cell h1"><span class="k">Appointment Delivery :</span> &#8377; ${d.appointmentDeliveryCharge.toFixed(2)}</div>
+    </div>`
+      : ''}
 
     <!-- BOOKING / DELIVERY GEOGRAPHY -->
     <div class="row fields">

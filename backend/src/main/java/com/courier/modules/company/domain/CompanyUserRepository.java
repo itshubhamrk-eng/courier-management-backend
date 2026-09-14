@@ -47,6 +47,9 @@ public interface CompanyUserRepository extends JpaRepository<User, UUID>, JpaSpe
     /** Headcount by lifecycle state, for the company statistics view. */
     long countByCompanyIdAndStatus(UUID companyId, UserStatus status);
 
+    /** Whether any user is currently placed in this department — a delete guard. */
+    boolean existsByDepartmentId(UUID departmentId);
+
     // ---------------------------------------------------------------- uniqueness
     // All count soft-deleted rows too: the unique keys do not know about `deleted`, and
     // @SQLRestriction cannot be switched off per query. Count, not boolean — MySQL has no
@@ -61,6 +64,24 @@ public interface CompanyUserRepository extends JpaRepository<User, UUID>, JpaSpe
         return employeeCode != null && countByCompanyEmployeeCodeIncludingDeleted(
                 TimeOrderedUuid.toBytes(companyId), employeeCode, TimeOrderedUuid.toBytes(excludeId)) > 0;
     }
+
+    /**
+     * Next {@code <branchCode>-N} sequence number for a branch employee's auto-generated
+     * {@code employeeCode} — one past the highest N already used under that branch's
+     * prefix, company-wide and including soft-deleted rows, so a deleted employee's number
+     * is never reissued (the unique key does not know about {@code deleted} either).
+     */
+    default int nextEmployeeSequence(UUID companyId, String branchCode) {
+        long max = maxEmployeeSequenceForPrefix(TimeOrderedUuid.toBytes(companyId), branchCode + "-");
+        return (int) (max + 1);
+    }
+
+    @Query(value = """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(employee_code, LENGTH(:prefix) + 1) AS UNSIGNED)), 0)
+            FROM users
+            WHERE company_id = :companyId AND employee_code LIKE CONCAT(:prefix, '%')
+            """, nativeQuery = true)
+    long maxEmployeeSequenceForPrefix(@Param("companyId") byte[] companyId, @Param("prefix") String prefix);
 
     /** Username is globally unique, so this check is not company-scoped. */
     default boolean isUsernameTaken(String username, UUID excludeId) {

@@ -4,9 +4,15 @@ import com.courier.modules.auth.application.PasswordPolicy;
 import com.courier.modules.company.application.command.CreateUserCommand;
 import com.courier.modules.company.application.command.UpdateUserCommand;
 import com.courier.modules.company.application.event.UserEvent;
+import com.courier.modules.company.domain.Branch;
+import com.courier.modules.company.domain.BranchRepository;
 import com.courier.modules.company.domain.CompanyRole;
 import com.courier.modules.company.domain.CompanyRoleRepository;
 import com.courier.modules.company.domain.DefaultRoleCatalog;
+import com.courier.modules.company.domain.Department;
+import com.courier.modules.company.domain.DepartmentRepository;
+import com.courier.modules.company.domain.DepartmentRole;
+import com.courier.modules.company.domain.DepartmentRoleRepository;
 import com.courier.modules.company.domain.User;
 import com.courier.modules.company.domain.UserCriteria;
 import com.courier.modules.company.domain.CompanyUserRepository;
@@ -45,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -91,8 +98,11 @@ public class UserServiceImpl implements UserService {
             + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "', '" + Roles.HUB_MANAGER + "')";
 
     private final CompanyUserRepository userRepository;
+    private final BranchRepository branchRepository;
     private final UserRoleRepository userRoleRepository;
     private final CompanyRoleRepository roleRepository;
+    private final DepartmentRepository departmentRepository;
+    private final DepartmentRoleRepository departmentRoleRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
     private final AuditService auditService;
@@ -121,9 +131,17 @@ public class UserServiceImpl implements UserService {
             branchId = ownBranchId;
         }
 
+        UUID departmentId = requireDepartment(companyId, command.departmentId());
+
         String email = User.normaliseEmail(command.email());
         String username = User.normaliseUsername(command.username());
-        String employeeCode = User.normaliseEmployeeCode(command.employeeCode());
+        // A branch employee's code is auto-generated as <branchCode>-<sequence> — never
+        // taken from the request — so it reads a colleague's placement at a glance rather
+        // than an admin's free-typed guess. Users with no branch (hub/company-level) keep
+        // the existing manual, optional employeeCode.
+        String employeeCode = branchId != null
+                ? generateBranchEmployeeCode(companyId, branchId)
+                : User.normaliseEmployeeCode(command.employeeCode());
 
         requireEmailAvailable(companyId, email, null);
         requireUsernameAvailable(username, null);
@@ -153,6 +171,7 @@ public class UserServiceImpl implements UserService {
                 .dateOfBirth(command.dateOfBirth())
                 .designation(command.designation())
                 .department(command.department())
+                .departmentId(departmentId)
                 .joiningDate(command.joiningDate())
                 .reportingManagerId(command.reportingManagerId())
                 .branchId(branchId)
@@ -169,7 +188,8 @@ public class UserServiceImpl implements UserService {
         user.applyInvariants();
         User saved = userRepository.save(user);
 
-        List<String> roleCodes = assignRoles(companyId, saved, command.roleIds(), branchManagerActor);
+        List<String> roleCodes =
+                assignRoles(companyId, saved, command.roleIds(), branchManagerActor, departmentId);
 
         log.info("User {} ({}) created in company {} by {}",
                 saved.getEmail(), saved.getId(), companyId, currentActor());
@@ -222,6 +242,7 @@ public class UserServiceImpl implements UserService {
         user.setDateOfBirth(command.dateOfBirth());
         user.setDesignation(command.designation());
         user.setDepartment(command.department());
+        user.setDepartmentId(requireDepartment(companyId, command.departmentId()));
         user.setJoiningDate(command.joiningDate());
         user.setReportingManagerId(command.reportingManagerId());
         user.setBranchId(branchId);
@@ -535,7 +556,7 @@ public class UserServiceImpl implements UserService {
     // -------------------------------------------------------------------- helpers
 
     private List<String> assignRoles(UUID companyId, User user, List<UUID> roleIds,
-                                     boolean branchManagerActor) {
+                                     boolean branchManagerActor, UUID departmentId) {
         List<CompanyRole> roles = new ArrayList<>();
         if (roleIds == null || roleIds.isEmpty()) {
             // No role given: fall back to the company's default, so a new user is never
@@ -544,12 +565,25 @@ public class UserServiceImpl implements UserService {
             // below.
             roleRepository.findDefaultRole(companyId).ifPresent(roles::add);
         } else {
+            // A department narrows which of the company's roles are on offer: when one is
+            // placed, every requested role must be one it actually grants, not just any
+            // active role in the whole catalogue.
+            Set<UUID> departmentRoleIds = departmentId == null ? null
+                    : departmentRoleRepository.findAllByDepartmentIdOrderByRoleCodeAsc(departmentId).stream()
+                            .map(DepartmentRole::getRoleId)
+                            .collect(java.util.stream.Collectors.toSet());
+
             for (UUID roleId : roleIds) {
                 CompanyRole role = roleRepository.findByIdWithinCompany(roleId, companyId)
                         .orElseThrow(() -> new ResourceNotFoundException("Role", roleId));
                 if (!role.isActive()) {
                     throw new BusinessRuleException(
                             "Role %s is inactive and cannot be assigned.".formatted(role.getRoleCode()));
+                }
+                if (departmentRoleIds != null && !departmentRoleIds.contains(roleId)) {
+                    throw new BusinessRuleException(
+                            "Role %s is not offered by the selected department."
+                                    .formatted(role.getRoleCode()));
                 }
                 if (branchManagerActor
                         && !DefaultRoleCatalog.isBranchAssignable(role.getRoleCode(), role.isSystemRole())) {
@@ -566,6 +600,16 @@ public class UserServiceImpl implements UserService {
             codes.add(role.getRoleCode());
         }
         return codes;
+    }
+
+    /** Resolves and validates a department placement within the caller's company. */
+    private UUID requireDepartment(UUID companyId, UUID departmentId) {
+        if (departmentId == null) {
+            return null;
+        }
+        Department department = departmentRepository.findByIdWithinCompany(departmentId, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Department", departmentId));
+        return department.getId();
     }
 
     /** Load for a write, always within the caller's company. */
@@ -679,6 +723,12 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private String generateBranchEmployeeCode(UUID companyId, UUID branchId) {
+        Branch branch = branchRepository.findByIdWithinCompany(branchId, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Branch", branchId));
+        return branch.getBranchCode() + "-" + userRepository.nextEmployeeSequence(companyId, branch.getBranchCode());
+    }
+
     private void requireEmployeeCodeAvailable(UUID companyId, String employeeCode, UUID excludeId) {
         if (userRepository.isEmployeeCodeTaken(companyId, employeeCode, excludeId)) {
             throw new DuplicateResourceException(ENTITY, "employeeCode", employeeCode);
@@ -728,6 +778,7 @@ public class UserServiceImpl implements UserService {
         values.put("dateOfBirth", String.valueOf(user.getDateOfBirth()));
         values.put("designation", user.getDesignation());
         values.put("department", user.getDepartment());
+        values.put("departmentId", String.valueOf(user.getDepartmentId()));
         values.put("joiningDate", String.valueOf(user.getJoiningDate()));
         values.put("reportingManagerId", String.valueOf(user.getReportingManagerId()));
         values.put("branchId", String.valueOf(user.getBranchId()));

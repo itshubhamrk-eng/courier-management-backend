@@ -25,6 +25,7 @@ public record CompanySettingsCommand(
         BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,
         Boolean walletEnabled, Boolean codEnabled, Boolean onlinePaymentEnabled,
         Boolean autoInvoiceGeneration, String roundOffRule,
+        BigDecimal netAmountMaxDecreasePercent, BigDecimal netAmountMaxIncreasePercent,
 
         Boolean slaBreachTicketEnabled, Integer slaBookingToLoadingSheetHours,
         Integer slaLoadingSheetToThcHours, Integer slaThcToInscanHours,

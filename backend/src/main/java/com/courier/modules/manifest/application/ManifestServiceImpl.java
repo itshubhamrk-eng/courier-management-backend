@@ -1,6 +1,14 @@
 package com.courier.modules.manifest.application;
 
+import com.courier.modules.communication.application.CommunicationConfigJson;
+import com.courier.modules.communication.application.CommunicationSettingService;
+import com.courier.modules.communication.application.provider.ProviderSendException;
+import com.courier.modules.communication.application.provider.SmsProvider;
+import com.courier.modules.communication.domain.CommunicationChannel;
+import com.courier.modules.communication.domain.CommunicationSetting;
+import com.courier.modules.company.application.CompanySettingsService;
 import com.courier.modules.company.application.UserService;
+import com.courier.modules.company.domain.User;
 import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
 import com.courier.modules.manifest.domain.Manifest;
@@ -19,19 +27,24 @@ import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.Roles;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -55,6 +68,8 @@ public class ManifestServiceImpl implements ManifestService {
     private static final String READERS = "isAuthenticated()";
 
     private static final int NUMBER_ATTEMPTS = 5;
+    private static final int DEFAULT_OTP_EXPIRY_MINUTES = 5;
+    private static final SecureRandom OTP_RANDOM = new SecureRandom();
 
     private final ManifestRepository manifestRepository;
     private final ShipmentService shipmentService;
@@ -62,6 +77,11 @@ public class ManifestServiceImpl implements ManifestService {
     private final UserService userService;
     private final AuditService auditService;
     private final EwayBillService ewayBillService;
+    private final CompanySettingsService companySettingsService;
+    private final CommunicationSettingService communicationSettingService;
+    private final SmsProvider smsProvider;
+    private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -190,6 +210,85 @@ public class ManifestServiceImpl implements ManifestService {
                 saved.getManifestNumber(), saved.getId(), companyId, vehicleId, currentActor());
 
         return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public DispatchOtpIssued requestDispatchOtp(UUID manifestId, UUID driverUserId) {
+        UUID companyId = requireCompany();
+        Manifest manifest = loadOrThrow(manifestId, companyId);
+        // Same "any real user of this company" driver check dispatch() itself uses.
+        User driver = userService.getById(driverUserId);
+        String mobile = driver.getMobile();
+        if (mobile == null || mobile.isBlank()) {
+            throw new BusinessRuleException(
+                    "%s has no mobile number on file — add one before requesting an OTP."
+                            .formatted(driver.effectiveDisplayName()));
+        }
+
+        int expiryMinutes = Optional.ofNullable(companySettingsService.get().getOtpExpiryMinutes())
+                .orElse(DEFAULT_OTP_EXPIRY_MINUTES);
+        String otp = generateOtp();
+        manifest.issueDispatchOtp(driverUserId, passwordEncoder.encode(otp),
+                Instant.now().plus(expiryMinutes, ChronoUnit.MINUTES));
+        manifestRepository.save(manifest);
+
+        sendOtpSms(companyId, mobile, otp, expiryMinutes);
+
+        log.info("Dispatch OTP issued for manifest {} ({}) driver {} in company {} by {}",
+                manifest.getManifestNumber(), manifestId, driverUserId, companyId, currentActor());
+
+        return new DispatchOtpIssued(maskMobile(mobile), expiryMinutes);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public void verifyDispatchOtp(UUID manifestId, UUID driverUserId, String otp) {
+        UUID companyId = requireCompany();
+        Manifest manifest = loadOrThrow(manifestId, companyId);
+        boolean codeMatched = manifest.getDispatchOtpHash() != null
+                && otp != null && passwordEncoder.matches(otp.trim(), manifest.getDispatchOtpHash());
+        manifest.registerOtpVerificationAttempt(driverUserId, codeMatched);
+        manifestRepository.save(manifest);
+
+        log.info("Dispatch OTP verified for manifest {} ({}) driver {} in company {} by {}",
+                manifest.getManifestNumber(), manifestId, driverUserId, companyId, currentActor());
+    }
+
+    /** Sends the raw OTP over the company's configured SMS channel (Communication
+     *  Center) — the same {@code SmsProvider} bean {@code CommunicationSendServiceImpl}
+     *  uses for shipment-event SMS, bypassing its template/log/retry machinery since an
+     *  OTP must be generated, sent and confirmed synchronously within one request rather
+     *  than queued. Falls back to log-only credentials (accepted by {@code
+     *  LogOnlySmsProvider} regardless) when the company hasn't configured SMS at all —
+     *  the same "log instead of a real send" gap every other unwired notification in this
+     *  project already has. */
+    private void sendOtpSms(UUID companyId, String mobile, String otp, int expiryMinutes) {
+        Optional<CommunicationSetting> setting =
+                communicationSettingService.findEnabled(companyId, CommunicationChannel.SMS);
+        SmsProvider.SmsCredentials credentials = setting.map(s -> {
+            Map<String, String> config = CommunicationConfigJson.read(objectMapper, s.getConfigJson());
+            return new SmsProvider.SmsCredentials(s.getProvider(), config.get("apiUrl"), s.getSecret(),
+                    config.get("senderId"));
+        }).orElseGet(() -> new SmsProvider.SmsCredentials(null, null, null, null));
+
+        String body = "Your OTP to dispatch this trip is %s. Valid for %d minute(s). Do not share it with anyone."
+                .formatted(otp, expiryMinutes);
+        try {
+            smsProvider.send(new SmsProvider.SmsMessage(mobile, body), credentials);
+        } catch (ProviderSendException e) {
+            throw new BusinessRuleException("Could not send the OTP SMS: " + e.getMessage());
+        }
+    }
+
+    private static String generateOtp() {
+        return String.valueOf(1000 + OTP_RANDOM.nextInt(9000));
+    }
+
+    private static String maskMobile(String mobile) {
+        return mobile.length() < 4 ? "****" : "*".repeat(mobile.length() - 4) + mobile.substring(mobile.length() - 4);
     }
 
     @Override

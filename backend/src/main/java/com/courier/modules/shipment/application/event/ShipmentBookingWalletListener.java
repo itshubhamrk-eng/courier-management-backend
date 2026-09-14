@@ -27,8 +27,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * "impossible" — see the module's own memory doc for the follow-up this implies.
  *
  * <p>Also credits branch commission, but on a separate event — {@link
- * ShipmentEvent.DispatchCommissionEarned} for collect-at-booking shipments, fired once the
- * shipment's Trip Challan (manifest dispatch) is created, not at booking time; or {@link
+ * ShipmentEvent.InScanCommissionEarned} for collect-at-booking shipments, fired once the
+ * shipment is in-scanned at its own final delivery branch, not at booking time; or {@link
  * ShipmentEvent.DeliveryCommissionEarned} for collect-at-delivery (TO_PAY/COD) shipments,
  * fired once delivered since that's when payment is actually collected. See either event's
  * own javadoc for why.
@@ -57,7 +57,7 @@ public class ShipmentBookingWalletListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void on(ShipmentEvent.DispatchCommissionEarned event) {
+    public void on(ShipmentEvent.InScanCommissionEarned event) {
         try {
             CompanyContext.runAs(event.companyId(), () -> walletService.creditCommission(
                     new CommissionCreditCommand(event.bookingBranchId(),
@@ -65,13 +65,13 @@ public class ShipmentBookingWalletListener {
                             "Branch commission for shipment " + event.shipmentNumber())));
         } catch (RuntimeException e) {
             log.error("Could not settle commission credit for branch {}, shipment {} ({}); "
-                    + "the manifest stays dispatched, commission uncredited — reconcile manually",
+                    + "the shipment stays in-scanned, commission uncredited — reconcile manually",
                     event.bookingBranchId(), event.shipmentNumber(), event.shipmentId(), e);
         }
     }
 
-    // Same commission credit as DispatchCommissionEarned's handler above, just triggered by
-    // delivery instead of dispatch — see ShipmentEvent.DeliveryCommissionEarned's own doc for
+    // Same commission credit as InScanCommissionEarned's handler above, just triggered by
+    // delivery instead of in-scan — see ShipmentEvent.DeliveryCommissionEarned's own doc for
     // why TO_PAY/COD shipments need this separate trigger.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)

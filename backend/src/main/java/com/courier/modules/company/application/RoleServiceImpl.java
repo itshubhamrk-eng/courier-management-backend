@@ -4,6 +4,7 @@ import com.courier.modules.company.application.command.CreateRoleCommand;
 import com.courier.modules.company.application.command.UpdateRoleCommand;
 import com.courier.modules.company.domain.CompanyRole;
 import com.courier.modules.company.domain.CompanyRoleRepository;
+import com.courier.modules.company.domain.DepartmentRoleRepository;
 import com.courier.modules.company.domain.RoleCriteria;
 import com.courier.modules.company.domain.RoleSpecifications;
 import com.courier.modules.company.domain.RoleStatus;
@@ -66,6 +67,7 @@ public class RoleServiceImpl implements RoleService {
             + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "')";
 
     private final CompanyRoleRepository repository;
+    private final DepartmentRoleRepository departmentRoleRepository;
     private final AuditService auditService;
 
     @Override
@@ -255,6 +257,13 @@ public class RoleServiceImpl implements RoleService {
                     "Role %s is the company's default and cannot be deleted. "
                             .formatted(role.getRoleCode())
                             + "Make another role the default first.");
+        }
+
+        if (departmentRoleRepository.existsByRoleId(id)) {
+            throw new BusinessRuleException(
+                    "Role %s is still offered by at least one department and cannot be deleted. "
+                            .formatted(role.getRoleCode())
+                            + "Remove it from that department first.");
         }
 
         // Soft delete only, per the project invariant. Users currently holding the role

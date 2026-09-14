@@ -4,9 +4,11 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { CreateRoleRequest, RoleProfile, UpdateRoleRequest } from '@core/models/role.model';
+import { Department } from '@core/models/department.model';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { RoleForm } from './components/role-form';
 import { RoleService } from './role.service';
+import { DepartmentService } from '../departments/department.service';
 
 /**
  * Create Role — wraps RoleForm in create mode and POSTs. Doubles as the Clone flow: with a
@@ -30,7 +32,8 @@ import { RoleService } from './role.service';
       @if (loading()) {
         <app-loader [minHeight]="280" caption="Loading…" />
       } @else {
-        <app-role-form mode="create" [prefill]="prefill()" [saving]="saving()"
+        <app-role-form mode="create" [prefill]="prefill()" [saving]="saving()" [departments]="departments()"
+                       (departmentsChanged)="pendingDepartmentIds = $event"
                        (saved)="save($event)" (cancelled)="cancel()" />
       }
     </div>
@@ -38,6 +41,7 @@ import { RoleService } from './role.service';
 })
 export class RoleCreate implements OnInit {
   private readonly service = inject(RoleService);
+  private readonly departmentService = inject(DepartmentService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
@@ -47,9 +51,12 @@ export class RoleCreate implements OnInit {
   readonly saving = signal(false);
   readonly prefill = signal<RoleProfile | null>(null);
   readonly cloning = signal(false);
+  readonly departments = signal<Department[]>([]);
+  protected pendingDepartmentIds: string[] = [];
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Roles', route: '/roles' }, { label: 'New' }]);
+    this.departmentService.list().subscribe({ next: (d) => this.departments.set(d), error: () => {} });
     const cloneFrom = this.route.snapshot.queryParamMap.get('cloneFrom');
     if (!cloneFrom) return;
     this.cloning.set(true);
@@ -64,7 +71,17 @@ export class RoleCreate implements OnInit {
   save(body: CreateRoleRequest | UpdateRoleRequest): void {
     this.saving.set(true);
     this.service.create(body as CreateRoleRequest).subscribe({
-      next: (r) => { this.saving.set(false); this.notify.success('Role created.'); this.router.navigate(['/roles', r.id]); },
+      next: (r) => {
+        this.saving.set(false); this.notify.success('Role created.');
+        if (this.pendingDepartmentIds.length === 0) { this.router.navigate(['/roles', r.id]); return; }
+        this.departmentService.syncRoleGrants(r.id, this.pendingDepartmentIds).subscribe({
+          next: () => this.router.navigate(['/roles', r.id]),
+          error: () => {
+            this.notify.error('Role created, but offering it via the selected department(s) failed — add it from the Departments page.');
+            this.router.navigate(['/roles', r.id]);
+          }
+        });
+      },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
         if (err.status === 409) this.notify.error(err.error?.message ?? 'A role with that code or name already exists.');

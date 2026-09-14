@@ -58,7 +58,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                 <div class="tbl__wrap">
                   <table class="tbl">
                     <thead>
-                      <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th></tr>
+                      <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
                     </thead>
                     <tbody>
                       @for (s of bookedShipments(); track s.id; let i = $index) {
@@ -67,6 +67,8 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                           <td>{{ i + 1 }}</td>
                           <td>{{ s.trackingNumber }}</td>
                           <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                          <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                          <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                           <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                         </tr>
                       }
@@ -302,6 +304,8 @@ export class LoadingSheet implements OnInit {
       <td>${this.esc(s.trackingNumber)}</td>
       <td>${this.esc(s.senderName)}</td>
       <td>${this.esc(s.receiverName)}</td>
+      <td>${this.esc(s.fromCity) || '—'}</td>
+      <td>${this.esc(s.toCity) || '—'}</td>
       <td class="center">${bookingDate(s)}</td>
       <td class="right">${s.chargeableWeight}</td>
       <td class="right">${topayFreight(s) ?? ''}</td>
@@ -381,13 +385,15 @@ export class LoadingSheet implements OnInit {
             <th>TRACKING NO</th>
             <th>CONSIGNOR NAME</th>
             <th>CONSIGNEE NAME</th>
+            <th>FROM CITY</th>
+            <th>TO CITY</th>
             <th class="c-date">BOOKING<br>DATE</th>
             <th class="c-weight">WEIGHT</th>
             <th class="c-freight">TO PAY<br>FREIGHT</th>
           </tr></thead>
-          <tbody>${rows || '<tr><td colspan="7" class="center">No shipments</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="9" class="center">No shipments</td></tr>'}</tbody>
           <tfoot><tr class="total-row">
-            <td colspan="5" class="right">Total</td>
+            <td colspan="7" class="right">Total</td>
             <td class="right">${totalWeight}</td>
             <td class="right">${totalFreight}</td>
           </tr></tfoot>

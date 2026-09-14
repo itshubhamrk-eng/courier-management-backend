@@ -59,13 +59,19 @@ class ManifestServiceImplTest {
     @Mock private UserService userService;
     @Mock private AuditService auditService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
+    @Mock private com.courier.modules.company.application.CompanySettingsService companySettingsService;
+    @Mock private com.courier.modules.communication.application.CommunicationSettingService communicationSettingService;
+    @Mock private com.courier.modules.communication.application.provider.SmsProvider smsProvider;
+    @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private ManifestServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new ManifestServiceImpl(manifestRepository, shipmentService, vehicleService,
-                userService, auditService, ewayBillService);
+                userService, auditService, ewayBillService, companySettingsService,
+                communicationSettingService, smsProvider, passwordEncoder, objectMapper);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
@@ -162,6 +168,41 @@ class ManifestServiceImplTest {
         assertThat(dispatched.getDriverUserId()).isEqualTo(driverId);
         verify(shipmentService).transitionToDispatched(
                 List.of(ready.getId()), manifest.getId(), vehicleId, manifest.getBookingBranchId());
+    }
+
+    @Test
+    @DisplayName("dispatch succeeds with no OTP ever requested — OTP is optional for now")
+    void dispatchSucceedsWithoutAnyOtp() {
+        Manifest manifest = existingManifest(ManifestStatus.CREATED);
+        UUID vehicleId = UUID.randomUUID();
+        UUID driverId = UUID.randomUUID();
+        when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
+                .thenReturn(Optional.of(manifest));
+        when(shipmentService.findManifestCreatedShipments(manifest.getId()))
+                .thenReturn(List.of(mock(Shipment.class)));
+        Vehicle active = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.AVAILABLE).build();
+        when(vehicleService.getById(vehicleId)).thenReturn(active);
+        when(userService.getById(driverId)).thenReturn(mock(User.class));
+
+        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId, null, null, null, null, null);
+
+        assertThat(dispatched.getStatus()).isEqualTo(ManifestStatus.DISPATCHED);
+    }
+
+    @Test
+    @DisplayName("verifyDispatchOtp registers a wrong code as a failed attempt")
+    void verifyDispatchOtpRejectsWrongCode() {
+        Manifest manifest = existingManifest(ManifestStatus.CREATED);
+        UUID driverId = UUID.randomUUID();
+        manifest.issueDispatchOtp(driverId, "hashed", java.time.Instant.now().plusSeconds(300));
+        when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
+                .thenReturn(Optional.of(manifest));
+        when(passwordEncoder.matches("000000", "hashed")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.verifyDispatchOtp(manifest.getId(), driverId, "000000"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Incorrect OTP");
+        assertThat(manifest.getDispatchOtpAttempts()).isEqualTo(1);
     }
 
     @Test

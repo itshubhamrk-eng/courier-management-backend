@@ -8,6 +8,362 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-14 — In Scan 404s "Branch not found" for a shipment booked at a different branch than the one receiving it (0.58.13)
+
+Direct report: BRANCH_MANAGER at Latur got "Branch not found: <uuid>" in-scanning a
+shipment whose booking branch was Karad — a real, active branch in the same company, just
+not the caller's own.
+
+**Root cause**: `ShipmentServiceImpl.eligibleBranchCommission` loaded the booking branch
+via `BranchServiceImpl.getById()`, a UI-facing read whose `requireVisible` check 404s for
+any non-`COMPANY_ADMIN`/`SUPER_ADMIN` caller viewing a branch that isn't their own. In-scan
+runs as the *receiving* branch's manager while checking the *booking* branch's
+`instantCommission` flag — a different branch, by design, on every cross-branch shipment.
+Switched to `BranchService.instantCommissionOf(branchId)`, an unscoped helper already built
+for exactly this internal lookup.
+
+**Verified**: `mvn compile` clean; reproduced live on the `:8100` throwaway backend —
+logged in as the real `latur@gmail.com` (BRANCH_MANAGER), in-scanned tracking
+`26090000031` (booked at Karad, collect-at-booking, bound for Latur) which 404'd before the
+fix and now returns `success:true`.
+
+---
+
+## Fixed 2026-09-13 — Booking Receipt (Print 3) DESTINATION row now shows delivery area alongside branch name
+
+Direct request: "show destination area on shipment order booking print". `ambox
+-consignment-print.util.ts`'s masthead DESTINATION field showed only
+`deliveryBranchLabel`; appended `deliveryArea` (already carried on `ConsignmentPrintData`,
+same postal-directory lookup `consignment-print.util.ts`'s own Delivery Pincode/Area/
+District row uses) in parentheses when present.
+
+---
+
+## Fixed 2026-09-13 — Net Amount/GST/Round Off recompute correctly after editing Other Charges/ODA/Door Delivery; Net Amount edit bounds now company-configurable (0.58.11)
+
+Direct request: "while shipment order booking if i edited Other Charges, door delivery
+charges, oda charges then Net Amount and gst and round of should be calculated properly
+not able to decrease Net Amount less than 10% and not able to increment more that 50%
+add this config in company setting".
+
+**Root cause**: `ShipmentServiceImpl.copyCharge`/`netAmountWithOtherCharges` always
+persisted `priced.roundOff()` — the Pricing Engine's own round-off, computed *before*
+Other Charges/ODA override/Door Delivery/Freight-override/Insurance deltas are added on
+top. Once any of those moved the total, the persisted Net Amount silently drifted off the
+company's own round-off rule (e.g. no longer a multiple of 5) while the Round Off line
+kept showing a stale figure. Same bug mirrored in the frontend's live preview
+(`shipment-create.ts`'s `app-charge-summary` binding, `roundOff: p.chargeBreakup.roundOff`
+verbatim) and in the post-booking Performa Bill print assembly.
+
+New `ShipmentServiceImpl.roundOffRule()` resolves `CompanySettings.roundOffRule` the same
+way `PricingEngineImpl.resolveRoundingRule` already does (same blank/since-renamed-value
+fallback to `PricingProperties.roundingRule`, so the two never disagree). Both methods now
+build the full `totalBeforeRoundOff` (engine net amount minus its own round-off, plus every
+delta) and re-round it fresh — Round Off and Net Amount are always internally consistent
+with whatever the operator typed. Frontend gained matching `preRoundNetAmount()`/
+`applyRoundOffRule()`/`computedRoundOff()`/`computedNetAmount()` on `ShipmentCreate`,
+wired into both the live sidebar preview and the Performa Bill print's own charge
+assembly (the latter kept its deliberate exclusion of raw Other/Appointment/Door charges
+from `netAmount` — `performa-bill-print.util.ts`'s own `total` formula re-adds them, a
+pre-existing, documented, out-of-scope-until-now quirk shared with `consignment-print
+.util.ts`/`ambox-consignment-print.util.ts` — only the round-off *delta* was folded in
+there, so the printed total still lands on the rounding rule without reopening that
+quirk).
+
+**New config, same request**: `CompanySettings` gained
+`netAmountMaxDecreasePercent`/`netAmountMaxIncreasePercent` (`V73`, DECIMAL(5,2), defaults
+10.00/50.00) — bounds on how far the booking form's editable Net Amount *preview* (display
+only, never sent to the server — see `ChargeSummary`'s own doc comment) may be typed below/
+above the freshly computed amount. Full Finance-section plumbing:
+`CompanySettingsRequest`/`Response`/`Command`/`Mapper`/`ServiceImpl.applyFinance`. Settings
+page gained a third Finance inline widget (two percent inputs + Save), same "no full edit
+dialog yet" pattern as Razorpay/Round Off. `ShipmentCreate.onManualNetAmountChange` clamps
+a typed override to `[computed*(1-decrease%), computed*(1+increase%)]` and toasts when
+clamped, replacing the old unconditional `manualNetAmount.set($event)`.
+
+**Verified**: `mvn test` full suite green (had to add a default `companySettingsService
+.get()` stub to `ShipmentServiceImplTest.setUp()` — `netAmountWithOtherCharges` now reads
+it, previously didn't; no test asserted an exact Net Amount value, so none needed
+updating). `tsc --noEmit`/`ng build --configuration production` clean. Live end-to-end
+on a throwaway `:8082` backend (`local` profile, real `courier_db`, never touching
+`:8100`/`:4200`): `V73` applied cleanly (`flyway_schema_history` now at v73), GET
+`/company-settings` returned the new fields with correct defaults, PATCH still refused a
+non-`COMPANY_ADMIN` (403, gate unchanged), and a real booking on the Pune→Osmanabad lane
+with `otherCharges=7.30`/`doorDeliveryCharge=33` persisted `netAmount=170.00` (a clean
+multiple of 5) with `roundOff=-1.454` — hand-verified: freight 40 + applicable charges 65
++ otherCharges 7.30 + doorDeliveryCharge 33 + gstAmount 26.154 = 171.454, nearest-5
+rounds to 170. New fixture shipment `PUNE-000046` left in the dev DB per convention.
+
+---
+
+## Added 2026-09-12 — Department Master; user creation picks a department, not a designation (0.58.10)
+
+Direct request ("create department master and every department have role and while
+create user based on department add role to user and remove designation from user
+creation form"). New company-owned module, same shape as `company_roles`/`CompanyRole`:
+`Department` (`departments` table, V71) with code/name/description/status, soft delete
+only. `DepartmentRole` (`department_roles`, join to `company_roles`, denormalised
+`role_code` — same pattern `RolePermission` uses for role-to-permission grants) is a
+**many-to-many**: a department can offer several roles (e.g. Operations offering both
+`BOOKING_OPERATOR` and `DELIVERY_OPERATOR`), picked by the user at creation from just that
+department's own grants rather than the whole company catalogue. Full CRUD —
+`DepartmentService`/`DepartmentServiceImpl`/`DepartmentController` at `/api/v1/departments`
+— mirrors `RoleService`'s isolation shape (`findByIdWithinCompany` everywhere, per-method
+`@PreAuthorize`, `COMPANY_ADMIN` writes, `SUPER_ADMIN` cross-company reads,
+`BRANCH_MANAGER` gets `/departments/assignable` to place their own new hires — the same
+bridge `RoleService.listAssignable` already grants for role pickers). New `DEPARTMENT`
+permission module (35, between USER and ROLE), 8 rights
+(CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/ACTIVATE/DEACTIVATE, same shape `BRANCH`), catalog
+240 -> 248. `RoleServiceImpl.delete` now refuses a role still offered by any department
+(new `DepartmentRoleRepository.existsByRoleId` guard) — deleting the role out from under a
+department it was never told about would otherwise leave a dangling grant.
+
+`User` gains `departmentId` (nullable, FK to `departments`) alongside the existing
+free-text `department` column — the old column is **left untouched**, not migrated, for
+existing data and any screen that still reads it; the two are independent. `CreateUser`/
+`UpdateUserCommand`/`Request` carry `departmentId`; `UserServiceImpl.assignRoles` now
+validates that when both a department and explicit `roleIds` are given, every requested
+role is one the department actually grants (`BusinessRuleException` otherwise) —
+defense-in-depth on top of the frontend's own filtered picker. `designation` is
+**untouched in the backend** (entity/DTOs/validation) — only removed from the create/edit
+form; kept for any other screen or import that still sets it (explicit decision, not an
+oversight).
+
+Frontend: new `features/departments` (service, list + inline drawer form, role
+multi-select) under Administration nav, `COMPANY_ADMIN`/`SUPER_ADMIN` only, matching
+Roles' access. `UserForm`: the free-text "Designation" and "Department" inputs are gone;
+a "Department" dropdown (optional, unassigned by default) replaces them, and the "Roles"
+multi-select narrows to just the selected department's roles the moment one is picked
+(reactive `effect` also strips any already-selected role that falls outside a newly picked
+department, so a stale selection can't be silently submitted).
+
+**Verified live 2026-09-12.** The apparent shipment-module breakage above turned out to be
+a stale incremental-build artifact, not a real defect — a second, concurrent session was
+mid-edit on an unrelated DRS/vehicle/OTP feature (`V72__drs_vehicle_otp.sql`) at the exact
+moment this feature's first `mvn test-compile` ran; `mvn clean compile`/`mvn -o test`
+afterwards passed clean (135+ test classes, 0 failures) once that session's own edits
+settled. Booted a throwaway backend (`:8082`, `local` profile, real `courier_db`) and a
+paired `ng serve` (`:4300`, `proxy.conf.verify.json`) per the project's own verification
+convention — real `:8100`/`:4200` never touched. Flyway had already applied V71/V72 to
+the shared dev DB (by the other session's own restart); confirmed `departments`/
+`department_roles` tables and 8 `DEPARTMENT_*` permission rows exist.
+
+Exercised the full contract with curl as `first.admin@gmail.com` (COMPANY_ADMIN,
+`COMPANY-C1`): created department `OPERATIONS_TEST` with `BOOKING_OPERATOR` +
+`DELIVERY_OPERATOR`; creating a user with a role **outside** that department's grants
+(`COMPANY_ADMIN`) correctly 422s "Role COMPANY_ADMIN is not offered by the selected
+department"; the same call with `BOOKING_OPERATOR` succeeds and the created user carries
+both `departmentId` and the role; `/departments/assignable` returns the department with
+its roles inline; deleting a department that still has a user in it correctly refuses.
+Then in the actual browser UI: signed in, "Departments" appears in the Administration nav
+exactly where wired (Users → **Departments** → Roles), the list renders the curl-created
+department with its role chips, created a second department ("Finance Desk",
+ACCOUNTS + FINANCE_USER) through the real drawer form end-to-end (code-preview,
+multi-select, save all worked), then on `/users/new` confirmed **Designation is gone**,
+**Department is a dropdown** (not free text), and picking "Operations" narrowed the Roles
+multi-select to exactly `BOOKING_OPERATOR`/`DELIVERY_OPERATOR` (not the full company
+catalogue) — created a real user through the form this way and its detail page shows
+`Roles: BOOKING_OPERATOR`. Verify stack torn down after (`:8082`/`:4300` killed); real
+`:8100`/`:4200` and their sessions untouched throughout. Test rows left in `courier_db`
+per project convention (fixtures, not cleaned up).
+
+---
+
+## Changed 2026-09-12 — Idle auto-logout raised from 30 to 120 minutes (0.58.9)
+
+Direct request ("session auto logout time should be 2 hours"). `environment
+.idleTimeoutMinutes` (`IdleTimeoutService` — signs out after no mouse/keyboard/scroll/
+touch activity, independent of the access/refresh-token lifecycle) changed 30 -> 120 in
+both `environment.ts` and `environment.development.ts` (only two environment files in this
+project, no separate prod one). Not touched: `app.jwt.access-token-ttl` (15m, silently
+refreshed) and `app.jwt.refresh-token-ttl` (7d, the real hard session-length ceiling
+regardless of activity) — those are a different knob from "auto logout" as the idle timer
+implements it; flag if 2 hours was meant for the refresh-token/session ceiling instead.
+
+---
+
+## Added 2026-09-12 — THC Departure Time defaults to now; Resend OTP gets a 15s countdown (0.58.8)
+
+Two small direct requests on the same THC form. `departureTime` (`trip-hire-challan.ts`)
+now pre-fills to the browser's current local date/time — `nowLocalDateTime()` builds the
+`datetime-local` string from `Date` getters rather than `toISOString()`, which would have
+silently shifted the shown value by the timezone offset. Set on `selectManifest`/`search`
+success and `reset()` (not just once at construction, so it's genuinely "now" whenever the
+Assign form actually becomes visible, not whichever moment the component happened to be
+built); the field stays editable, hint text changed from "Blank means now" to "Defaults to
+now — adjust if the vehicle left earlier/later" since it's never actually blank anymore.
+
+Resend OTP: a plain `setInterval`-backed `resendCooldown` signal starts at 15 on every
+successful send (first send or resend alike) and ticks down once a second; the button
+shows "Resend OTP (Ns)" and stays disabled until it hits 0. Cleaned up via
+`stopResendCooldown()` from `resetOtpState()` (driver change, new manifest selected) and a
+new `ngOnDestroy` (component navigated away while a countdown was running) — the interval
+would otherwise keep firing against a signal nothing renders anymore.
+
+Verified live on the real `:4200`/`:8100` (frontend-only change, no backend touched, so no
+restart needed — `ng serve`'s watcher already had it): selected a real open manifest
+(0-shipment, so no real dispatch risk), confirmed Departure Time pre-filled to the actual
+current time, sent a real driver OTP and watched "Resend OTP (10s)" count down and
+re-enable at 0.
+
+---
+
+## Changed 2026-09-12 — Driver OTP verification is optional, not a dispatch gate (0.58.7)
+
+Direct request ("Otp verification should be optional for now?"). `Manifest.dispatch()` no
+longer calls `requireDispatchOtpVerified` — dispatch succeeds whether or not the driver's
+OTP was ever requested or verified. `requestDispatchOtp`/`verifyDispatchOtp` and the whole
+send/verify UI in `trip-hire-challan.ts` are untouched and still work end to end; the
+Dispatch button is no longer disabled on `!otpVerified()`, and the "Send Driver OTP"
+button now reads "Send Driver OTP (optional)". `requireDispatchOtpVerified` itself is left
+in place on `Manifest` (unused for now) — re-enabling mandatory OTP later is one line
+(call it back from `dispatch()`) plus restoring the two removed frontend gates, both noted
+in code comments at the removal sites.
+
+`ManifestServiceImplTest`'s `dispatchRefusesWithoutVerifiedOtp` replaced with
+`dispatchSucceedsWithoutAnyOtp` (dispatch succeeds with zero OTP state on the manifest);
+`dispatchHappyPath` no longer seeds a verified OTP first, since it's no longer a
+precondition. Verified via direct `javac`/`junit-platform-console-standalone` run (not
+`mvn test`) — an unrelated, pre-existing uncommitted change to
+`UserServiceImpl`/`UserServiceImplTest` (a `BranchRepository` constructor param) currently
+fails the module's `mvn test`; flagged to the user rather than touched, since it isn't
+this session's work.
+
+---
+
+## Fixed 2026-09-12 — Dispatch OTP is 4 digits, not 6 (0.58.6)
+
+Direct follow-up on 0.58.5's driver OTP ("OTP should be 4 digit and OTP enter inpute
+should be only accept 4 digit"). `ManifestServiceImpl.generateOtp()` now draws from
+1000-9999 instead of 100000-999999. The Enter OTP field (`trip-hire-challan.ts`) gained
+`maxLength="4"`, a `Validators.pattern(/^\d{4}$/)`, and a `valueChanges` subscription that
+strips non-digits and clamps to 4 characters — `app-input` is a plain text/tel field with
+no built-in numeric-only mask, so a paste or a non-numeric keyboard needed an explicit
+filter rather than relying on `maxlength` alone.
+
+---
+
+## Added 2026-09-12 — THC dispatch now requires a driver OTP (V70) (0.58.5)
+
+Direct request ("for THC generation add otp verification"). Clarified up front: OTP goes
+to the assigned driver's own mobile (not the dispatcher's), gated at the existing Dispatch
+click rather than at vehicle/driver assignment, and ships even though no real SMS gateway
+is configured anywhere yet — same accepted gap every other unwired notification in this
+project already has.
+
+New `Manifest` fields (`dispatch_otp_hash`/`_driver_id`/`_expires_at`/`_attempts`/
+`_verified_at`, V70) and three new domain methods: `issueDispatchOtp` (stores a BCrypt
+hash + expiry, resets attempts), `registerOtpVerificationAttempt` (wrong code counts
+against 5 attempts before the code is invalidated outright; right code stamps
+`dispatchOtpVerifiedAt`), and `dispatch()` itself now refuses unless
+`dispatchOtpVerifiedAt` is set for the exact `driverUserId` being dispatched and still
+within its expiry — then clears all OTP state as one-time use. Switching the driver
+selection after requesting an OTP can't reuse a code meant for someone else, both
+client-side (`driverUserId` value-change resets the whole OTP UI state) and server-side
+(the domain check itself).
+
+`ManifestService.requestDispatchOtp`/`verifyDispatchOtp`, wired as
+`POST /shipment-movement/dispatch-otp/{request,verify}` right above the existing
+`/dispatch` in `ShipmentMovementController`. Sending the OTP reuses the Communication
+Center's own `SmsProvider` bean directly (`CommunicationSettingService.findEnabled` for
+the company's configured SMS credentials, falling back to empty credentials — which
+`LogOnlySmsProvider` accepts regardless — when SMS was never configured) rather than
+building a whole separate notification path: bypasses that module's
+template/log/retry machinery on purpose, since an OTP has to be generated, sent and
+confirmed synchronously inside one request rather than queued for later dispatch.
+`CompanySettings.otpExpiryMinutes` — a company-setting column that had existed since
+V8 with no code ever reading it — is now the actual OTP expiry window (default 5 minutes
+when unset).
+
+Frontend: `trip-hire-challan.ts`'s Assign Vehicle & Driver card gained a "Send Driver
+OTP" -> "Enter OTP"/"Verify OTP" -> "✓ Driver OTP verified" strip between the Driver
+picker and Departure Time; Dispatch is disabled until verified, in addition to its
+existing "has shipments" gate.
+
+**Verified live**, not just compiled: booted a second backend on `:8082` (`profile=local`,
+same dev DB — `:4200`/`:8100` never touched) to let Flyway actually apply V70, plus a
+second `ng serve` on `:4300`. Found and fixed a real gap immediately — the fixture driver
+user had no mobile on file, so the button correctly refused with "Pune User has no mobile
+number on file"; added one via the Users screen (kept, not cleaned up, per this project's
+"never clean up test data" rule), then walked the full happy path in a real browser
+tab: selected the driver, Send Driver OTP, read the actual code off
+`LogOnlySmsProvider`'s log line, entered it, Verify OTP, saw the verified badge replace
+the input. Existing `ManifestServiceImplTest` needed its constructor call updated for the
+five new dependencies; added two small tests (`dispatchRefusesWithoutVerifiedOtp`,
+`verifyDispatchOtpRejectsWrongCode`) alongside fixing `dispatchHappyPath` to seed a
+verified OTP first now that `dispatch()` requires one.
+
+---
+
+## Fixed 2026-09-12 — THC print: QR-only identity box, uniform borders, no more overlap onto edges (0.58.4)
+
+Direct bug report ("thc print remove barcode only qr code required, all border line size
+should be same, thc not overlap and going on border fix it"). Three fixes, all scoped to
+`trip-hire-challan.ts`'s `renderThcHtml` — the shared `renderPrintHeader`/`PRINT_HEADER_CSS`
+in `consignment-print.util.ts` (also used by DRS) untouched, so LR/DRS printouts are
+unaffected:
+
+- Dropped `barcodeValue` from the `renderPrintHeader` call (`box.barcodeValue` now
+  `undefined`, which already skips the `.lrbox-barcode` render) — only `qrValue` remains.
+- Every border in THC's own `<style>` block was a patchwork of `1px #777` (body/table/
+  meta/footer/terms/expenses) vs the shared header's `2px #000` (`.head`/`.co`/`.lrbox`),
+  plus `@media print` silently swapping the outer `.challan` border to `1px #000` while
+  screen used `#777` — normalized the whole document to `1px solid #000`, including an
+  override rule for the shared header's border width/color since that CSS is shared with
+  DRS and couldn't be edited directly.
+- Real bug, not just cosmetic: `.meta`'s 8 cells are one flat CSS-grid row of sibling
+  `<div>`s (not real table rows), so `.meta div:last-child` zeroed the border-right on only
+  the 8th cell — the 4th cell (row 1's rightmost, "TO") still carried its own
+  `border-right:1px` stacked flush against `.challan`'s outer border, rendering as a
+  visibly thicker/doubled tick poking past the box edge. The shipment table had the same
+  latent issue on every row's last column (`TO PAY FREIGHT`) since no rule zeroed it at
+  all. Fixed with `.meta div:nth-child(4n)` (one rule per visual row instead of one for the
+  whole grid) and `th:last-child, td:last-child { border-right: 0 }` (table `<tr>`s are
+  real rows, so plain `:last-child` works there). Also swapped the shipment rows' fixed
+  `height:19px` for `min-height` so a long consignor/consignee name wrapping to 2-3 lines
+  grows the row instead of overflowing past its own bottom border.
+
+Verified visually: reused the app's real login/nav, then confirmed the fix with a
+standalone HTML mirror of the exact style block fed synthetic long-value data (long
+company/driver/consignor names, long tracking/invoice/e-way numbers) since no manifest in
+the dev DB currently has shipments loaded — served over a throwaway `:4321` static server,
+screenshotted before/after. Confirmed the doubled-border tick at both `.meta`'s "TO" cell
+and the table's freight column, then confirmed it gone after the `nth-child(4n)`/
+`:last-child` fix, with wrapped long text no longer breaching row borders. Real dev
+`:4200`/`:8100` untouched.
+
+---
+
+## Fixed 2026-09-12 — Booking-branch commission now credits on in-scan at the delivery branch, not on Trip Challan creation (0.58.3)
+
+Direct bug report ("for booking branch order commission should be credit after shipment
+order inscan by delivery branch, now crediting after THC created it should be after
+inscan"). Only the collect-at-booking (PREPAID) trigger moves — `0.24.3`'s move from
+booking-time to Trip Challan/manifest-dispatch time was itself one hop too early; TO_PAY/
+COD's booking-branch commission (credited on actual delivery, `DeliveryCommissionEarned`)
+is untouched.
+
+`ShipmentEvent.DispatchCommissionEarned` renamed to `InScanCommissionEarned` and its
+publish call moved from `ShipmentServiceImpl.transitionToDispatched` to `scanOneIn`'s
+`finalDestination` branch (the same in-scan-at-own-delivery-branch gate
+`ReceivedAtBranch`/`ToPayReceivedAtDeliveryBranch` already use) — fires only when the
+shipment's payment mode collects at booking and its booking branch has
+`instantCommission` on, same eligibility check (`commissionOnBasicFreight +
+branchCommissionOnOtherAmount`) as before, unchanged. `transitionToDispatched` no longer
+touches `ShipmentCharge` at all. `ShipmentPendingCommissionDirectory`'s `PRE_DISPATCH`
+set renamed `PRE_INSCAN` and widened to include `DISPATCHED` (a collect-at-booking
+shipment sitting at `DISPATCHED` is now still "pending", not yet credited) — an
+intermediate crossing hop's in-scan reverts status to `READY_FOR_MANIFEST` first, already
+in the set, so multi-leg routes still resolve correctly.
+
+Three `transitionToDispatched` commission unit tests moved from `ShipmentServiceImplTest`
+to `ShipmentMovementServiceImplTest`'s `scanOneIn` section (mirroring the existing
+`ToPayReceivedAtDeliveryBranch` tests there), replaced with one regression test asserting
+dispatch never publishes a commission event. `mvn test`: full suite green, 135 test
+classes, 0 failures.
+
+---
+
 ## Deployed 2026-09-12 — commit `f07f202` shipped to prod (35.154.220.116)
 
 Direct request ("commit and deployed on prod"). Committed everything pending on the

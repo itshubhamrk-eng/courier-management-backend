@@ -21,6 +21,7 @@ public record UserSummaryResponse(
         String mobile,
         String designation,
         String department,
+        UUID departmentId,
         UUID branchId,
         UUID hubId,
         UserStatus status,

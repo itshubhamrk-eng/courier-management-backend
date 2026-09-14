@@ -7,6 +7,62 @@
 
 ## Current Version
 
+`0.58.10` — **Department Master, and user creation picks a department instead of typing a
+designation.** Direct request. New company-owned module `Department`/`departments` (V71),
+many-to-many to `company_roles` via `DepartmentRole`/`department_roles` (a department can
+offer several roles, e.g. Operations offering both `BOOKING_OPERATOR` and
+`DELIVERY_OPERATOR`) — full CRUD at `/api/v1/departments`, mirrors `RoleService`'s
+isolation shape exactly (`COMPANY_ADMIN` writes, `SUPER_ADMIN` cross-company reads,
+`BRANCH_MANAGER` gets `/departments/assignable`). New `DEPARTMENT` permission module (8
+rights, catalog 240 -> 248); `RoleServiceImpl.delete` now refuses a role still offered by
+a department. `User` gains `departmentId` (FK) alongside the untouched free-text
+`department` column; `UserServiceImpl.assignRoles` validates requested `roleIds` are among
+the chosen department's own grants when both are given. `designation` is untouched in the
+backend — removed only from `UserForm`'s create/edit template, not the entity/DTOs.
+Frontend: new `features/departments` (list + inline drawer form); `UserForm`'s
+designation/department text inputs replaced by a department dropdown that narrows the
+role multi-select to that department's own roles.
+
+**Verified live 2026-09-12**, after first appearing blocked: the shipment-module
+"breakage" was a stale build artifact from a second concurrent session mid-editing an
+unrelated DRS/OTP feature at the exact moment of the first `test-compile` — `mvn clean
+compile`/`mvn -o test` (135+ classes) passed clean once that session settled. Booted a
+throwaway `:8082`/`:4300` stack against the real dev `courier_db` (real `:8100`/`:4200`
+untouched) and exercised the full contract: curl-verified the department-role validation
+(role outside the department's grants 422s, role inside succeeds and lands on the user),
+`/departments/assignable`, and the delete guard; then in the actual browser, created a
+department through the real drawer form, and on `/users/new` confirmed Designation is
+gone, Department is a dropdown, and picking a department narrows the Roles multi-select
+to exactly that department's own roles — created a real user this way, role landed
+correctly on its detail page. Full detail in `CHANGELOG.md` 2026-09-12 "Department
+Master; user creation picks a department, not a designation".
+
+Previously current:
+
+`0.58.3` — **Booking-branch commission trigger moved again: Trip Challan creation →
+in-scan at the delivery branch.** Direct bug report ("booking branch order commission
+should be credit after shipment order inscan by delivery branch, now crediting after THC
+created it should be after inscan"). Only the collect-at-booking (PREPAID) trigger
+moves — `0.24.3`'s move from booking-time to Trip Challan/manifest-dispatch time turned
+out to be one hop too early; TO_PAY/COD's booking-branch commission (fires on actual
+delivery, `DeliveryCommissionEarned`) is untouched. `ShipmentEvent
+.DispatchCommissionEarned` renamed `InScanCommissionEarned`, publish call moved from
+`ShipmentServiceImpl.transitionToDispatched` to `scanOneIn`'s `finalDestination` branch —
+same gate `ReceivedAtBranch`/`ToPayReceivedAtDeliveryBranch` already use (in-scan at the
+shipment's *own* delivery branch, not a crossing hub) — same eligibility check
+(`commissionOnBasicFreight + branchCommissionOnOtherAmount`, booking branch's
+`instantCommission` on) as before. `transitionToDispatched` no longer touches
+`ShipmentCharge` at all. `ShipmentPendingCommissionDirectory`'s `PRE_DISPATCH` set
+renamed `PRE_INSCAN`, widened to include `DISPATCHED` (still "pending" there now) — an
+intermediate crossing hop's in-scan reverts status to `READY_FOR_MANIFEST` first, already
+in the set, so multi-leg routes still resolve right. Three `transitionToDispatched`
+commission tests moved from `ShipmentServiceImplTest` to `ShipmentMovementServiceImplTest`
+'s `scanOneIn` section; one new regression test asserts dispatch never publishes a
+commission event any more. `mvn test`: 135 test classes, 0 failures. Full detail in
+`CHANGELOG.md` 2026-09-12 "Booking-branch commission now credits on in-scan".
+
+Previously current:
+
 `0.58.2` — **Shipment Booking Pricing perf: fixed a real N+1 and wired the Company
 Settings cache Redis already had sitting unused.** Direct report ("pricing getting
 slow"). Audited every DB call `PricingEngineImpl.calculate` makes rather than guessing

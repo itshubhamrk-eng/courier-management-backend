@@ -65,6 +65,15 @@ public enum AuditAction {
     ROLE_ACTIVATED,
     ROLE_DEACTIVATED,
 
+    // --- department management. A department's role grants change with it (create/update
+    // carry the full set), so there is no separate "assigned" action the way roles have
+    // one for permissions.
+    DEPARTMENT_CREATED,
+    DEPARTMENT_UPDATED,
+    DEPARTMENT_DELETED,
+    DEPARTMENT_ACTIVATED,
+    DEPARTMENT_DEACTIVATED,
+
     // --- permission management (Phase 3). Catalogue writes are SUPER_ADMIN; grants are
     // the company's own decision and are recorded against the role.
     PERMISSION_CREATED,

@@ -30,7 +30,7 @@ public class UserMapper {
                 request.firstName(), request.middleName(), request.lastName(), request.displayName(),
                 request.email(), request.username(), request.mobile(), request.alternateMobile(),
                 request.password(), request.gender(), request.dateOfBirth(),
-                request.designation(), request.department(), request.joiningDate(),
+                request.designation(), request.department(), request.departmentId(), request.joiningDate(),
                 request.reportingManagerId(), request.branchId(), request.hubId(),
                 request.profileImage(), request.remarks(), request.roleIds());
     }
@@ -39,7 +39,7 @@ public class UserMapper {
         return new UpdateUserCommand(
                 request.firstName(), request.middleName(), request.lastName(), request.displayName(),
                 request.mobile(), request.alternateMobile(), request.gender(), request.dateOfBirth(),
-                request.designation(), request.department(), request.joiningDate(),
+                request.designation(), request.department(), request.departmentId(), request.joiningDate(),
                 request.reportingManagerId(), request.branchId(), request.hubId(),
                 request.profileImage(), request.remarks(), request.version());
     }
@@ -64,7 +64,7 @@ public class UserMapper {
                 user.effectiveDisplayName(),
                 user.getEmail(), user.getUsername(), user.getMobile(), user.getAlternateMobile(),
                 user.getGender(), user.getDateOfBirth(), user.getDesignation(), user.getDepartment(),
-                user.getJoiningDate(), user.getReportingManagerId(),
+                user.getDepartmentId(), user.getJoiningDate(), user.getReportingManagerId(),
                 user.getBranchId(), user.getHubId(), user.getProfileImage(),
                 user.getStatus(), user.isLocked(), user.getLastLogin(), user.getFailedLoginCount(),
                 user.getRemarks(),
@@ -83,7 +83,8 @@ public class UserMapper {
         return new UserSummaryResponse(
                 user.getId(), user.getCompanyId(), user.getEmployeeCode(),
                 user.effectiveDisplayName(), user.getEmail(), user.getUsername(), user.getMobile(),
-                user.getDesignation(), user.getDepartment(), user.getBranchId(), user.getHubId(),
+                user.getDesignation(), user.getDepartment(), user.getDepartmentId(),
+                user.getBranchId(), user.getHubId(),
                 user.getStatus(), user.isLocked(), roleCount, user.getCreatedAt(), user.getVersion());
     }
 }

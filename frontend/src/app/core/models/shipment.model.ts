@@ -794,10 +794,15 @@ export interface InScanRequest {
   missingTrackingNumbers?: string[];
 }
 
-/** Body of POST /shipment-movement/out-for-delivery. */
+/** Body of POST /shipment-movement/out-for-delivery. vehicleId/fuelCost/deliveryCharge
+ *  are all optional trip fields, same shape DispatchManifestRequest's own trip expenses
+ *  use — stamped on every DeliveryAssignment row the call touches. */
 export interface OutForDeliveryRequest {
   shipmentIds: string[];
   deliveryUserId: string;
+  vehicleId?: string | null;
+  fuelCost?: number | null;
+  deliveryCharge?: number | null;
 }
 
 /** Body of POST /shipment-movement/deliver. */

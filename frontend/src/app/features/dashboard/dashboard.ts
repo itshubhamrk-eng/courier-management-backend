@@ -19,6 +19,7 @@ import { BranchSummary } from './components/branch-summary';
 import { CompanyOverview } from './components/company-overview';
 import { BranchOverview } from './components/branch-overview';
 import { PodStatusPie } from './components/pod-status-pie';
+import { DeliveryStatusPie } from './components/delivery-status-pie';
 import { TrackBox } from '@features/shipment-movement/components/track-box';
 import { PackageIllustration } from '@shared/components/illustrations/package-illustration';
 import { FollowUpWidget } from './components/follow-up-widget';
@@ -26,6 +27,7 @@ import { FollowUpWidget } from './components/follow-up-widget';
 
 const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   new Set(['totalRevenue', 'walletBalance', 'todayCollection']);
+const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActualWeight']);
 
 /**
  * Role-based enterprise dashboard. The layout (which KPI tiles, charts, cards and quick
@@ -40,7 +42,7 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   imports: [
     DatePipe, MatIconModule, StatisticCard, UiCard, ChartCard, ActivityTimeline,
     RecentShipments, QuickActions, BranchSummary, CompanyOverview, BranchOverview, TrackBox,
-    PackageIllustration, FollowUpWidget, PodStatusPie /*, HubSummary */
+    PackageIllustration, FollowUpWidget, PodStatusPie, DeliveryStatusPie /*, HubSummary */
   ],
   template: `
     <div class="dash">
@@ -98,6 +100,11 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
               <app-pod-status-pie title="POD Overview — All Branches"
                 subtitle="Every branch, current state"
                 [loading]="loading()" [data]="data()?.companyOverview?.podOverview ?? null" />
+              <app-delivery-status-pie title="Delivery Status — All Branches"
+                subtitle="This month, delivered vs pending"
+                [loading]="loading()"
+                [delivered]="data()?.statistics?.delivered ?? 0"
+                [pending]="data()?.statistics?.pending ?? 0" />
             } @else if (layout().sections.branchOverview) {
               <app-pod-status-pie title="POD Overview — This Branch"
                 subtitle="This branch, current state"
@@ -242,7 +249,8 @@ export class Dashboard implements OnInit {
    *  leaving a lone trailing card stranded at its minmax width with empty track beside it. */
   readonly chartCols = computed(() => {
     const s = this.layout().sections;
-    let n = (s.companyOverview || s.branchOverview) ? 1 : 0;
+    // Company overview gets two pies (POD + Delivery Status), branch overview just the one.
+    let n = s.companyOverview ? 2 : (s.branchOverview ? 1 : 0);
     if (s.shipmentTrend) n++;
     if (s.deliveryPerformance) n++;
     if (s.revenueTrend) n++;
@@ -286,6 +294,7 @@ export class Dashboard implements OnInit {
     const v = this.data()?.statistics[t.key];
     if (v == null) return '—';
     if (MONEY_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+    if (WEIGHT_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
     return v;
   }
 

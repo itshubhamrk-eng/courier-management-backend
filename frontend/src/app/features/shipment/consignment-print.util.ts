@@ -82,6 +82,87 @@ export interface ConsignmentPrintData {
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
+/** Letterhead fields the shared print header needs — a subset of {@link ConsignmentPrintData},
+ *  so THC/DRS (which don't book a shipment) can pass just their `CompanyProfileService` data. */
+export interface PrintHeaderCompany {
+  companyName: string;
+  companyLogo: string | null;
+  companyAddress: string | null;
+  companyGst: string | null;
+  companyContact: string | null;
+  companyWebsite: string | null;
+}
+
+/** The right-hand identity box (LR No / THC No / DRS No, plus an optional barcode and/or QR
+ *  of the same or a related value). */
+export interface PrintHeaderBox {
+  label: string;
+  value: string;
+  barcodeValue?: string;
+  qrValue?: string;
+}
+
+/** The consignment note's own header (logo, letterhead, identity box) — shared verbatim by
+ *  the THC (`trip-hire-challan.ts`) and DRS (`out-for-delivery.ts`) prints so every document
+ *  this system prints carries the same masthead. Pair with {@link PRINT_HEADER_CSS}. */
+export function renderPrintHeader(d: PrintHeaderCompany, box: PrintHeaderBox): string {
+  return `<div class="head">
+        <div class="brand">
+          <div class="logo">
+            ${d.companyLogo ? `<img class="mark" src="${esc(d.companyLogo)}" alt="${esc(d.companyName)}">` : `
+            <div class="word">${esc(d.companyName)}</div>
+            <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
+              <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <div class="tag">Courier &amp; Logistics</div>`}
+          </div>
+        </div>
+        <div class="co co--company">
+          <h2>${esc(d.companyName)}</h2>
+          ${d.companyAddress ? `<p>${esc(d.companyAddress)}</p>` : ''}
+          <p>
+            ${d.companyGst ? `GSTIN: ${esc(d.companyGst)}` : ''}
+            ${d.companyGst && d.companyContact ? ' &nbsp;|&nbsp; ' : ''}
+            ${d.companyContact ? `Ph: ${esc(d.companyContact)}` : ''}
+          </p>
+          ${d.companyWebsite ? `<p>${esc(d.companyWebsite)}</p>` : ''}
+        </div>
+        <div class="lrbox">
+          <span class="lrbox-label">${esc(box.label)}</span>
+          <span class="lrbox-no">${esc(box.value)}</span>
+          ${box.barcodeValue ? `<div class="lrbox-barcode">${barcodeSvg(box.barcodeValue)}</div>` : ''}
+          ${box.qrValue ? `<div class="lrbox-qr">${qrSvg(box.qrValue)}</div>` : ''}
+        </div>
+      </div>`;
+}
+
+/** CSS for {@link renderPrintHeader} — colors inlined (not `var(--line)` etc.) so it drops
+ *  into any print document's own `<style>` without that document also defining the LR
+ *  template's root palette. */
+export const PRINT_HEADER_CSS = `
+  .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid #000}
+  .head > div{padding:7px 10px}
+  .head .brand{display:flex;align-items:center;justify-content:center}
+  .logo{line-height:1;text-align:center}
+  .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
+  .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
+  .logo .swoosh{display:block;margin:2px auto 0}
+  .logo .tag{font-size:10px;color:#f7941d;font-weight:600;margin-top:2px}
+  .co{font-size:13px;line-height:1.3;border-left:2px solid #000}
+  .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
+  .co p{margin:0;color:#333;text-align:center}
+  .co--company{display:flex;flex-direction:column;justify-content:center}
+  .co--company h2{font-size:17px}
+  .co--company p{font-size:12px;line-height:1.5}
+  .lrbox{border-left:2px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
+  .lrbox-label{font-size:11px;font-weight:700;color:#333}
+  .lrbox-no{font-size:16px;font-weight:800}
+  .lrbox-barcode{line-height:0}
+  .lrbox-barcode svg{width:150px;height:34px}
+  .lrbox-qr{line-height:0}
+  .lrbox-qr svg{width:52px;height:52px}
+`;
+
 /** Renders `value` (the LR/tracking number) to a barcode as a static inline SVG string —
  *  built off-DOM and serialized, so the printed page needs no script of its own to draw it
  *  (`printConsignmentCopies` writes plain HTML into a fresh iframe document). CODE128
@@ -208,34 +289,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
      <div class="receipt-inner">
 
       <!-- HEADER -->
-      <div class="head">
-        <div class="brand">
-          <div class="logo">
-            ${d.companyLogo ? `<img class="mark" src="${esc(d.companyLogo)}" alt="${esc(d.companyName)}">` : `
-            <div class="word">${esc(d.companyName)}</div>
-            <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
-              <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
-            </svg>
-            <div class="tag">Courier &amp; Logistics</div>`}
-          </div>
-        </div>
-        <div class="co co--company">
-          <h2>${esc(d.companyName)}</h2>
-          ${d.companyAddress ? `<p>${esc(d.companyAddress)}</p>` : ''}
-          <p>
-            ${d.companyGst ? `GSTIN: ${esc(d.companyGst)}` : ''}
-            ${d.companyGst && d.companyContact ? ' &nbsp;|&nbsp; ' : ''}
-            ${d.companyContact ? `Ph: ${esc(d.companyContact)}` : ''}
-          </p>
-          ${d.companyWebsite ? `<p>${esc(d.companyWebsite)}</p>` : ''}
-        </div>
-        <div class="lrbox">
-          <span class="lrbox-label">LR No</span>
-          <span class="lrbox-no">${esc(d.trackingNumber)}</span>
-          <div class="lrbox-barcode">${barcodeSvg(d.trackingNumber)}</div>
-          <div class="lrbox-qr">${qrSvg(d.shipmentNumber)}</div>
-        </div>
-      </div>
+      ${renderPrintHeader(d, { label: 'LR No', value: d.trackingNumber, barcodeValue: d.trackingNumber, qrValue: d.shipmentNumber })}
 
       <!-- TITLE STRIP -->
       <div class="title">
@@ -327,27 +381,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .receipt-inner{border:2px solid var(--line)}
 
   /* header */
-  .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid var(--line)}
-  .head > div{padding:7px 10px}
-  .head .brand{display:flex;align-items:center;justify-content:center}
-  .logo{line-height:1;text-align:center}
-  .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
-  .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
-  .logo .swoosh{display:block;margin:2px auto 0}
-  .logo .tag{font-size:10px;color:var(--orange);font-weight:600;margin-top:2px}
-  .co{font-size:13px;line-height:1.3;border-left:2px solid var(--line)}
-  .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
-  .co p{margin:0;color:var(--muted);text-align:center}
-  .co--company{display:flex;flex-direction:column;justify-content:center}
-  .co--company h2{font-size:17px}
-  .co--company p{font-size:12px;line-height:1.5}
-  .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
-  .lrbox-label{font-size:11px;font-weight:700;color:var(--muted)}
-  .lrbox-no{font-size:16px;font-weight:800}
-  .lrbox-barcode{line-height:0}
-  .lrbox-barcode svg{width:150px;height:34px}
-  .lrbox-qr{line-height:0}
-  .lrbox-qr svg{width:52px;height:52px}
+  ${PRINT_HEADER_CSS}
 
   /* title strip */
   .title{display:grid;grid-template-columns:1fr auto;align-items:start;gap:16px;padding:8px 14px 10px;border-bottom:2px solid var(--line)}

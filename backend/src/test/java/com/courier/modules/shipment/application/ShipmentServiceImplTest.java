@@ -120,6 +120,12 @@ class ShipmentServiceImplTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
     @Mock private ShipmentAssetRepository shipmentAssetRepository;
+    @Mock private com.courier.modules.shipment.domain.DeliveryDispatchOtpRepository deliveryDispatchOtpRepository;
+    @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock private com.courier.modules.company.application.CompanySettingsService companySettingsService;
+    @Mock private com.courier.modules.communication.application.CommunicationSettingService communicationSettingService;
+    @Mock private com.courier.modules.communication.application.provider.SmsProvider smsProvider;
+    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private ShipmentServiceImpl service;
 
@@ -132,7 +138,9 @@ class ShipmentServiceImplTest {
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
                 ewayBillService, freightCalculationService, branchPincodeMappingService,
-                applicableChargesCalculator, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository);
+                applicableChargesCalculator, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository,
+                deliveryDispatchOtpRepository, passwordEncoder, companySettingsService, communicationSettingService,
+                smsProvider, objectMapper);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -161,6 +169,9 @@ class ShipmentServiceImplTest {
         // below stays valid without needing to know about District Level Freight at all.
         when(freightCalculationService.calculate(any(), any(), any(), any()))
                 .thenReturn(freightCalculationResult(new BigDecimal("100.00"), BigDecimal.ZERO));
+
+        when(companySettingsService.get())
+                .thenReturn(com.courier.modules.company.domain.CompanySettings.builder().build());
     }
 
     @AfterEach
@@ -523,72 +534,30 @@ class ShipmentServiceImplTest {
 
         service.create(command());
 
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
         verify(eventPublisher).publishEvent(any(ShipmentEvent.PrepaidBookingConfirmed.class));
     }
 
-    // ------------------------------------------------------------ transitionToDispatched
+    // Commission-on-dispatch tests moved to ShipmentMovementServiceImplTest's scanOneIn
+    // section — commission now credits on in-scan at the final delivery branch, not on
+    // Trip Challan (manifest dispatch) creation. See ShipmentEvent.InScanCommissionEarned.
 
     @Test
-    @DisplayName("dispatching a manifest credits only the branch's own commission (not the "
-            + "company's) for a PREPAID shipment when its booking branch has instantCommission on")
-    void dispatchPublishesCommissionWhenInstant() {
+    @DisplayName("dispatching a manifest no longer publishes any commission event — "
+            + "commission credits later, on in-scan at the final delivery branch")
+    void dispatchNeverPublishesCommission() {
         Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        UUID manifestId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
         when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
                 .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
         when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
         when(branchService.getById(BOOKING_BRANCH)).thenReturn(
                 Branch.builder().branchCode("PUNE").instantCommission(true).build());
 
-        service.transitionToDispatched(List.of(shipment.getId()), manifestId, vehicleId, BOOKING_BRANCH);
-
-        org.mockito.ArgumentCaptor<ShipmentEvent.DispatchCommissionEarned> captor =
-                org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DispatchCommissionEarned.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        // commissionOnBasicFreight (10) + branchCommissionOnOtherAmount (5), never the
-        // stored totalCommission, which also folds in the company's own cut.
-        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
-        assertThat(captor.getValue().shipmentId()).isEqualTo(shipment.getId());
-        assertThat(captor.getValue().bookingBranchId()).isEqualTo(BOOKING_BRANCH);
-    }
-
-    @Test
-    @DisplayName("dispatching a manifest publishes no commission when the booking branch has "
-            + "instantCommission off")
-    void dispatchSkipsCommissionWhenNotInstant() {
-        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
-                .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
-        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
-        when(branchService.getById(BOOKING_BRANCH)).thenReturn(
-                Branch.builder().branchCode("PUNE").instantCommission(false).build());
-
         service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
                 BOOKING_BRANCH);
 
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
-    }
-
-    @Test
-    @DisplayName("dispatching a manifest publishes no commission for a TO_PAY/COD shipment")
-    void dispatchSkipsCommissionWhenNotCollectAtBooking() {
-        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
-                .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
-        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(false));
-
-        service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
-                BOOKING_BRANCH);
-
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
+        verify(chargeRepository, never()).findByShipmentIdIn(any());
     }
 
     @Test

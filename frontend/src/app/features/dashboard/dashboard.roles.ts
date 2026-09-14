@@ -74,7 +74,8 @@ const T = {
   inSorting:      { key: 'inSorting', label: 'In Sorting', icon: 'sort', tone: 'warning' },
   totalCompanies: { key: 'totalCompanies', label: 'Total Companies', icon: 'apartment', tone: 'brand' },
   activeCompanies:{ key: 'activeCompanies', label: 'Active Companies', icon: 'domain_verification', tone: 'success' },
-  totalShipments: { key: 'totalShipments', label: 'Total Shipments', icon: 'inventory_2', tone: 'info' }
+  totalShipments: { key: 'totalShipments', label: 'Total Shipments', icon: 'inventory_2', tone: 'info' },
+  totalActualWeight: { key: 'totalActualWeight', label: 'Total Actual Weight (kg)', icon: 'scale', tone: 'info' }
 } satisfies Record<string, StatTileDef>;
 
 // --- quick actions --------------------------------------------------------
@@ -105,7 +106,8 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
     sections: { ...allSectionsOff, shipmentTrend: true, revenueTrend: true, recentActivity: true }
   },
   COMPANY: {
-    stats: [T.todayShipments, T.delivered, T.inTransit, T.pending, T.revenue, { ...T.activeBranches, tone: 'danger' }],
+    stats: [T.todayShipments, T.totalActualWeight, T.revenue, T.delivered, T.inTransit, T.pending,
+      { ...T.activeBranches, tone: 'danger' }],
     quickActions: [],
     sections: {
       shipmentTrend: true, deliveryPerformance: true, revenueTrend: true,

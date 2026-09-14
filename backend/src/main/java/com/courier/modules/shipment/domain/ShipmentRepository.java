@@ -78,6 +78,10 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     List<DailyCountRow> countDailyByBookingDateBetween(@Param("start") LocalDate start,
                                                         @Param("end") LocalDate end);
 
+    @Query("select coalesce(sum(s.actualWeight), 0) from Shipment s "
+            + "where s.bookingDate between :start and :end")
+    BigDecimal sumActualWeightByBookingDateBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
+
     // -------------------------------------------------------------- company-scoped
     // Explicit companyId predicate, not left to the implicit Hibernate companyFilter —
     // DashboardServiceImpl.summary() is deliberately not @Transactional (see its own
@@ -87,6 +91,12 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     // (see MEMORY: dashboard-cross-tenant-leak — this is ISSUE-001's actual fix).
 
     long countByCompanyIdAndBookingDateBetween(UUID companyId, LocalDate start, LocalDate end);
+
+    @Query("select coalesce(sum(s.actualWeight), 0) from Shipment s "
+            + "where s.companyId = :companyId and s.bookingDate between :start and :end")
+    BigDecimal sumActualWeightByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
+                                                                @Param("start") LocalDate start,
+                                                                @Param("end") LocalDate end);
 
     long countByCompanyIdAndStatus(UUID companyId, ShipmentStatus status);
 
@@ -205,6 +215,13 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
             UUID companyId, UUID bookingBranchId, LocalDate start, LocalDate end);
+
+    @Query("select coalesce(sum(s.actualWeight), 0) from Shipment s "
+            + "where s.companyId = :companyId and s.bookingBranchId = :bookingBranchId "
+            + "and s.bookingDate between :start and :end")
+    BigDecimal sumActualWeightByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
+            @Param("start") LocalDate start, @Param("end") LocalDate end);
 
     long countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
             UUID companyId, UUID bookingBranchId, ShipmentStatus status, LocalDate start, LocalDate end);

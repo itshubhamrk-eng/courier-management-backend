@@ -43,6 +43,12 @@ public interface CompanyRoleRepository extends JpaRepository<CompanyRole, UUID>,
     Optional<CompanyRole> findByIdWithinCompany(@Param("id") UUID id,
                                                @Param("companyId") UUID companyId);
 
+    /** Batched counterpart of {@link #findByIdWithinCompany}, for resolving a department's
+     *  several role grants in one query instead of one per id. */
+    @Query("select r from CompanyRole r where r.companyId = :companyId and r.id in :ids")
+    List<CompanyRole> findAllByIdInWithinCompany(@Param("ids") java.util.Collection<UUID> ids,
+                                                 @Param("companyId") UUID companyId);
+
     /** The role a new user receives when none is specified. At most one per company. */
     @Query("select r from CompanyRole r where r.companyId = :companyId and r.defaultRole = true")
     Optional<CompanyRole> findDefaultRole(@Param("companyId") UUID companyId);

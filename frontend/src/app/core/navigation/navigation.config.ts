@@ -85,6 +85,7 @@ export const NAVIGATION: NavNode[] = [
     id: 'administration', title: 'Administration', icon: 'admin_panel_settings', order: 2,
     children: [
       { id: 'users', title: 'Users', icon: 'group', route: '/users', permission: 'USER_VIEW', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
+      { id: 'departments', title: 'Departments', icon: 'apartment', route: '/departments', permission: 'DEPARTMENT_VIEW', roles: ADMINS },
       { id: 'roles', title: 'Roles', icon: 'badge', route: '/roles', permission: 'ROLE_VIEW', roles: ADMINS },
       { id: 'permissions', title: 'Permissions', icon: 'key', route: '/permissions', permission: 'PERMISSION_VIEW', roles: ADMINS },
       { id: 'permission-assign', title: 'Assign Permissions', icon: 'rule', route: '/permissions/assign', permission: 'PERMISSION_ASSIGN', roles: [AppRole.COMPANY_ADMIN] },

@@ -79,7 +79,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Status</th><th></th></tr>
+                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                   @for (s of filteredShipments(); track s.id; let i = $index) {
@@ -87,6 +87,8 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                       <td>{{ i + 1 }}</td>
                       <td>{{ s.trackingNumber }}</td>
                       <td>{{ s.receiverName }}</td>
+                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                      <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                       <td><app-shipment-status-badge [status]="s.status" /></td>
                       <td class="tbl--right">
                         @if (s.status === 'OUT_FOR_DELIVERY') {
@@ -106,7 +108,8 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
         <app-card>
           <div class="sh">
             <div><strong>{{ s.trackingNumber }}</strong>
-              <span class="text-caption">{{ s.senderName }} → {{ s.receiverName }}, {{ s.receiverContact }}</span></div>
+              <span class="text-caption">{{ s.senderName }} → {{ s.receiverName }}, {{ s.receiverContact }}</span><br>
+              <span class="text-caption">{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }} &nbsp;·&nbsp; {{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</span></div>
             <app-button variant="stroked" icon="close" (pressed)="reset()">Back to List</app-button>
           </div>
           @if (paymentMode(); as pm) {
@@ -311,6 +314,9 @@ export class Delivery implements OnInit {
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);
+  /** Branch id -> "Name (CODE)" for the worklist's From Branch / To Branch column — same
+   *  `branchDirectory()` lookup Loading Sheet/THC already use for the same reason. */
+  readonly branchNames = signal<Map<string, string>>(new Map());
   readonly searchControl = new FormControl('');
   readonly statusControl = new FormControl<StatusFilter>('ALL');
   readonly statusOptions: SelectOption[] = [
@@ -341,6 +347,8 @@ export class Delivery implements OnInit {
     this.statusControl.valueChanges.subscribe(() => this.load());
     this.pendingTrackingNumber = this.route.snapshot.queryParamMap.get('trackingNumber');
     if (this.pendingTrackingNumber) this.searchControl.setValue(this.pendingTrackingNumber);
+    this.masters.branchDirectory().subscribe((list) =>
+      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
     this.load();
     this.destroyRef.onDestroy(() => this.stopQrScan());
   }
