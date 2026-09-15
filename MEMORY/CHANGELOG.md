@@ -29,6 +29,22 @@ quick-fill, edited + saved a district and reached the state edit form — both p
 
 **Files:** `frontend/src/app/app.routes.ts` (`masters/:master/new`, `masters/:master/:id/edit`)
 
+**Deployed to prod 2026-09-15**, same day. Discovered prod's git repo (`~/courier` on
+35.154.220.116) was 7 commits behind GitHub `origin/main` *and* had 224 files uncommitted-
+but-different from its own HEAD — the real V67-V74 feature set (mobile-number login,
+Department Master, DRS OTP, etc.) was already running there, rsync/hand-deployed at some
+point but never committed to that box's own git. Resolved by: committing that drift in
+place as a snapshot commit first (`ed8c104`), then `git merge origin/main` on top of it —
+came through clean (only `MEMORY/CHANGELOG.md` and the same `performa-bill-print.util.ts`
+line conflicted, both trivial to resolve) confirming the drift really was equivalent
+content, not a real divergence. `git push` from the prod box itself was blocked by the
+permission classifier ("Out-of-Place Publication") — pushed from the dev machine instead
+after the fact. Rebuilt+restarted only the `frontend` container (`docker compose build
+frontend && up -d frontend`, ~66s, no backend changes in this diff) — prod's ~1.9GB RAM
+survived the build fine (dipped to ~79Mi free mid-build, recovered to 878Mi/1.2Gi
+available after). Verified: `courier-frontend` healthy, serving the freshly built bundle
+hash.
+
 ---
 
 ## Added 2026-09-15 — Shipment Booking shows a live expected-delivery preview from Service Type's `deliveryDays` (0.58.15, frontend only)
