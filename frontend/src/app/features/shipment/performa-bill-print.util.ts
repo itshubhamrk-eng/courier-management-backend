@@ -44,7 +44,6 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     `<tr><td>GST Applied</td><td>&#8377; ${d.charges.gstAmount.toFixed(2)}</td></tr>`;
   const chargeRows: Array<[string, number]> = [
     ['Unloading Delivery Charges', 0],
-    ['Demurrage Charge', 0],
     ['Reschedule Fine', 0]
   ];
   const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =

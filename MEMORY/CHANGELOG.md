@@ -8,6 +8,48 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-15 — SUPER_ADMIN denied editing District/State (global masters `new`/`edit` routes hardcoded to COMPANY_ADMIN)
+
+Direct report: "Super admin not able to edit district and sate getting access denied."
+Backend `@PreAuthorize` on `DistrictServiceImpl`/`StateServiceImpl` was already correct
+(`hasRole('SUPER_ADMIN')` for global lists) — confirmed via curl login as
+`super.admin@gmail.com` / `Pass@1234`, PUT district succeeded 200. `master-list.ts` and
+`master-view.ts` already narrow per-list access correctly via `writeAccessFor` (reads
+`MasterDefinition.global`/`writeRoles`), but `app.routes.ts`'s `masters/:master/new` and
+`masters/:master/:id/edit` routes had `data.roles` hardcoded to `[AppRole.COMPANY_ADMIN]`
+instead of the union `MASTERS_READERS` (`ADMINS` = SUPER_ADMIN + COMPANY_ADMIN) that the
+sibling list/view routes already used — `MasterFormPage` has no per-definition narrowing
+of its own, so the route guard was the only gate and it silently 403'd SUPER_ADMIN before
+the page ever loaded. Fixed by changing both routes' `data.roles` to `MASTERS_READERS`;
+backend's per-service `@PreAuthorize` remains the real enforcement, so a COMPANY_ADMIN
+hitting a global-only route (or vice versa) still gets refused on submit. Verified live:
+`ng serve --port 4300` against real `:8100` backend, logged in via "Super Admin" dev
+quick-fill, edited + saved a district and reached the state edit form — both previously
+"access denied", both now work.
+
+**Files:** `frontend/src/app/app.routes.ts` (`masters/:master/new`, `masters/:master/:id/edit`)
+
+---
+
+## Added 2026-09-15 — Shipment Booking shows a live expected-delivery preview from Service Type's `deliveryDays` (0.58.15, frontend only)
+
+Direct request: "based on service type show delivery date, days config in service type."
+Backend already had everything (`ServiceType.deliveryDays`, master-form field, and
+`ShipmentServiceImpl.expectedDeliveryDate()` = `bookingDate + deliveryDays`, saved on
+create/update) — only the booking screen's live preview (before submit) was missing.
+
+`MasterDataService` gained `serviceTypeDirectory()` (mirrors `branchDirectory()`): raw
+`ServiceType[]` rows including `deliveryDays`, cached, invalidated on write — `options()`
+stays {value,label}-only since 12 other call sites depend on that shape.
+`ShipmentCreate` computes `expectedDeliveryPreview` client-side (string date arithmetic on
+`bookingDate`, no API call) on every `serviceTypeId`/`bookingDate` change and shows it as a
+hint under the Service Type field: "Expected delivery: 16 Sep 2026". Client-side mirror
+only — the saved value still comes from the server response, this never feeds the payload.
+
+**Note for browser automation on this machine**: `computer` tool clicks on this app's
+custom `app-select`/dev-quick-fill buttons don't register (click lands but no Angular
+event fires) — dispatching via `javascript_tool` (`button.click()`) works reliably instead.
+
 ## Added 2026-09-15 — Qty-level Applicable Charges — a Hamali-style charge can price on average per-piece weight, paid per piece (V74, 0.58.14)
 
 Direct request: "hamali charge should be total actual weight/qty, if total actual weight
