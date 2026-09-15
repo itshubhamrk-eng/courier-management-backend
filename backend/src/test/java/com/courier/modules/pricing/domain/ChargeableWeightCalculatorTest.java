@@ -35,4 +35,31 @@ class ChargeableWeightCalculatorTest {
 
         assertThat(result).isEqualByComparingTo("3.000");
     }
+
+    @Test
+    @DisplayName("below the company minimum: floors to the minimum")
+    void belowMinimumFloorsUp() {
+        BigDecimal result = ChargeableWeightCalculator.calculate(
+                new BigDecimal("10.000"), new BigDecimal("2.000"), new BigDecimal("15.000"));
+
+        assertThat(result).isEqualByComparingTo("15.000");
+    }
+
+    @Test
+    @DisplayName("above the company minimum: prices on actual/volumetric, unfloored")
+    void aboveMinimumUnaffected() {
+        BigDecimal result = ChargeableWeightCalculator.calculate(
+                new BigDecimal("16.000"), new BigDecimal("2.000"), new BigDecimal("15.000"));
+
+        assertThat(result).isEqualByComparingTo("16.000");
+    }
+
+    @Test
+    @DisplayName("null minimum: behaves exactly like the two-arg form")
+    void nullMinimumIsNoFloor() {
+        BigDecimal result = ChargeableWeightCalculator.calculate(
+                new BigDecimal("1.000"), new BigDecimal("4.500"), null);
+
+        assertThat(result).isEqualByComparingTo("4.500");
+    }
 }

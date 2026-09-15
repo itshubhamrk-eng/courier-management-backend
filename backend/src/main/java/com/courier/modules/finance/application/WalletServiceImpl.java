@@ -764,7 +764,13 @@ public class WalletServiceImpl implements WalletService {
                                    PaymentStatus paymentStatus) {
 
         BigDecimal before = Wallet.normalise(wallet.getAvailableBalance());
-        BigDecimal after = type.isCredit() ? wallet.applyCredit(amount) : wallet.applyDebit(amount);
+        // TPY (TO_PAY received at branch) is a liability the branch owes the company the
+        // instant the shipment lands, not a spend against float it must already have —
+        // see Wallet.applyDebitAllowingOverdraft's own doc. Every other debit type still
+        // enforces no-overdraft.
+        BigDecimal after = type.isCredit() ? wallet.applyCredit(amount)
+                : reason == SubTransactionType.TPY ? wallet.applyDebitAllowingOverdraft(amount)
+                : wallet.applyDebit(amount);
 
         WalletTransaction entry = WalletTransaction.builder()
                 .transactionNo(nextTransactionNumber())

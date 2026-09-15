@@ -8,6 +8,66 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-15 — TO_PAY freight not debited at in-scan on prod (C-KOL-000010/000011)
+
+Direct report: booked C-KOL-000010 Kolhapur→Karad, TO_PAY, commission/topay not debited.
+Traced via prod backend logs (`docker logs courier-backend`, container restarted 10:57 UTC
+same day for an unrelated deploy, so C-KOL-000010's own booking-time logs were gone — the
+user re-tested with C-KOL-000011 which reproduced live): `ShipmentServiceImpl.scanOneIn`
+fires `ToPayReceivedAtDeliveryBranch` correctly at in-scan (`ShipmentServiceImpl.java:1137`),
+`ShipmentDeliveryWalletListener` catches it AFTER_COMMIT and calls
+`WalletServiceImpl.debitForToPayReceivedAtBranch`, which threw
+`BusinessRuleException: Insufficient wallet balance. Available INR 0.0000, required INR 880.0000`
+— Karad branch wallet was at ₹0. The AFTER_COMMIT/REQUIRES_NEW listener only logs this
+("reconcile manually"), so the shipment stayed IN_SCAN looking normal with the debit
+silently never happening. Not a logic bug in the trigger — `Wallet.applyDebit` (shared by
+every debit reason) enforces no-overdraft uniformly, which is right for a spend against
+existing float (`SBK`, `MDB`, `TRO`, …) but wrong for `TPY`: the branch's TO_PAY liability
+exists the instant the shipment lands, whether or not the branch already has that much
+float sitting in its wallet.
+
+Fixed with `Wallet.applyDebitAllowingOverdraft` (new method — same operational/positive
+checks as `applyDebit`, no balance floor) and wired only for `SubTransactionType.TPY` in
+`WalletServiceImpl.post()`; every other debit reason (including `COD`) is unchanged and
+still refuses to overdraw. User chose the code fix over a one-off wallet top-up.
+
+`mvn -o test -Dtest='com.courier.modules.finance.**'` 59→61 (2 new: TO_PAY overdraws,
+COD still refused). Not yet deployed to prod — Karad's wallet is presumably still negative
+for C-KOL-000010/000011 once this ships; those two need a manual reconcile since the debit
+never posted at all (no ledger entry to correct, just a missing one to add).
+
+**Files:** `backend/.../finance/domain/Wallet.java`,
+`backend/.../finance/application/WalletServiceImpl.java`,
+`backend/src/test/.../finance/application/WalletServiceImplTest.java`
+
+## Fixed 2026-09-15 — S3 file storage actually enabled on dev EC2
+
+Direct request ("s3") after adding In Scan remark/photo (see below): found the
+`courier-saas-pod-547268988887` bucket and `courier-pod-s3-role` IAM role from 0.17.9
+still existed, but `AWS_S3_ENABLED`/`AWS_S3_BUCKET`/`AWS_REGION` were never actually set
+in dev EC2's `~/courier/.env` — `UnconfiguredFileStorage` was live there despite the
+bucket existing, which is what the 2026-09-12 "no storage backend" finding caught (real
+symptom, incomplete diagnosis — see corrected memory `no-file-storage-backend-configured`).
+
+Widened `courier-pod-s3-role`'s inline policy to add the new `in-scan-photo/*` prefix
+(object read/write + bucket-list condition) alongside the existing `pod/*`,
+`ticket-attachment/*`, `shipment-photo/*` — the new in-scan upload endpoint would have
+403'd under the EC2 instance role otherwise, even though it works locally under a
+full-access IAM user. Appended the three env lines to dev EC2's `.env`,
+`docker compose up -d backend` to pick them up. Hit [[ec2-ssh-blocked-recurring]] again
+(dev EC2 this time, not just prod) — home IP had rotated, fixed with
+`authorize-security-group-ingress` on port 22.
+
+**Verified**: `docker logs courier-backend` shows "S3 file storage enabled (bucket
+courier-saas-pod-547268988887, region us-east-1)", app started clean. Real
+`POST /shipments/{id}/image-upload` (curled from inside the EC2 box against
+`localhost:8091` — its SG has no rule for that host port from the outside) returned a
+real `https://courier-saas-pod-547268988887.s3.us-east-1.amazonaws.com/...` URL;
+`aws s3 ls` confirmed the object landed in the bucket.
+
+**Not done**: prod EC2 (35.154.220.116) has no instance profile attached and no S3 env
+vars — POD/booking/in-scan photo upload still 422s there. Nobody's asked for that yet.
+
 ## Added 2026-09-15 — In Scan Pending stock shown on Branch Overview dashboard (0.58.16)
 
 Direct request: "show inscan pending stock on branch dashboard." New `BranchOverviewResponse.inScanPending`

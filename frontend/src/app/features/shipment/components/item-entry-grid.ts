@@ -21,7 +21,7 @@ const VOLUMETRIC_DIVISOR = 5000;
 
 /** Used only until the company's own `defaultChargeableWeightKg` (Company Settings →
  *  Shipment) loads — see the `defaultWeightKg` input below. */
-const FALLBACK_DEFAULT_WEIGHT_KG = 20;
+const FALLBACK_DEFAULT_WEIGHT_KG = 15;
 
 function emptyRow(weightKg: number = FALLBACK_DEFAULT_WEIGHT_KG): ItemRow {
   // itemName defaults to a real value, not '' — toRequests() below filters out any row
@@ -141,7 +141,17 @@ export class ItemEntryGrid {
       return sum + v * (r.quantity || 1);
     }, 0));
 
-  protected readonly chargeableWeight = computed(() => Math.max(this.actualWeight(), this.volumetricWeight()));
+  // Mirrors the backend's real pricing floor (CompanySettings.defaultChargeableWeightKg,
+  // enforced authoritatively in ShipmentServiceImpl/PricingEngineImpl) so the live preview
+  // matches what booking actually charges: a 10kg parcel previews (and prices) at the
+  // company's 15kg minimum, a 16kg one previews at its own 16kg. Only floors once the real
+  // setting has loaded — `defaultWeightKg() == null` means "not loaded yet", not "no floor",
+  // so it must not fall back to FALLBACK_DEFAULT_WEIGHT_KG (a prefill constant, not a floor).
+  protected readonly chargeableWeight = computed(() => {
+    const raw = Math.max(this.actualWeight(), this.volumetricWeight());
+    const floor = this.defaultWeightKg();
+    return floor == null ? raw : Math.max(raw, floor);
+  });
 
   private seededDefaultWeight = false;
 

@@ -32,13 +32,13 @@ describe('ItemEntryGrid — weight preview', () => {
   });
 
   it('an untouched starting row previews the default weight and is itself a real item', () => {
-    // DEFAULT_WEIGHT_KG (20) prefills every new row so the preview isn't a misleading
+    // FALLBACK_DEFAULT_WEIGHT_KG (15) prefills every new row so the preview isn't a misleading
     // zero, and itemName defaults to 'Package' (a real value, not just a placeholder) so
     // an untouched row is exactly the "one implicit package" a single-item booking is —
     // it must survive to the emitted item list unedited, or nothing ever gets booked.
-    expect(weight).toEqual({ actual: 20, volumetric: 0, chargeable: 20 });
+    expect(weight).toEqual({ actual: 15, volumetric: 0, chargeable: 15 });
     expect(items).toEqual([{
-      itemName: 'Package', quantity: 1, weight: 20,
+      itemName: 'Package', quantity: 1, weight: 15,
       lengthCm: null, widthCm: null, heightCm: null,
       declaredValue: null, fragile: false, dangerousGoods: false
     }]);

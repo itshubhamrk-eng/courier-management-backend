@@ -60,6 +60,10 @@ export interface ConsignmentPrintData {
   /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
    *  GST-free, unlike {@link otherCharges}. Zero/absent when not an appointment booking. */
   appointmentDeliveryCharge?: number;
+  /** Booking form's Appointment Date/Time Slot fields — set together with
+   *  {@link appointmentDeliveryCharge} when Appointment Delivery is checked, absent otherwise. */
+  appointmentDate?: string | null;
+  appointmentTimeSlot?: string | null;
   /** Manual, typed at booking time when Delivery Type is DOOR — taxed with GST (folded
    *  into `charges.gstAmount`), unlike {@link appointmentDeliveryCharge}. Zero/absent when
    *  Office Delivery. */

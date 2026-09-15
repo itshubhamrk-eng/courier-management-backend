@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record DrsShipmentRowResponse(
         UUID shipmentId, String shipmentNumber, String trackingNumber,
-        String receiverName, String receiverContact, UUID paymentModeId,
+        String receiverName, String receiverAddress, String receiverContact, UUID paymentModeId,
         BigDecimal netAmount, ShipmentStatus status, Instant deliveredAt,
         /** The shipment's E-Way Bill number, null where none exists or Part-A hasn't
          *  succeeded yet. */

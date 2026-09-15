@@ -44,7 +44,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>#</th><th>Tracking No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Contact</th><th>From</th><th>To</th><th>Payment</th>
+                  <th>#</th><th>Tracking No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Address</th><th>Contact</th><th>From</th><th>To</th><th>Payment</th>
                   <th class="tbl--right">Amount</th><th>Status</th><th>Delivered At</th>
                 </tr>
               </thead>
@@ -55,6 +55,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
                     <td class="mono">{{ s.trackingNumber }}</td>
                     <td class="mono">{{ s.ewayBillNumber || '—' }}</td>
                     <td>{{ s.receiverName }}</td>
+                    <td class="tbl--address">{{ s.receiverAddress || '—' }}</td>
                     <td class="mono">{{ s.receiverContact }}</td>
                     <td>{{ s.fromCity || '—' }}</td>
                     <td>{{ s.toCity || '—' }}</td>
@@ -66,7 +67,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
                 }
               </tbody>
               <tfoot>
-                <tr><td colspan="8">Total</td><td class="tbl--right">₹{{ totalAmount() | number: '1.2-2' }}</td><td colspan="2"></td></tr>
+                <tr><td colspan="9">Total</td><td class="tbl--right">₹{{ totalAmount() | number: '1.2-2' }}</td><td colspan="2"></td></tr>
               </tfoot>
             </table>
           </div>
@@ -83,6 +84,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
     .tbl td { padding:10px 14px; border-top:1px solid var(--surface-border); white-space:nowrap; }
     .tbl tfoot td { font-weight:600; border-top:2px solid var(--surface-border); }
     .tbl--right { text-align:right; }
+    .tbl--address { white-space:normal; min-width:200px; }
     .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
   `]
 })

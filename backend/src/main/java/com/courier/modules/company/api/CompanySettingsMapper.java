@@ -17,7 +17,7 @@ public class CompanySettingsMapper {
                 r.awbPrefix(), r.awbRunningNumber(), r.bookingPrefix(), r.manifestPrefix(),
                 r.defaultServiceType(), r.defaultPackageType(), r.weightUnit(), r.dimensionUnit(),
                 r.autoGenerateBarcode(), r.allowDuplicateReferenceNumber(), r.autoAssignTrackingNumber(),
-                r.defaultChargeableWeightKg(),
+                r.defaultChargeableWeightKg(), r.defaultAppointmentDeliveryCharge(),
                 r.gstPercentage(), r.invoicePrefix(), r.creditLimit(), r.walletEnabled(),
                 r.codEnabled(), r.onlinePaymentEnabled(), r.autoInvoiceGeneration(), r.roundOffRule(),
                 r.netAmountMaxDecreasePercent(), r.netAmountMaxIncreasePercent(),
@@ -46,7 +46,7 @@ public class CompanySettingsMapper {
                         s.getManifestPrefix(), s.getDefaultServiceType(), s.getDefaultPackageType(),
                         s.getWeightUnit(), s.getDimensionUnit(), s.isAutoGenerateBarcode(),
                         s.isAllowDuplicateReferenceNumber(), s.isAutoAssignTrackingNumber(),
-                        s.getDefaultChargeableWeightKg()),
+                        s.getDefaultChargeableWeightKg(), s.getDefaultAppointmentDeliveryCharge()),
                 new CompanySettingsResponse.Finance(
                         s.getGstPercentage(), s.getInvoicePrefix(), s.getCreditLimit(),
                         s.isWalletEnabled(), s.isCodEnabled(), s.isOnlinePaymentEnabled(),

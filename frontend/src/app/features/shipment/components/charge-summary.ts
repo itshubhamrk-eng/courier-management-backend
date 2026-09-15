@@ -56,7 +56,7 @@ export interface ChargeSummaryData {
         <dt>Handling</dt><dd class="mono">{{ charges().handlingCharge | number: '1.2-2' }}</dd>
       }
       @if (charges().insuranceCharge) {
-        <dt>Insurance</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
+        <dt>FOV</dt><dd class="mono">{{ charges().insuranceCharge | number: '1.2-2' }}</dd>
       }
       @if (charges().applicableChargeLines?.length) {
         @for (line of charges().applicableChargeLines; track line.chargeName) {

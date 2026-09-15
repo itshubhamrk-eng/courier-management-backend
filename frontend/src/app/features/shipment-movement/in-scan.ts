@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { Observable, of } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 import { MatIconModule } from '@angular/material/icon';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -62,6 +64,17 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
           </div>
         </app-card>
 
+        <app-card title="Remark / Photo (optional)" subtitle="Applied to every shipment received below.">
+          <div class="row">
+            <app-input [control]="remarkControl" label="Remark" placeholder="e.g. box damaged, seal broken" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" (change)="onPhotoSelected($event)" />
+            @if (selectedPhoto(); as f) {
+              <span class="text-caption">{{ f.name }}</span>
+              <app-button variant="stroked" icon="close" (pressed)="clearPhoto()">Remove</app-button>
+            }
+          </div>
+        </app-card>
+
         <app-card title="Shipments on this Manifest">
           @if (loadingReceivingShipments()) {
             <app-loader [minHeight]="100" caption="Loading…" />
@@ -102,6 +115,14 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
             <app-input [control]="scanControl" label="Manifest / Shipment / AWB No." placeholder="MFT-… / SHP-… / AWB…" (keydown.enter)="scanOne()" />
             <app-button icon="qr_code_scanner" [loading]="scanning()" (pressed)="scanOne()">Scan</app-button>
           </div>
+          <div class="row row--sub">
+            <app-input [control]="remarkControl" label="Remark (optional)" placeholder="e.g. box damaged, seal broken" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" (change)="onPhotoSelected($event)" />
+            @if (selectedPhoto(); as f) {
+              <span class="text-caption">{{ f.name }}</span>
+              <app-button variant="stroked" icon="close" (pressed)="clearPhoto()">Remove</app-button>
+            }
+          </div>
         </app-card>
 
         @if (outcomes().length) {
@@ -136,8 +157,9 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
   styles: [`
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; }
     .section-title { margin:8px 0 0; }
-    .row { display:flex; gap:12px; align-items:flex-end; }
-    .row app-input { flex:1; }
+    .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+    .row app-input { flex:1; min-width:200px; }
+    .row--sub { margin-top:12px; }
     .ol { display:flex; flex-direction:column; gap:6px; }
     .ol__row { display:flex; align-items:center; gap:8px; font:400 13px var(--font-sans); color:var(--success-600, #16a34a); }
     .ol__row--fail { color:var(--danger-600, #dc2626); }
@@ -181,6 +203,11 @@ export class InScan implements OnInit {
   protected readonly selectedCount = computed(() => this.selectedTrackingNumbers().size);
 
   readonly scanControl = new FormControl('');
+  /** Shared by both scanOne() and confirmReceive() — one remark/photo per receive action,
+   *  attached to every shipment that action actually receives. */
+  readonly remarkControl = new FormControl('');
+  readonly selectedPhoto = signal<File | null>(null);
+  readonly uploadingPhoto = signal(false);
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'In Scan' }]);
@@ -206,6 +233,31 @@ export class InScan implements OnInit {
     if (!raw) return;
     this.scanControl.setValue('');
     this.resolve(raw);
+  }
+
+  protected onPhotoSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    this.selectedPhoto.set(file);
+  }
+
+  protected clearPhoto(): void {
+    this.selectedPhoto.set(null);
+  }
+
+  /** Uploads the selected photo (if any) and resolves to its URL, else resolves to null —
+   *  callers pipe this before the actual inScan() POST. */
+  private resolvePhotoUrl(): Observable<string | null> {
+    const file = this.selectedPhoto();
+    if (!file) return of(null);
+    this.uploadingPhoto.set(true);
+    return this.movementService.uploadInScanPhoto(file).pipe(
+      map((r) => { this.uploadingPhoto.set(false); return r.url; })
+    );
+  }
+
+  private resetRemarkAndPhoto(): void {
+    this.remarkControl.setValue('');
+    this.selectedPhoto.set(null);
   }
 
   /** One box, three identifiers: try Manifest No. first, then fall back to Shipment No. /
@@ -281,10 +333,13 @@ export class InScan implements OnInit {
       .map((s) => s.trackingNumber)
       .filter((t) => !selected.has(t));
     const manifestNumber = this.receivingManifest()?.manifestNumber ?? null;
+    const remarks = this.remarkControl.value?.trim() || null;
     this.scanning.set(true);
-    this.movementService.inScan({
-      receivingBranchId: this.myBranchId, trackingNumbers, manifestNumber, missingTrackingNumbers
-    }).subscribe({
+    this.resolvePhotoUrl().pipe(
+      switchMap((photoUrl) => this.movementService.inScan({
+        receivingBranchId: this.myBranchId!, trackingNumbers, manifestNumber, missingTrackingNumbers, remarks, photoUrl
+      }))
+    ).subscribe({
       next: (r) => {
         this.scanning.set(false);
         this.outcomes.set(r.results);
@@ -293,25 +348,38 @@ export class InScan implements OnInit {
         if (r.shortageTicketNumber) {
           this.notify.error(`${missingTrackingNumbers.length} shipment(s) not received — ticket ${r.shortageTicketNumber} raised for the company.`);
         }
+        this.resetRemarkAndPhoto();
         this.cancelReceive();
         if (r.successCount) this.loadPendingManifests();
       },
-      error: (e: HttpErrorResponse) => { this.scanning.set(false); this.notify.error(e.error?.message ?? 'Scan failed.'); }
+      error: (e: HttpErrorResponse) => {
+        this.scanning.set(false); this.uploadingPhoto.set(false);
+        this.notify.error(e.error?.message ?? 'Scan failed.');
+      }
     });
   }
 
   private runScan(trackingNumbers: string[]): void {
     if (!this.myBranchId) return;
+    const remarks = this.remarkControl.value?.trim() || null;
     this.scanning.set(true);
-    this.movementService.inScan({ receivingBranchId: this.myBranchId, trackingNumbers }).subscribe({
+    this.resolvePhotoUrl().pipe(
+      switchMap((photoUrl) => this.movementService.inScan({
+        receivingBranchId: this.myBranchId!, trackingNumbers, remarks, photoUrl
+      }))
+    ).subscribe({
       next: (r) => {
         this.scanning.set(false);
         this.outcomes.set(r.results);
         if (r.failureCount) this.notify.error(`${r.failureCount} of ${r.results.length} failed to receive.`);
         else this.notify.success(`${r.successCount} shipment(s) received.`);
+        this.resetRemarkAndPhoto();
         if (r.successCount) this.loadPendingManifests();
       },
-      error: (e: HttpErrorResponse) => { this.scanning.set(false); this.notify.error(e.error?.message ?? 'Scan failed.'); }
+      error: (e: HttpErrorResponse) => {
+        this.scanning.set(false); this.uploadingPhoto.set(false);
+        this.notify.error(e.error?.message ?? 'Scan failed.');
+      }
     });
   }
 }

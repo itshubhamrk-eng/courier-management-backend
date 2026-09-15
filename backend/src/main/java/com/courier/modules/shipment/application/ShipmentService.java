@@ -311,9 +311,28 @@ public interface ShipmentService {
      *                                "Shipment Issue", HIGH priority) against the company so
      *                                a short receipt is never silently lost. Null/empty
      *                                raises nothing, same behaviour as before this existed.
+     * @param remarks                 optional — replaces the default status-history text
+     *                                ("In scan"/"In scan at crossing hub…") on every
+     *                                shipment this call actually receives.
+     * @param photoUrl                optional — from {@link #uploadInScanPhoto}, attached as
+     *                                a shared {@code ShipmentAssetType.IN_SCAN} photo to every
+     *                                shipment this call actually receives.
      */
     BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers, String manifestNumber,
-                              List<String> missingTrackingNumbers);
+                              List<String> missingTrackingNumbers, String remarks, String photoUrl);
+
+    /**
+     * Uploads one photo taken while receiving shipments at In Scan — not tied to a single
+     * shipment up front (a batch scan may receive several), so it is stored under a
+     * {@code companyId/in-scan/…} key rather than {@code companyId/shipmentId/…} the way
+     * {@link #uploadShipmentImage} and {@link #uploadPodFile} are. The returned URL is
+     * passed into {@link #inScan}'s {@code photoUrl} and attached to every shipment that
+     * call actually receives.
+     */
+    String uploadInScanPhoto(UploadInScanPhotoCommand command);
+
+    record UploadInScanPhotoCommand(byte[] content, String filename, String contentType) {
+    }
 
     /**
      * Assigns a delivery user to every shipment id, each of which must be {@code IN_SCAN}.
@@ -402,7 +421,7 @@ public interface ShipmentService {
     }
 
     record DrsShipmentRow(UUID shipmentId, String shipmentNumber, String trackingNumber,
-                          String receiverName, String receiverContact, UUID paymentModeId,
+                          String receiverName, String receiverAddress, String receiverContact, UUID paymentModeId,
                           BigDecimal netAmount, com.courier.modules.shipment.domain.ShipmentStatus status,
                           java.time.Instant deliveredAt, String ewayBillNumber,
                           String fromCity, String toCity) {

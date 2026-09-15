@@ -35,6 +35,13 @@ export class ShipmentMovementService {
   inScan(body: InScanRequest) {
     return this.api.post<BulkMovementResult>(`${API.shipmentMovement}/in-scan`, body);
   }
+  /** Uploads a photo taken while receiving shipments (not tied to any one shipment yet) —
+   *  pass the returned URL into inScan()'s photoUrl. */
+  uploadInScanPhoto(file: File) {
+    const body = new FormData();
+    body.append('file', file);
+    return this.api.post<{ url: string }>(`${API.shipmentMovement}/in-scan-upload`, body);
+  }
   outForDelivery(body: OutForDeliveryRequest) {
     return this.api.post<BulkMovementResult>(`${API.shipmentMovement}/out-for-delivery`, body);
   }

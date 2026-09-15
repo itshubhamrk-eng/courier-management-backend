@@ -145,7 +145,14 @@ public class CompanySettings extends CompanyOwnedEntity {
      *  with no minimum. */
     @Column(name = "default_chargeable_weight_kg", precision = 10, scale = 3, nullable = false)
     @Builder.Default
-    private BigDecimal defaultChargeableWeightKg = new BigDecimal("20.000");
+    private BigDecimal defaultChargeableWeightKg = new BigDecimal("15.000");
+
+    /** Prefilled onto the Appointment Charge field when Appointment Delivery is checked
+     *  at booking time — a UX default the desk can still type over; not GST-applied,
+     *  see {@code ShipmentServiceImpl}'s charge breakup doc comment. */
+    @Column(name = "default_appointment_delivery_charge", precision = 19, scale = 4, nullable = false)
+    @Builder.Default
+    private BigDecimal defaultAppointmentDeliveryCharge = new BigDecimal("1000.0000");
 
     // === Finance ============================================================
 

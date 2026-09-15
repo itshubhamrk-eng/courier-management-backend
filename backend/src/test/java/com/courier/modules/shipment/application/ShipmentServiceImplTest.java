@@ -186,6 +186,13 @@ class ShipmentServiceImplTest {
     @DisplayName("a TO_PAY booking computes weight from the item grid, prices through the "
             + "engine, persists items/charges/history, and never touches the wallet")
     void bookingSucceeds() {
+        // Zeroed explicitly: this test is about the item-grid-to-engine wiring, not the
+        // minimum chargeable weight floor (covered by its own test below) — otherwise the
+        // booking's 5.000kg would floor to the @BeforeEach stub's entity default (15.000).
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .defaultChargeableWeightKg(BigDecimal.ZERO).build());
+
         Shipment created = service.create(command());
 
         assertThat(created.getShipmentNumber()).isEqualTo("PUNE-000001");
@@ -210,6 +217,35 @@ class ShipmentServiceImplTest {
         verify(customerService).findOrCreateForBooking("Asha Shah", "9876543210");
         verify(customerService).findOrCreateForBooking("Rahul Verma", "9876500000");
         verify(crossingService, never()).createLegs(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a booking below the company's minimum chargeable weight prices at the "
+            + "minimum, not its own lighter actual/volumetric weight; one above it prices "
+            + "at its own weight, unfloored")
+    void chargeableWeightNeverPricesBelowTheCompanyMinimum() {
+        // @BeforeEach's stub already carries the entity default (15.000kg) — command()'s
+        // 5.000kg item has no dimensions, so actual == volumetric-less chargeable == 5.000
+        // before the floor.
+        Shipment belowMinimum = service.create(command());
+        assertThat(belowMinimum.getActualWeight()).isEqualByComparingTo("5.000");
+        assertThat(belowMinimum.getChargeableWeight()).isEqualByComparingTo("15.000");
+
+        // Same @BeforeEach stub (15.000kg minimum) — a 16.000kg item is above it, so it
+        // prices at its own weight instead.
+        CreateShipmentCommand aboveMinimum = new CreateShipmentCommand(
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                "Asha Shah", "221B Baker Street, Pune", "9876543210",
+                "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
+                SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
+                List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("16.000"),
+                        null, null, null, null, false, false)),
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null);
+        Shipment aboveMinimumShipment = service.create(aboveMinimum);
+        assertThat(aboveMinimumShipment.getActualWeight()).isEqualByComparingTo("16.000");
+        assertThat(aboveMinimumShipment.getChargeableWeight()).isEqualByComparingTo("16.000");
     }
 
     @Test

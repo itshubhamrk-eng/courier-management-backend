@@ -68,19 +68,24 @@ public class PricingEngineImpl implements PricingEngine {
         BigDecimal volumetricWeight = VolumetricCalculator.calculate(
                 command.length(), command.width(), command.height(),
                 configuration.volumetricDivisor());
-        BigDecimal chargeableWeight =
-                ChargeableWeightCalculator.calculate(actualWeight, volumetricWeight);
-
+        // The minimum chargeable weight floor (CompanySettings.defaultChargeableWeightKg)
+        // is applied inside each branch below, not here — a caller that never reaches
+        // pricing (route/rate validation refuses first) must not pay for a CompanySettings
+        // lookup it will never use.
         try {
             Route route = routeValidation.validate(command);
             LocalDate bookingDate = bookingValidation.validate(command);
             List<Rate> candidates = rateValidation.validate(route.getId(), command, bookingDate);
 
-            // Resolved only on the priced (non-fallback) path — Freight Factor's own
-            // fallback below deliberately carries no round-off (see priceByDistanceAndWeight),
-            // so it has no reason to pay for a CompanySettings lookup it will not use.
+            // One CompanySettings lookup covers both the round-off override and the
+            // minimum chargeable weight floor — resolved only on the priced (non-fallback)
+            // path, so a caller that falls through to Freight Factor below isn't charged
+            // for a lookup this branch alone needed.
+            CompanySettings settings = companySettingsService.get();
+            BigDecimal chargeableWeight = ChargeableWeightCalculator.calculate(
+                    actualWeight, volumetricWeight, settings.getDefaultChargeableWeightKg());
             PricingContext context = new PricingContext(
-                    command, configuration.withRoundingRule(resolveRoundingRule()));
+                    command, configuration.withRoundingRule(resolveRoundingRule(settings)));
             context.matchedRoute(route);
             context.candidates(candidates);
             context.bookingDate(bookingDate);
@@ -91,7 +96,7 @@ public class PricingEngineImpl implements PricingEngine {
             PricingStrategy strategy = pricingFactory.resolve(context);
             return strategy.price(context);
         } catch (RouteRateUnavailableException noRouteRate) {
-            return priceByDistanceAndWeight(command, actualWeight, volumetricWeight, chargeableWeight);
+            return priceByDistanceAndWeight(command, actualWeight, volumetricWeight);
         }
     }
 
@@ -142,10 +147,6 @@ public class PricingEngineImpl implements PricingEngine {
      * on this one) — resolved to the real enum here, falling back to the deployment
      * default on a blank or since-renamed value rather than failing the whole booking.
      */
-    private RoundingRule resolveRoundingRule() {
-        return resolveRoundingRule(companySettingsService.get());
-    }
-
     private RoundingRule resolveRoundingRule(CompanySettings settings) {
         String stored = settings.getRoundOffRule();
         if (stored == null || stored.isBlank()) {
@@ -159,7 +160,13 @@ public class PricingEngineImpl implements PricingEngine {
     }
 
     private PricingResult priceByDistanceAndWeight(PricingCommand command, BigDecimal actualWeight,
-                                                    BigDecimal volumetricWeight, BigDecimal chargeableWeight) {
+                                                    BigDecimal volumetricWeight) {
+        // Fetched once, up front — needed for the floor below (before grid matching, so a
+        // below-minimum shipment matches the slab its floored weight actually falls in,
+        // not the one its raw weight would have) and reused for GST/round-off further down.
+        var settings = companySettingsService.get();
+        BigDecimal chargeableWeight = ChargeableWeightCalculator.calculate(
+                actualWeight, volumetricWeight, settings.getDefaultChargeableWeightKg());
         var matchOutcome = freightFactorService.tryCalculate(new FreightCalculationCommand(
                 command.bookingBranchId(), command.deliveryBranchId(), chargeableWeight));
         BigDecimal matchedFactor = matchOutcome.map(r -> r.matchedFactor().getFactor()).orElse(null);
@@ -182,7 +189,6 @@ public class PricingEngineImpl implements PricingEngine {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
         BigDecimal taxableSubtotal = chargesSubtotal.add(applicableCharges);
-        var settings = companySettingsService.get();
         BigDecimal gstAmount = taxableSubtotal.multiply(settings.getGstPercentage())
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP);
         BigDecimal preRoundNetAmount = taxableSubtotal.add(gstAmount);

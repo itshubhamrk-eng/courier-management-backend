@@ -20,7 +20,7 @@ const COPY_LABELS: CopyLabel[] = ['Customer Copy', 'Office Copy', 'Driver Copy',
 
 function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
-  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
+  const total = d.charges.netAmount + d.otherCharges + (d.doorDeliveryCharge ?? 0);
   const taxableAmount = total - d.charges.gstAmount;
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
@@ -139,9 +139,14 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     </div>
 
     <!-- APPOINTMENT DELIVERY -->
-    ${d.appointmentDeliveryCharge
-      ? `<div class="row fields">
-      <div class="cell h1"><span class="k">Appointment Delivery :</span> &#8377; ${d.appointmentDeliveryCharge.toFixed(2)}</div>
+    ${d.appointmentDate || d.appointmentTimeSlot
+      ? `<div class="row appt">
+      <div class="appt-badge">Appointment Delivery</div>
+      <div class="appt-info">
+        ${d.appointmentDate ? `<span class="k">Date :</span> ${esc(d.appointmentDate)}` : ''}
+        ${d.appointmentDate && d.appointmentTimeSlot ? ' &nbsp;|&nbsp; ' : ''}
+        ${d.appointmentTimeSlot ? `<span class="k">Time Slot :</span> ${esc(d.appointmentTimeSlot)}` : ''}
+      </div>
     </div>`
       : ''}
 
@@ -259,6 +264,9 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   .copytag{font-weight:700;font-size:12px;align-self:center}
   .g1,.g2{flex:1}
   .g3,.g4{width:1.6in}
+  .appt{align-items:center;background:#fff3cd;border-top:1px solid #000}
+  .appt-badge{background:#e67e22;color:#fff;font-weight:700;font-size:12px;letter-spacing:.04em;padding:4px 10px;border-right:1px solid #000}
+  .appt-info{flex:1;padding:4px 8px;font-weight:700;font-size:12px}
   .h1,.h2,.h3{flex:1}
   .h4{flex:1}
   .h5{flex:1}

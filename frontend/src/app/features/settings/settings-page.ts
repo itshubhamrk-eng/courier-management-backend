@@ -102,6 +102,15 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                             (click)="saveDefaultWeight()">{{ savingWeight() ? 'Saving…' : 'Save' }}</button>
                   </div>
                 </div>
+                <div class="dcw">
+                  <label class="text-caption" for="dac-input">Default Appointment Delivery Charge</label>
+                  <div class="dcw__row">
+                    <input id="dac-input" class="dcw__i" type="number" step="0.01" min="0"
+                           [value]="defaultAppointmentChargeInput() ?? ''" (input)="onAppointmentChargeInput($event)" />
+                    <button type="button" class="dcw__save" [disabled]="savingAppointmentCharge() || defaultAppointmentChargeInput() == null"
+                            (click)="saveDefaultAppointmentCharge()">{{ savingAppointmentCharge() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
               }
               @if (s.key === 'finance') {
                 <div class="rzp">
@@ -196,6 +205,11 @@ export class SettingsPage implements OnInit {
   readonly defaultWeightInput = signal<number | null>(null);
   readonly savingWeight = signal(false);
 
+  /** Shipment's second inline field — same "no full edit dialog yet" treatment as
+   *  Default Chargeable Weight above. */
+  readonly defaultAppointmentChargeInput = signal<number | null>(null);
+  readonly savingAppointmentCharge = signal(false);
+
   /** A company's own Razorpay account, loaded separately from the rest of settings —
    *  it's its own COMPANY_ADMIN-only backend resource, not part of /company-settings. */
   readonly razorpay = signal<RazorpayConfigResponse | null>(null);
@@ -231,9 +245,12 @@ export class SettingsPage implements OnInit {
     this.service.get().subscribe({
       next: (d) => {
         this.data.set(d ?? {});
-        const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
+        const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number } })?.shipment;
         if (shipment?.defaultChargeableWeightKg != null) {
           this.defaultWeightInput.set(Number(shipment.defaultChargeableWeightKg));
+        }
+        if (shipment?.defaultAppointmentDeliveryCharge != null) {
+          this.defaultAppointmentChargeInput.set(Number(shipment.defaultAppointmentDeliveryCharge));
         }
         const finance = (d as { finance?: {
           roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
@@ -281,6 +298,26 @@ export class SettingsPage implements OnInit {
         this.notify.success('Default chargeable weight updated');
       },
       error: () => this.savingWeight.set(false)
+    });
+  }
+
+  onAppointmentChargeInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.defaultAppointmentChargeInput.set(v === '' ? null : Number(v));
+  }
+
+  saveDefaultAppointmentCharge(): void {
+    const value = this.defaultAppointmentChargeInput();
+    if (value == null || value < 0) return;
+    this.savingAppointmentCharge.set(true);
+    this.service.patchSection('shipment', { defaultAppointmentDeliveryCharge: value }).subscribe({
+      next: (d) => {
+        const shipment = (d as { shipment?: unknown })?.shipment;
+        if (shipment) this.data.update((prev) => ({ ...prev, shipment }));
+        this.savingAppointmentCharge.set(false);
+        this.notify.success('Default appointment delivery charge updated');
+      },
+      error: () => this.savingAppointmentCharge.set(false)
     });
   }
 

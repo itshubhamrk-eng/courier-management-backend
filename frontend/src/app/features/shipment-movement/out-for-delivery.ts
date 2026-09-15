@@ -412,8 +412,8 @@ export class OutForDelivery implements OnInit, OnDestroy {
       <td>${this.esc(s.toCity) || '—'}</td>
       <td>${this.esc(this.label(s.paymentModeId, this.paymentModeOptions()))}</td>
       <td class="right">${collectAmount(s) ?? '—'}</td>
-      <td></td>
-      <td></td>
+      <td class="c-sign"></td>
+      <td class="c-stamp"></td>
     </tr>`).join('');
     win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
       <style>
@@ -438,7 +438,8 @@ export class OutForDelivery implements OnInit, OnDestroy {
         td.right, th.right { text-align: right; }
         .c-sr { width: 26px; }
         .c-amount { width: 60px; }
-        .c-sign, .c-stamp { width: 70px; }
+        .c-sign, .c-stamp { width: 100px; }
+        td.c-sign, td.c-stamp { min-height: 34px; height: 34px; }
         .total-row td { font-weight: bold; min-height: 22px; }
         .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
         .footer-left { padding: 5px; border-right: 1px solid #000; }

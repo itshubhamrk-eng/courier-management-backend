@@ -129,7 +129,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
             <div class="spacer"></div>
             <label class="chk">
               <input type="checkbox" [formControl]="c('insuranceApplicable')" />
-              <span>Insurance Applicable <span class="fld__h">(2% of freight)</span></span>
+              <span>FOV Applicable <span class="fld__h">(2% of Invoice Value)</span></span>
             </label>
           </app-card>
 
@@ -218,6 +218,9 @@ export class ShipmentEdit implements OnInit {
   /** Company Settings → Shipment → default chargeable weight, for any new row added
    *  while editing. */
   protected readonly defaultChargeableWeightKg = signal<number | null>(null);
+  /** Company Settings → Shipment → default appointment delivery charge, prefilled onto
+   *  `appointmentDeliveryCharge` when the checkbox is checked. */
+  protected readonly defaultAppointmentDeliveryCharge = signal<number>(1000);
 
   private id = '';
 
@@ -271,15 +274,23 @@ export class ShipmentEdit implements OnInit {
     this.masters.options('package-types').subscribe((o) => this.packageTypeOptions.set(o));
     this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
     this.settings.get().subscribe((d) => {
-      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number } })?.shipment;
       if (shipment?.defaultChargeableWeightKg != null) {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
       }
+      if (shipment?.defaultAppointmentDeliveryCharge != null) {
+        this.defaultAppointmentDeliveryCharge.set(Number(shipment.defaultAppointmentDeliveryCharge));
+      }
     });
-    // Unchecking Appointment Delivery clears its date/slot/charge — same "hidden stale
+    // Checking Appointment Delivery prefills the company's configured default charge when
+    // no charge is set yet; unchecking clears its date/slot/charge — same "hidden stale
     // value never submits" rule as `ShipmentCreate`.
     this.form.get('appointmentDelivery')?.valueChanges.subscribe((on) => {
-      if (!on) {
+      if (on) {
+        if (!this.form.get('appointmentDeliveryCharge')?.value) {
+          this.form.get('appointmentDeliveryCharge')?.setValue(this.defaultAppointmentDeliveryCharge());
+        }
+      } else {
         this.form.get('appointmentDate')?.setValue(null);
         this.form.get('appointmentTimeSlot')?.setValue('');
         this.form.get('appointmentDeliveryCharge')?.setValue(null);

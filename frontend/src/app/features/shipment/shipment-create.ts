@@ -186,9 +186,9 @@ type FreightOutcome =
               <div class="pref-box">
                 <label class="chk pref-box__title">
                   <input type="checkbox" [formControl]="c('insuranceApplicable')" />
-                  <span>Insurance Applicable</span>
+                  <span>FOV Applicable</span>
                 </label>
-                <p class="hint pref-box__note">2% of freight value, added to charges automatically.</p>
+                <p class="hint pref-box__note">2% of Invoice Value, added to charges automatically.</p>
               </div>
             </div>
           </app-card>
@@ -649,9 +649,15 @@ export class ShipmentCreate implements OnInit {
   protected readonly odaChargeOverride = signal<number | null>(null);
 
   /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
-   *  GST-free (direct user request), unlike {@link otherCharges}. Reset to zero whenever
-   *  the checkbox is unchecked, see `ngOnInit`. */
+   *  GST-free (direct user request), unlike {@link otherCharges}. Prefilled from
+   *  {@link defaultAppointmentDeliveryCharge} whenever the checkbox is checked, and reset
+   *  to zero whenever it's unchecked — see `ngOnInit`. */
   protected readonly appointmentDeliveryCharge = signal<number>(0);
+
+  /** Company Settings → Shipment → default appointment delivery charge, prefilled onto
+   *  {@link appointmentDeliveryCharge} when the checkbox is checked. Falls back to 1000
+   *  (the backend's own default) until settings load. */
+  protected readonly defaultAppointmentDeliveryCharge = signal<number>(1000);
 
   protected readonly deliveryTypes = DELIVERY_TYPES;
 
@@ -813,9 +819,15 @@ export class ShipmentCreate implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
     this.settings.get().subscribe((d) => {
-      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number } })?.shipment;
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number } })?.shipment;
       if (shipment?.defaultChargeableWeightKg != null) {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
+      }
+      if (shipment?.defaultAppointmentDeliveryCharge != null) {
+        this.defaultAppointmentDeliveryCharge.set(Number(shipment.defaultAppointmentDeliveryCharge));
+        if (this.c('appointmentDelivery').value) {
+          this.appointmentDeliveryCharge.set(this.defaultAppointmentDeliveryCharge());
+        }
       }
       const ewayBill = (d as { ewayBill?: { ewayBillMandatoryValue?: number } })?.ewayBill;
       if (ewayBill?.ewayBillMandatoryValue != null) {
@@ -955,10 +967,13 @@ export class ShipmentCreate implements OnInit {
         this.form.get('crossingCharge')?.setValue(null);
       }
     });
-    // Unchecking Appointment Delivery clears its date/slot/charge, same "hidden stale
-    // value never submits" rule as Crossing above.
+    // Checking Appointment Delivery prefills the company's configured default charge;
+    // unchecking clears its date/slot/charge, same "hidden stale value never submits"
+    // rule as Crossing above.
     this.form.get('appointmentDelivery')?.valueChanges.subscribe((on) => {
-      if (!on) {
+      if (on) {
+        this.appointmentDeliveryCharge.set(this.defaultAppointmentDeliveryCharge());
+      } else {
         this.form.get('appointmentDate')?.setValue(null);
         this.form.get('appointmentTimeSlot')?.setValue('');
         this.appointmentDeliveryCharge.set(0);
@@ -1165,14 +1180,16 @@ export class ShipmentCreate implements OnInit {
     return (this.odaChargeDelta() * this.myBranchGstPercentage()) / 100;
   }
 
-  /** Difference between the typed ODA override and District Level Freight's own figure —
-   *  zero until the operator edits it (the engine's `chargeBreakup.odaCharge` is no longer
-   *  the baseline; see {@link freightDelta}). See {@link gstOnOdaChargeDelta}. */
+  /** Difference between the final ODA figure and the Pricing Engine's own `chargeBreakup.
+   *  odaCharge` (the only ODA amount already taxed into `chargeBreakup.gstAmount`) — mirrors
+   *  `ShipmentServiceImpl.copyCharge`'s `finalOdaCharge`/`odaChargeDelta` exactly: District
+   *  Level Freight's own {@link freightCalc} figure is the default the moment it resolves
+   *  (a pincode-driven ODA the engine never priced), the typed override wins when present.
+   *  See {@link gstOnOdaChargeDelta}. */
   protected odaChargeDelta(): number {
-    const override = this.odaChargeOverride();
-    const baseline = this.freightCalc()?.odaCharge ?? this.pricing()?.chargeBreakup.odaCharge ?? 0;
-    if (override === null) return 0;
-    return override - baseline;
+    const finalOdaCharge = this.odaChargeOverride() ?? this.freightCalc()?.odaCharge ?? 0;
+    const engineOdaCharge = this.pricing()?.chargeBreakup.odaCharge ?? 0;
+    return finalOdaCharge - engineOdaCharge;
   }
 
   /** District Level Freight's own base freight is authoritative now, replacing the Pricing
@@ -1191,15 +1208,15 @@ export class ShipmentCreate implements OnInit {
     return (this.freightDelta() * this.myBranchGstPercentage()) / 100;
   }
 
-  /** When the Insurance Applicable checkbox is on, insurance is 2% of freight instead of
-   *  the Pricing Engine's own rate-driven `chargeBreakup.insuranceCharge` — mirrors
+  /** When the FOV (insurance) Applicable checkbox is on, FOV is 2% of Invoice Value instead
+   *  of the Pricing Engine's own rate-driven `chargeBreakup.insuranceCharge` — mirrors
    *  `ShipmentServiceImpl.copyCharge`'s `finalInsuranceCharge`. Plain method, not
    *  `computed()` — same `FormControl.value`-staleness reason as {@link readyToPrice}. */
   protected finalInsuranceCharge(): number {
     const engineInsurance = this.pricing()?.chargeBreakup.insuranceCharge ?? 0;
     if (!this.c('insuranceApplicable').value) return engineInsurance;
-    const freight = this.freightCalc() ? this.effectiveBaseFreight() : (this.pricing()?.chargeBreakup.freight ?? 0);
-    return freight * 0.02;
+    const invoiceValue = Number(this.c('invoiceValue').value) || 0;
+    return invoiceValue * 0.02;
   }
 
   /** Difference between {@link finalInsuranceCharge} and the engine's own figure — zero
@@ -1633,6 +1650,8 @@ export class ShipmentCreate implements OnInit {
             },
             otherCharges: this.otherCharges(),
             appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,
+            appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
+            appointmentTimeSlot: v.appointmentDelivery ? v.appointmentTimeSlot : null,
             doorDeliveryCharge: v.deliveryType === 'DOOR' ? this.doorDeliveryCharge() : undefined,
             remarks: v.remarks || null,
             createdByName: s.createdByName ?? null,

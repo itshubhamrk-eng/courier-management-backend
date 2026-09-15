@@ -267,7 +267,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         assertThat(result.failureCount()).isEqualTo(1);
     }
@@ -279,7 +279,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(UUID.randomUUID(), List.of(shipment.getTrackingNumber()), null, null);
+        var result = service.inScan(UUID.randomUUID(), List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         assertThat(result.failureCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.DISPATCHED);
@@ -292,10 +292,33 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+    }
+
+    @Test
+    @DisplayName("inScan records the caller's remark on the status-history row and the photo as "
+            + "an IN_SCAN ShipmentAsset when both are supplied")
+    void inScanRecordsRemarkAndPhoto() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null,
+                "box damaged, seal broken", "https://x/in-scan.png");
+
+        assertThat(result.successCount()).isEqualTo(1);
+        var historyCaptor = org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentStatusHistory.class);
+        verify(historyRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getRemarks()).isEqualTo("box damaged, seal broken");
+
+        var assetCaptor = org.mockito.ArgumentCaptor.forClass(ShipmentAsset.class);
+        verify(shipmentAssetRepository).save(assetCaptor.capture());
+        assertThat(assetCaptor.getValue().getAssetType()).isEqualTo(ShipmentAssetType.IN_SCAN);
+        assertThat(assetCaptor.getValue().getKind()).isEqualTo("PHOTO");
+        assertThat(assetCaptor.getValue().getAssetUrl()).isEqualTo("https://x/in-scan.png");
     }
 
     @Test
@@ -310,7 +333,7 @@ class ShipmentMovementServiceImplTest {
         when(crossingService.arriveAt(shipment.getId(), CROSSING_BRANCH))
                 .thenReturn(Optional.of(SECOND_CROSSING_BRANCH));
 
-        var result = service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        var result = service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
@@ -332,7 +355,7 @@ class ShipmentMovementServiceImplTest {
         when(ticketService.create(any())).thenReturn(ticket);
 
         var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), "MFT-000001",
-                List.of("AWB-MISSING-1", "AWB-MISSING-2"));
+                List.of("AWB-MISSING-1", "AWB-MISSING-2"), null, null);
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(result.shortageTicketNumber()).isEqualTo("TKT-000042");
@@ -346,7 +369,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, List.of());
+        var result = service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, List.of(), null, null);
 
         assertThat(result.shortageTicketNumber()).isNull();
         verify(ticketService, never()).create(any());
@@ -364,7 +387,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(shipment));
         when(crossingService.arriveAt(shipment.getId(), CROSSING_BRANCH)).thenReturn(Optional.empty());
 
-        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
         assertThat(shipment.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
@@ -382,7 +405,7 @@ class ShipmentMovementServiceImplTest {
         when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(charge));
 
-        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class);
         verify(eventPublisher).publishEvent(captor.capture());
@@ -400,7 +423,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(shipment));
         when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(codPaymentMode());
 
-        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
     }
@@ -418,7 +441,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(SECOND_CROSSING_BRANCH));
         when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
 
-        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(CROSSING_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
     }
@@ -440,7 +463,7 @@ class ShipmentMovementServiceImplTest {
                 Branch.builder().branchCode("PUNE").instantCommission(true).build());
         when(branchService.instantCommissionOf(shipment.getBookingBranchId())).thenReturn(true);
 
-        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.InScanCommissionEarned.class);
         verify(eventPublisher).publishEvent(captor.capture());
@@ -466,7 +489,7 @@ class ShipmentMovementServiceImplTest {
         when(branchService.getById(shipment.getBookingBranchId())).thenReturn(
                 Branch.builder().branchCode("PUNE").instantCommission(false).build());
 
-        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
     }
@@ -482,7 +505,7 @@ class ShipmentMovementServiceImplTest {
         when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(ShipmentCharge.builder().netAmount(BigDecimal.ZERO).build()));
 
-        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null, null, null);
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
     }

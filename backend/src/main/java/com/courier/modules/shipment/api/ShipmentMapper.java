@@ -279,7 +279,7 @@ public class ShipmentMapper {
             ShipmentService.DrsShipmentRow r) {
         return new com.courier.modules.shipment.api.dto.DrsShipmentRowResponse(
                 r.shipmentId(), r.shipmentNumber(), r.trackingNumber(),
-                r.receiverName(), r.receiverContact(), r.paymentModeId(),
+                r.receiverName(), r.receiverAddress(), r.receiverContact(), r.paymentModeId(),
                 r.netAmount(), r.status(), r.deliveredAt(), r.ewayBillNumber(), r.fromCity(), r.toCity());
     }
 

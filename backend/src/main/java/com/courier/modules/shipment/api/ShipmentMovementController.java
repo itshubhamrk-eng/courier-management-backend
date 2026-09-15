@@ -116,11 +116,30 @@ public class ShipmentMovementController {
     @Operation(summary = "Receive shipments at the delivery branch",
             description = "Each tracking number must be DISPATCHED and its delivery branch must "
                     + "match the receiving branch. Bulk: per-item outcome. A non-empty "
-                    + "missingTrackingNumbers auto-raises a Support ticket for the shortfall.")
+                    + "missingTrackingNumbers auto-raises a Support ticket for the shortfall. "
+                    + "Optional remarks/photoUrl (from in-scan-upload) are recorded on every "
+                    + "shipment actually received.")
     public ApiResponse<BulkMovementResponse> inScan(@Valid @RequestBody InScanRequest request) {
         var result = shipmentService.inScan(request.receivingBranchId(), request.trackingNumbers(),
-                request.manifestNumber(), request.missingTrackingNumbers());
+                request.manifestNumber(), request.missingTrackingNumbers(), request.remarks(), request.photoUrl());
         return ApiResponse.success(shipmentMapper.toResponse(result));
+    }
+
+    @PostMapping(value = "/in-scan-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload an In Scan photo",
+            description = "Stores a photo (JPEG/PNG/WEBP/HEIC) taken while receiving shipments, "
+                    + "not tied to any one shipment yet. Returns the URL to pass into in-scan() "
+                    + "as photoUrl, which then gets attached to every shipment that call receives.")
+    public ApiResponse<PodUploadResponse> uploadInScanPhoto(@RequestParam("file") MultipartFile file) {
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new BusinessRuleException("The uploaded file could not be read. Please retry.");
+        }
+        String url = shipmentService.uploadInScanPhoto(new ShipmentService.UploadInScanPhotoCommand(
+                content, file.getOriginalFilename(), file.getContentType()));
+        return ApiResponse.success(new PodUploadResponse(url), "File uploaded");
     }
 
     @PostMapping("/delivery-otp/request")

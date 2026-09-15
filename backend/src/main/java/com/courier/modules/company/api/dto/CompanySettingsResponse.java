@@ -46,7 +46,8 @@ public record CompanySettingsResponse(
                            String defaultPackageType, WeightUnit weightUnit,
                            DimensionUnit dimensionUnit, boolean autoGenerateBarcode,
                            boolean allowDuplicateReferenceNumber, boolean autoAssignTrackingNumber,
-                           BigDecimal defaultChargeableWeightKg) {
+                           BigDecimal defaultChargeableWeightKg,
+                           BigDecimal defaultAppointmentDeliveryCharge) {
     }
 
     @Schema(name = "FinanceSettings")

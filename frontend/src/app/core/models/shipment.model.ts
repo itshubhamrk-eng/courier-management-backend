@@ -802,6 +802,12 @@ export interface InScanRequest {
   trackingNumbers: string[];
   manifestNumber?: string | null;
   missingTrackingNumbers?: string[];
+  /** Recorded on every received shipment's status-history row in place of the default
+   *  "In scan" text. */
+  remarks?: string | null;
+  /** URL from ShipmentMovementService.uploadInScanPhoto(), attached as a shared photo
+   *  asset to every shipment this call actually receives. */
+  photoUrl?: string | null;
 }
 
 /** Body of POST /shipment-movement/out-for-delivery. vehicleId/fuelCost/deliveryCharge
@@ -853,6 +859,7 @@ export interface DrsShipmentRow {
   shipmentNumber: string;
   trackingNumber: string;
   receiverName: string;
+  receiverAddress: string;
   receiverContact: string;
   paymentModeId: string;
   netAmount: number | null;

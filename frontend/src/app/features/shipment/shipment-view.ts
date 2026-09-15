@@ -221,7 +221,7 @@ const TIMELINE_ICONS: Record<string, string> = {
                 <dd>{{ shipment()!.appointmentDate }} · {{ shipment()!.appointmentTimeSlot }}</dd>
               }
               @if (shipment()!.insuranceApplicable) {
-                <dt>Insurance</dt><dd>Applicable (2% of freight)</dd>
+                <dt>FOV</dt><dd>Applicable (2% of Invoice Value)</dd>
               }
             </dl>
           </app-card>

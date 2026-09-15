@@ -81,8 +81,11 @@ class PricingEngineImplTest {
         when(rateValidation.validate(route.getId(), command, bookingDate))
                 .thenReturn(List.of(rate));
         when(pricingFactory.resolve(any())).thenReturn(strategy);
+        // Zeroed explicitly: this test is about volumetric-vs-actual, not the minimum
+        // chargeable weight floor (covered by its own tests below).
         when(companySettingsService.get()).thenReturn(
-                com.courier.modules.company.domain.CompanySettings.builder().build());
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .defaultChargeableWeightKg(BigDecimal.ZERO).build());
         PricingResult expected = new PricingResult(route, rate, new BigDecimal("1.200"),
                 new BigDecimal("1.200"), new BigDecimal("1.200"), BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
@@ -256,6 +259,10 @@ class PricingEngineImplTest {
         when(matched.getFactor()).thenReturn(new BigDecimal("7.50"));
         when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.of(new FreightCalculationResult(
                 matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50"))));
+        // The floor is resolved before the override check (it's needed for grid matching),
+        // so this needs a settings stub even though this test never reaches pricing.
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder().build());
 
         assertThatThrownBy(() -> engine.calculate(command))
                 .isInstanceOf(BusinessRuleException.class)
@@ -279,9 +286,11 @@ class PricingEngineImplTest {
         when(matched.getFactor()).thenReturn(new BigDecimal("7.50"));
         when(freightFactorService.tryCalculate(any())).thenReturn(java.util.Optional.of(new FreightCalculationResult(
                 matched, new BigDecimal("148.728"), new BigDecimal("5.000"), new BigDecimal("37.50"))));
+        // Zeroed explicitly: this test is about override-factor mechanics, not the minimum
+        // chargeable weight floor — otherwise 5.000kg would floor to the entity default.
         when(companySettingsService.get()).thenReturn(
                 com.courier.modules.company.domain.CompanySettings.builder()
-                        .gstPercentage(BigDecimal.ZERO).build());
+                        .gstPercentage(BigDecimal.ZERO).defaultChargeableWeightKg(BigDecimal.ZERO).build());
 
         PricingResult result = engine.calculate(command);
 

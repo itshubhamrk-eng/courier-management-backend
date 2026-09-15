@@ -1,5 +1,6 @@
 package com.courier.modules.finance.application;
 
+import com.courier.modules.finance.application.command.CodDeliveryDebitCommand;
 import com.courier.modules.finance.application.command.CreditCommand;
 import com.courier.modules.finance.application.command.DebitCommand;
 import com.courier.modules.finance.application.command.RechargeCommand;
@@ -333,6 +334,32 @@ class WalletServiceImplTest {
     void debitInsufficient() {
         assertThatThrownBy(() -> service.debit(new DebitCommand(BRANCH,
                 new BigDecimal("1000.01"), null, null, null, null)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Insufficient wallet balance");
+
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1000.00");
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TO_PAY receipt at branch overdraws the wallet instead of being refused")
+    void toPayReceiptOverdraws() {
+        WalletTransaction entry = service.debitForToPayReceivedAtBranch(
+                new CodDeliveryDebitCommand(BRANCH, new BigDecimal("1880.00"), "C-KOL-000010",
+                        "TO_PAY received at branch for shipment C-KOL-000010"));
+
+        assertThat(entry.getSubTransactionType()).isEqualTo(SubTransactionType.TPY);
+        assertThat(entry.getBalanceBefore()).isEqualByComparingTo("1000.00");
+        assertThat(entry.getBalanceAfter()).isEqualByComparingTo("-880.00");
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("-880.00");
+        verify(auditService).record(eq(AuditAction.WALLET_DEBITED), eq("Wallet"), any(), any());
+    }
+
+    @Test
+    @DisplayName("COD delivery debit is still refused beyond the balance, unlike TO_PAY")
+    void codDeliveryStillRefused() {
+        assertThatThrownBy(() -> service.debitForCodDelivery(
+                new CodDeliveryDebitCommand(BRANCH, new BigDecimal("1000.01"), "SHP-9", "COD")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Insufficient wallet balance");
 

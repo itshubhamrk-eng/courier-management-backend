@@ -154,6 +154,24 @@ public class Wallet extends CompanyOwnedEntity {
         return this.availableBalance;
     }
 
+    /**
+     * Subtracts from the available balance without the insufficient-balance check —
+     * for debits that record a branch's liability the instant it arises (e.g. TO_PAY
+     * freight received at the delivery branch, owed to the company before the branch
+     * has collected it from the consignee), not a spend against existing float. The
+     * branch is expected to carry this as a negative balance until settled.
+     *
+     * @return the balance after the debit
+     * @throws BusinessRuleException if the amount is not strictly positive, or the wallet
+     *         is not operational
+     */
+    public BigDecimal applyDebitAllowingOverdraft(BigDecimal amount) {
+        requireOperational();
+        BigDecimal value = requirePositive(amount);
+        this.availableBalance = normalise(availableBalance).subtract(value);
+        return this.availableBalance;
+    }
+
     /** Scale-normalised amount, so 100 and 100.0000 are the same money. */
     public static BigDecimal normalise(BigDecimal amount) {
         return amount == null ? ZERO : amount.setScale(MONEY_SCALE, java.math.RoundingMode.HALF_UP);

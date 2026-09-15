@@ -20,7 +20,7 @@ public record CompanySettingsCommand(
         String defaultServiceType, String defaultPackageType, WeightUnit weightUnit,
         DimensionUnit dimensionUnit, Boolean autoGenerateBarcode,
         Boolean allowDuplicateReferenceNumber, Boolean autoAssignTrackingNumber,
-        BigDecimal defaultChargeableWeightKg,
+        BigDecimal defaultChargeableWeightKg, BigDecimal defaultAppointmentDeliveryCharge,
 
         BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,
         Boolean walletEnabled, Boolean codEnabled, Boolean onlinePaymentEnabled,
