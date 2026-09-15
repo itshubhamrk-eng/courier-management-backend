@@ -1,11 +1,19 @@
 package com.courier.modules.shipment.api;
 
 import com.courier.modules.manifest.application.ManifestService;
+import com.courier.modules.manifest.application.VehicleService;
 import com.courier.modules.manifest.domain.Manifest;
+import com.courier.modules.manifest.domain.Vehicle;
 import com.courier.modules.shipment.api.dto.BulkMovementResponse;
 import com.courier.modules.shipment.api.dto.DeliverRequest;
+import com.courier.modules.shipment.api.dto.DeliveryOtpRequestRequest;
+import com.courier.modules.shipment.api.dto.DeliveryOtpRequestResponse;
+import com.courier.modules.shipment.api.dto.DeliveryOtpVerifyRequest;
 import com.courier.modules.shipment.api.dto.DispatchManifestRequest;
 import com.courier.modules.shipment.api.dto.DispatchManifestResponse;
+import com.courier.modules.shipment.api.dto.DispatchOtpRequestRequest;
+import com.courier.modules.shipment.api.dto.DispatchOtpRequestResponse;
+import com.courier.modules.shipment.api.dto.DispatchOtpVerifyRequest;
 import com.courier.modules.shipment.api.dto.InScanRequest;
 import com.courier.modules.shipment.api.dto.OutForDeliveryRequest;
 import com.courier.modules.shipment.api.dto.PodUploadResponse;
@@ -56,12 +64,35 @@ public class ShipmentMovementController {
 
     private final ShipmentService shipmentService;
     private final ManifestService manifestService;
+    private final VehicleService vehicleService;
     private final ShipmentMapper shipmentMapper;
+
+    @PostMapping("/dispatch-otp/request")
+    @Operation(summary = "Request a driver OTP before dispatch (optional)",
+            description = "Sends a 4-digit OTP to the assigned driver's mobile over the company's "
+                    + "configured SMS channel. Verifying it (dispatch-otp/verify) is currently optional "
+                    + "and does not gate /dispatch.")
+    public ApiResponse<DispatchOtpRequestResponse> requestDispatchOtp(
+            @Valid @RequestBody DispatchOtpRequestRequest request) {
+        var issued = manifestService.requestDispatchOtp(request.manifestId(), request.driverUserId());
+        return ApiResponse.success(new DispatchOtpRequestResponse(issued.maskedMobile(), issued.expiresInMinutes()),
+                "OTP sent to " + issued.maskedMobile());
+    }
+
+    @PostMapping("/dispatch-otp/verify")
+    @Operation(summary = "Verify the driver OTP",
+            description = "A wrong code counts against a small attempt limit before the code is "
+                    + "invalidated and a fresh one must be requested.")
+    public ApiResponse<Void> verifyDispatchOtp(@Valid @RequestBody DispatchOtpVerifyRequest request) {
+        manifestService.verifyDispatchOtp(request.manifestId(), request.driverUserId(), request.otp());
+        return ApiResponse.success("OTP verified");
+    }
 
     @PostMapping("/dispatch")
     @Operation(summary = "Dispatch a manifest",
             description = "Manifest must have at least one MANIFEST_CREATED shipment. Assigns the "
-                    + "vehicle and driver, moves the manifest and every shipment on it to DISPATCHED.")
+                    + "vehicle and driver, moves the manifest and every shipment on it to DISPATCHED. "
+                    + "Driver OTP verification (dispatch-otp/verify) is optional and not required here.")
     public ApiResponse<DispatchManifestResponse> dispatch(@Valid @RequestBody DispatchManifestRequest request) {
         Manifest manifest = manifestService.dispatch(request.manifestId(), request.vehicleId(),
                 request.driverUserId(), request.departureTime(),
@@ -70,7 +101,7 @@ public class ShipmentMovementController {
         // count them by that status rather than MANIFEST_CREATED, which none of them are anymore.
         ShipmentCriteria dispatchedOnThisManifest = new ShipmentCriteria(
                 Set.of(ShipmentStatus.DISPATCHED), null, null, null, null, manifest.getId(),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         int dispatchedCount = (int) shipmentService.search(dispatchedOnThisManifest, Pageable.unpaged())
                 .getTotalElements();
         return ApiResponse.success(new DispatchManifestResponse(
@@ -92,11 +123,42 @@ public class ShipmentMovementController {
         return ApiResponse.success(shipmentMapper.toResponse(result));
     }
 
+    @PostMapping("/delivery-otp/request")
+    @Operation(summary = "Request a delivery user OTP before Generate DRS (optional)",
+            description = "Sends a 4-digit OTP to the delivery user's mobile over the company's "
+                    + "configured SMS channel. Verifying it (delivery-otp/verify) is currently optional "
+                    + "and does not gate /out-for-delivery.")
+    public ApiResponse<DeliveryOtpRequestResponse> requestDeliveryOtp(
+            @Valid @RequestBody DeliveryOtpRequestRequest request) {
+        var issued = shipmentService.requestDeliveryDispatchOtp(request.deliveryUserId());
+        return ApiResponse.success(new DeliveryOtpRequestResponse(issued.maskedMobile(), issued.expiresInMinutes()),
+                "OTP sent to " + issued.maskedMobile());
+    }
+
+    @PostMapping("/delivery-otp/verify")
+    @Operation(summary = "Verify the delivery user OTP",
+            description = "A wrong code counts against a small attempt limit before the code is "
+                    + "invalidated and a fresh one must be requested.")
+    public ApiResponse<Void> verifyDeliveryOtp(@Valid @RequestBody DeliveryOtpVerifyRequest request) {
+        shipmentService.verifyDeliveryDispatchOtp(request.deliveryUserId(), request.otp());
+        return ApiResponse.success("OTP verified");
+    }
+
     @PostMapping("/out-for-delivery")
     @Operation(summary = "Assign shipments to a delivery user",
-            description = "Each shipment must be IN_SCAN. Bulk: per-item outcome.")
+            description = "Each shipment must be IN_SCAN. Bulk: per-item outcome. vehicleId/fuelCost/"
+                    + "deliveryCharge are all optional trip fields, stamped on every DeliveryAssignment "
+                    + "row this call touches. Delivery user OTP verification (delivery-otp/verify) is "
+                    + "optional and not required here.")
     public ApiResponse<BulkMovementResponse> outForDelivery(@Valid @RequestBody OutForDeliveryRequest request) {
-        var result = shipmentService.assignOutForDelivery(request.shipmentIds(), request.deliveryUserId());
+        if (request.vehicleId() != null) {
+            Vehicle vehicle = vehicleService.getById(request.vehicleId());
+            if (!vehicle.isActive()) {
+                throw new BusinessRuleException("Vehicle %s is not active.".formatted(vehicle.getVehicleNumber()));
+            }
+        }
+        var result = shipmentService.assignOutForDelivery(request.shipmentIds(), request.deliveryUserId(),
+                request.vehicleId(), request.fuelCost(), request.deliveryCharge());
         return ApiResponse.success(shipmentMapper.toResponse(result));
     }
 

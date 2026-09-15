@@ -49,7 +49,7 @@ public class ShipmentMapper {
 
     public CreateShipmentCommand toCommand(CreateShipmentRequest r) {
         return new CreateShipmentCommand(
-                r.bookingBranchId(), r.deliveryBranchId(), r.manualShipmentNumber(),
+                r.bookingBranchId(), r.manualShipmentNumber(),
                 r.pickupPincode(), r.deliveryPincode(),
                 r.senderName(), r.senderAddress(), r.senderContact(),
                 r.receiverName(), r.receiverAddress(), r.receiverContact(),
@@ -61,12 +61,13 @@ public class ShipmentMapper {
                 r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
                 r.destinationAreaId(), r.ratePerKgOverride(),
                 r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
-                r.appointmentDeliveryCharge(), r.insuranceApplicable());
+                r.appointmentDeliveryCharge(), r.insuranceApplicable(),
+                r.deliveryType(), r.doorDeliveryCharge());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {
         return new UpdateShipmentCommand(
-                r.version(), r.deliveryBranchId(),
+                r.version(),
                 r.pickupPincode(), r.deliveryPincode(),
                 r.senderName(), r.senderAddress(), r.senderContact(),
                 r.receiverName(), r.receiverAddress(), r.receiverContact(),
@@ -77,7 +78,8 @@ public class ShipmentMapper {
                 r.invoiceValue(), toEwayBillData(r.ewayBill(), r.invoiceValue()),
                 r.destinationAreaId(), r.ratePerKgOverride(),
                 r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
-                r.appointmentDeliveryCharge(), r.insuranceApplicable());
+                r.appointmentDeliveryCharge(), r.insuranceApplicable(),
+                r.deliveryType(), r.doorDeliveryCharge());
     }
 
     /** The shipment's own invoiceValue rides along as the E-Way Bill's invoiceValue too —
@@ -89,7 +91,7 @@ public class ShipmentMapper {
         return new EwayBillDataCommand(r.ewayBillNumber(), r.invoiceNumber(), r.invoiceDate(),
                 invoiceValue, r.documentType(), r.documentNumber(), r.documentDate(),
                 r.transporterId(), r.vehicleNumber(), r.distance(), r.validFrom(), r.validUntil(),
-                r.documentUrl(), r.remarks());
+                r.documentUrl(), r.remarks(), r.consignorGstin(), r.consigneeGstin());
     }
 
     private List<ShipmentItemCommand> toItemCommands(List<ShipmentItemRequest> items) {
@@ -106,7 +108,7 @@ public class ShipmentMapper {
         return new ShipmentCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(),
                 safe.currentLocationId(), safe.nextLocationId(),
                 safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
-                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.search());
+                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.paymentModeId(), safe.search());
     }
 
     public ShipmentService.AddDocumentCommand toCommand(AddShipmentDocumentRequest r) {
@@ -124,6 +126,7 @@ public class ShipmentMapper {
         return new ShipmentResponse(
                 s.getId(), s.getCompanyId(), s.getShipmentNumber(), s.getTrackingNumber(),
                 s.getBookingDate(), s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(),
+                s.getFromCity(), s.getToCity(),
                 s.getCurrentLocationId(), s.getNextLocationId(),
                 s.getPickupPincode(), s.getDeliveryPincode(),
                 s.getSenderName(), s.getSenderAddress(), s.getSenderContact(),
@@ -133,7 +136,7 @@ public class ShipmentMapper {
                 s.getActualWeight(), s.getVolumetricWeight(), s.getChargeableWeight(),
                 s.getDeclaredValue(), s.getNumberOfPackages(), s.getStatus(), s.getRemarks(),
                 s.isAppointmentDelivery(), s.getAppointmentDate(), s.getAppointmentTimeSlot(),
-                s.isInsuranceApplicable(),
+                s.isInsuranceApplicable(), s.getDeliveryType(),
                 pod != null ? pod.getDeliveredAt() : null,
                 latestAssetUrl(assets, ShipmentAssetType.POD, "PHOTO"),
                 latestAssetUrl(assets, ShipmentAssetType.POD, "SIGNATURE"),
@@ -154,7 +157,7 @@ public class ShipmentMapper {
             return null;
         }
         return new ShipmentResponse.EwayBillInfo(s.id(), s.ewayBillNumber(), s.status(),
-                s.invoiceValue(), s.validFrom(), s.validUntil(), s.documentUrl());
+                s.invoiceValue(), s.validFrom(), s.validUntil(), s.documentUrl(), s.lastError());
     }
 
     /** Assets arrive newest-first ({@code ShipmentAssetRepository}'s own ordering) — the
@@ -195,18 +198,21 @@ public class ShipmentMapper {
     }
 
     public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,
-                                             Instant deliveredAt, String invoiceNumber, Instant receivedAt) {
+                                             Instant deliveredAt, String invoiceNumber, Instant receivedAt,
+                                             String ewayBillNumber) {
         return new ShipmentSummaryResponse(
                 s.getId(), s.getShipmentNumber(), s.getTrackingNumber(), s.getBookingDate(),
                 s.getBookingBranchId(), s.getDeliveryBranchId(), s.getCurrentLocationId(), s.getNextLocationId(),
-                s.getManifestId(), s.getPaymentModeId(),
+                s.getFromCity(), s.getToCity(),
+                s.getManifestId(), s.getPaymentModeId(), s.getDeliveryType(),
                 s.getSenderName(), s.getSenderContact(), s.getReceiverName(), s.getReceiverContact(),
                 s.getChargeableWeight(), netAmount,
                 charge == null ? null : charge.getTotalCommission(),
                 charge == null ? null : charge.getCommissionOnBasicFreight(),
                 charge == null ? null : charge.getBranchCommissionOnOtherAmount(),
                 charge == null ? null : charge.getCompanyCommissionOnBasicFreight(),
-                s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion(), invoiceNumber, receivedAt);
+                s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion(), invoiceNumber, receivedAt,
+                ewayBillNumber);
     }
 
     public ShipmentItemResponse toResponse(ShipmentItem i) {
@@ -221,9 +227,12 @@ public class ShipmentMapper {
                 c.charge().getShipmentId(),
                 c.charge().getFreight(), c.charge().getFuelCharge(), c.charge().getHandlingCharge(),
                 c.charge().getOdaCharge(), c.charge().getInsuranceCharge(), c.charge().getApplicableCharges(),
+                c.applicableChargeLines().stream()
+                        .map(l -> new ShipmentChargeResponse.ApplicableChargeLine(l.chargeName(), l.amount()))
+                        .toList(),
                 c.charge().getGstAmount(),
                 c.charge().getDiscountAmount(), c.charge().getRoundOff(), c.charge().getOtherCharges(),
-                c.charge().getAppointmentDeliveryCharge(),
+                c.charge().getAppointmentDeliveryCharge(), c.charge().getDoorDeliveryCharge(),
                 c.charge().getCommissionOnBasicFreight(), c.charge().getBranchCommissionOnOtherAmount(),
                 c.charge().getCompanyCommissionOnBasicFreight(), c.charge().getTotalCommission(),
                 c.charge().getNetAmount(),
@@ -271,7 +280,7 @@ public class ShipmentMapper {
         return new com.courier.modules.shipment.api.dto.DrsShipmentRowResponse(
                 r.shipmentId(), r.shipmentNumber(), r.trackingNumber(),
                 r.receiverName(), r.receiverContact(), r.paymentModeId(),
-                r.netAmount(), r.status(), r.deliveredAt());
+                r.netAmount(), r.status(), r.deliveredAt(), r.ewayBillNumber(), r.fromCity(), r.toCity());
     }
 
     public ShipmentDocumentResponse toResponse(ShipmentDocument d) {

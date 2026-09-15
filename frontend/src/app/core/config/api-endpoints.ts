@@ -15,6 +15,7 @@ export const API = {
   companies: '/companies',
   users: '/users',
   roles: '/roles',
+  departments: '/departments',
   permissions: '/permissions',
   branches: '/branches',
   customers: '/customers',

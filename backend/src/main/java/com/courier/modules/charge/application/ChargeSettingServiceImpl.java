@@ -209,7 +209,8 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
             if (candidate.overlaps(other)) {
                 throw new BusinessRuleException(
                         ("This %s slab overlaps another active setting (%s) under the same charge. "
-                                + "Slabs are [from, to), so they may touch but not overlap.")
+                                + "Slabs are [from, to], both ends inclusive, so adjacent bands must "
+                                + "leave a gap (e.g. 1-20 and 21-40) rather than touch (1-20 and 20-40).")
                                 .formatted(candidate.getChargeSlabType(), other.getId()));
             }
         }

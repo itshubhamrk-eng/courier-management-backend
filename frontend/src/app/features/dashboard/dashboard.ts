@@ -18,6 +18,8 @@ import { QuickActions } from './components/quick-actions';
 import { BranchSummary } from './components/branch-summary';
 import { CompanyOverview } from './components/company-overview';
 import { BranchOverview } from './components/branch-overview';
+import { PodStatusPie } from './components/pod-status-pie';
+import { DeliveryStatusPie } from './components/delivery-status-pie';
 import { TrackBox } from '@features/shipment-movement/components/track-box';
 import { PackageIllustration } from '@shared/components/illustrations/package-illustration';
 import { FollowUpWidget } from './components/follow-up-widget';
@@ -25,6 +27,7 @@ import { FollowUpWidget } from './components/follow-up-widget';
 
 const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   new Set(['totalRevenue', 'walletBalance', 'todayCollection']);
+const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActualWeight']);
 
 /**
  * Role-based enterprise dashboard. The layout (which KPI tiles, charts, cards and quick
@@ -39,29 +42,30 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   imports: [
     DatePipe, MatIconModule, StatisticCard, UiCard, ChartCard, ActivityTimeline,
     RecentShipments, QuickActions, BranchSummary, CompanyOverview, BranchOverview, TrackBox,
-    PackageIllustration, FollowUpWidget /*, HubSummary */
+    PackageIllustration, FollowUpWidget, PodStatusPie, DeliveryStatusPie /*, HubSummary */
   ],
   template: `
     <div class="dash">
-      <!-- welcome / context -->
-      <header class="dash__welcome clay-surface">
-        <div class="dash__welcome-text">
-          <h1 class="text-h1">{{ greeting() }}, {{ auth.displayName() || 'there' }}</h1>
-          <p class="text-caption">{{ companyName }} · {{ scopeLabel() }}</p>
-          <div class="dash__date">
-            <mat-icon>calendar_today</mat-icon>
-            <span>{{ now | date:'EEEE, d MMM y' }}</span>
+      <!-- welcome + track shipment, paired in one row to save vertical space -->
+      <section class="dash__hero">
+        <header class="dash__welcome clay-surface">
+          <div class="dash__welcome-text">
+            <h1 class="text-h1">{{ greeting() }}, {{ auth.displayName() || 'there' }}</h1>
+            <p class="text-caption">{{ companyName }} · {{ scopeLabel() }}</p>
+            <div class="dash__date">
+              <mat-icon>calendar_today</mat-icon>
+              <span>{{ now | date:'EEEE, d MMM y' }}</span>
+            </div>
           </div>
-        </div>
-        <app-package-illustration class="dash__welcome-ill" [size]="88" />
-      </header>
+          <app-package-illustration class="dash__welcome-ill" [size]="88" />
+        </header>
 
-      @if (profile() !== 'PLATFORM') {
-        <app-card title="Track Shipment" subtitle="Enter an AWB (Tracking No.) or Shipment No.">
-          <app-track-box />
-        </app-card>
-        <app-follow-up-widget data-tour="dash-follow-ups" />
-      }
+        @if (profile() !== 'PLATFORM') {
+          <app-card class="dash__track" title="Track Shipment" subtitle="Enter an AWB (Tracking No.) or Shipment No.">
+            <app-track-box />
+          </app-card>
+        }
+      </section>
 
       @if (error()) {
         <app-card>
@@ -88,9 +92,24 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
           <app-quick-actions data-tour="dash-quick-actions" [actions]="layout().quickActions" (pick)="onAction($event)" />
         }
 
-        <!-- charts -->
-        @if (hasCharts()) {
-          <section class="dash__charts">
+        <!-- charts, POD review first so approvals surface before the trend reading —
+             same grid as the charts so it matches their card size exactly -->
+        @if (hasCharts() || layout().sections.companyOverview || layout().sections.branchOverview) {
+          <section class="dash__charts" [style.grid-template-columns]="'repeat(' + chartCols() + ', minmax(0,1fr))'">
+            @if (layout().sections.companyOverview) {
+              <app-pod-status-pie title="POD Overview — All Branches"
+                subtitle="Every branch, current state"
+                [loading]="loading()" [data]="data()?.companyOverview?.podOverview ?? null" />
+              <app-delivery-status-pie title="Delivery Status — All Branches"
+                subtitle="This month, delivered vs pending"
+                [loading]="loading()"
+                [delivered]="data()?.statistics?.delivered ?? 0"
+                [pending]="data()?.statistics?.pending ?? 0" />
+            } @else if (layout().sections.branchOverview) {
+              <app-pod-status-pie title="POD Overview — This Branch"
+                subtitle="This branch, current state"
+                [loading]="loading()" [data]="data()?.branchOverview?.podOverview ?? null" />
+            }
             @if (layout().sections.shipmentTrend) {
               <app-chart-card title="Shipment Trend" subtitle="Bookings over time" type="area"
                 [colorKeys]="['brand']" [loading]="loading()" [data]="data()?.charts?.shipmentTrend ?? []" />
@@ -108,6 +127,10 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
           </section>
         }
 
+        @if (profile() !== 'PLATFORM') {
+          <app-follow-up-widget data-tour="dash-follow-ups" />
+        }
+
         <!-- company-wide overview (COMPANY_ADMIN only) -->
         @if (layout().sections.companyOverview) {
           <section class="dash__overview" data-tour="dash-company-overview">
@@ -122,8 +145,10 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
           </section>
         }
 
-        <!-- content columns -->
-        <section class="dash__cols">
+        <!-- content columns — the side column only exists (and only then does the row
+             split in two) when there's actually something to put in it; otherwise an
+             empty <aside> would still claim the grid's second track as dead space. -->
+        <section class="dash__cols" [class.dash__cols--single]="!layout().sections.branchSummary">
           <div class="dash__main">
             @if (layout().sections.recentShipments) {
               <app-recent-shipments [loading]="loading()" [rows]="data()?.recentShipments ?? []" />
@@ -133,16 +158,14 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
             }
           </div>
 
-          <aside class="dash__side">
-            @if (layout().sections.branchSummary) {
-              <app-branch-summary [loading]="loading()" [rows]="data()?.branchSummary ?? []" />
-            }
-            <!-- hub module not built yet
-            @if (layout().sections.hubSummary) {
-              <app-hub-summary [loading]="loading()" [rows]="data()?.hubSummary ?? []" />
-            }
-            -->
-          </aside>
+          @if (layout().sections.branchSummary) {
+            <aside class="dash__side">
+              <app-branch-summary [loading]="loading()" [rows]="data()?.branchSummary ?? []"
+                [pendingDelivery]="data()?.companyOverview?.pendingDelivery ?? null"
+                [activeBranches]="data()?.statistics?.activeBranches ?? null"
+                [totalBranches]="data()?.statistics?.totalBranches ?? null" />
+            </aside>
+          }
         </section>
       }
     </div>
@@ -157,16 +180,25 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
         radial-gradient(640px 300px at 92% 12%, rgba(52,211,153,.1), transparent 60%),
         radial-gradient(680px 340px at 50% 100%, rgba(251,191,36,.08), transparent 60%);
     }
+    .dash__hero { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:stretch; }
+    @media (max-width:900px){ .dash__hero { grid-template-columns:1fr; } }
     .dash__welcome { display:flex; align-items:center; justify-content:space-between; gap:16px;
       flex-wrap:wrap; padding:20px 26px; }
     .dash__welcome-text { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
     .dash__welcome-ill { flex-shrink:0; }
     @media (max-width:560px){ .dash__welcome-ill { display:none; } }
+    .dash__track { display:flex; flex-direction:column; }
+    .dash__track ::ng-deep .ac__body { flex:1; display:flex; align-items:center; }
+    .dash__track ::ng-deep .ac__body > * { width:100%; }
     .dash__date { display:inline-flex; align-items:center; gap:8px; padding:8px 16px; border-radius:var(--r-pill);
       background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); font:600 13px var(--font-sans); color:var(--content-muted); }
     .dash__date mat-icon { font-size:18px; width:18px; height:18px; }
     .dash__grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px; }
-    .dash__charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:18px; }
+    .dash__charts { display:grid; gap:18px; }
+    /* A lone odd-one-out in the final row (3 cards in a 2-up grid, say) spans both
+       columns instead of sitting alone at half width with empty track beside it. */
+    .dash__charts > *:last-child:nth-child(odd) { grid-column:1 / -1; }
+    @media (max-width:640px){ .dash__charts{ grid-template-columns:1fr !important; } }
     .dash__overview { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; align-items:start; }
     @media (max-width:900px){ .dash__overview{ grid-template-columns:1fr; } }
     /* Stacked full-width, not a grid — only two cards of very different natural height
@@ -175,6 +207,7 @@ const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
        own 2-column layout was built to avoid. */
     .dash__branch-overview { display:flex; flex-direction:column; gap:18px; }
     .dash__cols { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; align-items:start; }
+    .dash__cols--single { grid-template-columns:1fr; }
     .dash__main, .dash__side { display:flex; flex-direction:column; gap:18px; min-width:0; }
     .dash__error { display:flex; align-items:center; gap:16px; padding:8px; }
     .dash__error mat-icon { font-size:36px; width:36px; height:36px; color:var(--danger); }
@@ -210,6 +243,18 @@ export class Dashboard implements OnInit {
   readonly hasCharts = computed(() => {
     const s = this.layout().sections;
     return s.shipmentTrend || s.deliveryPerformance || s.revenueTrend;
+  });
+  /** Exact card count for the chart row (POD + whichever trend charts the role gets) —
+   *  an explicit column count so the row always divides evenly, instead of `auto-fit`
+   *  leaving a lone trailing card stranded at its minmax width with empty track beside it. */
+  readonly chartCols = computed(() => {
+    const s = this.layout().sections;
+    // Company overview gets two pies (POD + Delivery Status), branch overview just the one.
+    let n = s.companyOverview ? 2 : (s.branchOverview ? 1 : 0);
+    if (s.shipmentTrend) n++;
+    if (s.deliveryPerformance) n++;
+    if (s.revenueTrend) n++;
+    return Math.min(n || 1, 2);
   });
 
   ngOnInit(): void {
@@ -249,6 +294,7 @@ export class Dashboard implements OnInit {
     const v = this.data()?.statistics[t.key];
     if (v == null) return '—';
     if (MONEY_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+    if (WEIGHT_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
     return v;
   }
 

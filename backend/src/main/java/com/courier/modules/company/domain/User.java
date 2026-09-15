@@ -132,8 +132,19 @@ public class User extends CompanyOwnedEntity {
     @Column(name = "designation", length = 100)
     private String designation;
 
+    /**
+     * Free-text department, kept for existing data and any screen that still reads it.
+     * User creation now sets {@link #departmentId} instead, from the Department master —
+     * see {@code MEMORY} for the 2026-09 decision. Not cleared automatically: the two are
+     * independent columns, and a row written before the master existed simply has this one
+     * and not the other.
+     */
     @Column(name = "department", length = 100)
     private String department;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "department_id", columnDefinition = "BINARY(16)")
+    private UUID departmentId;
 
     @Column(name = "joining_date")
     private LocalDate joiningDate;

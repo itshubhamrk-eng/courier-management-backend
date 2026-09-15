@@ -161,7 +161,7 @@ export class BulkTrackingReport implements OnInit {
     });
   }
 
-  protected branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   view(r: BulkTrackRow): void {
     if (r.found && r.shipment) this.router.navigate(['/shipments', r.shipment.id]);

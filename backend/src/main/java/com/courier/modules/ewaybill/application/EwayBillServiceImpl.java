@@ -30,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,7 +44,7 @@ import java.util.stream.Collectors;
 
 /**
  * E-Way Bill Management use cases. See {@link EwayBillService} for the module's own
- * business rule and the two entry points that create/update a row.
+ * business rules and which entry point does what.
  */
 @Slf4j
 @Service
@@ -55,6 +57,9 @@ public class EwayBillServiceImpl implements EwayBillService {
     private static final String READERS = "isAuthenticated()";
 
     private static final Set<String> DOCUMENT_EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png");
+    private static final String DEFAULT_TRANSPORT_MODE = "ROAD";
+    private static final Set<EwayBillStatus> PART_A_DONE = Set.of(
+            EwayBillStatus.PART_A_GENERATED, EwayBillStatus.PART_B_PENDING, EwayBillStatus.GENERATED);
 
     private final EwayBillRepository repository;
     private final EwayBillProvider provider;
@@ -79,16 +84,12 @@ public class EwayBillServiceImpl implements EwayBillService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
-    public void enforceBookingRequirement(BigDecimal invoiceValue, EwayBillDataCommand ewayBill) {
+    public void requireBookingData(BigDecimal invoiceValue, EwayBillDataCommand ewayBill) {
         if (!isRequired(invoiceValue)) {
             return;
         }
-        if (ewayBill == null) {
+        if (ewayBill == null || isBlank(ewayBill.invoiceNumber()) || ewayBill.invoiceDate() == null) {
             throw new BusinessRuleException(mandatoryMessage());
-        }
-        EwayBillProvider.ValidationOutcome outcome = provider.validate(toValidationRequest(ewayBill));
-        if (!outcome.valid()) {
-            throw new BusinessRuleException(mandatoryMessage() + " " + outcome.reason());
         }
     }
 
@@ -100,35 +101,181 @@ public class EwayBillServiceImpl implements EwayBillService {
                 + format.format(mandatoryThreshold()) + ".";
     }
 
+    // ------------------------------------------------------------- Part-A (booking)
+
     @Override
     @Transactional
     @PreAuthorize(WRITERS)
-    public EwayBill upsertForShipment(UUID shipmentId, EwayBillDataCommand ewayBill) {
-        if (ewayBill == null) {
+    public EwayBill generatePartAForShipment(UUID shipmentId, EwayBillDataCommand data, ShipmentEwayBillContext ctx) {
+        if (data == null) {
             return null;
         }
         UUID companyId = requireCompany();
-        // Deliberately not currentFor() here — that helper falls back to a cancelled row
-        // for display purposes (findLatestForShipment), but a write must never resurrect
-        // one: a cancelled E-Way Bill is reissued as a fresh row, never reused in place.
+        String invoiceNumber = blankToNull(data.invoiceNumber());
+
+        // Idempotent by (shipment, invoice number): a retried booking call (e.g. a
+        // client retry after a network blip) must never raise a second E-Way Bill for
+        // the same invoice. Deliberately not "newest row regardless of invoice number"
+        // — an edit that changes the invoice number is a new E-Way Bill, not an amend.
+        EwayBill bill = repository.findAllByShipmentIdWithinCompany(shipmentId, companyId).stream()
+                .filter(b -> b.getStatus() != EwayBillStatus.CANCELLED)
+                .filter(b -> Objects.equals(b.getInvoiceNumber(), invoiceNumber))
+                .findFirst().orElse(null);
+
+        if (bill != null && PART_A_DONE.contains(bill.getStatus())) {
+            log.info("E-Way Bill Part-A already generated for shipment {} invoice {} in company {} — skipping",
+                    shipmentId, invoiceNumber, companyId);
+            return bill;
+        }
+        if (bill == null) {
+            bill = EwayBill.builder().shipmentId(shipmentId).status(EwayBillStatus.PART_A_PENDING).build();
+        }
+
+        applyData(bill, data);
+        applyContext(bill, ctx);
+        bill.applyInvariants();
+        applyStatus(bill, EwayBillStatus.PART_A_PENDING);
+
+        EwayBill toSave = bill;
+        try {
+            EwayBillProvider.PartAResult result = provider.generatePartA(toPartARequest(toSave));
+            if (result != null && result.success()) {
+                toSave.setEwayBillNumber(result.ewayBillNumber());
+                toSave.setValidFrom(result.validFrom());
+                toSave.setValidUntil(result.validUntil());
+                toSave.setProviderName(result.providerName());
+                toSave.setProviderReference(result.providerReference());
+                toSave.setPartAGeneratedAt(Instant.now());
+                toSave.setLastError(null);
+                applyStatus(toSave, EwayBillStatus.PART_A_GENERATED);
+                log.info("E-Way Bill {} Part-A generated for shipment {} in company {}",
+                        toSave.getEwayBillNumber(), shipmentId, companyId);
+                EwayBill saved = repository.save(toSave);
+                auditService.record(AuditAction.EWAY_BILL_PART_A_GENERATED, ENTITY, saved.getId(),
+                        Map.of("shipmentId", shipmentId.toString(), "ewayBillNumber",
+                                nullToEmpty(saved.getEwayBillNumber())));
+                return saved;
+            }
+            return failPartA(toSave, shipmentId, companyId,
+                    result == null ? "No response from the E-Way Bill provider." : result.failureReason());
+        } catch (Exception e) {
+            log.error("E-Way Bill Part-A generation threw for shipment {} in company {}: {}",
+                    shipmentId, companyId, e.getMessage());
+            return failPartA(toSave, shipmentId, companyId, "E-Way Bill provider error: " + safeMessage(e));
+        }
+    }
+
+    /** Never rethrown by any caller — a booking transaction must commit regardless of
+     *  provider outcome; only missing input data ({@link #requireBookingData}) may
+     *  legitimately block a booking. */
+    private EwayBill failPartA(EwayBill bill, UUID shipmentId, UUID companyId, String reason) {
+        bill.setLastError(reason);
+        bill.setRetryCount(bill.getRetryCount() + 1);
+        applyStatus(bill, EwayBillStatus.FAILED);
+        EwayBill saved = repository.save(bill);
+        log.warn("E-Way Bill Part-A failed for shipment {} in company {}: {}", shipmentId, companyId, reason);
+        auditService.record(AuditAction.EWAY_BILL_GENERATION_FAILED, ENTITY, saved.getId(),
+                Map.of("shipmentId", shipmentId.toString(), "stage", "PART_A", "reason", nullToEmpty(reason)));
+        return saved;
+    }
+
+    // ------------------------------------------------------------- Part-B (dispatch)
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public void triggerPartBForShipments(Collection<UUID> shipmentIds, String vehicleNumber,
+                                         String transporterId, String transportMode) {
+        if (shipmentIds == null || shipmentIds.isEmpty()) {
+            return;
+        }
+        UUID companyId = requireCompany();
+        String mode = isBlank(transportMode) ? DEFAULT_TRANSPORT_MODE : transportMode;
+
+        List<EwayBill> current = repository.findAllByShipmentIdInWithinCompany(shipmentIds, companyId).stream()
+                .filter(b -> b.getStatus() != EwayBillStatus.CANCELLED)
+                .collect(Collectors.groupingBy(EwayBill::getShipmentId,
+                        Collectors.collectingAndThen(
+                                Collectors.maxBy(Comparator.comparing(EwayBill::getCreatedAt)),
+                                Optional::orElseThrow)))
+                .values().stream()
+                .filter(b -> b.getStatus() == EwayBillStatus.PART_A_GENERATED)
+                .toList();
+
+        for (EwayBill bill : current) {
+            try {
+                bill.setVehicleNumber(vehicleNumber);
+                if (!isBlank(transporterId)) {
+                    bill.setTransporterId(transporterId);
+                }
+                bill.setTransportMode(mode);
+                applyStatus(bill, EwayBillStatus.PART_B_PENDING);
+
+                EwayBillProvider.PartBResult result = provider.updatePartB(new EwayBillProvider.PartBRequest(
+                        bill.getEwayBillNumber(), vehicleNumber, bill.getTransporterId(), mode));
+
+                if (result != null && result.success()) {
+                    if (result.providerReference() != null) {
+                        bill.setProviderReference(result.providerReference());
+                    }
+                    bill.setPartBGeneratedAt(Instant.now());
+                    bill.setLastError(null);
+                    applyStatus(bill, EwayBillStatus.GENERATED);
+                    repository.save(bill);
+                    auditService.record(AuditAction.EWAY_BILL_PART_B_GENERATED, ENTITY, bill.getId(),
+                            Map.of("shipmentId", bill.getShipmentId().toString(), "vehicleNumber", vehicleNumber));
+                } else {
+                    failPartB(bill, result == null ? "No response from the E-Way Bill provider." : result.failureReason());
+                }
+            } catch (Exception e) {
+                log.error("E-Way Bill Part-B update threw for shipment {} in company {}: {}",
+                        bill.getShipmentId(), companyId, e.getMessage());
+                try {
+                    failPartB(bill, "E-Way Bill provider error: " + safeMessage(e));
+                } catch (Exception persistFailure) {
+                    log.error("Could not even persist the E-Way Bill Part-B failure for shipment {}: {}",
+                            bill.getShipmentId(), persistFailure.getMessage());
+                }
+            }
+        }
+    }
+
+    private void failPartB(EwayBill bill, String reason) {
+        bill.setLastError(reason);
+        bill.setRetryCount(bill.getRetryCount() + 1);
+        applyStatus(bill, EwayBillStatus.FAILED);
+        repository.save(bill);
+        log.warn("E-Way Bill Part-B failed for shipment {} in company {}: {}",
+                bill.getShipmentId(), bill.getCompanyId(), reason);
+        auditService.record(AuditAction.EWAY_BILL_GENERATION_FAILED, ENTITY, bill.getId(),
+                Map.of("shipmentId", bill.getShipmentId().toString(), "stage", "PART_B", "reason", nullToEmpty(reason)));
+    }
+
+    // ------------------------------------------------------------- manual attach
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public EwayBill upsertForShipment(UUID shipmentId, EwayBillDataCommand data) {
+        if (data == null) {
+            return null;
+        }
+        UUID companyId = requireCompany();
         EwayBill bill = repository.findAllByShipmentIdWithinCompany(shipmentId, companyId).stream()
                 .filter(b -> b.getStatus() != EwayBillStatus.CANCELLED)
                 .findFirst().orElse(null);
         if (bill == null) {
-            bill = EwayBill.builder().shipmentId(shipmentId).status(EwayBillStatus.PENDING).build();
+            bill = EwayBill.builder().shipmentId(shipmentId).status(EwayBillStatus.PART_A_PENDING).build();
         }
-        applyData(bill, ewayBill);
+        applyData(bill, data);
         bill.applyInvariants();
-
-        EwayBillProvider.ValidationOutcome outcome = provider.validate(toValidationRequest(ewayBill));
-        applyStatus(bill, outcome.valid() ? EwayBillStatus.VALIDATED : EwayBillStatus.INVALID);
+        applyStatus(bill, isBlank(bill.getEwayBillNumber()) ? EwayBillStatus.PART_A_PENDING : EwayBillStatus.GENERATED);
 
         EwayBill saved = repository.save(bill);
         log.info("E-Way Bill {} ({}) for shipment {} in company {} -> {}", saved.getEwayBillNumber(),
                 saved.getId(), shipmentId, companyId, saved.getStatus());
-        auditService.record(saved.getStatus() == EwayBillStatus.VALIDATED
-                        ? AuditAction.EWAY_BILL_VALIDATED : AuditAction.EWAY_BILL_CREATED,
-                ENTITY, saved.getId(), Map.of("shipmentId", shipmentId.toString(), "status", saved.getStatus().name()));
+        auditService.record(AuditAction.EWAY_BILL_CREATED, ENTITY, saved.getId(),
+                Map.of("shipmentId", shipmentId.toString(), "status", saved.getStatus().name()));
         return saved;
     }
 
@@ -163,7 +310,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     private EwayBillSnapshot toSnapshot(EwayBill b) {
         return new EwayBillSnapshot(b.getId(), b.getEwayBillNumber(), b.getStatus().name(), b.getInvoiceNumber(),
-                b.getInvoiceValue(), b.getValidFrom(), b.getValidUntil(), b.getDocumentUrl());
+                b.getInvoiceValue(), b.getValidFrom(), b.getValidUntil(), b.getDocumentUrl(), b.getLastError());
     }
 
     // ------------------------------------------------------------- standalone lifecycle
@@ -174,9 +321,10 @@ public class EwayBillServiceImpl implements EwayBillService {
     public EwayBill create(CreateEwayBillCommand command) {
         UUID companyId = requireCompany();
         EwayBill bill = EwayBill.builder().shipmentId(command.shipmentId())
-                .status(EwayBillStatus.PENDING).build();
+                .status(EwayBillStatus.PART_A_PENDING).build();
         applyData(bill, command.data());
         bill.applyInvariants();
+        applyStatus(bill, isBlank(bill.getEwayBillNumber()) ? EwayBillStatus.PART_A_PENDING : EwayBillStatus.GENERATED);
         EwayBill saved;
         try {
             saved = repository.save(bill);
@@ -228,22 +376,75 @@ public class EwayBillServiceImpl implements EwayBillService {
     @Override
     @Transactional
     @PreAuthorize(WRITERS)
-    public EwayBill validate(UUID id) {
+    public EwayBill retry(UUID id) {
         UUID companyId = requireCompany();
         EwayBill bill = loadOrThrow(id, companyId);
-        if (bill.getStatus() == EwayBillStatus.CANCELLED) {
-            throw new BusinessRuleException("E-Way Bill %s is cancelled and cannot be validated."
-                    .formatted(id));
+        if (bill.getStatus() != EwayBillStatus.FAILED && bill.getStatus() != EwayBillStatus.EXPIRED) {
+            throw new BusinessRuleException(
+                    "E-Way Bill %s is not FAILED/EXPIRED, so there is nothing to retry.".formatted(id));
         }
-        EwayBillProvider.ValidationOutcome outcome = provider.validate(toValidationRequest(bill));
-        applyStatus(bill, outcome.valid() ? EwayBillStatus.VALIDATED : EwayBillStatus.INVALID);
-        EwayBill saved = repository.save(bill);
-        log.info("E-Way Bill {} ({}) validated -> {} in company {} by {}", saved.getEwayBillNumber(),
+
+        boolean retryPartB = bill.getStatus() == EwayBillStatus.FAILED && bill.partAGenerated();
+        EwayBill saved = retryPartB ? retryPartB(bill) : retryPartA(bill);
+
+        log.info("E-Way Bill {} ({}) retried -> {} in company {} by {}", saved.getEwayBillNumber(),
                 saved.getId(), saved.getStatus(), companyId, currentActor());
-        auditService.record(AuditAction.EWAY_BILL_VALIDATED, ENTITY, saved.getId(),
-                Map.of("status", saved.getStatus().name(),
-                        "reason", outcome.reason() == null ? "" : outcome.reason()));
+        auditService.record(AuditAction.EWAY_BILL_RETRIED, ENTITY, saved.getId(),
+                Map.of("status", saved.getStatus().name()));
         return saved;
+    }
+
+    private EwayBill retryPartA(EwayBill bill) {
+        applyStatus(bill, EwayBillStatus.PART_A_PENDING);
+        try {
+            EwayBillProvider.PartAResult result = provider.generatePartA(toPartARequest(bill));
+            if (result == null || !result.success()) {
+                throw new BusinessRuleException("E-Way Bill Part-A retry failed: "
+                        + (result == null ? "no response from the provider" : result.failureReason()));
+            }
+            bill.setEwayBillNumber(result.ewayBillNumber());
+            bill.setValidFrom(result.validFrom());
+            bill.setValidUntil(result.validUntil());
+            bill.setProviderName(result.providerName());
+            bill.setProviderReference(result.providerReference());
+            bill.setPartAGeneratedAt(Instant.now());
+            bill.setLastError(null);
+            applyStatus(bill, EwayBillStatus.PART_A_GENERATED);
+            return repository.save(bill);
+        } catch (Exception e) {
+            bill.setLastError(e instanceof BusinessRuleException ? e.getMessage() : safeMessage(e));
+            bill.setRetryCount(bill.getRetryCount() + 1);
+            applyStatus(bill, EwayBillStatus.FAILED);
+            repository.save(bill);
+            throw e instanceof BusinessRuleException bre ? bre
+                    : new BusinessRuleException("E-Way Bill Part-A retry failed: " + safeMessage(e));
+        }
+    }
+
+    private EwayBill retryPartB(EwayBill bill) {
+        applyStatus(bill, EwayBillStatus.PART_B_PENDING);
+        try {
+            EwayBillProvider.PartBResult result = provider.updatePartB(new EwayBillProvider.PartBRequest(
+                    bill.getEwayBillNumber(), bill.getVehicleNumber(), bill.getTransporterId(), bill.getTransportMode()));
+            if (result == null || !result.success()) {
+                throw new BusinessRuleException("E-Way Bill Part-B retry failed: "
+                        + (result == null ? "no response from the provider" : result.failureReason()));
+            }
+            if (result.providerReference() != null) {
+                bill.setProviderReference(result.providerReference());
+            }
+            bill.setPartBGeneratedAt(Instant.now());
+            bill.setLastError(null);
+            applyStatus(bill, EwayBillStatus.GENERATED);
+            return repository.save(bill);
+        } catch (Exception e) {
+            bill.setLastError(e instanceof BusinessRuleException ? e.getMessage() : safeMessage(e));
+            bill.setRetryCount(bill.getRetryCount() + 1);
+            applyStatus(bill, EwayBillStatus.FAILED);
+            repository.save(bill);
+            throw e instanceof BusinessRuleException bre ? bre
+                    : new BusinessRuleException("E-Way Bill Part-B retry failed: " + safeMessage(e));
+        }
     }
 
     @Override
@@ -267,18 +468,10 @@ public class EwayBillServiceImpl implements EwayBillService {
         FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
                 command.content(), key, command.contentType(), "eway-bill"));
         bill.setDocumentUrl(stored.url());
+        repository.save(bill);
 
-        // A document replacing an already-VALIDATED/UPLOADED/EXPIRED row does not silently
-        // undo or repeat that state; only a row still awaiting one moves forward.
-        Set<EwayBillStatus> promotable = Set.of(EwayBillStatus.NOT_REQUIRED, EwayBillStatus.REQUIRED,
-                EwayBillStatus.PENDING, EwayBillStatus.INVALID);
-        if (promotable.contains(bill.getStatus())) {
-            applyStatus(bill, EwayBillStatus.UPLOADED);
-        }
-        EwayBill saved = repository.save(bill);
-
-        auditService.record(AuditAction.EWAY_BILL_UPLOADED, ENTITY, saved.getId(),
-                Map.of("shipmentId", saved.getShipmentId().toString()));
+        auditService.record(AuditAction.EWAY_BILL_UPLOADED, ENTITY, bill.getId(),
+                Map.of("shipmentId", bill.getShipmentId().toString()));
         return stored.url();
     }
 
@@ -290,6 +483,19 @@ public class EwayBillServiceImpl implements EwayBillService {
         EwayBill bill = loadOrThrow(id, companyId);
         if (bill.getStatus() == EwayBillStatus.CANCELLED) {
             throw new BusinessRuleException("E-Way Bill %s is already cancelled.".formatted(id));
+        }
+        if (bill.partAGenerated()) {
+            EwayBillProvider.CancelResult result;
+            try {
+                result = provider.cancel(bill.getEwayBillNumber(), remarks);
+            } catch (Exception e) {
+                throw new BusinessRuleException("Could not cancel the E-Way Bill with the provider: "
+                        + safeMessage(e));
+            }
+            if (result == null || !result.success()) {
+                throw new BusinessRuleException("E-Way Bill cancellation was refused: "
+                        + (result == null ? "no response from the provider" : result.failureReason()));
+            }
         }
         bill.transitionTo(EwayBillStatus.CANCELLED);
         if (remarks != null && !remarks.isBlank()) {
@@ -305,6 +511,10 @@ public class EwayBillServiceImpl implements EwayBillService {
     // ------------------------------------------------------------------------ helpers
 
     private void applyData(EwayBill bill, EwayBillDataCommand data) {
+        // ewayBillNumber/transporterId/vehicleNumber/distance/validFrom/validUntil are
+        // only ever meaningful on the manual-attach path (create/update/upsertForShipment)
+        // — the auto-generation path (generatePartAForShipment) never reads them back off
+        // the command, only what the provider itself returns.
         bill.setEwayBillNumber(data.ewayBillNumber());
         bill.setInvoiceNumber(data.invoiceNumber());
         bill.setInvoiceDate(data.invoiceDate());
@@ -317,12 +527,27 @@ public class EwayBillServiceImpl implements EwayBillService {
         bill.setDistance(data.distance());
         bill.setValidFrom(data.validFrom());
         bill.setValidUntil(data.validUntil());
+        bill.setConsignorGstin(data.consignorGstin());
+        bill.setConsigneeGstin(data.consigneeGstin());
         if (data.documentUrl() != null && !data.documentUrl().isBlank()) {
             bill.setDocumentUrl(data.documentUrl().trim());
         }
         if (data.remarks() != null) {
             bill.setRemarks(data.remarks());
         }
+    }
+
+    private void applyContext(EwayBill bill, ShipmentEwayBillContext ctx) {
+        if (ctx == null) {
+            return;
+        }
+        bill.setConsignorName(ctx.consignorName());
+        bill.setConsignorAddress(ctx.consignorAddress());
+        bill.setConsignorPincode(ctx.consignorPincode());
+        bill.setConsigneeName(ctx.consigneeName());
+        bill.setConsigneeAddress(ctx.consigneeAddress());
+        bill.setConsigneePincode(ctx.consigneePincode());
+        bill.setProductDescription(ctx.productDescription());
     }
 
     private EwayBillDocumentType parseDocumentType(String raw) {
@@ -336,21 +561,21 @@ public class EwayBillServiceImpl implements EwayBillService {
         }
     }
 
-    private EwayBillProvider.ValidationRequest toValidationRequest(EwayBillDataCommand data) {
-        return new EwayBillProvider.ValidationRequest(data.ewayBillNumber(), data.invoiceNumber(),
-                data.invoiceDate(), data.invoiceValue(), data.vehicleNumber(),
-                data.validFrom(), data.validUntil());
-    }
-
-    private EwayBillProvider.ValidationRequest toValidationRequest(EwayBill bill) {
-        return new EwayBillProvider.ValidationRequest(bill.getEwayBillNumber(), bill.getInvoiceNumber(),
-                bill.getInvoiceDate(), bill.getInvoiceValue(), bill.getVehicleNumber(),
-                bill.getValidFrom(), bill.getValidUntil());
+    /** Builds the provider request from the row itself (not the incoming command) so
+     *  {@link #retry} can rebuild the exact same request without any fresh input —
+     *  everything Part-A needs is already snapshotted on the entity. */
+    private EwayBillProvider.PartARequest toPartARequest(EwayBill bill) {
+        return new EwayBillProvider.PartARequest(bill.getInvoiceNumber(), bill.getInvoiceDate(),
+                bill.getInvoiceValue(), bill.getDocumentType() == null ? null : bill.getDocumentType().name(),
+                bill.getDocumentNumber(), bill.getDocumentDate(),
+                bill.getConsignorGstin(), bill.getConsignorName(), bill.getConsignorAddress(), bill.getConsignorPincode(),
+                bill.getConsigneeGstin(), bill.getConsigneeName(), bill.getConsigneeAddress(), bill.getConsigneePincode(),
+                bill.getProductDescription());
     }
 
     /** Only calls {@link EwayBill#transitionTo} when the status is actually changing —
-     *  re-validating a row that is already {@code VALIDATED} with unchanged data must not
-     *  throw just because {@code EwayBillStatus.canTransitionTo} refuses a self-loop. */
+     *  re-processing a row already at the target status must not throw just because
+     *  {@code EwayBillStatus.canTransitionTo} refuses a self-loop. */
     private void applyStatus(EwayBill bill, EwayBillStatus next) {
         if (bill.getStatus() != next) {
             bill.transitionTo(next);
@@ -363,6 +588,26 @@ public class EwayBillServiceImpl implements EwayBillService {
         }
         int dot = filename.lastIndexOf('.');
         return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String blankToNull(String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    /** Never surfaces a raw exception message from an HTTP client to a user-visible
+     *  field — those can echo request content (headers, body) that must never be logged
+     *  or stored. Callers that need a user-facing reason use the provider's own
+     *  {@code failureReason} instead; this is only for the "provider threw" catch-all. */
+    private static String safeMessage(Exception e) {
+        return e.getClass().getSimpleName();
     }
 
     private EwayBill loadOrThrow(UUID id, UUID companyId) {

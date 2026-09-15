@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -20,7 +21,12 @@ import java.util.UUID;
 public record ShipmentSummaryResponse(
         UUID id, String shipmentNumber, String trackingNumber, LocalDate bookingDate,
         UUID bookingBranchId, UUID deliveryBranchId, UUID currentLocationId, UUID nextLocationId,
-        UUID manifestId, UUID paymentModeId,
+        /** The booking branch's own city — no longer a Delivery Branch pick at booking, see
+         *  {@code Shipment.fromCity}/{@code toCity}. */
+        String fromCity,
+        /** The destination pincode/area's resolved city. */
+        String toCity,
+        UUID manifestId, UUID paymentModeId, DeliveryType deliveryType,
         String senderName, String senderContact, String receiverName, String receiverContact,
         BigDecimal chargeableWeight, BigDecimal netAmount,
         BigDecimal totalCommission, BigDecimal commissionOnBasicFreight,
@@ -32,6 +38,10 @@ public record ShipmentSummaryResponse(
         /** When the shipment was last IN_SCAN'd (received at a branch/hub) — the latest of
          *  possibly several such entries if it crossed more than one hop. Null until it's
          *  been received anywhere. */
-        Instant receivedAt
+        Instant receivedAt,
+        /** The government-issued E-Way Bill number itself (distinct from {@link
+         *  #invoiceNumber}) — null until Part-A has actually succeeded. The THC's own
+         *  E-WAY BILL NO column. */
+        String ewayBillNumber
 ) {
 }

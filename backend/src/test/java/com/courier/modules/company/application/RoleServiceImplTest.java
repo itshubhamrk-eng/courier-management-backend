@@ -58,13 +58,14 @@ class RoleServiceImplTest {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
 
     @Mock private CompanyRoleRepository repository;
+    @Mock private com.courier.modules.company.domain.DepartmentRoleRepository departmentRoleRepository;
     @Mock private AuditService auditService;
 
     private RoleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new RoleServiceImpl(repository, auditService);
+        service = new RoleServiceImpl(repository, departmentRoleRepository, auditService);
         CompanyContext.setCompanyId(TENANT);
 
         when(repository.save(any(CompanyRole.class))).thenAnswer(i -> i.getArgument(0));

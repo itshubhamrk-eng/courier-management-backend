@@ -7,6 +7,742 @@
 
 ## Current Version
 
+`0.58.10` — **Department Master, and user creation picks a department instead of typing a
+designation.** Direct request. New company-owned module `Department`/`departments` (V71),
+many-to-many to `company_roles` via `DepartmentRole`/`department_roles` (a department can
+offer several roles, e.g. Operations offering both `BOOKING_OPERATOR` and
+`DELIVERY_OPERATOR`) — full CRUD at `/api/v1/departments`, mirrors `RoleService`'s
+isolation shape exactly (`COMPANY_ADMIN` writes, `SUPER_ADMIN` cross-company reads,
+`BRANCH_MANAGER` gets `/departments/assignable`). New `DEPARTMENT` permission module (8
+rights, catalog 240 -> 248); `RoleServiceImpl.delete` now refuses a role still offered by
+a department. `User` gains `departmentId` (FK) alongside the untouched free-text
+`department` column; `UserServiceImpl.assignRoles` validates requested `roleIds` are among
+the chosen department's own grants when both are given. `designation` is untouched in the
+backend — removed only from `UserForm`'s create/edit template, not the entity/DTOs.
+Frontend: new `features/departments` (list + inline drawer form); `UserForm`'s
+designation/department text inputs replaced by a department dropdown that narrows the
+role multi-select to that department's own roles.
+
+**Verified live 2026-09-12**, after first appearing blocked: the shipment-module
+"breakage" was a stale build artifact from a second concurrent session mid-editing an
+unrelated DRS/OTP feature at the exact moment of the first `test-compile` — `mvn clean
+compile`/`mvn -o test` (135+ classes) passed clean once that session settled. Booted a
+throwaway `:8082`/`:4300` stack against the real dev `courier_db` (real `:8100`/`:4200`
+untouched) and exercised the full contract: curl-verified the department-role validation
+(role outside the department's grants 422s, role inside succeeds and lands on the user),
+`/departments/assignable`, and the delete guard; then in the actual browser, created a
+department through the real drawer form, and on `/users/new` confirmed Designation is
+gone, Department is a dropdown, and picking a department narrows the Roles multi-select
+to exactly that department's own roles — created a real user this way, role landed
+correctly on its detail page. Full detail in `CHANGELOG.md` 2026-09-12 "Department
+Master; user creation picks a department, not a designation".
+
+Previously current:
+
+`0.58.3` — **Booking-branch commission trigger moved again: Trip Challan creation →
+in-scan at the delivery branch.** Direct bug report ("booking branch order commission
+should be credit after shipment order inscan by delivery branch, now crediting after THC
+created it should be after inscan"). Only the collect-at-booking (PREPAID) trigger
+moves — `0.24.3`'s move from booking-time to Trip Challan/manifest-dispatch time turned
+out to be one hop too early; TO_PAY/COD's booking-branch commission (fires on actual
+delivery, `DeliveryCommissionEarned`) is untouched. `ShipmentEvent
+.DispatchCommissionEarned` renamed `InScanCommissionEarned`, publish call moved from
+`ShipmentServiceImpl.transitionToDispatched` to `scanOneIn`'s `finalDestination` branch —
+same gate `ReceivedAtBranch`/`ToPayReceivedAtDeliveryBranch` already use (in-scan at the
+shipment's *own* delivery branch, not a crossing hub) — same eligibility check
+(`commissionOnBasicFreight + branchCommissionOnOtherAmount`, booking branch's
+`instantCommission` on) as before. `transitionToDispatched` no longer touches
+`ShipmentCharge` at all. `ShipmentPendingCommissionDirectory`'s `PRE_DISPATCH` set
+renamed `PRE_INSCAN`, widened to include `DISPATCHED` (still "pending" there now) — an
+intermediate crossing hop's in-scan reverts status to `READY_FOR_MANIFEST` first, already
+in the set, so multi-leg routes still resolve right. Three `transitionToDispatched`
+commission tests moved from `ShipmentServiceImplTest` to `ShipmentMovementServiceImplTest`
+'s `scanOneIn` section; one new regression test asserts dispatch never publishes a
+commission event any more. `mvn test`: 135 test classes, 0 failures. Full detail in
+`CHANGELOG.md` 2026-09-12 "Booking-branch commission now credits on in-scan".
+
+Previously current:
+
+`0.58.2` — **Shipment Booking Pricing perf: fixed a real N+1 and wired the Company
+Settings cache Redis already had sitting unused.** Direct report ("pricing getting
+slow"). Audited every DB call `PricingEngineImpl.calculate` makes rather than guessing
+first — `master_routes`/`rate_master` are already indexed exactly right for
+`RouteValidation`/`RateValidation`'s queries (`uk_master_routes_pair`,
+`idx_rate_master_combo`; V56 on 2026-09-04 already covered the real gaps elsewhere), so
+**no new migration this time**. Two real problems instead: (1)
+`ApplicableChargesCalculator.resolve()` queried `chargeSettingRepository` once per
+matched `Charge` — N charges under a service type meant N+1 round trips on every
+`/pricing/calculate` call, including the frontend's debounced live-preview keystrokes
+during booking. New `ChargeSettingRepository
+.findByCompanyIdAndChargeIdInAndStatus(companyId, chargeIds, ACTIVE)` batches it to one
+query, grouped by `chargeId` in memory afterward — `idx_charge_settings_charge`
+`(company_id, charge_id, status)` already serves the `IN` form fine. (2)
+`CompanySettingsService.get()` — read up to twice per pricing call (GST%, then
+round-off, as two separate fetches in the Freight Factor fallback; collapsed to one) and
+again by nearly every other module — had zero caching, despite `RedisConfig` (2026-08-17,
+Redis added to the compose stack) already declaring a `CACHE_COMPANY_CONFIG` bucket for
+exactly this that nothing had ever actually used (`grep -r @Cacheable` across the whole
+codebase came back empty before this). Wired `@Cacheable`/`@CacheEvict` — keyed on
+`CompanyContext.requireCompanyId()` — onto `get()` and all nine write methods (`replace`
++ eight `patch*`), explicit eviction on every write rather than relying on the 10-minute
+TTL alone. `CompanySettings` is a flat entity (no JPA associations), safe to round-trip
+through the existing `GenericJackson2JsonRedisSerializer`. Deliberately left
+`CACHE_RATE_CARDS` (also declared, also unused) alone — Route/Rate reads were already
+fast and wiring safe eviction across `RateServiceImpl`'s several write paths wasn't
+justified without a concrete slowness signal there; a correctness risk on a
+billing-relevant value isn't worth taking speculatively. Found along the way: two
+`PricingEngineImplTest` cases had gone stale against an earlier, already-uncommitted
+change (present before this task started) that added round-off to the Freight Factor
+fallback — fixed the expected values (`NEAREST_FIVE` default: 37.50→40.00, 56.05→55.00)
+so the suite builds green; out of this task's own scope but the fix was trivial and
+obviously correct once traced. `mvn compile` clean, `mvn test` 1031/1031. **Not
+load-tested** — no before/after timing capture (this account's tables are still small,
+same honesty note V56 already gave); the N+1 fix's win scales with charges-per-service-
+type, the cache's win scales with concurrent booking-desk request volume. Full detail in
+`CHANGELOG.md` 2026-09-12 "Shipment Booking Pricing perf".
+
+Previously current:
+
+`0.58.1` — **Print 3 follow-up, same session as 0.58.0**: three direct requests after
+live-verifying 0.58.0 on the real `:4200` (restarted on request — frontend-only change,
+real backend `:8100` left untouched, existing sessions survived). (1) "font should be
+same as print 1" — `performa-bill-print.util.ts`'s body font swapped from bare
+`Arial,Helvetica,sans-serif` to `"Segoe UI",Calibri,Arial,Helvetica,sans-serif`,
+matching `consignment-print.util.ts` exactly. (2) "padding spacing margin should be
+standard" — cell padding/font-size bumped from the ad hoc 11px/mixed-padding first pass
+to Print 1's baseline (`padding:4px 8px`, `font-size:12px`); outer `@page` margin
+already matched. (3) "add terms and condition as well" — added the identical Terms &
+Conditions block (same six clauses, same wording) Print 1 already has, styled to
+Print 3's black-line convention instead of Print 1's CSS-variable one.
+
+Fourth request, same session: **"amount show logic should be same as print 1 on print
+3"** — Print 3's amount column previously always showed a flat "Net Total" row
+regardless of copy label or payment mode. Ported `consignment-print.util.ts`'s exact
+`amountMode` logic (`normal`/`paid`/`omitted`/`collect`, keyed on paid-vs-ToPay and the
+copy label) verbatim into `performa-bill-print.util.ts`'s `sheet()` — same charge-line
+placeholder rows, same "Total Paid"/"ToPay"/omitted branches, same `amountInWords`
+call. Along the way, re-examined the "doorDeliveryCharge double-counted" finding
+flagged in 0.58.0: it's **not a Print-3-specific bug** — `consignment-print.util.ts`
+(Print 1, shipped since 0.28.8) has the exact same `total` formula, so whatever this
+is, it's pre-existing and now — correctly, per this request — identical across all
+three print buttons rather than something Print 3 diverged on.
+
+**Verified live**, real `:4200`, shipment `PUNE-000043` (Paid, Door Delivery ₹100),
+actual "Print 3" button click (not simulated) — same `Node.prototype.appendChild`
+iframe-capture technique as 0.58.0 to dodge a real `window.print()` dialog. Confirmed
+all four copy/mode combinations render correctly: Customer/Office copies show "Total
+Paid ₹341.90 (Paid)"; Driver copy's amount block is empty (nothing left to collect,
+matches Print 1's rule); Delivery copy shows "ToPay ₹0.00" (already Paid, so nothing
+outstanding) — byte-for-byte the same branching Print 1 produces for this booking.
+`tsc --noEmit` clean both times.
+
+Three more same-session follow-ups, each live-verified the same way (real `:4200`,
+real booking, captured iframe HTML, no real print dialog triggered):
+
+- **"header should be same as print 1"** — Print 3's masthead (decorative "Smart POST"
+  wordmark + company block + booking-branch corner) replaced with Print 1's exact
+  3-column header: logo/wordmark, company name+address+GST+contact+website, and an LR
+  box. Newly exported `barcodeSvg` from `consignment-print.util.ts` (previously
+  module-private) to reuse it here, same pattern as the already-exported `qrSvg`/
+  `amountInWords`. Dropped the amount-section's own QR (now redundant with the header's)
+  to match Print 1's single-QR convention.
+- **"border should be same as print 1"** — Print 1 nests a `.copy` (3px border, 10px
+  padding) around a `.receipt-inner` (2px border) for a double-frame look; Print 3 had
+  only a single 2px border flush to the content. Added the same nested wrapper
+  (`.sheet` outer 3px+padding, new `.receipt-inner` inner 2px).
+- **"only add QR code not barcode"** — immediately reversed part of the header change
+  above: dropped the barcode (`barcodeSvg` import removed again, `.lrbox-barcode`
+  markup/CSS deleted), kept just the QR, sized up 48px->64px to fill the space.
+
+Two more: **"all line size should be same"** — every internal grid line in Print 3 was
+already 1px except `.terms{border-top:2px}`, a stray inherited from an earlier edit;
+fixed to 1px (the outer `.sheet`/`.receipt-inner` double-frame from the border request
+above is intentionally different and untouched). **"QR data should be shipment no, and
+show shipment number below QR"** — the QR already encoded `d.shipmentNumber` (unchanged
+since 0.58.0), just needed the visible label; added `<span class="lrbox-shipno">`
+under `.lrbox-qr`.
+
+Then a reversal: **"remove extra border from print 3 ... border is not align proper"**
+— the double-frame from the "border same as Print 1" request (outer `.sheet` 3px +
+10px padding, inner `.receipt-inner` 2px) was exactly what read as misaligned: a white
+gap between two differently-inset frames instead of one flush border. Un-nested it
+back to a single `.sheet{border:2px}` with no padding, content flush against it — same
+as 0.58.0's original single-frame design, just with the header/border/amount-logic
+changes above layered on top of it.
+
+While live-verifying this one, hit an **unrelated compile error** from a concurrent
+edit to `shipment-table.ts` (`Property 'paymentModeLabel' does not exist on type
+'ShipmentTable'`) — not something this session touched, someone/something else editing
+the same repo live. It briefly blocked the ng serve overlay and, separately, a real
+`window.print()` fired once (the `appendChild`-patch script and the button click landed
+in two separate JS calls, and a background HMR reload silently wiped the patch in
+between) — tab froze, recovered with a same-tab `navigate` per
+`[[print-popup-freezes-chrome-automation]]`. Fix going forward: patch-and-click in one
+atomic `javascript_exec` call, never split across two.
+
+One more: **"page size should be same as print 1"** — Print 3 was A4 portrait at a
+fixed `7.6in` sheet width; switched to Print 1's exact `@page{size:A4 landscape}` and
+`width:1100px;max-width:100%`. The flexible columns (`.co`, `f1`/`f2`, `.party`) just
+stretch to fill the extra width since they were already `flex:`-based, not fixed —
+only the few inch-fixed columns (logo, LR box, `f3`-`f5`, `.amount`) keep their size.
+
+One more: **"add created by same as print 1"** — Print 3's footer was missing the
+"Created By" line Print 1 has; added `<div class="createdby">Created By :&nbsp;
+${d.createdByName ?? '—'}</div>` above the disclaimer line. Verified live: "Created By
+: Pune User" (real `createdByName` off the booking).
+
+One more: **"add more required information that need for shipment print that we are
+fill during shipment booking"** — cross-checked `ConsignmentPrintData` against what
+Print 3 actually rendered and found five booking-form fields Print 1 already surfaces
+that Print 3 didn't: `serviceTypeLabel`, an explicit `deliveryType` label (Print 3 only
+showed a conditional "Door Delivery" badge, never "Office Delivery" for the other
+case), `expectedDeliveryDate`, booking-side pincode/area/district, and delivery-side
+pincode/area/district (`remarks`/Special Instruction was already there since 0.58.0).
+Added three new rows between the article/weight row and the item table: Service
+Type/Delivery Type/Expected Delivery, Booking/Delivery Pincode-Area-District, and
+Special Instruction. Verified live with real data: "Express (EXP)", "Door Delivery",
+"2026-09-11", "411001, C D A (O), Pune", "413520, Almala, Latur".
+
+Follow-up question then request: "invoice details added on print 3?" — answered no
+(only a silent `declaredValue ?? invoiceValue` fallback in the Goods Value cell, never
+labeled, and no invoice *number* tracked anywhere in the system — same gap
+`ambox-consignment-print.util.ts` already documents). Then: **"just add invoice no and
+appointment delivery details if appointment delivery and applied gst"** — added
+"Invoice No : —" (same "not tracked" convention, fourth cell on the Service
+Type/Delivery Type/Expected Delivery row) and a new row for "GST Applied :
+₹{charges.gstAmount}" (always shown) plus "Appointment Delivery : ₹
+{appointmentDeliveryCharge}" (only when truthy — `PUNE-000043` has none, so that cell
+correctly renders absent, not a zero). Hit the 15-minute access-token expiry again
+mid-check; same re-login recipe.
+
+Two more: **"shipment book then show print 3 in place of print 1"** — the booking
+flow's own auto-print (`shipment-create.ts`, fires right after `service.create()`
+succeeds) was still calling `printConsignmentCopies` (Print 1) directly, untouched by
+any of the work above (which only ever touched the shipment-*view*'s three buttons).
+Swapped its import/call to `printPerformaBillCopies`. **Live-verified with an actual
+new booking**, not just the view page: logged in as `pune@gmail.com` (BRANCH_MANAGER —
+`first.admin@gmail.com`/COMPANY_ADMIN has no branch assigned and can't book), filled
+the New Shipment form via JS (Pune -> Osmanabad, Express, Door Delivery, Paid), hit one
+real validation snag — the default 20kg item weight exceeds package type DOC's 5kg
+cap (`BUSINESS_RULE_VIOLATION`, found by patching `XMLHttpRequest.prototype.send`
+since the app doesn't use `window.fetch`) — dropped it to 2kg and it booked clean as
+`PUNE-000044`. The same `appendChild`-patch from the shipment-view checks survives the
+in-app (non-reload) navigation from `/shipments/new` to `/shipments/:id` that follows a
+successful booking, since it's still the same document/window. Captured HTML confirmed
+Print 3's Performa layout auto-fired for a genuinely fresh booking, real data
+throughout (LR `26090000059`, ₹125.96, Door Delivery, First Company header).
+
+Then: **"rename print 1 as Delivery Receipt, print 3 as Booking Receipt"** — relabeled
+the two `shipment-view.ts` buttons (`print` -> "Delivery Receipt", `print3` ->
+"Booking Receipt"); `print2`'s "Print 2" label untouched, not mentioned in the request.
+Only the button text changed, not the method names or the print utils themselves.
+
+`tsc --noEmit` clean after each. One incidental finding while iterating: a stale,
+already-rendered preview `<iframe id="preview-iframe">` left in the DOM from a prior
+verification round sat at `z-index:99999` over the real page and silently absorbed the
+next `Print 3` click — no error, just nothing captured. Fix was removing it
+(`document.getElementById('preview-iframe')?.remove()`) before every subsequent
+click, and past that, driving the click via `querySelector('app-button')` +
+`.click()` in the same JS call proved more reliable than a separate coordinate-based
+`computer` click when timing against Angular's HMR reload. Also hit a real 15-minute
+access-token expiry mid-session (unrelated to the `:4200` restart) — plain re-login,
+no data implications.
+
+Previously current:
+
+`0.58.0` — **"Print 3" — a third consignment-note layout matching a real courier bill
+supplied as a reference file.** Direct request: "Bill_26091054986.pdf generate print 3
+as like this" (file found in `~/Downloads`, a SmartPost "Performa Invoice -
+Consignment Note" for a PUNE SWARGATE -> Chhatrapati Sambhajinagar booking).
+
+New `frontend/src/app/features/shipment/performa-bill-print.util.ts`, wired as a third
+button next to "Print LR" and "Print 2" on `shipment-view.ts` (`print3()` ->
+`printPerformaBillCopies()`, same `buildPrintData()` the other two share — no new data
+plumbing). Same `ConsignmentPrintData` shape as `consignment-print.util.ts`/
+`ambox-consignment-print.util.ts`; reuses their `qrSvg` and (newly exported)
+`amountInWords` rather than duplicating them. Reference's masthead has two blocks that
+don't map to this app's data: a courier network's own logo (left) — hardcoded
+"Smart POST" wordmark, decorative furniture same as `ambox-...`'s "AMBOX" fallback —
+and the booking branch shown as its own corner block (right), mapped honestly to
+`bookingBranchLabel`. "Km" (route distance) isn't tracked anywhere in this system and
+prints "—". Four copies per booking (Customer/Office/Driver/Delivery), matching the
+other two utils' copy set — the reference itself only shows one ("Customer Copy") but
+the label is just interpolated text in the doc-type cell, so the same rotation applies
+cleanly.
+
+**Verified (static, synthetic data)**: `tsc --noEmit` clean. No dev stack was running
+yet, so first pass was static-rendered rather than click-tested — same technique as
+0.28.9's original verification: exported `renderPerformaHtml` (pure string builder, no
+DOM deps besides `qrSvg`'s off-DOM SVG generation), bundled with `esbuild` to CommonJS,
+ran in Node with synthetic data matching the reference PDF's own numbers (LR
+`26091054986`, Pune Swargate -> Chhatrapati Sambhajinagar, ₹290 net), served the static
+output over a throwaway local HTTP server and screenshotted it in `claude-in-chrome` —
+header, route bar, item table, consignor/consignee block, QR, Door Delivery box, and
+signature footer all render correctly across all four copies.
+
+**Verified live, real data binding (same day, follow-up: "test it live with all data
+binding")**: booted a throwaway `:8082`/`:4300` stack. Hit a real `DB_PORT` gotcha
+booting `:8082` — repo root `.env` sets `DB_PORT=3307` (a Docker MySQL that's never
+actually installed; Homebrew `mysql@8.0` is really on `3306`) and sourcing the whole
+`.env` for its `JWT_SECRET`/`SECRETS_ENCRYPTION_KEY` while only overriding `DB_HOST`/
+`DB_USERNAME`/`DB_PASSWORD` left the stale `DB_PORT=3307` in effect — pure `Connection
+refused` at Flyway init with zero hint it was a port mismatch; new memory
+`local-dev-environment`'s 2026-09-11 entry. Logged into the real UI as
+`pune@gmail.com`/`COMPANY-C1` (JS-driven form fill + read-back, not `form_input`, per
+`[[dev-login-credential]]`'s known field-corruption gotcha), opened a real booked
+shipment (`PUNE-000043`, Pune->Latur, Door Delivery charge ₹100) and clicked the actual
+"Print 3" button — not a simulation. To avoid the real `window.print()` native-dialog
+freeze risk (`[[print-popup-freezes-chrome-automation]]`), patched `Node.prototype
+.appendChild` to catch the print util's hidden iframe the instant it's inserted and
+stub its `contentWindow.print`, capturing the exact production-rendered HTML instead of
+letting a real print dialog fire — same spirit as that memory's `window.open` capture
+trick, applied to this iframe-based mechanism instead. Real company name/address,
+branch labels, sender/receiver, AWB, and QR all bound correctly.
+
+**Found a real (pre-existing, not introduced here) bug while doing this**: the shared
+`total` formula (`netAmount + otherCharges + appointmentDeliveryCharge +
+doorDeliveryCharge`), copied identically into `consignment-print.util.ts`'s `copy()`,
+`ambox-consignment-print.util.ts`'s `sheet()`, and this file's `sheet()`, double-counts
+`doorDeliveryCharge` whenever it's non-zero — the charge summary card already shows
+`netAmount` (₹241.90 on `PUNE-000043`) as the *sum including* Door Delivery (₹100) and
+its GST, but all three print utils then add `doorDeliveryCharge` a second time, printing
+₹341.90. Confirmed by reading the shared formula (identical in all three files) rather
+than needing to re-click Print LR/Print 2 — same bug, same root cause, present since
+0.28.8. Not fixed — out of scope for a print-3-addition task and affects two other
+files this task didn't otherwise touch; flagged to the user rather than silently
+patched.
+
+Previously current:
+
+`0.57.0` — **Login now accepts a registered mobile number, not just email.** Direct
+request: "user able to login using there contact number as well".
+
+Two `User` JPA entities map the same physical `users` table across modules —
+`auth.domain.User` (credentials/login, used by the whole auth flow) and
+`company.domain.User` (HR/org fields — employee code, branch/hub assignment,
+**owns `mobile`**). Added a read-only `mobile` field to `auth.domain.User`, same
+shared-kernel convention its existing `branchId`/`hubId` fields already use
+("`company.User` owns writes, auth only reads"). New
+`UserRepository.findFirstByMobileOrderByCreatedAtAsc` (`findFirst`, not a plain
+`findBy` — `mobile` carries no DB uniqueness constraint, unlike `email`, so a
+duplicate would otherwise throw). `AuthService.login` resolves the typed
+identifier through new `resolveLoginEmail`/`looksLikeMobile` (digits only,
+optional leading `+`, >= 7 digits, no `@`) before calling
+`authenticationManager.authenticate(...)` — an unmatched or non-mobile-shaped
+identifier passes through unchanged, which naturally fails the existing email
+lookup with the same generic `INVALID_CREDENTIALS`, so no new error branch or
+timing difference exists for an attacker to probe. `LoginRequest.email` dropped
+its `@Email` validation (`@NotBlank` + `@Size` only). Frontend `login.ts` dropped
+`Validators.email`, relabelled "Email or Mobile Number".
+
+**Verified**: `mvn test` 1029/1029 (3 new `AuthServiceTest` cases). `tsc --noEmit`
+clean. `curl` against a throwaway `:8082` stack first (real `courier_db` data,
+`ganesh@gmail.com`, mobile `7878787878`, COMPANY-C1) — mobile and email login
+with the same password gave byte-identical responses, wrong password/unknown
+mobile both gave the identical generic `INVALID_CREDENTIALS`.
+
+**Then a real browser click-through** ("test it live"): flipped
+`ganesh@gmail.com` to `email_verified=1` in `courier_db` so login could fully
+succeed, booted a paired `:8082`+`:4300` throwaway stack, and hit a genuine CORS
+gotcha — `:8082` launched with `SPRING_PROFILES_ACTIVE=dev` 403s every browser
+request from `:4300` because the `dev` profile's CORS allowlist *replaces* the
+base one and drops all `localhost` origins (`curl` doesn't trip this, no
+`Origin` header) — relaunched with `-Dspring-boot.run.profiles=local` (same as
+the real `:8100`) and it worked. New memory:
+`verify-stack-dev-profile-cors-gotcha`. Typed `7878787878` into the relabelled
+"Email or Mobile Number" field on `:4300` and landed on the dashboard as
+"Ganesh Waghmare" — full success. Both throwaway processes torn down after;
+`ganesh@gmail.com`'s `email_verified=1` left in place (real dev row).
+
+`0.56.0` — **Door Delivery Charge is now GST-taxed (was deliberately GST-free); plus a
+same-turn Net Amount override bug fix.** Direct request: "door delivery charges gst
+should be applicable" — reverses an earlier direct-request decision that made
+`doorDeliveryCharge` (manual, typed at booking, DOOR only) GST-free like
+`appointmentDeliveryCharge`. Appointment Delivery Charge is untouched, still GST-free.
+
+`ShipmentServiceImpl.copyCharge`/`netAmountWithOtherCharges`: new
+`gstOnDoorDeliveryCharge = doorDeliveryCharge * bookingBranch.gstPercentage%`, folded
+into `gstAmount` and `netAmount`, same `percentOf` pattern `otherCharges` already
+uses. Doc comments on `ShipmentCharge.doorDeliveryCharge`/`ShipmentChargeResponse`
+updated. No existing test fixtures touched this calculation. `mvn test` 1026/1026.
+Frontend `shipment-create.ts` gained a mirroring `gstOnDoorDeliveryCharge()`, folded
+into the live preview's `gstAmount`/`netAmount` (both the sidebar preview and the LR
+print-data assembly); dropped the stale "(no GST)" hint next to Door Delivery Charge
+in `shipment-create.ts`/`shipment-edit.ts`/`charge-summary.ts`. `tsc --noEmit` clean,
+`ng test` 156/157 (pre-existing unrelated `navigation.config.spec.ts` failure).
+
+**Same-turn bug fix** ("not able to edit Net Amount it should edit and able to enter
+amount manualy"): the live preview's editable Net Amount override
+(`shipment-create.ts`'s `manualNetAmount` signal) was being *added to* the other
+manual charges/deltas instead of replacing the total outright, so typing e.g. "500"
+displayed "500 + otherCharges + deltas...", snapping the visible value away from what
+was just typed on every keystroke. Fixed to `manualNetAmount() ?? <computed default>`
+— a typed override is now the literal displayed total, matching `ChargeSummary`'s own
+doc comment ("Net Amount becomes a typeable override"). Pre-existing bug, not
+introduced by the GST change above; `manualNetAmount` is documented "display only,
+never sent to the server", so booking correctness itself was never affected.
+
+**Verified**: throwaway `:8082` stack, PUT-updated a real booked shipment
+(`PUNE-000043`) to `deliveryType: DOOR`, `doorDeliveryCharge: 100` — `gstAmount` 18.9
+-> 36.9 (+18, exactly 100 * bookingBranch's 18% GST), `netAmount` 123.9 -> 241.9
+(+100 +18). Browser click-test on the real `:4200`/`:8100` (no booking submitted, form
+cancelled after): typing 100 into Door Delivery Charge moved GST 76.50 -> 94.50 live,
+no "(no GST)" label shown; typing 999 into Net Amount held exactly "999" through a
+further field edit (previously snapped back to a recomputed, different number).
+
+`0.55.0` — **Shipment Booking no longer picks a Delivery Branch — From City/To City
+instead; branch is auto-resolved server-side, not deferred.** Direct request ("while
+shipment booking we do not need branch from and to location should be city name while
+generate loading sheet and THC then we assign branch for it"). Investigated first:
+Fuel/Handling/Applicable Charges/Discount/Round-off are matched by the old Pricing
+Engine off a `(bookingBranchId, deliveryBranchId)` `Route` pair, not city/district — a
+truly-null `deliveryBranchId` at booking would have silently zeroed those on every
+shipment (Freight/ODA/GST are safe, District Level Freight already resolves those off
+city/district alone). User chose (of two options put to them) to keep `deliveryBranchId`
+authoritative and auto-resolved server-side, immediately at booking — never trusted from
+the client — off the destination pincode's own `branch_pincode_mapping` row (same lookup
+Delivery Branch used to auto-select from), so Route/Rate pricing keeps working unchanged;
+only the *picker* disappears from the UI. `V69`: `shipments.delivery_branch_id` now
+nullable (an unmapped pincode no longer blocks booking — same "don't block on a
+data gap" precedent as 0.37.0's "Ungeocoded branch no longer blocks Shipment Booking"),
+new `shipments.from_city`/`to_city`
+plain-text columns (mirrors `Branch.city`'s own plain-string modelling, not a new City FK).
+`Shipment.applyInvariants` only requires `bookingBranchId` now. `ShipmentServiceImpl
+.resolveDeliveryBranchId` (new, both `create`/`update`) replaces every
+`command.deliveryBranchId()` use — `deliveryBranchId` dropped entirely from
+`CreateShipmentRequest`/`UpdateShipmentRequest`/their Commands. `fromCity` =
+`bookingBranch.getCity()`; `toCity` = District Level Freight's own resolved city, plumbed
+through as a new field on `PincodeCoverageLookupPort.CoverageRef` ->
+`FreightCalculationResult` -> `FreightCalculationResponse` (backend DTO + frontend model)
+so Shipment Booking's existing live Freight Calculation preview carries it for free —
+no new endpoint. Frontend `shipment-create.ts`/`shipment-edit.ts`: "Delivery Branch"
+autocomplete removed from both; Create shows two read-only fields, "From City" (booking
+branch's own city) and "To City" (`freightCalc()?.destinationCityName`, resolved the
+instant the operator types/confirms Destination Pincode/Area — unchanged plumbing,
+just no longer a picker); Edit drops the field outright (no live preview there to source
+a city display from). Crossing Branch (multi-hop routing) and Loading Sheet/THC's own
+manifest-level From/To Branch pickers are untouched — out of scope, and already the
+literal "assign branch" moment for routing/dispatch purposes; this change only concerns
+Shipment Booking's own delivery-branch field. `mvn test`: 1021/1021 (fixed 2 test-only
+`FreightCalculationResult`/`CoverageRef` positional-arg call sites for the new fields,
+added a `BranchPincodeMappingService` mock to `ShipmentServiceImplTest`/
+`ShipmentMovementServiceImplTest`). `ng test`: 156/157 (the one failure,
+`navigation.config.spec.ts`'s `reports-dashboard` nav node, pre-existing and unrelated).
+Verified live on dev DB (V69 applied, `courier_db`): booked a real shipment with no
+`deliveryBranchId` in the request body — response came back with `deliveryBranchId`
+auto-resolved, `fromCity: "Pune"`, `toCity: "Osmanabad"`, `nextLocationId` matching;
+`GET .../charges` confirmed pricing actually ran off the resolved branch (nonzero
+`appliedFreightFactor`, proving the Freight Factor fallback got a real branch-pair
+distance, not a null one). Walked the real booking form in a browser too: "From City"/
+"To City" render, no Delivery Branch picker anywhere, typing Destination Pincode 413520
+resolved "To City: Osmanabad" and priced live. Verification shipment (`PUNE-000038`)
+left in `courier_db` per [[keep-test-data-in-dev-db]].
+
+**Same day, follow-up** — direct request: "now change loading sheet and thc creation
+changes". Loading Sheet/THC still pick a real Delivery Branch on purpose (a manifest/
+vehicle has to go to an actual branch, not a city — that already *is* the "assign
+branch" moment from the original request); asked the user first, they chose to keep
+branch-picking as-is and just show City alongside it. `loading-sheet.ts`/
+`trip-hire-challan.ts`: the one `branchDirectory()` label-building line in each now
+appends `— <city>` (via the `city` field the `BranchSummary`/`Branch` frontend model
+already carries) to the same `Map<id, label>` that already feeds the Delivery Branch
+autocomplete, the lane filter, `ManifestCard`'s from/to header, and both printed
+challans' FROM/TO meta — one line changed per file, no new plumbing, everything
+downstream already read off that one Map. `tsc --noEmit` clean, `ng test` 156/157
+(same pre-existing unrelated `navigation.config.spec.ts` failure). Verified live in a
+browser: Loading Sheet's open-manifest card read "Pune (PUNE) — Pune → Mumbai Geotest
+(MUMBAI_GEOTEST) — Mumbai", Delivery Branch options read "Karad (KARAD) — Karad" /
+"Latur (LATUR) — Latur".
+
+**Same day, second follow-up** — direct request: "in thc and drs show from and to city
+of every shipment". Per-shipment (not manifest-level) From/To City, everywhere a
+shipment row already appears in THC/DRS. `Shipment.fromCity`/`toCity` didn't reach any
+list-row DTO yet — only the full `ShipmentResponse` had them (0.55.0). Added `fromCity`/
+`toCity` to `ShipmentSummaryResponse` (`ShipmentMapper.toSummary` — the one DTO backing
+the shipment list, THC's manifest-shipments endpoint, and Out For Delivery's own list)
+and to `ShipmentService.DrsShipmentRow`/`DrsShipmentRowResponse` (`getDrsDetail`, only
+built straight off a `Shipment` entity, not through `toSummary`). Frontend: `Shipment`/
+`DrsShipmentRow` models gained the two fields; added a "From → To"/"From City"/"To City"
+column to THC's on-screen shipment checklist and its printed challan,
+`out-for-delivery.ts`'s on-screen checklist and its printed DRS, and `drs-detail.ts`'s
+table — five call sites, all just reading `s.fromCity`/`s.toCity` off data that already
+flowed through, plus the matching colspan/header bookkeeping each printed table's totals
+row needed. `mvn test` 1021/1021, `tsc --noEmit` clean, `ng test` 156/157 (same
+pre-existing failure). Verified live end-to-end on dev DB: booked a shipment
+(`PUNE-000038`, Pune→Osmanabad — a Latur-branch-served district, not the branch's own
+named city, on real fixture data), created+dispatched a manifest for it (`MFT-260909-
+3403`) as the Pune user, then in-scanned and generated a DRS (`DRS000007`) for it as the
+Latur user — `GET /manifests/{id}/shipments` and `GET /shipment-movement/drs/detail`
+both carried `fromCity`/`toCity` in the JSON. Walked DRS Detail in a real browser: FROM/
+TO columns read "Pune"/"Osmanabad" for the tracked shipment.
+
+**Same turn, third follow-up** — direct request: "ON THS print should not required
+sign and stamp column it should be only on DRS". THC's printed challan (not DRS's —
+that one keeps RECEIVER SIGN/STAMP) had carried empty RECEIVER SIGN/STAMP columns
+since before this session; dropped them from `trip-hire-challan.ts`'s `renderThcHtml`
+(header cells, the two trailing empty `<td>`s per row, the now-dead `.c-sign` CSS
+rule) and adjusted the empty-state/total-row colspans to match the new 11-column
+table. `tsc --noEmit` clean.
+
+**Same day, "test it live full flow" request** — a real click-through of the entire
+chain in a browser, not curl: booked `PUNE-000039` (Pune→Osmanabad) as the Pune user
+through the actual Shipment Booking form (From City/To City rendered, no branch picker
+anywhere, live pricing computed) — hit the package-type-vs-weight validation live too
+(DOC package type caps at 5kg, the item grid's own 20kg default tripped it; dropped to
+2kg and it booked clean, confirming that's a pre-existing rule, not a regression).
+Created Loading Sheet manifest `MFT-260909-5994` (Delivery Branch picker showed "Latur
+(LATUR) — Latur" per the city-suffix change), dispatched it as the Pune user through
+THC (on-screen "FROM → TO" column read "Pune → Osmanabad"; captured the actual printed-
+challan HTML — see below — and confirmed FROM CITY/TO CITY columns present and RECEIVER
+SIGN/STAMP columns absent, exactly as the two follow-ups above intended), signed in as
+the Latur user, In Scan'd it, generated DRS `DRS000008` off Generate DRS's own "FROM →
+TO" on-screen column, and read DRS Detail's table straight from the browser — both rows
+showed FROM "Pune" / TO "Osmanabad". One real snag along the way, unrelated to this
+session's own edits: clicking Book Shipment once froze the automation tab for ~45s (the
+booking flow's own LR-print `window.open`+`document.write`, pre-existing code untouched
+this session) — recovered by just re-navigating the same tab; from Dispatch/Generate
+DRS onward, patched `window.open` first (via `javascript_tool`) to capture each printed
+challan's HTML into a variable instead of letting it actually pop open, sidestepping the
+freeze entirely for the rest of the flow — see [[print-popup-freezes-chrome-automation]].
+
+**Next turn** — direct request: "from shipment order book page create new card for
+delivery type, appointment booking, inssurance applicable with standard design it
+should not look live patchup". Delivery Type (radio + conditional Door Delivery
+Charge), Appointment Delivery (checkbox + conditional date/slot) and Insurance
+Applicable (checkbox) had lived stacked at the bottom of the "Booking Details" card in
+`shipment-create.ts`, separated only by `<div class="spacer">`s — visually read as
+bolted on. Pulled all three into a new "Delivery Preferences" `app-card` (own
+title+subtitle, same pattern `Items`/`Parties` already use), laid out as three bordered
+option boxes side by side (new `.pref-grid`/`.pref-box` classes, deliberately mirroring
+the existing `.party`/`.party--sender` bordered-box convention `Parties` already
+established — not a new visual language, reused the app's own precedent) each with a
+`.pref-box__title`, its own conditional sub-fields, and a one-line `.hint` note when
+collapsed instead of empty space. `.pref-grid` added to the existing 760px collapse
+media query alongside `.grid2`/`.grid3`/`.parties`. Purely a template/CSS
+reorganization — no form control, validation, or submit-payload changes; `deliveryType`/
+`appointmentDelivery`/`appointmentTimeSlot`/`insuranceApplicable` controls untouched.
+`tsc --noEmit` clean, `ng test` 156/157 (same pre-existing unrelated failure). Verified
+live in a browser: new card renders as three clean boxes, toggling Appointment Delivery
+and Insurance both expand/collapse correctly in place, the existing "Pick an appointment
+delivery date" summary validation still fires unchanged.
+
+**Follow-up UI passes, same card** — three quick direct requests in sequence, each
+verified live on the real `:4200` dev server (hot-reload, never restarted):
+(1) "design issue appointment delivery" — the Appointment Delivery box's Date/Time Slot
+inputs sat side-by-side in a 2-column grid inside a ⅓-width box, clipping the "e.g.
+1:00-2:00" placeholder; `.pref-box__sub--grid` changed from `1fr 1fr` to a single
+stacked column. (2) "show appointment delivery charge option near appointment delivery
+option" — `appointmentDeliveryCharge` was only editable inside `<app-charge-summary>`'s
+sidebar breakdown, not near the checkbox itself; added a plain number input inside the
+Appointment Delivery box, same pattern `doorDeliveryCharge` already used next to
+Delivery Type, bound to the same signal so either input stays in sync. (3) "add this
+card after items card" — moved the whole "Delivery Preferences" card block to sit after
+`Items`, before `Parties` (was: Booking Details → Delivery Preferences → Items →
+Parties; now: Booking Details → Items → Delivery Preferences → Parties). `tsc --noEmit`
+clean each time, `ng test` 156/157 throughout (same pre-existing unrelated failure).
+
+**"charge list not visible on shipment page according to weight and km"** — a real,
+previously-undetected bug, not a UI issue. Investigated via the live `:4200` Charges
+admin screen (`ChargeSettingResponse`'s own KM Range/KG Range columns) before touching
+code. Two distinct root causes, both fixed:
+
+1. `ApplicableChargesCalculator.calculate` resolved `distanceKm` off
+   `context.matchedRoute().getDistanceKm()` — a matched **Route** (Rate Master's own
+   Route/Rate lookup), never anything else. A KM- or BOTH-slab `ChargeSetting` (e.g. a
+   "Fuel Surcharge Test" charge banded 0–50km/50–75km) could only ever match when a
+   Route/Rate had matched too, even though the `charge` module's own class doc already
+   describes Applicable Charges as independent of any Route/Rate match. Fixed:
+   `distanceKm` now resolves directly off `AddressDistanceService
+   .resolveBranchDistance(bookingBranchId, deliveryBranchId)` — the same real
+   branch-pair road distance Freight Factor's own fallback already uses — with the same
+   graceful-null treatment (`BusinessRuleException` from a same-branch pair or an
+   ungeocoded branch degrades to "no KM known" rather than blocking the booking).
+2. The deeper cause: **most bookings now price through `PricingEngineImpl
+   .priceByDistanceAndWeight`** (the Freight Factor fallback) rather than the standard
+   Route/Rate calculator chain, since Shipment Booking stopped requiring an explicit
+   Delivery Branch pick (0.55.0) and most lanes have no Rate Master Route configured at
+   all. That fallback hand-built its `PricingResult` with Fuel/Handling/**Applicable
+   Charges**/Discount/Round-off all hardcoded to `BigDecimal.ZERO` — a *documented,
+   deliberate* design ("Freight Factor deliberately carries none of those") from before
+   Applicable Charges existed as an independent, Route-agnostic module. Fuel/Handling/
+   Discount/Round-off legitimately have no other source without a matched Rate and stay
+   zero; Applicable Charges does not — it only needs `command` (service type, booking/
+   delivery branch), chargeable weight, and freight (for a PERCENTAGE-type charge), none
+   of which require a Route/Rate. `PricingEngineImpl` now runs
+   `ApplicableChargesCalculator` inside the fallback too (a small standalone
+   `PricingContext` built just for it), and GST/net amount are computed on freight +
+   Applicable Charges together, mirroring `PricingContext.subtotalBeforeGst()`'s own
+   shape in the standard chain. Backend only — no frontend change needed, `ChargeSummary`
+   already renders whatever `applicableCharges` the API returns.
+
+`mvn test` 1023/1023 (2 new `ApplicableChargesCalculatorTest` cases — resolved-distance
+match + graceful-null; 1 new `PricingEngineImplTest` case — Applicable Charges flowing
+through the fallback with correct GST). Verified live end-to-end on dev DB: added a real
+300–350km band (₹55) to the existing "Fuel Surcharge Test" charge via the `:4200` admin
+UI (Pune↔Latur's own cached `address_distance` is ~324km), then booked a fresh shipment
+(`PUNE-000041`) on my own throwaway `:8082` stack on that exact lane — before the fix,
+`GET .../charges` returned `applicableCharges: 0.0`; after, `applicableCharges: 65.0`
+(the existing KG-slab "Hamali" charge plus the new 300–350km band, both now applying and
+summing correctly), `gstAmount`/`netAmount` recomputed on the full taxable base.
+
+**Same turn, follow-up** — "it should show charge name as well not live applicable
+charge": the lumped `applicableCharges` total (both the live booking-time preview and
+the persisted per-shipment view) never said *which* configured charge contributed —
+just one number, even when two charges (Hamali + Fuel Surcharge Test) summed into it.
+Refactored `ApplicableChargesCalculator`: `calculate()` (the generic `ChargeCalculator`
+sum every other caller needs) now delegates to a new public `resolve(serviceTypeId,
+weight, bookingBranchId, deliveryBranchId, freight) -> List<Line>` (`Line(chargeName,
+amount)`) — the same plain-parameter shape `PricingEngineImpl`'s fallback path already
+called, so that path got simpler as a side effect (one `resolve()` call instead of a
+throwaway `PricingContext`). Threaded `applicableChargeLines` through both places a
+shipment's charges reach the wire: `PricingResult`/`ChargeBreakup` (the live pre-booking
+preview — `StandardPricingStrategy` finds the `ApplicableChargesCalculator` bean in its
+own calculator list and calls `.resolve()` a second time purely for the line-item
+detail, alongside the existing sum) and `ShipmentService.ShipmentCharges`/
+`ShipmentChargeResponse` (`GET /shipments/{id}/charges` — lines resolved *live* off the
+shipment's own stored booking/delivery branch, chargeable weight and freight, same
+"recompute at read time, don't persist" treatment `matchedRouteCode`/`matchedRateCode`
+already get, so a since-renamed charge still shows correctly). Frontend: `ChargeSummary`
+(the one component both the booking-preview sidebar and the persisted Shipment Charges
+page render through) now loops `applicableChargeLines` as one row per charge name,
+falling back to the old lumped `applicableCharges` row only when the array is empty/
+undefined. `mvn test` 1024/1024 (new `StandardPricingStrategyTest` case proving the
+result's `applicableChargeLines` comes from the calculator's own `.resolve()`, not just
+its sum). Verified live on the real `:4200`/`:8100` backend (restarted with the repo's
+own `.env` `JWT_SECRET`/`SECRETS_ENCRYPTION_KEY` so existing browser sessions could still
+decrypt/re-auth) and on my own `:8082`: `GET .../charges` and `POST /pricing/calculate`
+both now carry `applicableChargeLines: [{"chargeName":"Fuel Surcharge Test","amount":55},
+{"chargeName":"Hamali","amount":10}]`; walked Shipment Booking live in a browser —
+Booking Summary reads "Fuel Surcharge Test — 55.00" by name instead of one "Applicable
+Charges" line (Hamali didn't show at 20kg since that weight sits outside its matched
+band under the then-current half-open matching — see the same-turn follow-up directly
+below, where this was identified as the actual bug and fixed).
+
+**Same turn, second follow-up — slab bands are now closed-inclusive `[from, to]`, not
+half-open `[from, to)`.** User asked whether Hamali's "1-20"/"21-40" bands mean
+weight=20 uses the first band and weight=21 the second — surfaced that the existing
+half-open matching left weight=20 unmatched by *either* band (a silent gap), which is
+exactly what the line above observed at 20kg. Explained the tradeoff (reconfigure the
+bands to touch at the boundary vs. change the matching semantics); direct instruction
+back: "use 1<= w and w<=20". Confirmed via a live `courier_db` query first that real
+Hamali data already uses gap-style bands (`0-20, 21-40, 41-60, 61-9999`, not touching),
+so flipping the matching semantics is safe for existing data, not just a theoretical
+convention change.
+
+`ApplicableChargesCalculator.inRange` — `value.compareTo(to) < 0` became `<= 0`.
+`ChargeSetting.rangesOverlap` (the write-time no-overlap guard on create/update/
+activate) changed the same direction, both comparisons `<` to `<=`, so a band ending at
+50 and one starting at 50 now correctly register as overlapping — needed, or the new
+inclusive matching would let two active settings both match exactly 50. Doc comments on
+`ChargeSetting`/`ChargeSettingServiceImpl.requireNoOverlap`'s error message updated;
+this module deliberately diverges from `master.domain.WeightSlab`, which stays
+half-open (its bands are system-resolved off round KM boundaries, not hand-typed by a
+company admin the way this module's are).
+
+`mvn test` 1026/1026 — updated `ApplicableChargesCalculatorTest`'s KG-band fixtures
+from touching to the real gap style and added a `gapBetweenBandsPricesZero` case;
+updated `ChargeSettingTest`'s `overlaps()` assertions (touching now overlaps) and
+`ChargeSettingServiceImplTest`'s "adjacent slab accepted" test, which flipped to
+"touching slab rejected" plus a new gapped-slab-accepted case. Direct instruction
+("restart on 4200 and 8100") authorized restarting the real backend; restarted `:8100`
+with the compiled fix (same `.env` secrets, `SERVER_PORT=8100`, profile `local`) and
+confirmed live via `POST /pricing/calculate` on the real Hamali data: weight=20.000 ->
+`Hamali: 10.00` ("0-20" band, previously fell in the half-open gap and priced 0);
+weight=21.000 -> `Hamali: 15.00` ("21-40" band). Noted but not fixed: the real "Fuel
+Surcharge Test" KM bands (`0-50`/`50-75`) touch at 50 and are now technically
+overlapping under the new rule — not re-validated until that charge is next edited;
+at km=50 whichever setting the repository returns first wins rather than summing both.
+
+`0.54.0` — **E-Way Bill: replaced the old manual-entry module with real two-stage
+auto-generation (Part-A at booking, Part-B at Manifest dispatch); not yet deployed
+(V68).** Direct request ("Implement E-Way Bill auto-generation... integrate with
+Shipment/Manifest/Vehicle... provider abstraction... backend authoritative"). The
+pre-existing `com.courier.modules.ewaybill` module (V47) turned out to be a manual
+"type in a 12-digit number you already got from the government portal, we'll
+format-check it" flow — no generation, no provider abstraction beyond a local
+regex-validator, no Manifest/Vehicle integration at all. This replaced that flow
+wholesale rather than bolting auto-generation on top, since the task's own spec (exact
+status vocabulary, exact `EwayBillProvider` operations, exact business flow) effectively
+*was* the target design for this module, not an unrelated one.
+
+New `EwayBillStatus`: `NOT_REQUIRED/REQUIRED/PART_A_PENDING/PART_A_GENERATED/
+PART_B_PENDING/GENERATED/FAILED/EXPIRED/CANCELLED`, replacing `PENDING/UPLOADED/
+VALIDATED/INVALID` (existing rows remapped by `V68`'s `UPDATE ... CASE`).
+`EwayBillProvider` redesigned around `generatePartA/updatePartB/getStatus/cancel`
+(outcome records, not exceptions, for ordinary failure) — `UnconfiguredEwayBillProvider`
+(default, always active) returns a graceful failure outcome, never a fake success;
+`EwayBillGspProvider` + `EwayBillGspProperties` (`app.ewaybill.gsp.*`, all
+`EWAYBILL_GSP_*` env vars) are a generic REST/JSON adapter enabled only via
+`enabled=true` with real `base-url`/`client-id`/`client-secret` (fails fast at startup
+otherwise, mirroring `PaymentGatewayConfig`/`RazorpayProperties` exactly) — explicitly
+documented as a generic shape needing reconciliation against whatever real GSP vendor
+contract shows up later, not a fabricated integration.
+
+`EwayBill` entity gained a Part-A snapshot (consignor/consignee name/address/pincode/
+GSTIN, product description, transport mode, provider name/reference, part-A/B
+timestamps, sanitized `last_error`, `retry_count`) — a deliberate snapshot, not a live
+join back to the shipment: an E-Way Bill is a legal document as issued, and it lets
+`EwayBillServiceImpl.retry` rebuild the exact same provider request from the row alone
+without `modules.ewaybill` depending back on `modules.shipment` (circular).
+
+**The load-bearing distinction**: `EwayBillServiceImpl.requireBookingData` (renamed
+from `enforceBookingRequirement`) still blocks booking/dispatch when the *minimum input
+data* (invoice number/date) is missing — that predates this task and is the "existing
+business rule" the brief said to leave alone. But an actual provider call failing
+(unconfigured, timeout, GSP rejection) is now always caught and persisted as `FAILED`,
+**never rethrown** from `generatePartAForShipment`/`triggerPartBForShipments` — a
+mandatory-E-Way-Bill shipment still books, and a manifest still dispatches, exactly per
+"failed generation must not corrupt or rollback the booking." `retry`/`cancel` are the
+two exceptions: direct standalone user actions, not embedded in an unrelated
+transaction, so they throw with the provider's own reason.
+
+`ManifestServiceImpl.dispatch` gained a `EwayBillService` dependency and calls
+`triggerPartBForShipments(dispatchedShipmentIds, vehicle.getVehicleNumber(), null,
+"ROAD")` right after `transitionToDispatched`, wrapped in its own try/catch as
+defense-in-depth even though the service method itself never throws for a
+provider-side reason. `ShipmentServiceImpl.create`/`update` call
+`generatePartAForShipment` (built from a new `ewayBillContext` helper — sender/receiver
+identity off the shipment itself, a short item-name join as product description) only
+when `ewayBillRequired`; the pre-existing optional manual-attach path
+(`upsertForShipment`) is untouched for a shipment that never crossed the threshold.
+
+Frontend: `EwayBillStatus` type/`EwayBillBookingRequest`/`EwayBill` models updated to
+the new vocabulary + `consignorGstin`/`consigneeGstin`/`lastError`/`retryCount`/etc.;
+`eway-bill.service.ts`'s `validate()` replaced with `retry()`. `shipment-create.ts`'s
+E-Way Bill add-on dropped the manual E-Way Bill Number/Vehicle Number/Valid From/Until
+inputs entirely (now provider-issued/dispatch-derived) in favour of Invoice Number/
+Date + optional Sender/Receiver GSTIN, with a note explaining the auto-flow.
+`shipment-view.ts` gained a proper dedicated E-Way Bill card: overall status badge,
+separate Part-A/Part-B labels (derived from the single `status` + whether a number was
+ever issued — `partAStatusLabel`/`partBStatusLabel`), a Failure Reason row, and a
+Retry action replacing the old Validate button (gated the same `can().update` way).
+
+**Verified**: full backend `mvn -o test` (1021/1021 green, including new
+`EwayBillServiceImplTest` cases for not-required/required/Part-A success+failure/
+provider-timeout/duplicate-prevention/Part-B trigger+failure/retry-both-stages, and a
+rewritten `EwayBillStatusTest`); `mvn -o compile`/`test-compile` clean. Frontend
+`tsc -p tsconfig.app.json --noEmit` and `ng build --configuration production` both
+clean. **Live-verified end to end** on the real `courier_db` (`V68` applied — picked up
+by the same session's own `mvn test` run against the real DB, confirmed via `SHOW
+COLUMNS`/`flyway_schema_history`) through a throwaway `:8085` backend + `:4300`
+`ng serve` (real `:8080`/`:4200` untouched throughout): booked a real shipment
+(`PUNE-000036`) with `invoiceValue=75000` over the default ₹50,000 threshold — booking
+succeeded (not blocked) with the E-Way Bill row landing `FAILED` and the exact
+`UnconfiguredEwayBillProvider` message, proving the "failure never blocks booking"
+rule for real; `POST .../retry` correctly threw the same message (422) while leaving
+the row's data/GSTINs intact (`retryCount` 0→1); dispatched a manifest carrying that
+shipment (`MFT-260909-3839`) with a real vehicle — dispatch succeeded and the E-Way
+Bill row was correctly left untouched (Part-A never having succeeded, per the
+"silently skipped" rule), confirmed via the Manifest/Vehicle Movement flow with no
+crash. Then walked both pages in a real browser: Shipment Details rendered the new
+E-Way Bill card exactly as designed (status, Part-A/Part-B labels, failure reason,
+Retry/Upload/Cancel) and clicking Retry surfaced the provider's message as a toast;
+Shipment Booking's E-Way Bill add-on rendered the new Invoice Number/Date/GSTIN-only
+fields with live "invoice number required" validation blocking Book Shipment.
+Verification shipment/manifest left in `courier_db` per [[keep-test-data-in-dev-db]].
+
+Previously current:
+
 `0.53.0` — **Shipment Booking now folds "applicable charges" (the new Charge module,
 e.g. "Hamali") into net amount, GST-inclusive; not yet deployed (V66).** Direct request
 ("while shipment booking this should be calculate as freight + added and applicable

@@ -13,9 +13,9 @@ import java.util.UUID;
  * {@code ShipmentCharge}.
  *
  * <p>Two figures, one per commission trigger {@code ShipmentBookingWalletListener} listens
- * for: a shipment's branch commission is credited on Trip Challan dispatch for
- * collect-at-booking payment modes, or on delivery for collect-at-delivery (TO_PAY/COD)
- * ones — see {@code ShipmentEvent.DispatchCommissionEarned} / {@code
+ * for: a shipment's branch commission is credited on in-scan at its own final delivery
+ * branch for collect-at-booking payment modes, or on delivery for collect-at-delivery
+ * (TO_PAY/COD) ones — see {@code ShipmentEvent.InScanCommissionEarned} / {@code
  * DeliveryCommissionEarned} for why. Everything still short of that trigger is "pending".
  */
 public interface PendingCommissionPort {
@@ -26,7 +26,8 @@ public interface PendingCommissionPort {
 
     /**
      * @param bookingPending commission on collect-at-booking shipments still short of
-     *                       dispatch (statuses before {@code DISPATCHED})
+     *                       in-scan at their own final delivery branch (statuses before
+     *                       that branch's {@code IN_SCAN})
      * @param deliveryPending commission on collect-at-delivery (TO_PAY/COD) shipments still
      *                        short of delivery (every status before {@code DELIVERED})
      * @return {@link PendingCommission#ZERO} for a branch with {@code instantCommission} off,

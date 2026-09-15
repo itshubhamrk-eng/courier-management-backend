@@ -9,6 +9,7 @@ import {
 } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
 import { Branch } from '@core/models/branch.model';
+import { Department } from '@core/models/department.model';
 import { Page, PageQuery } from '@core/models/page.model';
 
 /** A minimal option for placement/manager/role dropdowns. */
@@ -64,6 +65,11 @@ export class UserService {
    *  their own branch and need a role to assign). */
   roles() {
     return this.api.get<CompanyRole[]>(`${API.roles}/assignable`);
+  }
+  /** `/departments/assignable` — ACTIVE departments with the roles each offers, for the
+   *  department picker on user creation. Same BRANCH_MANAGER bridge as `roles()`. */
+  departments() {
+    return this.api.get<Department[]>(`${API.departments}/assignable`);
   }
   branches() {
     return this.api

@@ -165,7 +165,7 @@ export class ShipmentExceptionReport implements OnInit {
 
   view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
-  protected branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   exportCsv(): void {
     this.exporting.set(true);

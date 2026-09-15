@@ -65,6 +65,15 @@ public enum AuditAction {
     ROLE_ACTIVATED,
     ROLE_DEACTIVATED,
 
+    // --- department management. A department's role grants change with it (create/update
+    // carry the full set), so there is no separate "assigned" action the way roles have
+    // one for permissions.
+    DEPARTMENT_CREATED,
+    DEPARTMENT_UPDATED,
+    DEPARTMENT_DELETED,
+    DEPARTMENT_ACTIVATED,
+    DEPARTMENT_DEACTIVATED,
+
     // --- permission management (Phase 3). Catalogue writes are SUPER_ADMIN; grants are
     // the company's own decision and are recorded against the role.
     PERMISSION_CREATED,
@@ -162,12 +171,16 @@ public enum AuditAction {
     SHIPMENT_DOCUMENT_UPLOADED,
     SHIPMENT_IMAGE_UPLOADED,
 
-    // --- E-Way Bill Management (V47)
+    // --- E-Way Bill Management (V47, auto-generation V68)
     EWAY_BILL_CREATED,
     EWAY_BILL_UPDATED,
     EWAY_BILL_VALIDATED,
     EWAY_BILL_UPLOADED,
     EWAY_BILL_CANCELLED,
+    EWAY_BILL_PART_A_GENERATED,
+    EWAY_BILL_PART_B_GENERATED,
+    EWAY_BILL_GENERATION_FAILED,
+    EWAY_BILL_RETRIED,
 
     // --- shipment movement (V19: minimal Manifest + the movement pipeline on top of it)
     VEHICLE_CREATED,

@@ -36,14 +36,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ShipmentPendingCommissionDirectory implements PendingCommissionPort {
 
-    /** Statuses a collect-at-booking shipment sits in before {@code DISPATCHED} — the
-     *  status {@code transitionToDispatched} moves it to and fires {@code
-     *  DispatchCommissionEarned} from. */
-    private static final Set<ShipmentStatus> PRE_DISPATCH =
-            EnumSet.of(ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST, ShipmentStatus.MANIFEST_CREATED);
+    /** Statuses a collect-at-booking shipment sits in before {@code IN_SCAN} at its own
+     *  final delivery branch — the status {@code scanOneIn}'s {@code finalDestination}
+     *  branch moves it to and fires {@code InScanCommissionEarned} from. */
+    private static final Set<ShipmentStatus> PRE_INSCAN =
+            EnumSet.of(ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST, ShipmentStatus.MANIFEST_CREATED,
+                    ShipmentStatus.DISPATCHED);
 
     /** Every status short of {@code DELIVERED} — where a collect-at-delivery shipment's
-     *  commission fires. Superset of {@link #PRE_DISPATCH}, queried once and filtered
+     *  commission fires. Superset of {@link #PRE_INSCAN}, queried once and filtered
      *  twice below rather than two separate repository calls. */
     private static final Set<ShipmentStatus> PRE_DELIVERY =
             EnumSet.of(ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST, ShipmentStatus.MANIFEST_CREATED,
@@ -76,7 +77,7 @@ public class ShipmentPendingCommissionDirectory implements PendingCommissionPort
                 .collect(Collectors.toMap(id -> id, paymentModeService::getById));
 
         BigDecimal bookingPending = open.stream()
-                .filter(s -> PRE_DISPATCH.contains(s.getStatus()))
+                .filter(s -> PRE_INSCAN.contains(s.getStatus()))
                 .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtBooking())
                 .map(s -> commissionOf(charges.get(s.getId())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

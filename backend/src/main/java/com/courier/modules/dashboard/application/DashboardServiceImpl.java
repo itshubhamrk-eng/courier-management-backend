@@ -183,6 +183,7 @@ public class DashboardServiceImpl implements DashboardService {
         long totalShipments;
         BigDecimal totalRevenue;
         BigDecimal todayCollection;
+        BigDecimal totalActualWeight;
         List<Shipment> recent;
         List<ShipmentStatusHistory> recentDeliveries;
         List<WalletTransaction> recentWalletTransactions;
@@ -200,6 +201,8 @@ public class DashboardServiceImpl implements DashboardService {
             pending = CompanyContext.runAs(null,
                     () -> shipmentRepository.countByStatusInAndBookingDateBetween(PENDING, monthStart, today));
             totalShipments = CompanyContext.<Long>runAs(null, () -> shipmentRepository.count());
+            totalActualWeight = CompanyContext.<BigDecimal>runAs(null,
+                    () -> shipmentRepository.sumActualWeightByBookingDateBetween(monthStart, today));
             totalRevenue = CompanyContext.<BigDecimal>runAs(null, () -> shipmentChargeRepository.sumNetAmount());
             todayCollection = CompanyContext.<BigDecimal>runAs(null,
                     () -> shipmentChargeRepository.sumNetAmountForBookingDateBetween(monthStart, today));
@@ -225,6 +228,8 @@ public class DashboardServiceImpl implements DashboardService {
             // Not shown on any branch-scoped profile's tile set (dashboard.roles.ts) —
             // left company-wide, same as the cross-tenant/company branches' own values.
             totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                    scope, ownBranchId, monthStart, today);
             totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
             todayCollection = shipmentChargeRepository
                     .sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
@@ -245,6 +250,8 @@ public class DashboardServiceImpl implements DashboardService {
             pending = shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
                     scope, PENDING, monthStart, today);
             totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingDateBetween(
+                    scope, monthStart, today);
             totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
             todayCollection = shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
                     scope, monthStart, today);
@@ -270,7 +277,8 @@ public class DashboardServiceImpl implements DashboardService {
 
         DashboardStatisticsResponse statistics = new DashboardStatisticsResponse(
                 todayShipments, delivered, inTransit, pending, totalRevenue,
-                todayShipments, todayCollection, pendingDelivery, totalShipments, walletBalance);
+                todayShipments, todayCollection, pendingDelivery, totalShipments, walletBalance,
+                totalActualWeight);
 
         // Company-wide, not branch-wide: shown only for a caller with no own branch (the
         // same "ownWallet == null" test the existing Pending Delivery tile already uses to

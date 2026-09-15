@@ -94,6 +94,15 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal appointmentDeliveryCharge = BigDecimal.ZERO;
 
+    /** Manual, typed at booking time when {@code Shipment.deliveryType} is {@code DOOR} —
+     *  taxed with GST (direct user request; folded into {@link #gstAmount}), unlike
+     *  {@link #appointmentDeliveryCharge} which stays GST-free. Forced to zero
+     *  server-side when {@code deliveryType} is {@code OFFICE}, regardless of what was
+     *  typed. */
+    @Column(name = "door_delivery_charge", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal doorDeliveryCharge = BigDecimal.ZERO;
+
     /** {@code freight * commissionOnBasicFreight%} — the booking branch's own percentage
      *  ({@code Branch}) at booking time. */
     @Column(name = "commission_on_basic_freight", nullable = false, precision = 19, scale = 4)

@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -21,7 +22,6 @@ import java.util.UUID;
 @Schema(name = "UpdateShipmentRequest", description = "Full replacement of a still-BOOKED shipment")
 public record UpdateShipmentRequest(
         @NotNull Long version,
-        @NotNull UUID deliveryBranchId,
         @NotBlank @Size(max = 10) String pickupPincode,
         @NotBlank @Size(max = 10) String deliveryPincode,
         @NotBlank @Size(max = 150) String senderName,
@@ -73,6 +73,12 @@ public record UpdateShipmentRequest(
         @Schema(description = "When true, insurance is charged at 2% of freight instead of "
                 + "the Pricing Engine's own rate-driven insurance figure. GST is recomputed "
                 + "on the difference, same as odaCharge.")
-        Boolean insuranceApplicable
+        Boolean insuranceApplicable,
+        @Schema(description = "Defaults to DOOR. OFFICE never charges extra — "
+                + "doorDeliveryCharge is ignored server-side when this is OFFICE.")
+        DeliveryType deliveryType,
+        @Schema(description = "Optional, defaults to zero, meaningful only when deliveryType "
+                + "is DOOR. Deliberately never taxed with GST, unlike otherCharges.")
+        @DecimalMin(value = "0") BigDecimal doorDeliveryCharge
 ) {
 }

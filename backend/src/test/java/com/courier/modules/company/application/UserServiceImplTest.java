@@ -4,6 +4,8 @@ import com.courier.modules.auth.application.AuthProperties;
 import com.courier.modules.auth.application.PasswordPolicy;
 import com.courier.modules.company.application.command.CreateUserCommand;
 import com.courier.modules.company.application.command.UpdateUserCommand;
+import com.courier.modules.company.domain.Branch;
+import com.courier.modules.company.domain.BranchRepository;
 import com.courier.modules.company.domain.CompanyRole;
 import com.courier.modules.company.domain.CompanyRoleRepository;
 import com.courier.modules.company.domain.CompanyUserRepository;
@@ -65,8 +67,11 @@ class UserServiceImplTest {
     private static final UUID CALLER = UUID.randomUUID();
 
     @Mock private CompanyUserRepository userRepository;
+    @Mock private BranchRepository branchRepository;
     @Mock private UserRoleRepository userRoleRepository;
     @Mock private CompanyRoleRepository roleRepository;
+    @Mock private com.courier.modules.company.domain.DepartmentRepository departmentRepository;
+    @Mock private com.courier.modules.company.domain.DepartmentRoleRepository departmentRoleRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -81,7 +86,8 @@ class UserServiceImplTest {
         AuthProperties props = new AuthProperties();
         PasswordPolicy passwordPolicy = new PasswordPolicy(props);
 
-        service = new UserServiceImpl(userRepository, userRoleRepository, roleRepository,
+        service = new UserServiceImpl(userRepository, branchRepository, userRoleRepository, roleRepository,
+                departmentRepository, departmentRoleRepository,
                 passwordEncoder, passwordPolicy, auditService, eventPublisher);
 
         CompanyContext.setCompanyId(TENANT);
@@ -140,7 +146,7 @@ class UserServiceImplTest {
     private CreateUserCommand createCommand(String email, String password, List<UUID> roleIds) {
         return new CreateUserCommand("emp001", null, "Asha", null, "Nair", null,
                 email, "asha.nair", "+91 9876500001", null, password,
-                null, null, "Clerk", "Ops", null, null, null, null, null, null, roleIds);
+                null, null, "Clerk", "Ops", null, null, null, null, null, null, null, roleIds);
     }
 
     // ------------------------------------------------------------------- create
@@ -227,13 +233,17 @@ class UserServiceImplTest {
     void branchManagerCreatesOwnBranchUser() {
         UUID ownBranch = UUID.randomUUID();
         plantedBranchManager(ownBranch);
+        when(branchRepository.findByIdWithinCompany(ownBranch, TENANT))
+                .thenReturn(Optional.of(Branch.builder().branchCode("PUNE").build()));
+        when(userRepository.nextEmployeeSequence(TENANT, "PUNE")).thenReturn(3);
 
         UserService.CreatedUser created = service.create(
                 new CreateUserCommand("emp002", null, "Ravi", null, "Rao", null,
                         "ravi@legacy.test", "ravi.rao", "+91 9876500002", null, null,
-                        null, null, "Clerk", "Ops", null, null, ownBranch, null, null, null, null));
+                        null, null, "Clerk", "Ops", null, null, null, ownBranch, null, null, null, null));
 
         assertThat(created.user().getBranchId()).isEqualTo(ownBranch);
+        assertThat(created.user().getEmployeeCode()).isEqualTo("PUNE-3");
     }
 
     @Test
@@ -246,7 +256,7 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> service.create(
                 new CreateUserCommand("emp002", null, "Ravi", null, "Rao", null,
                         "ravi@legacy.test", "ravi.rao", "+91 9876500002", null, null,
-                        null, null, "Clerk", "Ops", null, null, otherBranch, null, null, null, null)))
+                        null, null, "Clerk", "Ops", null, null, null, otherBranch, null, null, null, null)))
                 .isInstanceOf(ForbiddenException.class).hasMessageContaining("your own branch");
     }
 
@@ -259,7 +269,7 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> service.create(
                 new CreateUserCommand("emp002", null, "Ravi", null, "Rao", null,
                         "ravi@legacy.test", "ravi.rao", "+91 9876500002", null, null,
-                        null, null, "Clerk", "Ops", null, null, null, UUID.randomUUID(), null, null, null)))
+                        null, null, "Clerk", "Ops", null, null, null, null, UUID.randomUUID(), null, null, null)))
                 .isInstanceOf(ForbiddenException.class).hasMessageContaining("hub");
     }
 
@@ -363,7 +373,7 @@ class UserServiceImplTest {
 
     private UpdateUserCommand updateCommand(String firstName, Long version) {
         return new UpdateUserCommand(firstName, null, "Nair", null, "+91 90000", null,
-                null, null, "Manager", "Ops", null, null, null, null, null, null, version);
+                null, null, "Manager", "Ops", null, null, null, null, null, null, null, version);
     }
 
     @Test

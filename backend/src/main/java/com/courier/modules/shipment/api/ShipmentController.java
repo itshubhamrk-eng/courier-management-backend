@@ -159,13 +159,14 @@ public class ShipmentController {
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
         Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
         Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
+        Map<UUID, String> ewayBillNumbers = shipmentService.ewayBillNumbersFor(ids);
 
         Map<String, ShipmentSummaryResponse> byTrackingNumber = new LinkedHashMap<>();
         Map<String, ShipmentSummaryResponse> byShipmentNumber = new LinkedHashMap<>();
         for (Shipment s : matches) {
             ShipmentSummaryResponse row = mapper.toSummary(s, netAmounts.get(s.getId()),
                     charges.get(s.getId()), deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()),
-                    receivedAt.get(s.getId()));
+                    receivedAt.get(s.getId()), ewayBillNumbers.get(s.getId()));
             byTrackingNumber.put(s.getTrackingNumber(), row);
             byShipmentNumber.put(s.getShipmentNumber(), row);
         }
@@ -198,9 +199,10 @@ public class ShipmentController {
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
         Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
         Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
+        Map<UUID, String> ewayBillNumbers = shipmentService.ewayBillNumbersFor(ids);
         return ApiResponse.success(PageResponse.from(page,
                 s -> mapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()), deliveredAt.get(s.getId()),
-                        invoiceNumbers.get(s.getId()), receivedAt.get(s.getId()))));
+                        invoiceNumbers.get(s.getId()), receivedAt.get(s.getId()), ewayBillNumbers.get(s.getId()))));
     }
 
     @GetMapping("/summary")

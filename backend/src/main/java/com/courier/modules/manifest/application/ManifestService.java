@@ -60,4 +60,27 @@ public interface ManifestService {
      * isn't actually on this manifest.
      */
     void removeShipment(UUID manifestId, UUID shipmentId);
+
+    /** Result of a successful OTP request — never the raw code itself, only enough for the
+     *  UI to tell the operator where it went and how long it lasts. */
+    record DispatchOtpIssued(String maskedMobile, int expiresInMinutes) {
+    }
+
+    /**
+     * Generates a 4-digit OTP, stores its hash against the manifest for {@code
+     * driverUserId}, and sends it to that driver's mobile over the company's configured
+     * SMS channel (Communication Center) — falling back to the same log-only sender every
+     * other unwired notification in this project uses when no real gateway is configured.
+     * Refuses a manifest already dispatched, an unknown driver, or a driver with no mobile
+     * number on file.
+     */
+    DispatchOtpIssued requestDispatchOtp(UUID manifestId, UUID driverUserId);
+
+    /**
+     * Verifies {@code otp} against the manifest's currently-issued code for {@code
+     * driverUserId} — a wrong code counts against a small attempt limit before the code is
+     * invalidated outright and a fresh one must be requested. Verification is currently
+     * optional: {@link #dispatch} does not require it to have succeeded first.
+     */
+    void verifyDispatchOtp(UUID manifestId, UUID driverUserId, String otp);
 }

@@ -16,6 +16,10 @@ import java.util.UUID;
  * <p>{@code password} may be null: when omitted the account is created with an unusable
  * random password and must go through the reset flow, exactly like a provisioned admin.
  * {@code roleIds} may be empty — the company's default role is applied.
+ *
+ * <p>{@code departmentId} places the user in a Department master row; when {@code
+ * roleIds} is also given, each id must be one of that department's own role grants —
+ * checked in the service, not here.
  */
 public record CreateUserCommand(
         String employeeCode,
@@ -33,6 +37,7 @@ public record CreateUserCommand(
         LocalDate dateOfBirth,
         String designation,
         String department,
+        UUID departmentId,
         LocalDate joiningDate,
         UUID reportingManagerId,
         UUID branchId,

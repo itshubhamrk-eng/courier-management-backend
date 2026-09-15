@@ -59,10 +59,10 @@ class FreightCalculationServiceImplTest {
             new BranchLookupPort.BranchRef(BRANCH, "ICHALKARANJI", "Ichalkaranji", true);
     private static final PincodeCoverageLookupPort.CoverageRef SERVICEABLE_NON_ODA =
             new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, false,
-                    DISTRICT, "PUNE", "Pune", true);
+                    DISTRICT, "PUNE", "Pune", true, "Pune");
     private static final PincodeCoverageLookupPort.CoverageRef SERVICEABLE_ODA =
             new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, true,
-                    DISTRICT, "PUNE", "Pune", true);
+                    DISTRICT, "PUNE", "Pune", true, "Pune");
 
     @BeforeEach
     void setUp() {
@@ -287,7 +287,7 @@ class FreightCalculationServiceImplTest {
     void notServiceableDestinationRejected() {
         PincodeCoverageLookupPort.CoverageRef notServiceable =
                 new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, false, false,
-                        DISTRICT, "PUNE", "Pune", true);
+                        DISTRICT, "PUNE", "Pune", true, "Pune");
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(notServiceable));
 
         assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
@@ -302,7 +302,7 @@ class FreightCalculationServiceImplTest {
         UUID otherDistrict = UUID.randomUUID();
         PincodeCoverageLookupPort.CoverageRef thisPincode =
                 new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, false,
-                        DISTRICT, "PUNE", "Pune", true);
+                        DISTRICT, "PUNE", "Pune", true, "Pune");
         // A different pincode elsewhere resolving to a different district must never be consulted —
         // findByPincode is only ever stubbed for DESTINATION_PINCODE, so any lookup by another code
         // would return an unstubbed (empty) result and fail this test with a different exception.

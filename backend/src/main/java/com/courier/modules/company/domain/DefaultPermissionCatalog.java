@@ -78,6 +78,10 @@ public final class DefaultPermissionCatalog {
         MATRIX.put(PermissionModule.SUPER_ADMIN_USER, EnumSet.of(CREATE, READ, SEARCH));
         MATRIX.put(PermissionModule.USER,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ASSIGN, ACTIVATE, DEACTIVATE));
+        // Same shape as BRANCH below: a department is a handful of company-defined rows,
+        // not a bulk-imported catalogue, so no IMPORT.
+        MATRIX.put(PermissionModule.DEPARTMENT,
+                EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE));
         MATRIX.put(PermissionModule.ROLE,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, ASSIGN, ACTIVATE, DEACTIVATE));
         MATRIX.put(PermissionModule.PERMISSION,

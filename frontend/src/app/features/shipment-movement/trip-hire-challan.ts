@@ -1,13 +1,14 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, forkJoin, of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
-import qrcode from 'qrcode-generator';
+import { catchError, switchMap } from 'rxjs/operators';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { AuthService } from '@core/auth/auth.service';
+import { CompanyProfileService, CompanyLetterhead } from '@features/company/company-profile.service';
+import { companyAddressLine, renderPrintHeader, PRINT_HEADER_CSS } from '@features/shipment/consignment-print.util';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
@@ -51,7 +52,12 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
  *  batch-fetched server-side by `/manifests/{id}/shipments` the same "one query, not one
  *  per row" way as `netAmount`/`deliveredAt` already are (see `ShipmentService
  *  .invoiceNumbersFor`) — blank ("—") for a shipment with no E-Way Bill, the normal case
- *  below the mandatory-value threshold. The QR code encodes the challan number as plain
+ *  below the mandatory-value threshold. E-WAY BILL NO is the distinct, government-issued
+ *  number itself (`Shipment.ewayBillNumber`, `ShipmentService.ewayBillNumbersFor`) — also
+ *  blank until Part-A has actually succeeded, which for a shipment dispatched right after
+ *  booking may still be in flight or `FAILED`; Part-B (this dispatch's own vehicle/
+ *  transport details) is filled in server-side right after this THC is generated, not
+ *  reflected on the printed copy itself. The QR code encodes the challan number as plain
  *  text (same `qrcode-generator` lib `consignment-print.util.ts` already uses for the LR's
  *  own QR, no CDN dependency). */
 @Component({
@@ -94,7 +100,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
         <app-card>
           <div class="mh">
             <div><strong>{{ m.manifestNumber }}</strong>
-              <span class="text-caption">Status: {{ m.status }}</span></div>
+              <span class="text-caption">{{ branchNames().get(m.bookingBranchId) || '—' }} → {{ branchNames().get(m.deliveryBranchId) || '—' }} &nbsp;·&nbsp; Status: {{ m.status }}</span></div>
             <div class="mh__actions">
               @if (m.status !== 'CREATED') {
                 <app-button variant="stroked" icon="visibility" [loading]="previewing()" (pressed)="previewThc()">Preview THC</app-button>
@@ -114,7 +120,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
               <div class="tbl__wrap">
                 <table class="tbl">
                   <thead>
-                    <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th class="tbl--right">Weight</th></tr>
+                    <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
                   </thead>
                   <tbody>
                     @for (s of manifestShipments(); track s.id; let i = $index) {
@@ -123,6 +129,8 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
                         <td>{{ i + 1 }}</td>
                         <td>{{ s.trackingNumber }}</td>
                         <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                        <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                        <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                         <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                       </tr>
                     }
@@ -138,9 +146,26 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
                 <app-select [control]="c('vehicleId')" label="Vehicle" [options]="vehicleOptions()" placeholder="Select vehicle" />
                 <app-select [control]="c('driverUserId')" label="Driver" [options]="driverOptions()" placeholder="Select driver" />
               </div>
+
+              <div class="otp">
+                @if (!otpVerified()) {
+                  <app-button type="button" variant="stroked" icon="sms" [loading]="sendingOtp()"
+                    [disabled]="!c('driverUserId').value || resendCooldown() > 0" (pressed)="requestOtp()">
+                    {{ otpRequested() ? (resendCooldown() > 0 ? 'Resend OTP (' + resendCooldown() + 's)' : 'Resend OTP') : 'Send Driver OTP (optional)' }}
+                  </app-button>
+                  @if (otpRequested()) {
+                    <span class="text-caption">Sent to {{ maskedMobile() }} — valid {{ otpExpiresInMinutes() }} min.</span>
+                    <app-input [control]="otpControl" type="tel" label="Enter OTP" placeholder="4-digit code" [maxLength]="4" />
+                    <app-button type="button" icon="check" [loading]="verifyingOtp()" (pressed)="verifyOtp()">Verify OTP</app-button>
+                  }
+                } @else {
+                  <span class="otp__ok">✓ Driver OTP verified</span>
+                }
+              </div>
+
               <label class="fld"><span class="fld__l">Departure Time</span>
                 <input class="fld__i" type="datetime-local" [formControl]="c('departureTime')" />
-                <span class="fld__hint">Blank means now</span></label>
+                <span class="fld__hint">Defaults to now — adjust if the vehicle left earlier/later</span></label>
               <div class="grid2">
                 <app-input [control]="c('fuelCost')" type="number" label="Fuel Cost" placeholder="0.00" />
                 <app-input [control]="c('driverAdvance')" type="number" label="Driver Advance" placeholder="0.00" />
@@ -173,6 +198,9 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+    .otp { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; padding:12px; background:var(--surface-muted); border-radius:var(--r-field); }
+    .otp app-input { min-width:160px; }
+    .otp__ok { font:600 14px var(--font-sans); color:var(--success-600, #1a7f37); }
     .mh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .mh strong { display:block; font:600 15px var(--font-sans); }
     .mh__actions { display:flex; gap:10px; }
@@ -192,7 +220,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
     @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
   `]
 })
-export class TripHireChallan implements OnInit {
+export class TripHireChallan implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
@@ -202,6 +230,7 @@ export class TripHireChallan implements OnInit {
   private readonly vehicleService = inject(VehicleService);
   private readonly masterData = inject(MasterDataService);
   private readonly movementService = inject(ShipmentMovementService);
+  private readonly companyProfile = inject(CompanyProfileService);
 
   readonly manifest = signal<Manifest | null>(null);
   readonly result = signal<DispatchManifestResponse | null>(null);
@@ -222,8 +251,25 @@ export class TripHireChallan implements OnInit {
    *  `userDirectory()` lookup DRS Report/Detail already uses for the same reason
    *  (`userOptions()`'s Lookup has no mobile slot). */
   readonly driverDirectory = signal<Map<string, { name: string; mobile: string }>>(new Map());
+  /** Company letterhead for the THC header (name/address/GST beside the logo) — same
+   *  `CompanyProfileService` `consignment-print.util.ts` uses for the LR. */
+  readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
   readonly manifestShipments = signal<Shipment[]>([]);
   readonly loadingShipments = signal(false);
+  /** Driver OTP — optional for now (direct request): sending/verifying it works
+   *  end to end but doesn't block Dispatch. Still reset whenever the driver selection
+   *  changes so a code issued for one driver is never shown as verified for another. */
+  readonly sendingOtp = signal(false);
+  readonly verifyingOtp = signal(false);
+  readonly otpRequested = signal(false);
+  readonly otpVerified = signal(false);
+  readonly maskedMobile = signal('');
+  readonly otpExpiresInMinutes = signal(5);
+  readonly otpControl = new FormControl('', [Validators.pattern(/^\d{4}$/)]);
+  /** Seconds left before Resend OTP is clickable again — starts at 15 on every successful
+   *  send (first send or resend alike), ticks down once a second. */
+  readonly resendCooldown = signal(0);
+  private resendTimer: ReturnType<typeof setInterval> | null = null;
   /** Ids unchecked in "Shipments on this Manifest" — dropped from the row list right
    *  away, but not actually detached (ManifestService.removeShipment) until dispatch()
    *  fires, so unchecking causes no server-side change on its own. */
@@ -233,7 +279,7 @@ export class TripHireChallan implements OnInit {
   readonly form: FormGroup = this.fb.group({
     vehicleId: [null as string | null, Validators.required],
     driverUserId: [null as string | null, Validators.required],
-    departureTime: [null as string | null],
+    departureTime: [this.nowLocalDateTime() as string | null],
     fuelCost: [null as number | null, Validators.min(0)],
     driverAdvance: [null as number | null, Validators.min(0)],
     tollAmount: [null as number | null, Validators.min(0)],
@@ -247,14 +293,23 @@ export class TripHireChallan implements OnInit {
     this.movementService.userOptions().subscribe((u) =>
       this.driverOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
     this.movementService.userDirectory().subscribe((m) => this.driverDirectory.set(m));
+    this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((c) => this.companyLetterhead.set(c));
     this.masterData.branchDirectory().subscribe((list) => {
-      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+      this.branchNames.set(new Map(list.map((b) =>
+        [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
       this.branchCodes.set(new Map(list.map((b) => [b.id, b.branchCode])));
     });
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
       this.topayModeIds.set(new Set(p.content
         .filter((r) => r['collectAtDelivery'] === true && r['cashOnDelivery'] !== true)
         .map((r) => r.id))));
+    this.c('driverUserId').valueChanges.subscribe(() => this.resetOtpState());
+    // Digits-only, 4 chars max — strips anything a paste or a non-numeric keyboard slips
+    // in, since the field itself (a plain text input) doesn't block that on its own.
+    this.otpControl.valueChanges.subscribe((v) => {
+      const digits = (v ?? '').replace(/\D/g, '').slice(0, 4);
+      if (digits !== v) this.otpControl.setValue(digits, { emitEvent: false });
+    });
     this.loadOpenManifests();
     const manifestNumber = this.route.snapshot.queryParamMap.get('manifestNumber');
     if (manifestNumber) {
@@ -276,6 +331,8 @@ export class TripHireChallan implements OnInit {
   selectManifest(m: Manifest): void {
     this.manifest.set(m);
     this.result.set(null);
+    this.resetOtpState();
+    this.c('departureTime').setValue(this.nowLocalDateTime());
     this.loadManifestShipments(m);
   }
 
@@ -289,6 +346,8 @@ export class TripHireChallan implements OnInit {
         if (!p.content.length) { this.notify.error('No manifest found.'); return; }
         this.manifest.set(p.content[0]);
         this.result.set(null);
+        this.resetOtpState();
+        this.c('departureTime').setValue(this.nowLocalDateTime());
         this.loadManifestShipments(p.content[0]);
       },
       error: (e: HttpErrorResponse) => { this.searching.set(false); this.notify.error(e.error?.message ?? 'Search failed.'); }
@@ -301,6 +360,79 @@ export class TripHireChallan implements OnInit {
     this.manifestShipments.set([]);
     this.pendingRemovals.set([]);
     this.form.reset();
+    this.c('departureTime').setValue(this.nowLocalDateTime());
+    this.resetOtpState();
+  }
+
+  /** `datetime-local` wants `YYYY-MM-DDTHH:mm` in the viewer's own local time, not UTC —
+   *  `toISOString()` would silently shift the displayed value by the timezone offset. */
+  private nowLocalDateTime(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  private resetOtpState(): void {
+    this.otpRequested.set(false);
+    this.otpVerified.set(false);
+    this.maskedMobile.set('');
+    this.otpControl.reset();
+    this.stopResendCooldown();
+  }
+
+  requestOtp(): void {
+    const manifest = this.manifest();
+    const driverUserId = this.c('driverUserId').value;
+    if (!manifest || !driverUserId) return;
+    this.sendingOtp.set(true);
+    this.movementService.requestDispatchOtp(manifest.id, driverUserId).subscribe({
+      next: (r) => {
+        this.sendingOtp.set(false);
+        this.otpRequested.set(true);
+        this.otpVerified.set(false);
+        this.maskedMobile.set(r.maskedMobile);
+        this.otpExpiresInMinutes.set(r.expiresInMinutes);
+        this.otpControl.reset();
+        this.notify.success(`OTP sent to ${r.maskedMobile}.`);
+        this.startResendCooldown();
+      },
+      error: (e: HttpErrorResponse) => { this.sendingOtp.set(false); this.notify.error(e.error?.message ?? 'Could not send OTP.'); }
+    });
+  }
+
+  private startResendCooldown(): void {
+    this.stopResendCooldown();
+    this.resendCooldown.set(15);
+    this.resendTimer = setInterval(() => {
+      const next = this.resendCooldown() - 1;
+      if (next <= 0) { this.stopResendCooldown(); return; }
+      this.resendCooldown.set(next);
+    }, 1000);
+  }
+
+  private stopResendCooldown(): void {
+    if (this.resendTimer !== null) { clearInterval(this.resendTimer); this.resendTimer = null; }
+    this.resendCooldown.set(0);
+  }
+
+  ngOnDestroy(): void {
+    this.stopResendCooldown();
+  }
+
+  verifyOtp(): void {
+    const manifest = this.manifest();
+    const driverUserId = this.c('driverUserId').value;
+    const otp = this.otpControl.value?.trim();
+    if (!manifest || !driverUserId || !otp) return;
+    this.verifyingOtp.set(true);
+    this.movementService.verifyDispatchOtp(manifest.id, driverUserId, otp).subscribe({
+      next: () => {
+        this.verifyingOtp.set(false);
+        this.otpVerified.set(true);
+        this.notify.success('OTP verified.');
+      },
+      error: (e: HttpErrorResponse) => { this.verifyingOtp.set(false); this.notify.error(e.error?.message ?? 'Incorrect OTP.'); }
+    });
   }
 
   private loadManifestShipments(m: Manifest): void {
@@ -390,15 +522,6 @@ export class TripHireChallan implements OnInit {
     return `THC/${code}/${dd}${mm}${yy}/${seq}`;
   }
 
-  /** Same inline `qrcode-generator` pattern as `consignment-print.util.ts`'s own `qrSvg` —
-   *  no CDN, no separate PDF/image service. */
-  private qrSvg(value: string): string {
-    const qr = qrcode(0, 'M');
-    qr.addData(value);
-    qr.make();
-    return qr.createSvgTag({ cellSize: 3, margin: 0 });
-  }
-
   /** Mirrors the branded KTC-style Trip Hire Challan layout. TO PAY FREIGHT only carries a
    *  figure for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's
    *  doc. INVOICE NO is the shipment's E-Way Bill invoice number, blank where none exists. */
@@ -412,18 +535,24 @@ export class TripHireChallan implements OnInit {
       <td class="center">${i + 1}</td>
       <td>${this.esc(s.trackingNumber)}</td>
       <td>${this.esc(s.invoiceNumber) || '—'}</td>
+      <td>${this.esc(s.ewayBillNumber) || '—'}</td>
       <td>${this.esc(s.senderName)}</td>
       <td>${this.esc(s.receiverName)}</td>
+      <td>${this.esc(s.fromCity) || '—'}</td>
+      <td>${this.esc(s.toCity) || '—'}</td>
       <td class="center">${bookingDate(s)}</td>
       <td class="right">${s.chargeableWeight}</td>
       <td class="right">${topayFreight(s) ?? ''}</td>
-      <td></td>
-      <td></td>
     </tr>`).join('');
     const dispatched = m.departureTime ?? m.dispatchedAt;
     const dispatchedDate = dispatched ? new Date(dispatched) : null;
-    const companyName = this.esc(this.auth.companyName() ?? 'Trip Hire Challan');
-    const companyLogo = this.auth.companyLogo();
+    const company = this.companyLetterhead();
+    const companyNameRaw = company?.companyName ?? this.auth.companyName() ?? 'Trip Hire Challan';
+    const companyName = this.esc(companyNameRaw);
+    const companyLogo = company?.logo ?? this.auth.companyLogo();
+    const companyAddress = companyAddressLine(company);
+    const companyGst = company?.gstNumber ?? null;
+    const companyContact = company?.mobile ?? null;
     const driver = this.driverDirectory().get(m.driverUserId ?? '');
     const thcNumber = this.thcNumber(m);
     const fuelCost = m.fuelCost ?? 0;
@@ -437,23 +566,18 @@ export class TripHireChallan implements OnInit {
         * { box-sizing: border-box; }
         body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 9px; }
         .toolbar { width: 900px; margin: 0 auto 10px; }
-        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #777; background: #eee; cursor: pointer; font-size: 12px; }
-        .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #777; }
-        .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #777; }
-        .header { display: grid; grid-template-columns: 1fr 230px 90px; border-bottom: 1px solid #777; }
-        .company-info { text-align: center; padding: 10px; line-height: 15px; }
-        .company-info .big { font-size: 13px; font-weight: bold; }
-        .company-info .mark { max-width: 100%; max-height: 40px; object-fit: contain; }
-        .challan-box { border-left: 1px solid #777; padding: 10px; text-align: center; }
-        .challan-number { font-size: 11px; font-weight: bold; word-break: break-all; }
-        .qr-box { border-left: 1px solid #777; padding: 8px; text-align: center; }
-        .qr-box svg { width: 70px; height: 70px; }
-        .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #777; }
-        .meta div { padding: 4px 6px; border-right: 1px solid #777; }
-        .meta div:last-child { border-right: 0; }
+        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #000; background: #eee; cursor: pointer; font-size: 12px; }
+        .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #000; }
+        .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #000; }
+        ${PRINT_HEADER_CSS}
+        .head, .head .co, .head .lrbox { border-color: #000; border-width: 1px; }
+        .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #000; }
+        .meta div { padding: 4px 6px; border-right: 1px solid #000; }
+        .meta div:nth-child(4n) { border-right: 0; }
         .label { font-weight: bold; display: block; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border-right: 1px solid #777; border-bottom: 1px solid #777; padding: 3px 4px; vertical-align: middle; height: 19px; word-wrap: break-word; }
+        th, td { border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 4px; vertical-align: middle; min-height: 19px; word-wrap: break-word; overflow-wrap: break-word; }
+        th:last-child, td:last-child { border-right: 0; }
         th { font-weight: bold; text-align: center; background: #fafafa; font-size: 8px; }
         td { font-size: 8px; }
         td.center, th.center { text-align: center; }
@@ -461,23 +585,22 @@ export class TripHireChallan implements OnInit {
         .c-sr { width: 30px; }
         .c-date { width: 75px; }
         .c-weight, .c-freight { width: 75px; }
-        .c-sign { width: 60px; }
-        .total-row td { font-weight: bold; height: 22px; }
+        .total-row td { font-weight: bold; min-height: 22px; }
         .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
-        .footer-left { padding: 5px; border-right: 1px solid #777; }
+        .footer-left { padding: 5px; border-right: 1px solid #000; }
         .footer-right { text-align: center; padding: 5px; font-weight: bold; }
         .signature { height: 22px; margin-top: 2px; }
-        .terms { border-bottom: 1px solid #777; padding: 6px 8px; font-size: 8px; line-height: 13px; }
+        .terms { border-bottom: 1px solid #000; padding: 6px 8px; font-size: 8px; line-height: 13px; }
         .terms .label { display: block; margin-bottom: 2px; }
         .terms ol { margin: 0; padding-left: 14px; }
-        .expenses { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #777; }
-        .expenses div { padding: 4px 6px; border-right: 1px solid #777; }
+        .expenses { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #000; }
+        .expenses div { padding: 4px 6px; border-right: 1px solid #000; }
         .expenses div:last-child { border-right: 0; }
         .expenses .total { font-weight: bold; }
         @media print {
           body { background: #fff; padding: 0; margin: 0; }
           .toolbar { display: none; }
-          .challan { width: 100%; border: 1px solid #000; }
+          .challan { width: 100%; }
           @page { size: A4 portrait; margin: 8mm; }
         }
         @media screen and (max-width: 950px) { .challan, .toolbar { width: 100%; overflow-x: auto; } }
@@ -491,13 +614,10 @@ export class TripHireChallan implements OnInit {
       <div class="challan">
         <div class="title">TRIP HIRE CHALLAN</div>
 
-        <div class="header">
-          <div class="company-info">${companyLogo ? `<img class="mark" src="${this.esc(companyLogo)}" alt="${companyName}">` : `<span class="big">${companyName}</span>`}</div>
-          <div class="challan-box">
-            <div class="challan-number">${this.esc(thcNumber)}</div>
-          </div>
-          <div class="qr-box">${this.qrSvg(thcNumber)}</div>
-        </div>
+        ${renderPrintHeader(
+          { companyName: companyNameRaw, companyLogo, companyAddress, companyGst, companyContact, companyWebsite: null },
+          { label: 'THC No', value: thcNumber, qrValue: thcNumber }
+        )}
 
         <div class="meta">
           <div><span class="label">DATE</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleDateString('en-GB')) : '—'}</div>
@@ -515,21 +635,20 @@ export class TripHireChallan implements OnInit {
             <th class="c-sr">SR<br>NO.</th>
             <th>TRACKING NO</th>
             <th>INVOICE NO</th>
+            <th>E-WAY BILL NO</th>
             <th>CONSIGNOR NAME</th>
             <th>CONSIGNEE NAME</th>
+            <th>FROM CITY</th>
+            <th>TO CITY</th>
             <th class="c-date">BOOKING<br>DATE</th>
             <th class="c-weight">WEIGHT</th>
             <th class="c-freight">TO PAY<br>FREIGHT</th>
-            <th class="c-sign">RECEIVER<br>SIGN</th>
-            <th class="c-sign">STAMP</th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="10" class="center">No shipments</td></tr>'}</tbody>
           <tfoot><tr class="total-row">
-            <td colspan="6" class="right">Total</td>
+            <td colspan="8" class="right">Total</td>
             <td class="right">${totalWeight}</td>
             <td class="right">${totalFreight}</td>
-            <td></td>
-            <td></td>
           </tr></tfoot>
         </table>
 

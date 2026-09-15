@@ -105,6 +105,33 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "other_amount", precision = 12, scale = 2)
     private BigDecimal otherAmount;
 
+    /** BCrypt hash of the current dispatch OTP — never the raw code, matching this
+     *  project's password/token storage convention. Null once verified-and-consumed by
+     *  {@link #dispatch} or invalidated after {@link #OTP_MAX_ATTEMPTS} wrong guesses. */
+    @Column(name = "dispatch_otp_hash", length = 100)
+    private String dispatchOtpHash;
+
+    /** The driver this OTP was issued for — {@link #dispatch} refuses to proceed unless
+     *  the driver being dispatched is this exact id, so switching the driver selection
+     *  after requesting an OTP can't reuse a code meant for someone else. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "dispatch_otp_driver_id", columnDefinition = "BINARY(16)")
+    private UUID dispatchOtpDriverId;
+
+    @Column(name = "dispatch_otp_expires_at")
+    private Instant dispatchOtpExpiresAt;
+
+    @Column(name = "dispatch_otp_attempts", nullable = false)
+    @Builder.Default
+    private int dispatchOtpAttempts = 0;
+
+    /** Set once the OTP has been correctly verified; {@link #dispatch} requires this to be
+     *  non-null (and still within {@link #dispatchOtpExpiresAt}) for the same driver. */
+    @Column(name = "dispatch_otp_verified_at")
+    private Instant dispatchOtpVerifiedAt;
+
+    private static final int OTP_MAX_ATTEMPTS = 5;
+
     public boolean isDispatched() {
         return status != ManifestStatus.CREATED;
     }
@@ -120,6 +147,10 @@ public class Manifest extends CompanyOwnedEntity {
             throw new BusinessRuleException(
                     "Manifest %s has already been dispatched.".formatted(manifestNumber));
         }
+        // Driver OTP verification is optional for now, on direct request — requestDispatchOtp/
+        // verifyDispatchOtp still work end to end, but dispatch() no longer requires
+        // requireDispatchOtpVerified() to have succeeded first. Re-enable by calling it here
+        // again once OTP is made mandatory.
         this.vehicleId = vehicleId;
         this.driverUserId = driverUserId;
         this.status = ManifestStatus.DISPATCHED;
@@ -129,5 +160,70 @@ public class Manifest extends CompanyOwnedEntity {
         this.driverAdvance = driverAdvance;
         this.tollAmount = tollAmount;
         this.otherAmount = otherAmount;
+        // One-time use — a dispatched manifest never needs its OTP state again, and a
+        // future re-dispatch attempt (refused above anyway) must not find a stale
+        // "verified" flag lying around.
+        this.dispatchOtpHash = null;
+        this.dispatchOtpDriverId = null;
+        this.dispatchOtpExpiresAt = null;
+        this.dispatchOtpAttempts = 0;
+        this.dispatchOtpVerifiedAt = null;
+    }
+
+    /**
+     * @throws BusinessRuleException already dispatched — same point-of-no-return as
+     *         {@link #dispatch}; requesting a fresh OTP for an already-gone manifest makes
+     *         no sense
+     */
+    public void issueDispatchOtp(UUID driverUserId, String otpHash, Instant expiresAt) {
+        if (isDispatched()) {
+            throw new BusinessRuleException(
+                    "Manifest %s has already been dispatched.".formatted(manifestNumber));
+        }
+        this.dispatchOtpDriverId = driverUserId;
+        this.dispatchOtpHash = otpHash;
+        this.dispatchOtpExpiresAt = expiresAt;
+        this.dispatchOtpAttempts = 0;
+        this.dispatchOtpVerifiedAt = null;
+    }
+
+    /**
+     * The hash comparison itself happens in the service layer (it owns the
+     * {@code PasswordEncoder}) — this only applies the resulting business rules: wrong
+     * codes count against {@link #OTP_MAX_ATTEMPTS} before the code is invalidated
+     * outright, and a right one only sticks for the driver it was issued to.
+     *
+     * @throws BusinessRuleException no OTP requested yet, requested for a different
+     *         driver, expired, or the code didn't match
+     */
+    public void registerOtpVerificationAttempt(UUID driverUserId, boolean codeMatched) {
+        if (dispatchOtpHash == null || dispatchOtpExpiresAt == null) {
+            throw new BusinessRuleException("Request a driver OTP before verifying it.");
+        }
+        if (!driverUserId.equals(dispatchOtpDriverId)) {
+            throw new BusinessRuleException("This OTP was issued for a different driver.");
+        }
+        if (Instant.now().isAfter(dispatchOtpExpiresAt)) {
+            throw new BusinessRuleException("OTP has expired — request a new one.");
+        }
+        if (!codeMatched) {
+            dispatchOtpAttempts++;
+            if (dispatchOtpAttempts >= OTP_MAX_ATTEMPTS) {
+                dispatchOtpHash = null;
+                dispatchOtpExpiresAt = null;
+            }
+            throw new BusinessRuleException("Incorrect OTP.");
+        }
+        this.dispatchOtpVerifiedAt = Instant.now();
+    }
+
+    private void requireDispatchOtpVerified(UUID driverUserId) {
+        if (dispatchOtpVerifiedAt == null || !driverUserId.equals(dispatchOtpDriverId)) {
+            throw new BusinessRuleException("Verify the driver's OTP before dispatching this manifest.");
+        }
+        if (dispatchOtpExpiresAt == null || Instant.now().isAfter(dispatchOtpExpiresAt)) {
+            throw new BusinessRuleException(
+                    "Driver OTP verification has expired — verify again before dispatching.");
+        }
     }
 }

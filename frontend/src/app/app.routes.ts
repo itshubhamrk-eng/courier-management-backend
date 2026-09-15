@@ -594,6 +594,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/users/user-edit').then((m) => m.UserEdit)
       },
       {
+        path: 'departments', title: 'Departments', canActivate: [roleGuard], data: { roles: ADMINS },
+        loadComponent: () => import('@features/departments/department-list').then((m) => m.DepartmentList)
+      },
+      {
         path: 'roles', title: 'Roles', canActivate: [roleGuard], data: { roles: ADMINS },
         loadComponent: () => import('@features/roles/role-list').then((m) => m.RoleList)
       },

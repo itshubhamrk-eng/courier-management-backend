@@ -15,6 +15,22 @@ import { BranchSummaryRow } from '../models/dashboard.model';
   template: `
     <app-card title="Branch Summary" subtitle="Booking & delivery offices">
       <a card-actions routerLink="/branches" class="bs__link">Manage</a>
+      @if (!loading() && (pendingDelivery() != null || totalBranches() != null)) {
+        <div class="bs__stats">
+          @if (pendingDelivery() != null) {
+            <span class="bs__stat" data-tone="warning">
+              <mat-icon>local_shipping</mat-icon>
+              {{ pendingDelivery() }} pending delivery
+            </span>
+          }
+          @if (totalBranches() != null) {
+            <span class="bs__stat" data-tone="success">
+              <mat-icon>store</mat-icon>
+              {{ activeBranches() }} of {{ totalBranches() }} branches active
+            </span>
+          }
+        </div>
+      }
       @if (loading()) {
         <app-loader [minHeight]="180" />
       } @else if (rows().length === 0) {
@@ -40,6 +56,12 @@ import { BranchSummaryRow } from '../models/dashboard.model';
   `,
   styles: [`
     .bs__link { font:600 13px var(--font-sans); color:var(--brand-600); text-decoration:none; }
+    .bs__stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+    .bs__stat { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:var(--r-pill);
+      font:600 12px var(--font-sans); }
+    .bs__stat mat-icon { font-size:16px; width:16px; height:16px; }
+    .bs__stat[data-tone="warning"] { background:var(--warning-bg); color:var(--warning); }
+    .bs__stat[data-tone="success"] { background:var(--success-bg); color:var(--success); }
     .bs-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:24px 0; color:var(--content-muted); }
     .bs-empty mat-icon { font-size:34px; width:34px; height:34px; opacity:.45; }
     .bs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
@@ -54,4 +76,7 @@ import { BranchSummaryRow } from '../models/dashboard.model';
 export class BranchSummary {
   readonly loading = input(false);
   readonly rows = input<BranchSummaryRow[]>([]);
+  readonly pendingDelivery = input<number | null>(null);
+  readonly activeBranches = input<number | null>(null);
+  readonly totalBranches = input<number | null>(null);
 }

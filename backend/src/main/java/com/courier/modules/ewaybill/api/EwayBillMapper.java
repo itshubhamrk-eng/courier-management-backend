@@ -18,7 +18,7 @@ public class EwayBillMapper {
                 r.ewayBillNumber(), r.invoiceNumber(), r.invoiceDate(), r.invoiceValue(),
                 r.documentType(), r.documentNumber(), r.documentDate(), r.transporterId(),
                 r.vehicleNumber(), r.distance(), r.validFrom(), r.validUntil(),
-                r.documentUrl(), r.remarks()));
+                r.documentUrl(), r.remarks(), r.consignorGstin(), r.consigneeGstin()));
     }
 
     public UpdateEwayBillCommand toCommand(UpdateEwayBillRequest r) {
@@ -26,7 +26,7 @@ public class EwayBillMapper {
                 r.ewayBillNumber(), r.invoiceNumber(), r.invoiceDate(), r.invoiceValue(),
                 r.documentType(), r.documentNumber(), r.documentDate(), r.transporterId(),
                 r.vehicleNumber(), r.distance(), r.validFrom(), r.validUntil(),
-                r.documentUrl(), r.remarks()));
+                r.documentUrl(), r.remarks(), r.consignorGstin(), r.consigneeGstin()));
     }
 
     public EwayBillResponse toResponse(EwayBill b) {
@@ -35,9 +35,13 @@ public class EwayBillMapper {
                 b.getInvoiceNumber(), b.getInvoiceDate(), b.getInvoiceValue(),
                 b.getDocumentType() == null ? null : b.getDocumentType().name(),
                 b.getDocumentNumber(), b.getDocumentDate(),
-                b.getTransporterId(), b.getVehicleNumber(), b.getDistance(),
+                b.getConsignorGstin(), b.getConsigneeGstin(),
+                b.getTransporterId(), b.getVehicleNumber(), b.getTransportMode(), b.getDistance(),
                 b.getValidFrom(), b.getValidUntil(),
                 b.getStatus().name(),
+                b.getProviderName(), b.getProviderReference(),
+                b.getPartAGeneratedAt(), b.getPartBGeneratedAt(),
+                b.getLastError(), b.getRetryCount(),
                 b.getDocumentUrl(), b.getRemarks(),
                 b.getCreatedBy(), b.getCreatedAt(), b.getUpdatedBy(), b.getUpdatedAt(), b.getVersion());
     }

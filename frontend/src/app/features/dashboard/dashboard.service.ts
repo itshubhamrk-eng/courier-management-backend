@@ -37,6 +37,12 @@ export class DashboardService {
       .page<Branch>(API.branches, { page: 0, size: 6, sort: 'branchCode,asc' })
       .pipe(catchError(() => of(emptyPage<Branch>())));
 
+    // separate, size:1 count-only calls — branches$ above is capped to 6 rows for the
+    // summary list, too few to also double as an accurate active-branch total
+    const activeBranches$ = this.api
+      .page<Branch>(API.branches, { page: 0, size: 1, status: 'ACTIVE' })
+      .pipe(map((p) => p.totalElements), catchError(() => of(0)));
+
     // hub module not built yet — /api/v1/hubs doesn't exist; hub tiles/section stay empty
     const companies$ =
       profile === 'PLATFORM'
@@ -44,24 +50,26 @@ export class DashboardService {
             .pipe(map((p) => p.totalElements), catchError(() => of(0)))
         : of(0);
 
-    return forkJoin({ summary: summary$, branches: branches$, companies: companies$ }).pipe(
-      map(({ summary, branches, companies }) => this.assemble(summary, branches, companies))
+    return forkJoin({ summary: summary$, branches: branches$, activeBranches: activeBranches$, companies: companies$ }).pipe(
+      map(({ summary, branches, activeBranches, companies }) =>
+        this.assemble(summary, branches, activeBranches, companies))
     );
   }
 
   private assemble(
     raw: RawSummary,
     branches: Page<Branch>,
+    activeBranchCount: number,
     companyCount: number
   ): DashboardSummary {
     const s = raw.statistics ?? {};
-    const activeBranches = branches.content.filter((b) => b.status === 'ACTIVE').length;
 
     const statistics: DashboardStatistics = {
       ...emptyStatistics(),
       ...s,
       // derive from live list endpoints when the summary endpoint omits the figure
-      activeBranches: s.activeBranches ?? (branches.totalElements || activeBranches),
+      activeBranches: s.activeBranches ?? activeBranchCount,
+      totalBranches: s.totalBranches ?? branches.totalElements,
       totalCompanies: s.totalCompanies ?? companyCount,
       activeCompanies: s.activeCompanies ?? companyCount,
       // walletBalance is the caller's own branch wallet (null for company/platform admins,

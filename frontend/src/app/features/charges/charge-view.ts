@@ -64,6 +64,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
         <app-card title="Identity">
           <dl class="kv">
             <dt>Service Type</dt><dd>{{ serviceTypeNames().get(charge()!.serviceTypeId) || charge()!.serviceTypeId }}</dd>
+            <dt>Slab Basis</dt><dd>{{ charge()!.isQtyLevel ? 'Average per-piece weight, paid per piece' : 'Total chargeable weight' }}</dd>
             <dt>Status</dt><dd><app-status-badge [value]="charge()!.status" /></dd>
           </dl>
         </app-card>

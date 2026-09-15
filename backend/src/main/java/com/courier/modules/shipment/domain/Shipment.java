@@ -81,9 +81,26 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "booking_branch_id", columnDefinition = "BINARY(16)", nullable = false, updatable = false)
     private UUID bookingBranchId;
 
+    /**
+     * Resolved server-side off {@code deliveryPincode}'s own {@code
+     * branch_pincode_mapping} row (never trusted from the client) — booking no longer
+     * asks the operator to pick a Delivery Branch, only a destination pincode/area, so
+     * this is null whenever that pincode isn't mapped to a branch yet. Filled in for real
+     * once Loading Sheet/THC generation resolves it.
+     */
     @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "delivery_branch_id", columnDefinition = "BINARY(16)", nullable = false)
+    @Column(name = "delivery_branch_id", columnDefinition = "BINARY(16)")
     private UUID deliveryBranchId;
+
+    /** The booking branch's own city — plain text, same modelling as {@code Branch.city},
+     *  shown at booking instead of a branch picker. */
+    @Column(name = "from_city", length = 120)
+    private String fromCity;
+
+    /** The destination pincode/area's resolved city — plain text, shown at booking
+     *  instead of a Delivery Branch picker. */
+    @Column(name = "to_city", length = 120)
+    private String toCity;
 
     /**
      * The manifest this shipment is currently scanned onto — set by Shipment Movement's
@@ -231,6 +248,14 @@ public class Shipment extends CompanyOwnedEntity {
     @Builder.Default
     private boolean insuranceApplicable = false;
 
+    /** {@code DOOR} (default) may carry a manual, GST-free {@code
+     *  ShipmentCharge.doorDeliveryCharge}; {@code OFFICE} never charges extra —
+     *  enforced server-side in {@code ShipmentServiceImpl.copyCharge}, not just UX. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_type", nullable = false, length = 10)
+    @Builder.Default
+    private DeliveryType deliveryType = DeliveryType.DOOR;
+
     // ---------------------------------------------------------------- behaviour
 
     public boolean isEditable() {
@@ -251,9 +276,8 @@ public class Shipment extends CompanyOwnedEntity {
 
     public void applyInvariants() {
         this.remarks = blankToNull(remarks);
-        if (bookingBranchId == null || deliveryBranchId == null) {
-            throw new BusinessRuleException(
-                    "A shipment needs both a booking branch and a delivery branch.");
+        if (bookingBranchId == null) {
+            throw new BusinessRuleException("A shipment needs a booking branch.");
         }
         this.senderName = blankToNull(senderName);
         this.senderAddress = blankToNull(senderAddress);
@@ -281,6 +305,9 @@ public class Shipment extends CompanyOwnedEntity {
         }
         if (shipmentType == null) {
             this.shipmentType = ShipmentType.NON_DOCUMENT;
+        }
+        if (deliveryType == null) {
+            this.deliveryType = DeliveryType.DOOR;
         }
         if (appointmentDelivery) {
             if (appointmentDate == null || blankToNull(appointmentTimeSlot) == null) {

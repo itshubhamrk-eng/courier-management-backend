@@ -17,6 +17,12 @@ import java.time.LocalDate;
  * mandatory threshold; optional and simply attached-if-given otherwise. Its own
  * {@code invoiceValue} is not repeated here — the shipment's own {@code invoiceValue}
  * carries it, and {@code ShipmentServiceImpl} copies it across when creating the row.
+ *
+ * <p>{@code ewayBillNumber}/{@code transporterId}/{@code vehicleNumber}/{@code distance}/
+ * {@code validFrom}/{@code validUntil} are ignored on the mandatory auto-generation path
+ * — the E-Way Bill number is provider-issued, and transport details are filled in at
+ * Manifest dispatch, not typed at booking. They remain accepted here only so a
+ * non-mandatory, optional attach can still record one the operator already holds.
  */
 @Schema(name = "EwayBillBookingRequest", description = "E-Way Bill data supplied inline with a booking")
 public record EwayBillBookingRequest(
@@ -33,6 +39,10 @@ public record EwayBillBookingRequest(
         Instant validFrom,
         Instant validUntil,
         @Size(max = 1000) String documentUrl,
-        @Size(max = 500) String remarks
+        @Size(max = 500) String remarks,
+        @Schema(description = "Sender's GSTIN, optional — Shipment itself carries no GST fields.")
+        @Size(max = 15) String consignorGstin,
+        @Schema(description = "Receiver's GSTIN, optional.")
+        @Size(max = 15) String consigneeGstin
 ) {
 }

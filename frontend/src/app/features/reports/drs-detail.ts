@@ -44,7 +44,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>#</th><th>Tracking No.</th><th>Receiver</th><th>Contact</th><th>Payment</th>
+                  <th>#</th><th>Tracking No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Contact</th><th>From</th><th>To</th><th>Payment</th>
                   <th class="tbl--right">Amount</th><th>Status</th><th>Delivered At</th>
                 </tr>
               </thead>
@@ -53,8 +53,11 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
                   <tr>
                     <td>{{ i + 1 }}</td>
                     <td class="mono">{{ s.trackingNumber }}</td>
+                    <td class="mono">{{ s.ewayBillNumber || '—' }}</td>
                     <td>{{ s.receiverName }}</td>
                     <td class="mono">{{ s.receiverContact }}</td>
+                    <td>{{ s.fromCity || '—' }}</td>
+                    <td>{{ s.toCity || '—' }}</td>
                     <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
                     <td class="tbl--right">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
                     <td><app-shipment-status-badge [status]="s.status" /></td>
@@ -63,7 +66,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
                 }
               </tbody>
               <tfoot>
-                <tr><td colspan="5">Total</td><td class="tbl--right">₹{{ totalAmount() | number: '1.2-2' }}</td><td colspan="2"></td></tr>
+                <tr><td colspan="8">Total</td><td class="tbl--right">₹{{ totalAmount() | number: '1.2-2' }}</td><td colspan="2"></td></tr>
               </tfoot>
             </table>
           </div>

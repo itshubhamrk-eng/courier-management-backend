@@ -37,6 +37,7 @@ public record UpdateUserRequest(
         @Past LocalDate dateOfBirth,
         @Size(max = 100) String designation,
         @Size(max = 100) String department,
+        UUID departmentId,
         LocalDate joiningDate,
         UUID reportingManagerId,
         UUID branchId,

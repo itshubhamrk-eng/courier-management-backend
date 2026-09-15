@@ -5,10 +5,10 @@ import { EwayBill, CreateEwayBillRequest, UpdateEwayBillRequest } from '@core/mo
 
 /**
  * E-Way Bill Management — talks to /api/v1/eway-bills, mirroring `EwayBillController`
- * one-to-one. Shipment Booking itself carries E-Way Bill data inline in `POST`/
- * `PUT /shipments` (see `ShipmentService`); this service is for managing an already-created
- * E-Way Bill afterward — validating, uploading its document, or cancelling it — from
- * Shipment Details.
+ * one-to-one. Auto-generation itself (Part-A at booking, Part-B at Manifest dispatch)
+ * happens entirely on the backend; this service is for inspecting an already-created
+ * E-Way Bill afterward, retrying a failed generation, uploading a document, or
+ * cancelling it — from Shipment Details.
  */
 @Injectable({ providedIn: 'root' })
 export class EwayBillService {
@@ -22,9 +22,9 @@ export class EwayBillService {
     return this.api.put<EwayBill>(`${API.ewayBills}/${id}`, body);
   }
 
-  /** Re-checks the row's own current fields and moves it to VALIDATED or INVALID — only a
-   *  VALIDATED E-Way Bill lets AWB generation proceed where one is mandatory. */
-  validate(id: string) { return this.api.post<EwayBill>(`${API.ewayBills}/${id}/validate`, {}); }
+  /** Re-attempts whichever stage last failed — Part-A when no number was ever issued,
+   *  Part-B otherwise (or a fresh Part-A when EXPIRED). Only legal from FAILED/EXPIRED. */
+  retry(id: string) { return this.api.post<EwayBill>(`${API.ewayBills}/${id}/retry`, {}); }
 
   /** PDF, JPG or PNG only. */
   upload(id: string, file: File) {

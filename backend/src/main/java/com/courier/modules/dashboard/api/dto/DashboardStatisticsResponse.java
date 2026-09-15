@@ -13,7 +13,8 @@ import java.math.BigDecimal;
  * {@code walletBalance} is the caller's own branch wallet's spendable
  * ({@code availableBalance}, not {@code totalBalance} — a hold isn't spendable), null for
  * a caller with no own branch (company/platform admins, whose layout doesn't show the tile
- * anyway).
+ * anyway). {@code totalActualWeight} is the same month-to-date window as {@code
+ * todayShipments}, summed rather than counted.
  */
 public record DashboardStatisticsResponse(
         long todayShipments,
@@ -25,6 +26,7 @@ public record DashboardStatisticsResponse(
         BigDecimal todayCollection,
         long pendingDelivery,
         long totalShipments,
-        BigDecimal walletBalance
+        BigDecimal walletBalance,
+        BigDecimal totalActualWeight
 ) {
 }

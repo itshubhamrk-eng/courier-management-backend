@@ -9,6 +9,8 @@ import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.security.Roles;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,7 @@ import java.util.UUID;
  * never configure their own gateway, and an empty row per company would be pure clutter.
  * {@link #get()} returns a transient, unpersisted default instead.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompanyRazorpayConfigServiceImpl implements CompanyRazorpayConfigService {
@@ -38,11 +41,28 @@ public class CompanyRazorpayConfigServiceImpl implements CompanyRazorpayConfigSe
     private final CompanyRazorpayConfigRepository repository;
     private final AuditService auditService;
 
+    /**
+     * A stored {@code keySecret} that no longer decrypts under the running
+     * {@code SECRETS_ENCRYPTION_KEY} (rotated after the row was saved, or the row was
+     * written under a different key) must not 500 every read of company settings — this is
+     * a masked read, not a use of the secret. Treated the same as "never configured"; the
+     * company admin has to re-enter the credentials to actually fix it. Logged loudly since
+     * it hides a real data problem otherwise.
+     */
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(COMPANY_ADMIN_ONLY)
     public CompanyRazorpayConfig get() {
-        return repository.findByCompanyId(requireCompany()).orElseGet(CompanyRazorpayConfig::new);
+        UUID companyId = requireCompany();
+        try {
+            return repository.findByCompanyId(companyId).orElseGet(CompanyRazorpayConfig::new);
+        } catch (DataAccessException | IllegalStateException e) {
+            log.warn("Razorpay config for company {} could not be decrypted — treating as "
+                    + "not configured. The stored key_secret_encrypted no longer matches "
+                    + "SECRETS_ENCRYPTION_KEY; the company admin must re-enter it.",
+                    companyId, e);
+            return new CompanyRazorpayConfig();
+        }
     }
 
     @Override

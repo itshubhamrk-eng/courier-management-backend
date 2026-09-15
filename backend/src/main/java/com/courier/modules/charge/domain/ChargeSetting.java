@@ -31,11 +31,15 @@ import java.util.UUID;
  * table directly on every read. {@code chargeId} is a real, same-module foreign key
  * ({@code RESTRICT}), unlike the cross-module ids this project leaves as plain columns.
  *
- * <p><b>Slab bands are half-open, {@code [from, to)}</b> — the same convention
- * {@code master.domain.WeightSlab} uses, chosen over {@code Rate}'s closed-both-ends
- * convention because a company can carry a KM slab where the boundary is a round
- * number (0/50/100 km) and "does 50 km belong to the 0-50 or the 50-100 band" needs one
- * unambiguous answer. See {@link #overlaps(ChargeSetting)}.
+ * <p><b>Slab bands are closed, {@code [from, to]}, both ends inclusive</b> — direct
+ * request ("use 1&lt;= w and w&lt;=20"): a band typed as "1-20" must include 20 itself,
+ * matching how a company admin naturally reads a slab row (was half-open {@code [from,
+ * to)}, the same convention {@code master.domain.WeightSlab} still uses — deliberately
+ * diverged from that here, this module's own bands are typed by a company admin as plain
+ * "1-20"/"21-40" pairs, not resolved by the system off round KM boundaries the way
+ * District Level Freight's own slabs are). Adjacent bands must therefore leave a gap
+ * (1-20, 21-40) rather than touch (1-20, 20-40 now overlaps at 20). See
+ * {@link #overlaps(ChargeSetting)}.
  */
 @Entity
 @Getter
@@ -115,8 +119,9 @@ public class ChargeSetting extends CompanyOwnedEntity {
      * True when this setting and {@code other} band the same KG and/or KM range, for the
      * same {@link #chargeSlabType}. Only meaningful for two {@code SLAB} settings sharing
      * both a {@link #chargeId} and a {@link #chargeSlabType} — the caller narrows to that
-     * before calling. Half-open on both dimensions: {@code [from, to)}, so a band ending at
-     * 50 and one starting at 50 do not overlap, but do if either extends past it.
+     * before calling. Closed on both dimensions: {@code [from, to]}, so a band ending at
+     * 50 and one starting at 50 now overlap (both would match a value of exactly 50) —
+     * adjacent bands must leave a gap instead of touching. See the class doc.
      */
     public boolean overlaps(ChargeSetting other) {
         if (other == null || chargeType != ChargeType.SLAB || other.chargeType != ChargeType.SLAB
@@ -133,7 +138,7 @@ public class ChargeSetting extends CompanyOwnedEntity {
     }
 
     private static boolean rangesOverlap(BigDecimal aFrom, BigDecimal aTo, BigDecimal bFrom, BigDecimal bTo) {
-        return aFrom.compareTo(bTo) < 0 && bFrom.compareTo(aTo) < 0;
+        return aFrom.compareTo(bTo) <= 0 && bFrom.compareTo(aTo) <= 0;
     }
 
     public void applyInvariants() {
@@ -207,7 +212,7 @@ public class ChargeSetting extends CompanyOwnedEntity {
         if (to.compareTo(from) <= 0) {
             throw new BusinessRuleException(
                     "to-" + label.toLowerCase() + " must be greater than from-" + label.toLowerCase()
-                            + " (the slab is [from, to)).");
+                            + " (the slab is [from, to]).");
         }
     }
 

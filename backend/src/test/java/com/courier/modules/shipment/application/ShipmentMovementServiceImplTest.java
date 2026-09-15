@@ -103,10 +103,18 @@ class ShipmentMovementServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private com.courier.modules.districtfreight.application.FreightCalculationService freightCalculationService;
+    @Mock private com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
+    @Mock private com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
     @Mock private ShipmentAssetRepository shipmentAssetRepository;
+    @Mock private com.courier.modules.shipment.domain.DeliveryDispatchOtpRepository deliveryDispatchOtpRepository;
+    @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock private com.courier.modules.company.application.CompanySettingsService companySettingsService;
+    @Mock private com.courier.modules.communication.application.CommunicationSettingService communicationSettingService;
+    @Mock private com.courier.modules.communication.application.provider.SmsProvider smsProvider;
+    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private ShipmentServiceImpl service;
 
@@ -118,8 +126,10 @@ class ShipmentMovementServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, freightCalculationService, auditService, eventPublisher, fileStoragePort,
-                shipmentAssetRepository);
+                ewayBillService, freightCalculationService, branchPincodeMappingService,
+                applicableChargesCalculator, auditService, eventPublisher, fileStoragePort,
+                shipmentAssetRepository, deliveryDispatchOtpRepository, passwordEncoder, companySettingsService,
+                communicationSettingService, smsProvider, objectMapper);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
@@ -130,6 +140,13 @@ class ShipmentMovementServiceImplTest {
         // unconditionally reads the payment mode) doesn't publish ToPayReceivedAtDeliveryBranch
         // for tests that don't care about payment mode at all. Overridden per test below.
         when(paymentModeService.getById(any())).thenReturn(paymentMode(true));
+        // Collect-at-booking now also fetches the charge and checks instantCommission at
+        // scanOneIn's finalDestination — harmless defaults (no commission, since
+        // instantCommission is off) for tests that don't care about commission at all.
+        // Overridden per test below.
+        when(chargeRepository.findByShipmentIdWithinCompany(any(), any()))
+                .thenReturn(Optional.of(ShipmentCharge.builder().build()));
+        when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE").build());
     }
 
     @AfterEach
@@ -406,6 +423,70 @@ class ShipmentMovementServiceImplTest {
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
     }
 
+    @Test
+    @DisplayName("inScan at the shipment's own final delivery branch credits only the "
+            + "booking branch's own commission (not the company's) for a PREPAID shipment "
+            + "when its booking branch has instantCommission on")
+    void inScanAtFinalDestinationPublishesCommissionWhenInstant() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(ShipmentCharge.builder()
+                        .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                        .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                        .build()));
+        when(branchService.getById(shipment.getBookingBranchId())).thenReturn(
+                Branch.builder().branchCode("PUNE").instantCommission(true).build());
+        when(branchService.instantCommissionOf(shipment.getBookingBranchId())).thenReturn(true);
+
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.InScanCommissionEarned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        // commissionOnBasicFreight (10) + branchCommissionOnOtherAmount (5), never the
+        // stored totalCommission, which also folds in the company's own cut.
+        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
+        assertThat(captor.getValue().shipmentId()).isEqualTo(shipment.getId());
+        assertThat(captor.getValue().bookingBranchId()).isEqualTo(shipment.getBookingBranchId());
+    }
+
+    @Test
+    @DisplayName("inScan at the shipment's own final delivery branch publishes no commission "
+            + "when the booking branch has instantCommission off")
+    void inScanAtFinalDestinationSkipsCommissionWhenNotInstant() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(ShipmentCharge.builder()
+                        .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                        .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                        .build()));
+        when(branchService.getById(shipment.getBookingBranchId())).thenReturn(
+                Branch.builder().branchCode("PUNE").instantCommission(false).build());
+
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
+    }
+
+    @Test
+    @DisplayName("inScan at the shipment's own final delivery branch publishes no booking-branch "
+            + "commission for a TO_PAY/COD shipment — that credits later, on actual delivery")
+    void inScanAtFinalDestinationSkipsCommissionWhenNotCollectAtBooking() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, shipment.getTrackingNumber()))
+                .thenReturn(Optional.of(shipment));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(false));
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(ShipmentCharge.builder().netAmount(BigDecimal.ZERO).build()));
+
+        service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
+    }
+
     // -------------------------------------------------------------------- assignOutForDelivery
 
     @Test
@@ -415,7 +496,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
 
-        var result = service.assignOutForDelivery(List.of(shipment.getId()), UUID.randomUUID());
+        var result = service.assignOutForDelivery(List.of(shipment.getId()), UUID.randomUUID(), null, null, null);
 
         assertThat(result.failureCount()).isEqualTo(1);
     }
@@ -432,7 +513,7 @@ class ShipmentMovementServiceImplTest {
         when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        var result = service.assignOutForDelivery(List.of(shipment.getId()), deliveryUser);
+        var result = service.assignOutForDelivery(List.of(shipment.getId()), deliveryUser, null, null, null);
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.OUT_FOR_DELIVERY);
@@ -653,6 +734,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Branch.builder().branchCode("PUNE").build());
         when(branchService.getById(BOOKING_BRANCH))
                 .thenReturn(Branch.builder().branchCode("MUMBAI").instantCommission(true).build());
+        when(branchService.instantCommissionOf(BOOKING_BRANCH)).thenReturn(true);
 
         service.deliver(shipment.getId(),
                 new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));

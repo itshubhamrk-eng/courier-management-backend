@@ -32,9 +32,11 @@ import { ShipmentService } from './shipment.service';
           <app-charge-summary [charges]="{
             freight: charges()!.freight, fuelCharge: charges()!.fuelCharge, handlingCharge: charges()!.handlingCharge,
             odaCharge: charges()!.odaCharge, insuranceCharge: charges()!.insuranceCharge,
-            applicableCharges: charges()!.applicableCharges, gstAmount: charges()!.gstAmount,
+            applicableCharges: charges()!.applicableCharges, applicableChargeLines: charges()!.applicableChargeLines,
+            gstAmount: charges()!.gstAmount,
             discountAmount: charges()!.discountAmount, roundOff: charges()!.roundOff,
             otherCharges: charges()!.otherCharges, appointmentDeliveryCharge: charges()!.appointmentDeliveryCharge,
+            doorDeliveryCharge: charges()!.doorDeliveryCharge,
             netAmount: charges()!.netAmount
           }" />
         </app-card>

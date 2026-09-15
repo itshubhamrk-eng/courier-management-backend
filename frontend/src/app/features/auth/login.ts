@@ -10,7 +10,8 @@ import { environment } from '@env/environment';
 import { companyCodeForHostname } from '@core/config/company-domain-map';
 import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
 
-/** Sign-in. Company slug (company code) is optional — the backend resolves it. */
+/** Sign-in. Company slug (company code) is optional — the backend resolves it. The
+ *  identifier field accepts either an email or a registered mobile number. */
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -31,7 +32,7 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
             <button type="button" class="login__unlock" (click)="clearCompanyLock()">Not your company? Sign in without one</button>
           }
         }
-        <app-input [control]="ctrl('email')" label="Email" type="email" placeholder="you@company.com"
+        <app-input [control]="ctrl('email')" label="Email or Mobile Number" type="text" placeholder="you@company.com or mobile number"
                    icon="mail" [required]="true" autocomplete="username" [maxLength]="255" />
         <app-input [control]="ctrl('password')" label="Password" type="password" placeholder="••••••••"
                    icon="lock" [required]="true" [togglePassword]="true" autocomplete="current-password" [maxLength]="72" />
@@ -117,7 +118,11 @@ export class Login {
 
   readonly form = this.fb.nonNullable.group({
     companyCode: ['', Validators.maxLength(50)],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
+    // No Validators.email — this field accepts a mobile number too (direct request:
+    // "user able to login using there contact number as well"); the backend resolves
+    // either shape to the account's own email, or fails with the usual invalid-
+    // credentials message, so no client-side shape check is needed here.
+    email: ['', [Validators.required, Validators.maxLength(255)]],
     password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
     rememberMe: [false]
   });

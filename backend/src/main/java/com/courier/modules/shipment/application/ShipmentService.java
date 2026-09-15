@@ -144,6 +144,14 @@ public interface ShipmentService {
     Map<UUID, String> invoiceNumbersFor(Collection<UUID> shipmentIds);
 
     /**
+     * Current E-Way Bill's own provider-issued number per shipment (distinct from
+     * {@link #invoiceNumbersFor}) — the THC's own E-WAY BILL NO column and the DRS's
+     * own row. A shipment missing from the returned map has no E-Way Bill, or one whose
+     * Part-A has not (yet) succeeded.
+     */
+    Map<UUID, String> ewayBillNumbersFor(Collection<UUID> shipmentIds);
+
+    /**
      * Every POD-kind asset (photo + signature, every historical upload, newest first) per
      * shipment, for the POD Review table's photo-preview column — batch-fetched the same way
      * as {@link #netAmountsFor}. A shipment missing from the returned map has no POD asset at
@@ -229,9 +237,17 @@ public interface ShipmentService {
                               String remarks) {
     }
 
-    /** The persisted charge row plus the resolved route/rate codes, for a display-ready response. */
+    /** The persisted charge row plus the resolved route/rate codes, for a display-ready
+     *  response. {@code applicableChargeLines} is resolved live off the shipment's own
+     *  stored booking/delivery branch, chargeable weight and freight — not persisted, the
+     *  same "recompute at read time" treatment {@code matchedRouteCode}/{@code
+     *  matchedRateCode} already get — so a charge/setting renamed or reconfigured after
+     *  booking still shows correctly; {@code charge.applicableCharges} (the persisted sum)
+     *  is untouched and remains the source of truth for the actual net amount. */
     record ShipmentCharges(com.courier.modules.shipment.domain.ShipmentCharge charge,
-                           String matchedRouteCode, String matchedRateCode) {
+                           String matchedRouteCode, String matchedRateCode,
+                           java.util.List<com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator.Line>
+                                   applicableChargeLines) {
     }
 
     // =================================================================== Shipment Movement (V19)
@@ -303,8 +319,38 @@ public interface ShipmentService {
      * Assigns a delivery user to every shipment id, each of which must be {@code IN_SCAN}.
      * Creates or replaces that shipment's {@code DeliveryAssignment} row and moves it to
      * {@code OUT_FOR_DELIVERY}. Per-item result, same shape as {@link #inScan}.
+     * {@code vehicleId}/{@code fuelCost}/{@code deliveryCharge} are all optional — same
+     * "trip expenses, no validation beyond what the controller already did" treatment
+     * {@code ManifestService.dispatch} gives its own trip-expense fields — and are
+     * stamped on every row this call touches, same as the generated {@code drsNumber}.
      */
-    BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId);
+    BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId,
+                                             UUID vehicleId, java.math.BigDecimal fuelCost,
+                                             java.math.BigDecimal deliveryCharge);
+
+    /** Result of a successful delivery-OTP request — mirrors {@code ManifestService
+     *  .DispatchOtpIssued}, kept as its own record since {@code modules.shipment} must not
+     *  depend on {@code modules.manifest} (see {@code ManifestServiceImpl}'s class doc). */
+    record DeliveryOtpIssued(String maskedMobile, int expiresInMinutes) {
+    }
+
+    /**
+     * Generates a 4-digit OTP, stores its hash against a re-issuable per-company/delivery-user
+     * challenge ({@code DeliveryDispatchOtp}), and sends it to that delivery user's mobile over
+     * the company's configured SMS channel — same mechanism {@code ManifestService
+     * .requestDispatchOtp} uses for the driver dispatch OTP. Refuses an unknown delivery user or
+     * one with no mobile number on file.
+     */
+    DeliveryOtpIssued requestDeliveryDispatchOtp(UUID deliveryUserId);
+
+    /**
+     * Verifies {@code otp} against the delivery user's currently-issued code — a wrong code
+     * counts against a small attempt limit before the code is invalidated outright and a fresh
+     * one must be requested. Verification is currently optional: {@link #assignOutForDelivery}
+     * does not require it to have succeeded first, same "optional for now" stance
+     * {@code ManifestService.verifyDispatchOtp} takes for THC dispatch.
+     */
+    void verifyDeliveryDispatchOtp(UUID deliveryUserId, String otp);
 
     /**
      * Closes a delivery: captures receiver name (required), remarks, and the optional
@@ -358,7 +404,8 @@ public interface ShipmentService {
     record DrsShipmentRow(UUID shipmentId, String shipmentNumber, String trackingNumber,
                           String receiverName, String receiverContact, UUID paymentModeId,
                           BigDecimal netAmount, com.courier.modules.shipment.domain.ShipmentStatus status,
-                          java.time.Instant deliveredAt) {
+                          java.time.Instant deliveredAt, String ewayBillNumber,
+                          String fromCity, String toCity) {
     }
 
     record DrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,

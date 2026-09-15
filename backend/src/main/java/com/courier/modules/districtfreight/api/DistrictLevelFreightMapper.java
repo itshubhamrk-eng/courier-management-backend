@@ -92,6 +92,7 @@ public class DistrictLevelFreightMapper {
         return new FreightCalculationResponse(
                 r.matchedFreightId(), r.bookingBranchId(), r.bookingBranchCode(), r.bookingBranchName(),
                 r.districtId(), r.districtCode(), r.districtName(), r.destinationPincode(),
+                r.destinationCityName(),
                 r.chargeableWeight(), r.weightSlabLabel(), r.ratePerKg(), r.baseFreight(),
                 r.odaApplicable(), r.odaCharge(), r.totalFreight());
     }

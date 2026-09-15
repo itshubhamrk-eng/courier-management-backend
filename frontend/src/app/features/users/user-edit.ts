@@ -6,6 +6,7 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { CreateUserRequest, UpdateUserRequest, UserProfile } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
+import { Department } from '@core/models/department.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UserForm } from './components/user-form';
@@ -27,7 +28,7 @@ import { Lookup, UserService } from './user.service';
       } @else if (!user()) {
         <app-card><p class="empty">User not found or outside your scope.</p></app-card>
       } @else {
-        <app-user-form mode="edit" [user]="user()" [branches]="branches()" [hubs]="hubs()"
+        <app-user-form mode="edit" [user]="user()" [departments]="departments()" [branches]="branches()" [hubs]="hubs()"
                        [managers]="managers()" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
       }
     </div>
@@ -44,6 +45,7 @@ export class UserEdit implements OnInit {
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly user = signal<UserProfile | null>(null);
+  readonly departments = signal<Department[]>([]);
   readonly branches = signal<Lookup[]>([]);
   readonly hubs = signal<Lookup[]>([]);
   readonly managers = signal<Lookup[]>([]);
@@ -57,10 +59,13 @@ export class UserEdit implements OnInit {
 
   private load(): void {
     this.loading.set(true);
-    forkJoin({ user: this.service.get(this.id), branches: this.service.branches(), hubs: this.service.hubs(), managers: this.service.managers(this.id) })
-      .subscribe({
+    forkJoin({
+      user: this.service.get(this.id), departments: this.service.departments(),
+      branches: this.service.branches(), hubs: this.service.hubs(), managers: this.service.managers(this.id)
+    }).subscribe({
         next: (l) => {
-          this.user.set(l.user); this.branches.set(l.branches); this.hubs.set(l.hubs); this.managers.set(l.managers);
+          this.user.set(l.user); this.departments.set(l.departments); this.branches.set(l.branches);
+          this.hubs.set(l.hubs); this.managers.set(l.managers);
           this.breadcrumb.set([{ label: 'Users', route: '/users' }, { label: l.user.displayName, route: `/users/${this.id}` }, { label: 'Edit' }]);
           this.loading.set(false);
         },

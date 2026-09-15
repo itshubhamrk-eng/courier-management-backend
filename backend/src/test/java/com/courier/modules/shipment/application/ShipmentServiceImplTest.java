@@ -107,6 +107,8 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private FreightCalculationService freightCalculationService;
+    @Mock private com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
+    @Mock private com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
     @Mock private PaymentModeService paymentModeService;
@@ -118,6 +120,12 @@ class ShipmentServiceImplTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private FileStoragePort fileStoragePort;
     @Mock private ShipmentAssetRepository shipmentAssetRepository;
+    @Mock private com.courier.modules.shipment.domain.DeliveryDispatchOtpRepository deliveryDispatchOtpRepository;
+    @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock private com.courier.modules.company.application.CompanySettingsService companySettingsService;
+    @Mock private com.courier.modules.communication.application.CommunicationSettingService communicationSettingService;
+    @Mock private com.courier.modules.communication.application.provider.SmsProvider smsProvider;
+    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private ShipmentServiceImpl service;
 
@@ -129,8 +137,10 @@ class ShipmentServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, freightCalculationService, auditService, eventPublisher, fileStoragePort,
-                shipmentAssetRepository);
+                ewayBillService, freightCalculationService, branchPincodeMappingService,
+                applicableChargesCalculator, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository,
+                deliveryDispatchOtpRepository, passwordEncoder, companySettingsService, communicationSettingService,
+                smsProvider, objectMapper);
 
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
@@ -139,6 +149,10 @@ class ShipmentServiceImplTest {
         when(branchShipmentSequenceRepository.nextValue()).thenReturn(1L);
         when(companyShipmentSequenceRepository.nextValue()).thenReturn(1L);
         when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE").build());
+        Branch deliveryBranch = Branch.builder().branchCode("MUMBAI").build();
+        deliveryBranch.setId(DELIVERY_BRANCH);
+        when(branchPincodeMappingService.findBranchForPincode(any()))
+                .thenReturn(java.util.Optional.of(deliveryBranch));
         when(itemRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(chargeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(historyRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -155,6 +169,9 @@ class ShipmentServiceImplTest {
         // below stays valid without needing to know about District Level Freight at all.
         when(freightCalculationService.calculate(any(), any(), any(), any()))
                 .thenReturn(freightCalculationResult(new BigDecimal("100.00"), BigDecimal.ZERO));
+
+        when(companySettingsService.get())
+                .thenReturn(com.courier.modules.company.domain.CompanySettings.builder().build());
     }
 
     @AfterEach
@@ -517,72 +534,30 @@ class ShipmentServiceImplTest {
 
         service.create(command());
 
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
         verify(eventPublisher).publishEvent(any(ShipmentEvent.PrepaidBookingConfirmed.class));
     }
 
-    // ------------------------------------------------------------ transitionToDispatched
+    // Commission-on-dispatch tests moved to ShipmentMovementServiceImplTest's scanOneIn
+    // section — commission now credits on in-scan at the final delivery branch, not on
+    // Trip Challan (manifest dispatch) creation. See ShipmentEvent.InScanCommissionEarned.
 
     @Test
-    @DisplayName("dispatching a manifest credits only the branch's own commission (not the "
-            + "company's) for a PREPAID shipment when its booking branch has instantCommission on")
-    void dispatchPublishesCommissionWhenInstant() {
+    @DisplayName("dispatching a manifest no longer publishes any commission event — "
+            + "commission credits later, on in-scan at the final delivery branch")
+    void dispatchNeverPublishesCommission() {
         Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        UUID manifestId = UUID.randomUUID();
-        UUID vehicleId = UUID.randomUUID();
         when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
                 .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
         when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
         when(branchService.getById(BOOKING_BRANCH)).thenReturn(
                 Branch.builder().branchCode("PUNE").instantCommission(true).build());
 
-        service.transitionToDispatched(List.of(shipment.getId()), manifestId, vehicleId, BOOKING_BRANCH);
-
-        org.mockito.ArgumentCaptor<ShipmentEvent.DispatchCommissionEarned> captor =
-                org.mockito.ArgumentCaptor.forClass(ShipmentEvent.DispatchCommissionEarned.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        // commissionOnBasicFreight (10) + branchCommissionOnOtherAmount (5), never the
-        // stored totalCommission, which also folds in the company's own cut.
-        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
-        assertThat(captor.getValue().shipmentId()).isEqualTo(shipment.getId());
-        assertThat(captor.getValue().bookingBranchId()).isEqualTo(BOOKING_BRANCH);
-    }
-
-    @Test
-    @DisplayName("dispatching a manifest publishes no commission when the booking branch has "
-            + "instantCommission off")
-    void dispatchSkipsCommissionWhenNotInstant() {
-        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
-                .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
-        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
-        when(branchService.getById(BOOKING_BRANCH)).thenReturn(
-                Branch.builder().branchCode("PUNE").instantCommission(false).build());
-
         service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
                 BOOKING_BRANCH);
 
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
-    }
-
-    @Test
-    @DisplayName("dispatching a manifest publishes no commission for a TO_PAY/COD shipment")
-    void dispatchSkipsCommissionWhenNotCollectAtBooking() {
-        Shipment shipment = existingShipment(ShipmentStatus.MANIFEST_CREATED);
-        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
-                .thenReturn(List.of(shipment));
-        when(chargeRepository.findByShipmentIdIn(List.of(shipment.getId())))
-                .thenReturn(List.of(charge(shipment.getId(), "10.0000", "5.0000")));
-        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(false));
-
-        service.transitionToDispatched(List.of(shipment.getId()), UUID.randomUUID(), UUID.randomUUID(),
-                BOOKING_BRANCH);
-
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DispatchCommissionEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
+        verify(chargeRepository, never()).findByShipmentIdIn(any());
     }
 
     @Test
@@ -597,7 +572,7 @@ class ShipmentServiceImplTest {
     @DisplayName("a missing pickup or delivery pincode is refused")
     void blankPincodeRejected() {
         CreateShipmentCommand withoutPincode = new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, null, "", DELIVERY_PINCODE,
+                BOOKING_BRANCH, null, "", DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -605,7 +580,7 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(withoutPincode))
                 .isInstanceOf(BusinessRuleException.class)
@@ -774,7 +749,7 @@ class ShipmentServiceImplTest {
 
     private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 senderName, senderAddress, senderContact,
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -782,12 +757,12 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithOdaOverride(BigDecimal odaCharge) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -796,12 +771,12 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithRatePerKgOverride(BigDecimal ratePerKgOverride) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -810,12 +785,12 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null, null, null, ratePerKgOverride,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static CreateShipmentCommand commandWithManualNumber(String manualShipmentNumber) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, manualShipmentNumber, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, manualShipmentNumber, PICKUP_PINCODE, DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -823,12 +798,12 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static UpdateShipmentCommand updateCommand(Long expectedVersion) {
         return new UpdateShipmentCommand(
-                expectedVersion, DELIVERY_BRANCH, PICKUP_PINCODE, DELIVERY_PINCODE,
+                expectedVersion, PICKUP_PINCODE, DELIVERY_PINCODE,
                 "Asha Shah", "221B Baker Street, Pune", "9876543210",
                 "Rahul Verma (updated)", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -836,13 +811,13 @@ class ShipmentServiceImplTest {
                 List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
                         null, null, null, null, false, false)),
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static CreateShipmentCommand command(String senderName, String senderAddress, String senderContact,
                                                    boolean crossing, java.util.UUID crossingBranchId) {
         return new CreateShipmentCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
                 senderName, senderAddress, senderContact,
                 "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
@@ -851,7 +826,7 @@ class ShipmentServiceImplTest {
                         null, null, null, null, false, false)),
                 null, null, null, null, crossing,
                 crossingBranchId == null ? null : List.of(crossingBranchId), null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static Shipment existingShipment(ShipmentStatus status) {
@@ -929,15 +904,15 @@ class ShipmentServiceImplTest {
 
         return new PricingResult(route, rate, new BigDecimal("5.000"), BigDecimal.ZERO,
                 new BigDecimal("5.000"), freight, new BigDecimal("10.00"),
-                new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("5.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(),
                 new BigDecimal("20.70"), BigDecimal.ZERO, new BigDecimal("0.30"), netAmount, null);
     }
 
     private static FreightCalculationResult freightCalculationResult(BigDecimal baseFreight, BigDecimal odaCharge) {
         boolean odaApplicable = odaCharge.signum() > 0;
         return new FreightCalculationResult(UUID.randomUUID(), BOOKING_BRANCH, "PUNE", "Pune Hub",
-                UUID.randomUUID(), "PUN", "Pune", DELIVERY_PINCODE, new BigDecimal("5.000"),
-                "1-15 KG", new BigDecimal("20.00"), baseFreight, odaApplicable, odaCharge,
+                UUID.randomUUID(), "PUN", "Pune", UUID.randomUUID(), DELIVERY_PINCODE, "Pune",
+                new BigDecimal("5.000"), "1-15 KG", new BigDecimal("20.00"), baseFreight, odaApplicable, odaCharge,
                 baseFreight.add(odaCharge));
     }
 }

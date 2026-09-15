@@ -412,6 +412,47 @@ class AuthServiceTest {
                 .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
     }
 
+    // ------------------------------------------------------ mobile-number login
+
+    @Test
+    @DisplayName("a mobile number resolves to its account's own email before authenticating")
+    void mobileNumberResolvesToOwnEmail() {
+        user.setMobile("9876543210");
+        when(userRepository.findFirstByMobileOrderByCreatedAtAsc("9876543210")).thenReturn(Optional.of(user));
+        stubSuccessfulAuthentication();
+
+        authService.login(new AuthService.LoginCommand(
+                companyId, null, "9876543210", "correct-password", false, "10.0.0.1", "JUnit", null));
+
+        ArgumentCaptor<UsernamePasswordAuthenticationToken> token =
+                ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+        verify(authenticationManager).authenticate(token.capture());
+        assertThat(token.getValue().getPrincipal()).isEqualTo("ops@acme.test");
+    }
+
+    @Test
+    @DisplayName("an unmatched mobile number degrades to the same invalid-credentials response "
+            + "as an unknown email, never a separate error")
+    void unmatchedMobileNumberDegradesGracefully() {
+        when(userRepository.findFirstByMobileOrderByCreatedAtAsc("9999999999")).thenReturn(Optional.empty());
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
+
+        UnauthorizedException failure = catchUnauthorized(() -> authService.login(new AuthService.LoginCommand(
+                companyId, null, "9999999999", "pw", false, "10.0.0.1", "JUnit", null)));
+
+        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    @DisplayName("an email-shaped identifier is never treated as a mobile number")
+    void emailShapedIdentifierNeverTreatedAsMobile() {
+        stubSuccessfulAuthentication();
+
+        authService.login(command("correct-password", false));
+
+        verify(userRepository, never()).findFirstByMobileOrderByCreatedAtAsc(anyString());
+    }
+
     // ---------------------------------------------------------------- refresh
 
     @Test

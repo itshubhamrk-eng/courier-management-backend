@@ -30,6 +30,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
 
     /**
+     * Mobile-number login (direct request: "user able to login using there contact
+     * number as well") — same company-scoping requirement as {@link #findByEmail},
+     * the caller must bind {@code CompanyContext} first. {@code mobile} carries no
+     * uniqueness constraint at the DB level (unlike {@code email}), so this is
+     * {@code findFirst}, oldest account first, rather than a plain {@code findBy}
+     * that would throw on a duplicate — acceptable here since {@code
+     * company.UserServiceImpl} is expected to keep it de facto unique per company,
+     * same trust level {@code company.User.mobile} itself already operates under.
+     */
+    Optional<User> findFirstByMobileOrderByCreatedAtAsc(String mobile);
+
+    /**
      * Explicit company predicate rather than {@code findById}, because a PK load
      * bypasses the Hibernate filter. Belt and braces: the filter also applies, so
      * the company is checked twice.

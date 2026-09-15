@@ -4,6 +4,8 @@ import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.CompanyRazorpayConfig;
 import com.courier.modules.finance.domain.CompanyRazorpayConfigRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,6 +24,7 @@ import java.util.UUID;
  * ones, which is the entire point of {@code PaymentGatewayPort} already being
  * gateway-agnostic.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CompanyPaymentGatewayResolver {
@@ -30,11 +33,24 @@ public class CompanyPaymentGatewayResolver {
     private final PaymentGatewayPort platformDefaultGateway;
     private final RestClient.Builder restClientBuilder;
 
+    /**
+     * A stored {@code keySecret} that no longer decrypts under the running
+     * {@code SECRETS_ENCRYPTION_KEY} must not break wallet recharge outright — falls back to
+     * the platform-wide gateway, same as "this company never configured its own", rather than
+     * 500ing checkout. See the matching guard in {@code CompanyRazorpayConfigServiceImpl.get}.
+     */
     public PaymentGatewayPort resolve(UUID companyId) {
-        return repository.findByCompanyId(companyId)
-                .filter(CompanyRazorpayConfig::hasCredentials)
-                .<PaymentGatewayPort>map(this::toGateway)
-                .orElse(platformDefaultGateway);
+        try {
+            return repository.findByCompanyId(companyId)
+                    .filter(CompanyRazorpayConfig::hasCredentials)
+                    .<PaymentGatewayPort>map(this::toGateway)
+                    .orElse(platformDefaultGateway);
+        } catch (DataAccessException | IllegalStateException e) {
+            log.warn("Razorpay config for company {} could not be decrypted — falling back "
+                    + "to the platform gateway. The company admin must re-enter their "
+                    + "credentials.", companyId, e);
+            return platformDefaultGateway;
+        }
     }
 
     private PaymentGatewayPort toGateway(CompanyRazorpayConfig config) {

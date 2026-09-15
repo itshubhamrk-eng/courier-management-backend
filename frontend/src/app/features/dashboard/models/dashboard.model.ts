@@ -12,7 +12,10 @@ export interface DashboardStatistics {
   inTransit: number;
   pending: number;
   totalRevenue: number;
+  /** Sum of actualWeight (kg) over the same month-to-date window as todayShipments. */
+  totalActualWeight: number;
   activeBranches: number;
+  totalBranches: number;
   activeHubs: number;
   /** Branch/Hub scoped only; null for company/platform scope. */
   walletBalance: number | null;
@@ -34,8 +37,8 @@ export interface DashboardStatistics {
 }
 
 export const emptyStatistics = (): DashboardStatistics => ({
-  todayShipments: 0, delivered: 0, inTransit: 0, pending: 0, totalRevenue: 0,
-  activeBranches: 0, activeHubs: 0, walletBalance: null,
+  todayShipments: 0, delivered: 0, inTransit: 0, pending: 0, totalRevenue: 0, totalActualWeight: 0,
+  activeBranches: 0, totalBranches: 0, activeHubs: 0, walletBalance: null,
   todayBookings: 0, todayCollection: 0, pendingDelivery: 0,
   toReceive: 0, toDispatch: 0, inSorting: 0,
   totalCompanies: 0, activeCompanies: 0, totalShipments: 0

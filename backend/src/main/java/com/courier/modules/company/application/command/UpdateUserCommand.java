@@ -27,6 +27,7 @@ public record UpdateUserCommand(
         LocalDate dateOfBirth,
         String designation,
         String department,
+        UUID departmentId,
         LocalDate joiningDate,
         UUID reportingManagerId,
         UUID branchId,

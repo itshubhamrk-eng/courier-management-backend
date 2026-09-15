@@ -104,8 +104,8 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
 
         return new FreightCalculationResult(freight.getId(), branch.branchId(), branch.branchCode(),
                 branch.branchName(), coverage.districtId(), coverage.districtCode(), coverage.districtName(),
-                coverage.pincodeCode(), chargeableWeight, slab.label(), slab.ratePerKg(), baseFreight,
-                odaApplies, odaCharge, totalFreight);
+                coverage.pincodeId(), coverage.pincodeCode(), coverage.cityName(), chargeableWeight, slab.label(),
+                slab.ratePerKg(), baseFreight, odaApplies, odaCharge, totalFreight);
     }
 
     private UUID requireCompany() {

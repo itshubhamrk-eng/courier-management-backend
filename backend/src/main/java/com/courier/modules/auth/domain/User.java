@@ -82,6 +82,15 @@ public class User extends CompanyOwnedEntity {
     private String phone;
 
     /**
+     * The contact number {@code company.User} owns and writes — same shared-kernel
+     * pattern as {@link #branchId}/{@link #hubId} below (auth never writes this
+     * column either). Read here so mobile-number login can look a user up by it —
+     * see {@code AuthService#resolveLoginEmail}.
+     */
+    @Column(name = "mobile", length = 20)
+    private String mobile;
+
+    /**
      * The branch/hub this account is staffed at, if any — the same {@code branch_id}/
      * {@code hub_id} columns {@code company.User} maps on the shared {@code users}
      * table (see {@code MEMORY/modules/user.md}'s "shared kernel" note). Read here so

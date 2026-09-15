@@ -140,8 +140,9 @@ public final class DefaultRoleCatalog {
                     Set.of(
                             "COMPANY_READ", "SETTINGS_READ", "BRANCH_READ", "HUB_READ",
                             // 1. Create branch users — its own counter staff, and nobody else's.
+                            // DEPARTMENT_READ: the department picker on that same form.
                             "USER_READ", "USER_SEARCH", "USER_CREATE", "USER_UPDATE",
-                            "USER_ASSIGN", "USER_ACTIVATE", "USER_DEACTIVATE",
+                            "USER_ASSIGN", "USER_ACTIVATE", "USER_DEACTIVATE", "DEPARTMENT_READ",
                             // 2. Assign menus. MENU_ASSIGN, never PERMISSION_ASSIGN: the
                             // first hands a subordinate role screens the manager already
                             // reaches, the second opens the whole catalogue.

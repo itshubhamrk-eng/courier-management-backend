@@ -30,7 +30,9 @@ public class PricingMapper {
                 request.bookingDate(),
                 request.discountPercentage(),
                 request.discountAmount(),
-                request.freightFactorOverride());
+                request.freightFactorOverride(),
+                request.totalActualWeight() == null ? request.actualWeight() : request.totalActualWeight(),
+                request.numberOfPackages() == null ? 1 : request.numberOfPackages());
     }
 
     /**
@@ -48,6 +50,9 @@ public class PricingMapper {
                 result.odaCharge(),
                 result.insuranceCharge(),
                 result.applicableCharges(),
+                result.applicableChargeLines().stream()
+                        .map(l -> new ChargeBreakup.ApplicableChargeLine(l.chargeName(), l.amount()))
+                        .toList(),
                 result.gstAmount(),
                 result.discountAmount(),
                 result.roundOff(),

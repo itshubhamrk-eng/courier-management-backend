@@ -19,6 +19,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -68,6 +69,22 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
      *  created before this column existed. */
     @Column(name = "drs_number", length = 20)
     private String drsNumber;
+
+    /** Optional — the delivery boy's own vehicle for this run, not validated against
+     *  {@code manifest.domain.Vehicle} here (the manifest module is the only one allowed
+     *  to depend the other way; see {@code ManifestServiceImpl}'s class doc). The
+     *  controller validates it active before this is ever set. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "vehicle_id", columnDefinition = "BINARY(16)")
+    private UUID vehicleId;
+
+    /** Optional trip expenses, stamped on every row one bulk {@code assignOutForDelivery}
+     *  ("Generate DRS") call touches — same convention {@link #drsNumber} already uses. */
+    @Column(name = "fuel_cost", precision = 12, scale = 2)
+    private BigDecimal fuelCost;
+
+    @Column(name = "delivery_charge", precision = 12, scale = 2)
+    private BigDecimal deliveryCharge;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

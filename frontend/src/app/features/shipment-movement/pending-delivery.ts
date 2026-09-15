@@ -13,6 +13,7 @@ import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { ShipmentStatusBadge } from '@features/shipment/components/shipment-status-badge';
 import { Shipment } from '@core/models/shipment.model';
 import { ShipmentService } from '@features/shipment/shipment.service';
+import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentMovementService } from './shipment-movement.service';
 
 /** Pending Delivery — this branch's own IN_SCAN / OUT_FOR_DELIVERY shipments, one row per
@@ -50,7 +51,7 @@ import { ShipmentMovementService } from './shipment-movement.service';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>Status</th><th class="tbl--right">Actions</th></tr>
+                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th class="tbl--right">Actions</th></tr>
                 </thead>
                 <tbody>
                   @for (s of pendingDelivery(); track s.id; let i = $index) {
@@ -58,6 +59,8 @@ import { ShipmentMovementService } from './shipment-movement.service';
                       <td>{{ i + 1 }}</td>
                       <td>{{ s.trackingNumber }}</td>
                       <td>{{ s.receiverName }}</td>
+                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                      <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                       <td><app-shipment-status-badge [status]="s.status" /></td>
                       <td class="tbl--right">
                         <div class="rowbtns">
@@ -96,6 +99,7 @@ export class PendingDelivery implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly shipmentService = inject(ShipmentService);
+  private readonly masterData = inject(MasterDataService);
   private readonly movementService = inject(ShipmentMovementService);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
@@ -106,12 +110,17 @@ export class PendingDelivery implements OnInit {
   readonly userOptions = signal<SelectOption[]>([]);
   readonly assigningId = signal<string | null>(null);
   readonly deliveryUserControl = new FormControl<string | null>(null);
+  /** Branch id -> "Name (CODE)" for the worklist's From Branch / To Branch column — same
+   *  `branchDirectory()` lookup Loading Sheet/THC already use for the same reason. */
+  readonly branchNames = signal<Map<string, string>>(new Map());
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Pending Delivery' }]);
     if (!this.myBranchId) return;
     this.movementService.userOptions().subscribe((u) =>
       this.userOptions.set(u.map((x) => ({ value: x.id, label: x.label }))));
+    this.masterData.branchDirectory().subscribe((list) =>
+      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
     this.load();
   }
 

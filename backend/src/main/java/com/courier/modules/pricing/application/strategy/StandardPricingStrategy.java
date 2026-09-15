@@ -2,6 +2,7 @@ package com.courier.modules.pricing.application.strategy;
 
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.application.PricingResult;
+import com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator;
 import com.courier.modules.pricing.application.calculator.ChargeCalculator;
 import com.courier.modules.pricing.domain.ChargeType;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,16 @@ public class StandardPricingStrategy implements PricingStrategy {
                     context.charge(calculator.type(), amount);
                 });
 
+        List<ApplicableChargesCalculator.Line> applicableChargeLines = calculators.stream()
+                .filter(ApplicableChargesCalculator.class::isInstance)
+                .map(ApplicableChargesCalculator.class::cast)
+                .findFirst()
+                .map(calculator -> calculator.resolve(context.command().serviceTypeId(),
+                        context.chargeableWeight(), context.command().totalActualWeight(),
+                        context.command().numberOfPackages(), context.command().bookingBranchId(),
+                        context.command().deliveryBranchId(), context.charge(ChargeType.FREIGHT)))
+                .orElse(List.of());
+
         return new PricingResult(
                 context.matchedRoute(),
                 context.matchedRate(),
@@ -59,6 +70,7 @@ public class StandardPricingStrategy implements PricingStrategy {
                 context.charge(ChargeType.ODA),
                 context.charge(ChargeType.INSURANCE),
                 context.charge(ChargeType.APPLICABLE_CHARGES),
+                applicableChargeLines,
                 context.charge(ChargeType.GST),
                 context.charge(ChargeType.DISCOUNT),
                 context.charge(ChargeType.ROUND_OFF),

@@ -112,7 +112,7 @@ public class ManifestController {
                     + "manifest picker both read this.")
     public ApiResponse<List<ShipmentSummaryResponse>> shipments(@PathVariable UUID id) {
         manifestService.getById(id); // 404s a foreign/unknown manifest before listing anything
-        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, id, null, null, null, null, null);
+        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, id, null, null, null, null, null, null);
         Page<Shipment> page = shipmentService.search(criteria, Pageable.unpaged());
         List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
         Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);
@@ -120,9 +120,11 @@ public class ManifestController {
         Map<UUID, java.time.Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
         Map<UUID, String> invoiceNumbers = shipmentService.invoiceNumbersFor(ids);
         Map<UUID, java.time.Instant> receivedAt = shipmentService.receivedAtFor(ids);
+        Map<UUID, String> ewayBillNumbers = shipmentService.ewayBillNumbersFor(ids);
         List<ShipmentSummaryResponse> summaries = page.getContent().stream()
                 .map(s -> shipmentMapper.toSummary(s, netAmounts.get(s.getId()), charges.get(s.getId()),
-                        deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()), receivedAt.get(s.getId())))
+                        deliveredAt.get(s.getId()), invoiceNumbers.get(s.getId()), receivedAt.get(s.getId()),
+                        ewayBillNumbers.get(s.getId())))
                 .toList();
         return ApiResponse.success(summaries);
     }

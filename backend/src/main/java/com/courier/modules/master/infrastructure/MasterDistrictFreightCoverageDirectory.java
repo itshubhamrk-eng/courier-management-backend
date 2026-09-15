@@ -72,7 +72,7 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
             }
             return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
                     pincode.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
-                    district.isActive()));
+                    district.isActive(), city.getName()));
         });
     }
 
@@ -116,7 +116,7 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
             }
             return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
                     link.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
-                    district.isActive()));
+                    district.isActive(), city.getName()));
         });
     }
 }

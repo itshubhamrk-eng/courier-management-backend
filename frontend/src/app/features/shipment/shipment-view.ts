@@ -3,7 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -16,13 +16,15 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { CompanyProfileService } from '@features/company/company-profile.service';
-import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES, Manifest } from '@core/models/shipment.model';
+import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES, Manifest, ShipmentEwayBillInfo } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
-import { printConsignmentCopies, companyAddressLine } from './consignment-print.util';
+import { printConsignmentCopies, companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
+import { printAmboxCopies } from './ambox-consignment-print.util';
+import { printPerformaBillCopies } from './performa-bill-print.util';
 import { emptyPage } from '@core/models/page.model';
 import { TicketService } from '@core/services/ticket.service';
 import { Ticket } from '@core/models/ticket.model';
@@ -71,7 +73,9 @@ const TIMELINE_ICONS: Record<string, string> = {
             <mat-icon>event_repeat</mat-icon> Create Follow-up</a>
           <span class="sv__spacer"></span>
           @if (charge(); as c) {
-            <app-button variant="stroked" icon="print" (pressed)="print(c)">Print LR</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print(c)">Delivery Receipt</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print2(c)">Print 2</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print3(c)">Booking Receipt</app-button>
           }
           @if (can().update && shipment()!.status === 'BOOKED') {
             <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button>
@@ -211,6 +215,7 @@ const TIMELINE_ICONS: Record<string, string> = {
               <dt>Package Type</dt><dd>{{ packageTypeLabel(shipment()!.packageTypeId) }}</dd>
               <dt>Payment Mode</dt><dd>{{ paymentModeLabel(shipment()!.paymentModeId) }}</dd>
               <dt>Shipment Type</dt><dd>{{ shipment()!.shipmentType }}</dd>
+              <dt>Delivery Type</dt><dd>{{ shipment()!.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</dd>
               @if (shipment()!.appointmentDelivery) {
                 <dt>Appointment Delivery</dt>
                 <dd>{{ shipment()!.appointmentDate }} · {{ shipment()!.appointmentTimeSlot }}</dd>
@@ -247,30 +252,37 @@ const TIMELINE_ICONS: Record<string, string> = {
           }
 
           @if (shipment()!.ewayBillRequired || shipment()!.invoiceValue || shipment()!.ewayBill) {
-            <app-card title="E-Way Bill">
+            <app-card title="E-Way Bill" subtitle="Part-A generated at booking, Part-B at manifest dispatch.">
               <dl class="kv">
                 <dt>Required</dt><dd>{{ shipment()!.ewayBillRequired ? 'Yes' : 'No' }}</dd>
                 @if (shipment()!.invoiceValue != null) {
                   <dt>Invoice Value</dt><dd class="mono">{{ shipment()!.invoiceValue | number: '1.2-2' }}</dd>
                 }
                 @if (shipment()!.ewayBill; as eb) {
-                  <dt>E-Way Bill Number</dt><dd>{{ eb.ewayBillNumber || '—' }}</dd>
-                  <dt>Status</dt><dd>{{ eb.status }}</dd>
+                  <dt>Overall Status</dt>
+                  <dd><span class="eway-status" [class.eway-status--failed]="eb.status === 'FAILED'"
+                            [class.eway-status--done]="eb.status === 'GENERATED'">{{ eb.status }}</span></dd>
+                  <dt>E-Way Bill Number</dt><dd class="mono">{{ eb.ewayBillNumber || '— not yet issued —' }}</dd>
+                  <dt>Part-A</dt><dd>{{ partAStatusLabel(eb) }}</dd>
+                  <dt>Part-B</dt><dd>{{ partBStatusLabel(eb) }}</dd>
                   @if (eb.validFrom || eb.validUntil) {
                     <dt>Validity</dt>
                     <dd>{{ eb.validFrom ? (eb.validFrom | date: 'mediumDate') : '—' }} – {{ eb.validUntil ? (eb.validUntil | date: 'mediumDate') : '—' }}</dd>
+                  }
+                  @if (eb.status === 'FAILED' && eb.lastError) {
+                    <dt>Failure Reason</dt><dd class="eway-missing">{{ eb.lastError }}</dd>
                   }
                   @if (eb.documentUrl) {
                     <dt>Document</dt><dd><a [href]="eb.documentUrl" target="_blank" rel="noopener">View document</a></dd>
                   }
                 } @else if (shipment()!.ewayBillRequired) {
-                  <dt>E-Way Bill</dt><dd class="eway-missing">Missing — required before AWB generation</dd>
+                  <dt>E-Way Bill</dt><dd class="eway-missing">Not generated yet</dd>
                 }
               </dl>
               @if (can().update && shipment()!.ewayBill; as eb) {
                 <div class="eway-actions">
-                  @if (eb.status !== 'VALIDATED' && eb.status !== 'CANCELLED') {
-                    <app-button variant="stroked" [loading]="ewayBillBusy()" (pressed)="validateEwayBill(eb.id)">Validate</app-button>
+                  @if (canRetryEwayBill(eb)) {
+                    <app-button variant="stroked" [loading]="ewayBillBusy()" (pressed)="retryEwayBill(eb.id)">Retry</app-button>
                   }
                   @if (eb.status !== 'CANCELLED') {
                     <app-button variant="stroked" (pressed)="ewayBillFile.click()">Upload Document</app-button>
@@ -341,6 +353,9 @@ const TIMELINE_ICONS: Record<string, string> = {
     .commission__row--total strong { color:var(--brand-600); }
     .eway-missing { color:var(--danger); }
     .eway-actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+    .eway-status { font:600 12px var(--font-sans); letter-spacing:.02em; }
+    .eway-status--done { color:var(--brand-600); }
+    .eway-status--failed { color:var(--danger); }
     .rel { display:flex; flex-direction:column; gap:2px; }
     .rel__row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 4px;
       border-bottom:1px solid var(--surface-border); text-decoration:none; color:var(--content-fg); }
@@ -480,16 +495,16 @@ export class ShipmentView implements OnInit {
 
   timelineIcon(status: string): string { return TIMELINE_ICONS[status] ?? 'circle'; }
 
-  branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id; }
+  branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
   serviceTypeLabel(id: string): string { return this.serviceTypeOptions().find((o) => o.value === id)?.label ?? id; }
   packageTypeLabel(id: string): string { return this.packageTypeOptions().find((o) => o.value === id)?.label ?? id; }
   paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? id; }
 
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }
 
-  print(c: ShipmentCharge): void {
+  private buildPrintData(c: ShipmentCharge) {
     const s = this.shipment()!;
-    forkJoin({
+    return forkJoin({
       company: this.companyProfile.get().pipe(catchError(() => of(null))),
       bookingGeo: s.pickupPincode
         ? this.masters.pincodeGeo(s.pickupPincode).pipe(catchError(() => of(null)))
@@ -497,49 +512,87 @@ export class ShipmentView implements OnInit {
       deliveryGeo: s.deliveryPincode
         ? this.masters.pincodeGeo(s.deliveryPincode).pipe(catchError(() => of(null)))
         : of(null)
-    }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
-      printConsignmentCopies({
-        companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
-        companyLogo: company?.logo ?? this.auth.companyLogo(),
-        companyAddress: companyAddressLine(company),
-        companyGst: company?.gstNumber ?? null,
-        companyContact: company?.mobile ?? null,
-        companyWebsite: company?.website ?? null,
-        shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-        expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-        bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
-        bookingPincode: s.pickupPincode || null,
-        bookingDistrict: bookingGeo?.districtName ?? null,
-        bookingArea: bookingGeo?.areaName ?? null,
-        deliveryPincode: s.deliveryPincode || null,
-        deliveryDistrict: deliveryGeo?.districtName ?? null,
-        deliveryArea: deliveryGeo?.areaName ?? null,
-        senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
-        receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
-        serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
-        paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
-        numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
-        declaredValue: s.declaredValue ?? null,
-        charges: {
-          freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
-          insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges, gstAmount: c.gstAmount,
-          discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
-        },
-        otherCharges: c.otherCharges,
-        appointmentDeliveryCharge: c.appointmentDeliveryCharge,
-        remarks: s.remarks ?? null,
-        createdByName: s.createdByName ?? null
-      });
-    });
+    }).pipe(map(({ company, bookingGeo, deliveryGeo }): ConsignmentPrintData => ({
+      companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
+      companyLogo: company?.logo ?? this.auth.companyLogo(),
+      companyAddress: companyAddressLine(company),
+      companyGst: company?.gstNumber ?? null,
+      companyContact: company?.mobile ?? null,
+      companyWebsite: company?.website ?? null,
+      shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
+      expectedDeliveryDate: s.expectedDeliveryDate ?? null,
+      bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
+      bookingPincode: s.pickupPincode || null,
+      bookingDistrict: bookingGeo?.districtName ?? null,
+      bookingArea: bookingGeo?.areaName ?? null,
+      deliveryPincode: s.deliveryPincode || null,
+      deliveryDistrict: deliveryGeo?.districtName ?? null,
+      deliveryArea: deliveryGeo?.areaName ?? null,
+      senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
+      receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
+      serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
+      paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
+      deliveryType: s.deliveryType,
+      numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
+      declaredValue: s.declaredValue ?? null,
+      charges: {
+        freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
+        insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges,
+        applicableChargeLines: c.applicableChargeLines, gstAmount: c.gstAmount,
+        discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
+      },
+      otherCharges: c.otherCharges,
+      appointmentDeliveryCharge: c.appointmentDeliveryCharge,
+      doorDeliveryCharge: c.doorDeliveryCharge,
+      remarks: s.remarks ?? null,
+      createdByName: s.createdByName ?? null,
+      invoiceValue: s.invoiceValue ?? null,
+      items: s.items.map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
+    })));
+  }
+
+  print(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printConsignmentCopies(data));
+  }
+
+  print2(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printAmboxCopies(data));
+  }
+
+  print3(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printPerformaBillCopies(data));
   }
 
   // ------------------------------------------------------------------- E-Way Bill
 
-  validateEwayBill(id: string): void {
+  /** Part-A is done once a provider-issued number exists — independent of the current
+   *  `status`, so a row FAILED at Part-B still shows Part-A as generated. Mirrors
+   *  backend `EwayBill.partAGenerated()`. */
+  protected partAStatusLabel(eb: ShipmentEwayBillInfo): string {
+    if (eb.ewayBillNumber) return 'Generated';
+    if (eb.status === 'FAILED') return 'Failed';
+    if (eb.status === 'CANCELLED') return 'Cancelled';
+    return 'Pending';
+  }
+
+  protected partBStatusLabel(eb: ShipmentEwayBillInfo): string {
+    if (eb.status === 'GENERATED') return 'Generated';
+    if (eb.status === 'CANCELLED') return 'Cancelled';
+    if (eb.status === 'EXPIRED') return 'Expired';
+    if (!eb.ewayBillNumber) return 'Awaiting Part-A';
+    if (eb.status === 'FAILED') return 'Failed';
+    return 'Awaiting vehicle assignment';
+  }
+
+  protected canRetryEwayBill(eb: ShipmentEwayBillInfo): boolean {
+    return eb.status === 'FAILED' || eb.status === 'EXPIRED';
+  }
+
+  retryEwayBill(id: string): void {
     this.ewayBillBusy.set(true);
-    this.ewayBillService.validate(id).subscribe({
-      next: () => { this.ewayBillBusy.set(false); this.notify.success('E-Way Bill validated.'); this.load(); },
-      error: (e) => { this.ewayBillBusy.set(false); this.notify.error(e?.error?.message ?? 'Could not validate the E-Way Bill.'); }
+    this.ewayBillService.retry(id).subscribe({
+      next: () => { this.ewayBillBusy.set(false); this.notify.success('E-Way Bill retried.'); this.load(); },
+      error: (e) => { this.ewayBillBusy.set(false); this.notify.error(e?.error?.message ?? 'Could not retry the E-Way Bill.'); }
     });
   }
 

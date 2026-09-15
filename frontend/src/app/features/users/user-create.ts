@@ -6,6 +6,7 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { CreateUserRequest, UpdateUserRequest } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
+import { Department } from '@core/models/department.model';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UserForm } from './components/user-form';
 import { Lookup, UserService } from './user.service';
@@ -24,7 +25,7 @@ import { Lookup, UserService } from './user.service';
       @if (loading()) {
         <app-loader [minHeight]="280" caption="Loading…" />
       } @else {
-        <app-user-form mode="create" [roles]="roles()" [branches]="branches()" [hubs]="hubs()"
+        <app-user-form mode="create" [roles]="roles()" [departments]="departments()" [branches]="branches()" [hubs]="hubs()"
                        [managers]="managers()" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
       }
     </div>
@@ -39,15 +40,21 @@ export class UserCreate implements OnInit {
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly roles = signal<CompanyRole[]>([]);
+  readonly departments = signal<Department[]>([]);
   readonly branches = signal<Lookup[]>([]);
   readonly hubs = signal<Lookup[]>([]);
   readonly managers = signal<Lookup[]>([]);
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Users', route: '/users' }, { label: 'New' }]);
-    forkJoin({ roles: this.service.roles(), branches: this.service.branches(), hubs: this.service.hubs(), managers: this.service.managers() })
-      .subscribe({
-        next: (l) => { this.roles.set(l.roles); this.branches.set(l.branches); this.hubs.set(l.hubs); this.managers.set(l.managers); this.loading.set(false); },
+    forkJoin({
+      roles: this.service.roles(), departments: this.service.departments(),
+      branches: this.service.branches(), hubs: this.service.hubs(), managers: this.service.managers()
+    }).subscribe({
+        next: (l) => {
+          this.roles.set(l.roles); this.departments.set(l.departments); this.branches.set(l.branches);
+          this.hubs.set(l.hubs); this.managers.set(l.managers); this.loading.set(false);
+        },
         error: () => this.loading.set(false)
       });
   }

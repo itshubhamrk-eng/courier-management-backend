@@ -3,6 +3,7 @@ package com.courier.modules.shipment.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /** The Pricing Engine's own charge breakup, persisted at booking time. See {@code GET /api/v1/shipments/{id}/charges}. */
@@ -15,12 +16,22 @@ public record ShipmentChargeResponse(
                 + "to this shipment's service type and weight/distance. GST-inclusive, "
                 + "unlike appointmentDeliveryCharge.")
         BigDecimal applicableCharges,
+        @Schema(description = "applicableCharges broken out by the charge module's own name "
+                + "(e.g. \"Hamali\", \"Fuel Surcharge\") — resolved live off this shipment's "
+                + "own booking/delivery branch, chargeable weight and freight, not persisted, "
+                + "so a since-renamed or reconfigured charge still shows correctly. Empty when "
+                + "no charge is configured for this shipment's service type.")
+        List<ApplicableChargeLine> applicableChargeLines,
         BigDecimal gstAmount, BigDecimal discountAmount,
         BigDecimal roundOff, BigDecimal otherCharges,
         @Schema(description = "Manual, typed at booking time when appointmentDelivery is "
                 + "checked. Deliberately GST-free — added straight into netAmount, never "
                 + "folded into gstAmount.")
         BigDecimal appointmentDeliveryCharge,
+        @Schema(description = "Manual, typed at booking time when deliveryType is DOOR. "
+                + "Taxed with GST (folded into gstAmount), unlike appointmentDeliveryCharge. "
+                + "Zero when deliveryType is OFFICE.")
+        BigDecimal doorDeliveryCharge,
         BigDecimal commissionOnBasicFreight, BigDecimal branchCommissionOnOtherAmount,
         BigDecimal companyCommissionOnBasicFreight, BigDecimal totalCommission, BigDecimal netAmount,
         UUID matchedRouteId, String matchedRouteCode,
@@ -30,4 +41,7 @@ public record ShipmentChargeResponse(
                 + "Factor fallback (matchedRouteId/matchedRateId both null).")
         BigDecimal appliedFreightFactor
 ) {
+    @Schema(name = "ApplicableChargeLine")
+    public record ApplicableChargeLine(String chargeName, BigDecimal amount) {
+    }
 }

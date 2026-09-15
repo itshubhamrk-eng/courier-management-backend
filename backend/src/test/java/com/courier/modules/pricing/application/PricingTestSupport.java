@@ -61,7 +61,8 @@ public final class PricingTestSupport {
                                          BigDecimal discountAmount) {
         return new PricingCommand(BOOKING_BRANCH, DELIVERY_BRANCH, "411001", "400001",
                 SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE, actualWeight, length, width, height,
-                declaredValue, LocalDate.of(2026, 6, 1), discountPercentage, discountAmount, null);
+                declaredValue, LocalDate.of(2026, 6, 1), discountPercentage, discountAmount, null,
+                actualWeight, 1);
     }
 
     public static PricingConfiguration configuration() {

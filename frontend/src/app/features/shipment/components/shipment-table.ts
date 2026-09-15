@@ -27,10 +27,14 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td>{{ s.bookingDate }}</td>
         <td>{{ branchLabel(s.bookingBranchId) }}</td>
         <td>{{ branchLabel(s.deliveryBranchId) }}</td>
+        <td>{{ s.fromCity || '—' }}</td>
+        <td>{{ s.toCity || '—' }}</td>
         <td>{{ s.senderName }}</td>
         <td class="mono">{{ s.senderContact }}</td>
         <td>{{ s.receiverName }}</td>
         <td class="mono">{{ s.receiverContact }}</td>
+        <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
+        <td>{{ s.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</td>
         <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
         <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
@@ -73,6 +77,7 @@ export class ShipmentTable {
    *  projection (`ShipmentSummaryResponse`) carries is shown; branch is the one that's an
    *  id rather than a plain string. */
   readonly branchOptions = input<SelectOption[]>([]);
+  readonly paymentModeOptions = input<SelectOption[]>([]);
 
   readonly sortChange = output<SortState>();
   readonly action = output<{ type: ShipmentAction; shipment: Shipment }>();
@@ -83,10 +88,14 @@ export class ShipmentTable {
     { key: 'bookingDate', header: 'Booking Date', sortable: true },
     { key: 'bookingBranchId', header: 'Booking Branch' },
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
+    { key: 'fromCity', header: 'From City' },
+    { key: 'toCity', header: 'To City' },
     { key: 'senderName', header: 'Sender' },
     { key: 'senderContact', header: 'Sender Contact' },
     { key: 'receiverName', header: 'Receiver' },
     { key: 'receiverContact', header: 'Receiver Contact' },
+    { key: 'paymentModeId', header: 'Payment Mode' },
+    { key: 'deliveryType', header: 'Delivery Type' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', sortable: true, align: 'right' },
     { key: 'netAmount', header: 'Total Amount', align: 'right' },
     { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },
@@ -101,4 +110,5 @@ export class ShipmentTable {
   isEditable(s: Shipment): boolean { return s.status === 'BOOKED'; }
   isCancellable(s: Shipment): boolean { return CANCELLABLE_STATUSES.includes(s.status); }
   branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 }

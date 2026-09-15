@@ -119,6 +119,9 @@ export interface FreightCalculationResponse {
   districtCode: string;
   districtName: string;
   destinationPincode: string;
+  /** The destination pincode/area's resolved city — shown at booking instead of a
+   *  Delivery Branch picker. */
+  destinationCityName: string | null;
   chargeableWeight: number;
   weightSlabLabel: string;
   ratePerKg: number;

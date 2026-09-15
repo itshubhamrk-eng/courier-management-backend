@@ -1,4 +1,4 @@
-import { ChargeBreakup } from '@core/models/shipment.model';
+import { ChargeBreakup, DeliveryType } from '@core/models/shipment.model';
 import { CompanyLetterhead } from '@features/company/company-profile.service';
 import JsBarcode from 'jsbarcode';
 import qrcode from 'qrcode-generator';
@@ -15,8 +15,7 @@ export function companyAddressLine(c: CompanyLetterhead | null | undefined): str
  *  real booking form and the price it was actually booked at (same `PricingResponse` the
  *  live preview showed, since the server prices what it books). Laid out to match a real
  *  courier LR template (SmartPost-style) row for row — see `copy()` below for which of its
- *  fields (Parcel Received, Consignee GST, Delivery Type) this system doesn't track and
- *  prints as "—". */
+ *  fields (Parcel Received, Consignee GST) this system doesn't track and prints as "—". */
 export interface ConsignmentPrintData {
   companyName: string;
   /** Company branding, `AuthService.companyLogo()` — absent falls back to the text wordmark. */
@@ -51,6 +50,7 @@ export interface ConsignmentPrintData {
   serviceTypeLabel: string;
   packageTypeLabel: string;
   paymentModeLabel: string;
+  deliveryType: DeliveryType;
   numberOfPackages: number;
   chargeableWeight: number;
   declaredValue: number | null;
@@ -60,21 +60,114 @@ export interface ConsignmentPrintData {
   /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
    *  GST-free, unlike {@link otherCharges}. Zero/absent when not an appointment booking. */
   appointmentDeliveryCharge?: number;
+  /** Manual, typed at booking time when Delivery Type is DOOR — taxed with GST (folded
+   *  into `charges.gstAmount`), unlike {@link appointmentDeliveryCharge}. Zero/absent when
+   *  Office Delivery. */
+  doorDeliveryCharge?: number;
   /** Booking form's remarks field — printed as the LR's "Special Instruction" line. */
   remarks: string | null;
   /** Booked-by user's name — `ShipmentResponse.createdByName`, absent if the booking user
    *  no longer resolves (deleted, cross-tenant). */
   createdByName: string | null;
+  /** `ShipmentResponse.invoiceValue` / the booking form's Invoice Value field — the
+   *  E-Way Bill threshold figure, distinct from `declaredValue` (insurance). Used by
+   *  `ambox-consignment-print.util.ts`'s "Invoice Value" field. */
+  invoiceValue: number | null;
+  /** Packed items — carries only what `ambox-consignment-print.util.ts` needs to derive
+   *  actual (non-chargeable) weight and box dimensions, neither tracked as a single
+   *  shipment-level field. */
+  items: Array<{ weight: number; lengthCm?: number | null; widthCm?: number | null; heightCm?: number | null }>;
 }
 
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
+/** Letterhead fields the shared print header needs — a subset of {@link ConsignmentPrintData},
+ *  so THC/DRS (which don't book a shipment) can pass just their `CompanyProfileService` data. */
+export interface PrintHeaderCompany {
+  companyName: string;
+  companyLogo: string | null;
+  companyAddress: string | null;
+  companyGst: string | null;
+  companyContact: string | null;
+  companyWebsite: string | null;
+}
+
+/** The right-hand identity box (LR No / THC No / DRS No, plus an optional barcode and/or QR
+ *  of the same or a related value). */
+export interface PrintHeaderBox {
+  label: string;
+  value: string;
+  barcodeValue?: string;
+  qrValue?: string;
+}
+
+/** The consignment note's own header (logo, letterhead, identity box) — shared verbatim by
+ *  the THC (`trip-hire-challan.ts`) and DRS (`out-for-delivery.ts`) prints so every document
+ *  this system prints carries the same masthead. Pair with {@link PRINT_HEADER_CSS}. */
+export function renderPrintHeader(d: PrintHeaderCompany, box: PrintHeaderBox): string {
+  return `<div class="head">
+        <div class="brand">
+          <div class="logo">
+            ${d.companyLogo ? `<img class="mark" src="${esc(d.companyLogo)}" alt="${esc(d.companyName)}">` : `
+            <div class="word">${esc(d.companyName)}</div>
+            <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
+              <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <div class="tag">Courier &amp; Logistics</div>`}
+          </div>
+        </div>
+        <div class="co co--company">
+          <h2>${esc(d.companyName)}</h2>
+          ${d.companyAddress ? `<p>${esc(d.companyAddress)}</p>` : ''}
+          <p>
+            ${d.companyGst ? `GSTIN: ${esc(d.companyGst)}` : ''}
+            ${d.companyGst && d.companyContact ? ' &nbsp;|&nbsp; ' : ''}
+            ${d.companyContact ? `Ph: ${esc(d.companyContact)}` : ''}
+          </p>
+          ${d.companyWebsite ? `<p>${esc(d.companyWebsite)}</p>` : ''}
+        </div>
+        <div class="lrbox">
+          <span class="lrbox-label">${esc(box.label)}</span>
+          <span class="lrbox-no">${esc(box.value)}</span>
+          ${box.barcodeValue ? `<div class="lrbox-barcode">${barcodeSvg(box.barcodeValue)}</div>` : ''}
+          ${box.qrValue ? `<div class="lrbox-qr">${qrSvg(box.qrValue)}</div>` : ''}
+        </div>
+      </div>`;
+}
+
+/** CSS for {@link renderPrintHeader} — colors inlined (not `var(--line)` etc.) so it drops
+ *  into any print document's own `<style>` without that document also defining the LR
+ *  template's root palette. */
+export const PRINT_HEADER_CSS = `
+  .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid #000}
+  .head > div{padding:7px 10px}
+  .head .brand{display:flex;align-items:center;justify-content:center}
+  .logo{line-height:1;text-align:center}
+  .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
+  .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
+  .logo .swoosh{display:block;margin:2px auto 0}
+  .logo .tag{font-size:10px;color:#f7941d;font-weight:600;margin-top:2px}
+  .co{font-size:13px;line-height:1.3;border-left:2px solid #000}
+  .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
+  .co p{margin:0;color:#333;text-align:center}
+  .co--company{display:flex;flex-direction:column;justify-content:center}
+  .co--company h2{font-size:17px}
+  .co--company p{font-size:12px;line-height:1.5}
+  .lrbox{border-left:2px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
+  .lrbox-label{font-size:11px;font-weight:700;color:#333}
+  .lrbox-no{font-size:16px;font-weight:800}
+  .lrbox-barcode{line-height:0}
+  .lrbox-barcode svg{width:150px;height:34px}
+  .lrbox-qr{line-height:0}
+  .lrbox-qr svg{width:52px;height:52px}
+`;
+
 /** Renders `value` (the LR/tracking number) to a barcode as a static inline SVG string —
  *  built off-DOM and serialized, so the printed page needs no script of its own to draw it
  *  (`printConsignmentCopies` writes plain HTML into a fresh iframe document). CODE128
  *  handles the tracking number's full alnum/digit range with no character-set gate. */
-function barcodeSvg(value: string): string {
+export function barcodeSvg(value: string): string {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   JsBarcode(svg, value, {
     format: 'CODE128', displayValue: false, margin: 0, height: 34, width: 1.6
@@ -88,7 +181,7 @@ function barcodeSvg(value: string): string {
  *  POD photo itself; see `HeuristicPodVerificationProvider`'s `qrScanValue` check. Type 0 lets
  *  the library auto-pick the smallest QR version that fits `value`; 'M' error correction
  *  tolerates real-world print/photo degradation without bloating the module count. */
-function qrSvg(value: string): string {
+export function qrSvg(value: string): string {
   const qr = qrcode(0, 'M');
   qr.addData(value);
   qr.make();
@@ -110,7 +203,7 @@ function threeDigitWords(n: number): string {
 }
 /** Indian numbering (Lakh/Crore) — this LR template prints the payable amount in words
  *  the way physical courier receipts traditionally do, e.g. "Two Hundred Fifteen Only". */
-function amountInWords(amount: number): string {
+export function amountInWords(amount: number): string {
   let n = Math.round(amount);
   if (n === 0) return 'Zero Only';
   const crore = Math.floor(n / 1e7); n %= 1e7;
@@ -129,7 +222,7 @@ type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Cop
 
 function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
-  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0);
+  const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
   const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
   const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
@@ -196,34 +289,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
      <div class="receipt-inner">
 
       <!-- HEADER -->
-      <div class="head">
-        <div class="brand">
-          <div class="logo">
-            ${d.companyLogo ? `<img class="mark" src="${esc(d.companyLogo)}" alt="${esc(d.companyName)}">` : `
-            <div class="word">${esc(d.companyName)}</div>
-            <svg class="swoosh" width="140" height="10" viewBox="0 0 150 12" aria-hidden="true">
-              <path d="M2 9 Q75 -4 148 6" fill="none" stroke="#f7941d" stroke-width="3" stroke-linecap="round"/>
-            </svg>
-            <div class="tag">Courier &amp; Logistics</div>`}
-          </div>
-        </div>
-        <div class="co co--company">
-          <h2>${esc(d.companyName)}</h2>
-          ${d.companyAddress ? `<p>${esc(d.companyAddress)}</p>` : ''}
-          <p>
-            ${d.companyGst ? `GSTIN: ${esc(d.companyGst)}` : ''}
-            ${d.companyGst && d.companyContact ? ' &nbsp;|&nbsp; ' : ''}
-            ${d.companyContact ? `Ph: ${esc(d.companyContact)}` : ''}
-          </p>
-          ${d.companyWebsite ? `<p>${esc(d.companyWebsite)}</p>` : ''}
-        </div>
-        <div class="lrbox">
-          <span class="lrbox-label">LR No</span>
-          <span class="lrbox-no">${esc(d.trackingNumber)}</span>
-          <div class="lrbox-barcode">${barcodeSvg(d.trackingNumber)}</div>
-          <div class="lrbox-qr">${qrSvg(d.shipmentNumber)}</div>
-        </div>
-      </div>
+      ${renderPrintHeader(d, { label: 'LR No', value: d.trackingNumber, barcodeValue: d.trackingNumber, qrValue: d.shipmentNumber })}
 
       <!-- TITLE STRIP -->
       <div class="title">
@@ -260,7 +326,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
           <table class="small">
             <tr><td colspan="2">Special Instruction :&nbsp; ${esc(d.remarks ?? '—')}</td></tr>
             <tr><td colspan="2">Consignee GST Number :&nbsp; —</td></tr>
-            <tr><td colspan="2">Delivery Type :&nbsp; Door Delivery</td></tr>
+            <tr><td colspan="2">Delivery Type :&nbsp; ${d.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery'}</td></tr>
           </table>
         </div>
         <div class="right">${amountSection}
@@ -315,27 +381,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .receipt-inner{border:2px solid var(--line)}
 
   /* header */
-  .head{display:grid;grid-template-columns:220px 1fr 180px;border-bottom:2px solid var(--line)}
-  .head > div{padding:10px 12px}
-  .head .brand{display:flex;align-items:center;justify-content:center}
-  .logo{line-height:1;text-align:center}
-  .logo .mark{max-width:100%;max-height:60px;object-fit:contain}
-  .logo .word{font-size:22px;font-weight:800;letter-spacing:-.3px}
-  .logo .swoosh{display:block;margin:2px auto 0}
-  .logo .tag{font-size:10px;color:var(--orange);font-weight:600;margin-top:2px}
-  .co{font-size:13px;line-height:1.3;border-left:2px solid var(--line)}
-  .co h2{margin:0 0 2px;font-size:15px;font-weight:700;text-align:center}
-  .co p{margin:0;color:var(--muted);text-align:center}
-  .co--company{display:flex;flex-direction:column;justify-content:center}
-  .co--company h2{font-size:17px}
-  .co--company p{font-size:12px;line-height:1.5}
-  .lrbox{border-left:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
-  .lrbox-label{font-size:11px;font-weight:700;color:var(--muted)}
-  .lrbox-no{font-size:16px;font-weight:800}
-  .lrbox-barcode{line-height:0}
-  .lrbox-barcode svg{width:150px;height:34px}
-  .lrbox-qr{line-height:0}
-  .lrbox-qr svg{width:52px;height:52px}
+  ${PRINT_HEADER_CSS}
 
   /* title strip */
   .title{display:grid;grid-template-columns:1fr auto;align-items:start;gap:16px;padding:8px 14px 10px;border-bottom:2px solid var(--line)}
@@ -346,7 +392,7 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
 
   /* shared table look */
   table{width:100%;border-collapse:collapse}
-  td,th{border:1px solid var(--line);padding:5px 8px;font-size:12px;vertical-align:middle}
+  td,th{border:1px solid var(--line);padding:4px 8px;font-size:12px;vertical-align:middle}
   .lbl{font-weight:700;white-space:nowrap}
 
   .party{border-top:0}
@@ -361,17 +407,17 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   .charges .total td{font-size:15px;font-weight:700}
   .zero{border:1px solid var(--line);border-top:0;text-align:right;padding:6px 8px;font-size:14px;font-weight:700}
   .note{border:1px solid var(--line);border-top:0;padding:8px;font-size:11px;font-weight:700;line-height:1.5}
-  .small td{font-size:11px;padding:3px 8px}
+  .small td{font-size:11px;padding:2px 8px}
 
   /* terms & conditions */
-  .terms{border-top:2px solid var(--line);padding:6px 10px;font-size:9px;line-height:1.5;color:var(--muted);text-align:justify}
+  .terms{border-top:2px solid var(--line);padding:4px 10px;font-size:9px;line-height:1.3;color:var(--muted);text-align:justify}
   .terms .t-title{font-weight:700;font-size:10px;color:var(--ink);margin-bottom:2px}
 
   /* footer */
-  .footer{padding:6px 10px 10px;font-size:11px;line-height:1.4}
+  .footer{padding:4px 10px 6px;font-size:11px;line-height:1.4}
   .footer .createdby{font-weight:700;font-size:12px;margin-bottom:4px}
   .footer .gen{font-weight:700}
-  .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:20px}
+  .sign{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-top:10px}
 
   @media print{
     body{background:#fff}

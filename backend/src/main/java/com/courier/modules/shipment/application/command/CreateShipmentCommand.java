@@ -1,6 +1,7 @@
 package com.courier.modules.shipment.application.command;
 
 import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
+import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.ShipmentType;
 
 import java.math.BigDecimal;
@@ -55,10 +56,14 @@ import java.util.UUID;
  * @param insuranceApplicable when true, insurance is charged at 2% of freight instead of
  *                          the Pricing Engine's own rate-driven insurance figure — same
  *                          delta-algebra as {@code odaCharge}, taxed like {@code otherCharges}
+ * @param deliveryType      defaults to {@code DOOR} when null; {@code OFFICE} never charges
+ *                          extra — {@code doorDeliveryCharge} is ignored server-side
+ * @param doorDeliveryCharge optional, defaults to zero, meaningful only when {@code
+ *                          deliveryType} is {@code DOOR} — deliberately never taxed with
+ *                          GST, unlike {@code otherCharges}
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
-        UUID deliveryBranchId,
         String manualShipmentNumber,
         String pickupPincode,
         String deliveryPincode,
@@ -95,6 +100,8 @@ public record CreateShipmentCommand(
         LocalDate appointmentDate,
         String appointmentTimeSlot,
         BigDecimal appointmentDeliveryCharge,
-        Boolean insuranceApplicable
+        Boolean insuranceApplicable,
+        DeliveryType deliveryType,
+        BigDecimal doorDeliveryCharge
 ) {
 }

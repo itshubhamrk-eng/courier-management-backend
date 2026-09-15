@@ -7,6 +7,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import {
   CreateRoleRequest, UpdateRoleRequest, RoleProfile, RoleType, ROLE_TYPES
 } from '@core/models/role.model';
+import { Department } from '@core/models/department.model';
 
 // Mirrors the backend CreateRoleRequest pattern: 3-50 chars, letters/digits/space/-/_,
 // no leading or trailing separator. Saved uppercased with spaces → underscores.
@@ -63,6 +64,13 @@ const TYPE_OPTIONS: SelectOption[] = ROLE_TYPES.map((t) => ({
           Permission module's job. Activation and deactivation have their own actions.</p>
       </app-card>
 
+      <app-card title="Departments" subtitle="Which departments may place a user in this role.">
+        <app-select [control]="c('departmentIds')" label="Departments" [options]="departmentOptions()"
+                    [multiple]="true" placeholder="Offer this role via…" />
+        <p class="note">Optional. A department's own role picker only shows roles offered here —
+          skip this and add it from the Departments page later.</p>
+      </app-card>
+
       <div class="rform__bar">
         <span class="rform__note">
           @if (form.invalid && form.touched) { Fix the highlighted fields before saving. }
@@ -109,14 +117,24 @@ export class RoleForm {
   /** Optional prefill for cloning: name/type/description/default copied, code left blank. */
   readonly prefill = input<RoleProfile | null>(null);
   readonly saving = input(false);
+  /** ACTIVE departments to offer this role via — same catalogue the Departments page uses. */
+  readonly departments = input<Department[]>([]);
 
   readonly saved = output<CreateRoleRequest | UpdateRoleRequest>();
+  /** Fired alongside `saved`, in edit mode reflecting the delta from what the role already
+   *  offered — the caller (RoleCreate/RoleEdit) reconciles it via DepartmentService.syncRoleGrants
+   *  once the role itself is saved and its id is known. */
+  readonly departmentsChanged = output<string[]>();
   readonly cancelled = output<void>();
 
   protected readonly typeOptions = TYPE_OPTIONS;
   protected readonly isCreate = computed(() => this.mode() === 'create');
+  protected readonly departmentOptions = computed<SelectOption[]>(() => this.departments()
+    .filter((d) => d.status === 'ACTIVE')
+    .map((d) => ({ value: d.id, label: d.departmentName })));
   private hydrated = signal(false);
   private prefilled = signal(false);
+  private departmentsHydrated = signal(false);
 
   protected readonly form: FormGroup = this.build();
 
@@ -125,6 +143,17 @@ export class RoleForm {
   constructor() {
     effect(() => { const r = this.role(); if (r && this.mode() === 'edit') this.hydrate(r); });
     effect(() => { const p = this.prefill(); if (p && this.mode() === 'create') this.applyPrefill(p); });
+    // Departments load separately (own API call) and may resolve after the role does —
+    // re-check both on every change, only actually hydrating once, the same one-shot
+    // guard `hydrate` uses for the role's own fields.
+    effect(() => {
+      const r = this.role(); const depts = this.departments();
+      if (r && this.mode() === 'edit' && depts.length && !this.departmentsHydrated()) {
+        const selected = depts.filter((d) => d.roles.some((x) => x.id === r.id)).map((d) => d.id);
+        this.form.patchValue({ departmentIds: selected }, { emitEvent: false });
+        this.departmentsHydrated.set(true);
+      }
+    });
     this.c('roleCode').valueChanges.subscribe((v: string) => this.codePreview.set(this.normalise(v)));
   }
 
@@ -159,7 +188,8 @@ export class RoleForm {
       roleName: ['', [Validators.required, Validators.maxLength(100)]],
       description: ['', Validators.maxLength(255)],
       roleType: [null as RoleType | null, Validators.required],
-      isDefault: [false]
+      isDefault: [false],
+      departmentIds: [[] as string[]]
     });
   }
 
@@ -168,6 +198,8 @@ export class RoleForm {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     const v = this.form.getRawValue();
     const trim = (s: string) => (s && s.trim() ? s.trim() : null);
+
+    this.departmentsChanged.emit(v.departmentIds ?? []);
 
     if (this.isCreate()) {
       this.saved.emit({

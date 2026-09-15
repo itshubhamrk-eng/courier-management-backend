@@ -193,7 +193,7 @@ export class DeliveryReport implements OnInit {
 
   view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
-  protected branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
   protected paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   exportCsv(): void {

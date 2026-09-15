@@ -24,8 +24,8 @@ public sealed interface ShipmentEvent {
      * deliberately not built ahead of this, its consumer.
      *
      * <p>Carries no commission any more — branch commission is credited on
-     * {@link DispatchCommissionEarned} instead, once the shipment's Trip Challan
-     * (manifest dispatch) is created, not at booking time.
+     * {@link InScanCommissionEarned} instead, once the shipment is in-scanned at its own
+     * final delivery branch, not at booking time.
      */
     record PrepaidBookingConfirmed(
             UUID shipmentId,
@@ -38,16 +38,18 @@ public sealed interface ShipmentEvent {
     }
 
     /**
-     * A shipment's Trip Challan was created (its manifest was dispatched) and its booking
-     * branch has commission still to collect. Published from {@code
-     * ShipmentServiceImpl.transitionToDispatched}, one event per shipment, only when the
-     * shipment's payment mode collects at booking and its booking branch has {@code
-     * instantCommission} on. Handled by {@code ShipmentBookingWalletListener}, which calls
-     * {@code WalletService.creditCommission} — moved here (was on {@link
-     * PrepaidBookingConfirmed}, i.e. at booking) on direct user request: "credit branch
-     * commission after Trip Challan created", not at order booking. Only fires for
-     * collect-at-booking payment modes — a collect-at-delivery (TO_PAY/COD) shipment's
-     * booking commission credits later instead, via {@link DeliveryCommissionEarned}.
+     * A shipment reached its own final delivery branch and was in-scanned there (not a
+     * crossing hub's in-scan — see {@code ShipmentServiceImpl.scanOneIn}'s {@code
+     * finalDestination} branch, the same one {@link ReceivedAtBranch} is gated on) and its
+     * booking branch has commission still to collect. Published from {@code
+     * ShipmentServiceImpl.scanOneIn}, one event per shipment, only when the shipment's
+     * payment mode collects at booking and its booking branch has {@code instantCommission}
+     * on. Handled by {@code ShipmentBookingWalletListener}, which calls {@code
+     * WalletService.creditCommission} — moved here (was on Trip Challan/manifest dispatch
+     * creation) on direct user request: "credit commission after shipment in-scan by
+     * delivery branch, not after Trip Challan created". Only fires for collect-at-booking
+     * payment modes — a collect-at-delivery (TO_PAY/COD) shipment's booking commission
+     * credits later instead, via {@link DeliveryCommissionEarned}.
      *
      * @param branchCommission the branch's own two commission lines, summed —
      *                         {@code commissionOnBasicFreight + branchCommissionOnOtherAmount}
@@ -56,7 +58,7 @@ public sealed interface ShipmentEvent {
      *                         {@code companyCommissionOnBasicFreight} — that is company
      *                         revenue and must never land in the branch's wallet.
      */
-    record DispatchCommissionEarned(
+    record InScanCommissionEarned(
             UUID shipmentId,
             UUID companyId,
             UUID bookingBranchId,
@@ -113,16 +115,16 @@ public sealed interface ShipmentEvent {
     /**
      * A collect-at-delivery ({@code TO_PAY}/{@code COD}) shipment was delivered — its
      * booking branch has commission still to collect, only now that payment has actually
-     * been collected. The {@link DispatchCommissionEarned} trigger never fires for these
+     * been collected. The {@link InScanCommissionEarned} trigger never fires for these
      * (it's gated to collect-at-booking payment modes only), so without this a TO_PAY
      * order's booking branch never got its commission at all. Published from {@code
-     * ShipmentServiceImpl.deliver}, same eligibility {@link DispatchCommissionEarned} uses
+     * ShipmentServiceImpl.deliver}, same eligibility {@link InScanCommissionEarned} uses
      * otherwise (booking branch has {@code instantCommission} on, commission > 0). Handled
      * by {@code ShipmentBookingWalletListener}, which calls the same {@code WalletService
      * .creditCommission} — this is the booking branch's own commission, not a delivery-side
      * credit, even though it's triggered by delivery.
      *
-     * @param branchCommission same two-line sum as {@link DispatchCommissionEarned} —
+     * @param branchCommission same two-line sum as {@link InScanCommissionEarned} —
      *                         {@code commissionOnBasicFreight + branchCommissionOnOtherAmount}
      */
     record DeliveryCommissionEarned(

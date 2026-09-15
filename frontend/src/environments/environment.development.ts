@@ -7,5 +7,5 @@ export const environment = {
   version: '0.1.0',
   envLabel: 'development',
   accessTokenSkewSeconds: 30,
-  idleTimeoutMinutes: 30
+  idleTimeoutMinutes: 120
 };

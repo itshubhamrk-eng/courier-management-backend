@@ -9,10 +9,12 @@ import com.courier.modules.charge.domain.ChargeStatus;
 import com.courier.modules.charge.domain.ChargeType;
 import com.courier.modules.charge.domain.ChargeValueType;
 import com.courier.modules.charge.domain.CommissionType;
-import com.courier.modules.master.domain.Route;
+import com.courier.modules.distance.application.AddressDistanceService;
+import com.courier.modules.distance.domain.AddressDistance;
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.application.PricingTestSupport;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.exception.BusinessRuleException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,11 +27,13 @@ import org.mockito.quality.Strictness;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -46,13 +50,28 @@ class ApplicableChargesCalculatorTest {
 
     @Mock private ChargeRepository chargeRepository;
     @Mock private ChargeSettingRepository chargeSettingRepository;
+    @Mock private AddressDistanceService addressDistanceService;
 
     private ApplicableChargesCalculator calculator;
+    // Every stubbed setting across stubSettings() calls, filtered per-invocation the same
+    // way the real findByCompanyIdAndChargeIdInAndStatus batch query would — mirrors
+    // ApplicableChargesCalculator now fetching all charges' settings in one round trip.
+    private final List<ChargeSetting> allSettings = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        calculator = new ApplicableChargesCalculator(chargeRepository, chargeSettingRepository);
+        calculator = new ApplicableChargesCalculator(chargeRepository, chargeSettingRepository, addressDistanceService);
         CompanyContext.setCompanyId(COMPANY);
+        // Harmless default for every test that doesn't care about distance (KG/FACTOR
+        // charges) — the two KM-specific tests below override it per case.
+        lenient().when(addressDistanceService.resolveBranchDistance(any(), any())).thenReturn(distance("0"));
+        lenient().when(chargeSettingRepository.findByCompanyIdAndChargeIdInAndStatus(
+                eq(COMPANY), anyCollection(), eq(ChargeStatus.ACTIVE)))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    var chargeIds = (java.util.Collection<UUID>) invocation.getArgument(1);
+                    return allSettings.stream().filter(s -> chargeIds.contains(s.getChargeId())).toList();
+                });
     }
 
     @AfterEach
@@ -75,18 +94,19 @@ class ApplicableChargesCalculatorTest {
     }
 
     @Test
-    @DisplayName("a KG slab charge (Hamali: 0-20/21-40/41-60/61-9999) prices each band correctly")
+    @DisplayName("a KG slab charge (Hamali: 0-20/21-40/41-60/61-9999, closed [from,to] both ends "
+            + "inclusive) prices each band correctly, including exactly on a boundary")
     void kgSlabBands() {
         UUID chargeId = UUID.randomUUID();
         stubCharges(charge(chargeId));
         stubSettings(chargeId,
-                kgSlab("0", "21", "10"),
-                kgSlab("21", "41", "15"),
-                kgSlab("41", "61", "20"),
+                kgSlab("0", "20", "10"),
+                kgSlab("21", "40", "15"),
+                kgSlab("41", "60", "20"),
                 kgSlab("61", "9999", "25"));
 
         assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("10.00");
-        assertThat(calculator.calculate(context(new BigDecimal("20.999")))).isEqualByComparingTo("10.00");
+        assertThat(calculator.calculate(context(new BigDecimal("20.000")))).isEqualByComparingTo("10.00");
         assertThat(calculator.calculate(context(new BigDecimal("21.000")))).isEqualByComparingTo("15.00");
         assertThat(calculator.calculate(context(new BigDecimal("40.000")))).isEqualByComparingTo("15.00");
         assertThat(calculator.calculate(context(new BigDecimal("41.000")))).isEqualByComparingTo("20.00");
@@ -96,13 +116,24 @@ class ApplicableChargesCalculatorTest {
     }
 
     @Test
-    @DisplayName("a weight at/above the top band's own upper bound (half-open [from,to)) prices zero")
+    @DisplayName("a weight in the gap between two bands (closed [from,to] leaves 20.5 unmatched "
+            + "between 0-20 and 21-40) prices zero")
+    void gapBetweenBandsPricesZero() {
+        UUID chargeId = UUID.randomUUID();
+        stubCharges(charge(chargeId));
+        stubSettings(chargeId, kgSlab("0", "20", "10"), kgSlab("21", "40", "15"));
+
+        assertThat(calculator.calculate(context(new BigDecimal("20.500")))).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("a weight past the top band's own upper bound prices zero")
     void aboveTopBand() {
         UUID chargeId = UUID.randomUUID();
         stubCharges(charge(chargeId));
-        stubSettings(chargeId, kgSlab("0", "21", "10"));
+        stubSettings(chargeId, kgSlab("0", "20", "10"));
 
-        assertThat(calculator.calculate(context(new BigDecimal("21.000")))).isEqualByComparingTo("0.00");
+        assertThat(calculator.calculate(context(new BigDecimal("20.001")))).isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -135,31 +166,46 @@ class ApplicableChargesCalculatorTest {
         UUID hamaliId = UUID.randomUUID();
         UUID fuelSurchargeId = UUID.randomUUID();
         stubCharges(charge(hamaliId), charge(fuelSurchargeId));
-        stubSettings(hamaliId, kgSlab("0", "21", "10"));
+        stubSettings(hamaliId, kgSlab("0", "20", "10"));
         stubSettings(fuelSurchargeId, factor("5", ChargeValueType.AMOUNT));
 
         assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("15.00");
     }
 
     @Test
-    @DisplayName("a KM slab charge matches the booking's matched route distance")
-    void kmSlabUsesMatchedRouteDistance() {
+    @DisplayName("a KM slab charge matches the booking/delivery branch pair's own resolved "
+            + "distance — never a matched Route, which most bookings (District Level Freight's "
+            + "own Freight Factor fallback) never set at all")
+    void kmSlabUsesResolvedBranchDistance() {
         UUID chargeId = UUID.randomUUID();
         stubCharges(charge(chargeId));
-        stubSettings(chargeId, kmSlab("0", "50", "40"), kmSlab("50", "9999", "80"));
+        stubSettings(chargeId, kmSlab("0", "50", "40"), kmSlab("51", "9999", "80"));
 
-        Route near = new Route();
-        near.setDistanceKm(new BigDecimal("30"));
-        Route far = new Route();
-        far.setDistanceKm(new BigDecimal("120"));
+        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
+                .thenReturn(distance("30"));
+        assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("40.00");
 
-        PricingContext nearCtx = context(new BigDecimal("10.000"));
-        nearCtx.matchedRoute(near);
-        assertThat(calculator.calculate(nearCtx)).isEqualByComparingTo("40.00");
+        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
+                .thenReturn(distance("120"));
+        assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("80.00");
+    }
 
-        PricingContext farCtx = context(new BigDecimal("10.000"));
-        farCtx.matchedRoute(far);
-        assertThat(calculator.calculate(farCtx)).isEqualByComparingTo("80.00");
+    @Test
+    @DisplayName("an unresolvable branch-pair distance (ungeocoded branch, etc.) degrades to no "
+            + "KM known instead of blocking the booking — the KM slab just doesn't match")
+    void unresolvableDistanceDoesNotBlockBooking() {
+        UUID chargeId = UUID.randomUUID();
+        stubCharges(charge(chargeId));
+        stubSettings(chargeId, kmSlab("0", "9999", "40"));
+
+        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
+                .thenThrow(new BusinessRuleException("Branch is not geocoded."));
+
+        assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("0.00");
+    }
+
+    private AddressDistance distance(String km) {
+        return AddressDistance.builder().distanceKm(new BigDecimal(km)).build();
     }
 
     // ---------------------------------------------------------------- fixtures
@@ -178,8 +224,10 @@ class ApplicableChargesCalculatorTest {
     }
 
     private void stubSettings(UUID chargeId, ChargeSetting... settings) {
-        lenient().when(chargeSettingRepository.findByCompanyIdAndChargeIdAndStatus(
-                eq(COMPANY), eq(chargeId), eq(ChargeStatus.ACTIVE))).thenReturn(List.of(settings));
+        for (ChargeSetting setting : settings) {
+            setting.setChargeId(chargeId);
+        }
+        allSettings.addAll(List.of(settings));
     }
 
     private Charge charge(UUID id) {

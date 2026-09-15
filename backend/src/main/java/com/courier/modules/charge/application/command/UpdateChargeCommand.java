@@ -5,6 +5,7 @@ import java.util.UUID;
 public record UpdateChargeCommand(
         String chargeName,
         UUID serviceTypeId,
+        Boolean isQtyLevel,
         Long expectedVersion
 ) {
 }

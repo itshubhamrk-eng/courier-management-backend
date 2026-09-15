@@ -30,6 +30,7 @@ const STATUSES: SelectOption[] = ([
       @if (!lockDeliveryBranch()) {
         <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Any branch" />
       }
+      <app-select [control]="c('paymentModeId')" label="Payment Mode" [options]="paymentModeOptions()" placeholder="Any payment mode" />
 
       <label class="fld"><span class="fld__l">{{ mode() === 'delivery' ? 'Delivered From' : 'Booked From' }}</span>
         <input class="fld__i" type="date" [formControl]="c('dateFrom')" /></label>
@@ -65,17 +66,20 @@ export class ShipmentFilter {
 
   protected readonly statuses = STATUSES;
   protected readonly branchOptions = signal<SelectOption[]>([]);
+  protected readonly paymentModeOptions = signal<SelectOption[]>([]);
 
   protected readonly form: FormGroup = this.fb.group({
     status: [[] as string[]],
     bookingBranchId: [null as string | null],
     deliveryBranchId: [null as string | null],
+    paymentModeId: [null as string | null],
     dateFrom: [''],
     dateTo: ['']
   });
 
   constructor() {
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+    this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -89,12 +93,13 @@ export class ShipmentFilter {
       status: v.status?.length ? (v.status as ShipmentStatus[]) : undefined,
       bookingBranchId: v.bookingBranchId || undefined,
       deliveryBranchId: v.deliveryBranchId || undefined,
+      paymentModeId: v.paymentModeId || undefined,
       ...dateKeys
     });
   }
 
   protected clear(): void {
-    this.form.reset({ status: [], bookingBranchId: null, deliveryBranchId: null, dateFrom: '', dateTo: '' });
+    this.form.reset({ status: [], bookingBranchId: null, deliveryBranchId: null, paymentModeId: null, dateFrom: '', dateTo: '' });
     this.changed.emit({});
   }
 }

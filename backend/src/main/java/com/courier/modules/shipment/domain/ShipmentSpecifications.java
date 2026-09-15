@@ -48,6 +48,9 @@ public final class ShipmentSpecifications {
             if (safe.bookingDateTo() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("bookingDate"), safe.bookingDateTo()));
             }
+            if (safe.paymentModeId() != null) {
+                predicates.add(cb.equal(root.get("paymentModeId"), safe.paymentModeId()));
+            }
             if (hasText(safe.search())) {
                 String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
                 predicates.add(cb.or(

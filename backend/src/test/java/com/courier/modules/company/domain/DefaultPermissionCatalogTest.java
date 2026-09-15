@@ -40,10 +40,12 @@ class DefaultPermissionCatalogTest {
         // READ/UPDATE/SEARCH/EXPORT/UPLOAD/VALIDATE/CANCEL, the last two new
         // PermissionAction values E-Way Bill Management needed), and V63 a further 9 (the
         // new CHARGE module: CREATE/READ/UPDATE/DELETE/SEARCH/IMPORT/EXPORT/ACTIVATE/
-        // DEACTIVATE, the same MASTER shape ROUTE_MASTER already has). All generated from
-        // this matrix. If someone adds a module or action here without a follow-up
-        // migration, this is the tripwire.
-        assertThat(DefaultPermissionCatalog.size()).isEqualTo(240);
+        // DEACTIVATE, the same MASTER shape ROUTE_MASTER already has), and V71 a further 8
+        // (the new DEPARTMENT module: CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/ACTIVATE/
+        // DEACTIVATE, the same shape BRANCH already has). All generated from this matrix.
+        // If someone adds a module or action here without a follow-up migration, this is
+        // the tripwire.
+        assertThat(DefaultPermissionCatalog.size()).isEqualTo(248);
     }
 
     @Test

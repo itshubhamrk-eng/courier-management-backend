@@ -50,7 +50,7 @@ class BookingValidationTest {
                 PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH,
                 "411001", "400001", PricingTestSupport.SERVICE_TYPE,
                 PricingTestSupport.PACKAGE_TYPE, PricingTestSupport.PAYMENT_MODE,
-                new BigDecimal("2.000"), null, null, null, null, null, null, null, null);
+                new BigDecimal("2.000"), null, null, null, null, null, null, null, null, null, null);
 
         assertThat(validation.validate(withoutDate)).isEqualTo(LocalDate.now());
     }

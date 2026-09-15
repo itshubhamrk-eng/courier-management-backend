@@ -17,7 +17,8 @@ import java.util.UUID;
 public interface PincodeCoverageLookupPort {
 
     record CoverageRef(UUID pincodeId, String pincodeCode, boolean serviceable, boolean odaApplicable,
-                        UUID districtId, String districtCode, String districtName, boolean districtActive) {
+                        UUID districtId, String districtCode, String districtName, boolean districtActive,
+                        String cityName) {
     }
 
     /** {@code pincodeCode} is matched exactly, case-insensitively — empty when no pincode

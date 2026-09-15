@@ -12,6 +12,7 @@ export interface AppUser {
   mobile?: string;
   designation?: string;
   department?: string;
+  departmentId?: string | null;
   branchId?: string | null;
   hubId?: string | null;
   status: UserStatus;
@@ -39,6 +40,7 @@ export interface UserProfile {
   dateOfBirth?: string | null;
   designation?: string;
   department?: string;
+  departmentId?: string | null;
   joiningDate?: string | null;
   reportingManagerId?: string | null;
   branchId?: string | null;
@@ -76,6 +78,7 @@ export interface CreateUserRequest {
   dateOfBirth?: string | null;
   designation?: string | null;
   department?: string | null;
+  departmentId?: string | null;
   joiningDate?: string | null;
   reportingManagerId?: string | null;
   branchId?: string | null;
@@ -97,6 +100,7 @@ export interface UpdateUserRequest {
   dateOfBirth?: string | null;
   designation?: string | null;
   department?: string | null;
+  departmentId?: string | null;
   joiningDate?: string | null;
   reportingManagerId?: string | null;
   branchId?: string | null;

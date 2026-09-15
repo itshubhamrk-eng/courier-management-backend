@@ -68,6 +68,17 @@ public class Charge extends CompanyOwnedEntity {
     @Builder.Default
     private ChargeStatus status = ChargeStatus.ACTIVE;
 
+    /** When true, a {@code SLAB} setting under this charge prices on this shipment's
+     *  average per-piece weight (total actual weight / {@code numberOfPackages}) instead
+     *  of its total chargeable weight, and the matched slab's value is multiplied by
+     *  {@code numberOfPackages} — see {@code ApplicableChargesCalculator}. Direct request:
+     *  a Hamali charge configured as 40kg total / 2 pieces should slab-match on 20kg (the
+     *  per-piece average), not 40kg, and pay out per piece. Meaningless for a
+     *  {@code FACTOR} setting, same as {@link ChargeSetting#getChargeSlabType()}. */
+    @Column(name = "is_qty_level", nullable = false)
+    @Builder.Default
+    private boolean qtyLevel = false;
+
     // ---------------------------------------------------------------- behaviour
 
     public boolean isActive() {

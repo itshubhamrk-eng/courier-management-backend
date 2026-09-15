@@ -15,6 +15,8 @@ public record UpdateChargeRequest(
 
         @NotNull UUID serviceTypeId,
 
+        Boolean isQtyLevel,
+
         @NotNull Long version
 ) {
 }

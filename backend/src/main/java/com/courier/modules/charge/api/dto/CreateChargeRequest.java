@@ -13,6 +13,11 @@ public record CreateChargeRequest(
 
         @NotBlank @Size(max = 150) @Schema(example = "Fuel Surcharge - Express") String chargeName,
 
-        @NotNull UUID serviceTypeId
+        @NotNull UUID serviceTypeId,
+
+        @Schema(description = "A SLAB setting under this charge prices on average "
+                + "per-piece weight (actual weight / package count) instead of total "
+                + "chargeable weight, and pays out per piece. Defaults false.")
+        Boolean isQtyLevel
 ) {
 }

@@ -76,6 +76,12 @@ public record CompanySettingsRequest(
                 message = "must be one of NONE, NEAREST_ONE, NEAREST_FIVE, NEAREST_TEN")
         @Schema(description = "How Shipment Booking's final amount is rounded")
         String roundOffRule,
+        @DecimalMin("0.0") @DecimalMax("100.0") @Digits(integer = 3, fraction = 2)
+        @Schema(description = "Max percent Shipment Booking's editable Net Amount may be decreased below the computed amount")
+        BigDecimal netAmountMaxDecreasePercent,
+        @DecimalMin("0.0") @DecimalMax("999.99") @Digits(integer = 3, fraction = 2)
+        @Schema(description = "Max percent Shipment Booking's editable Net Amount may be increased above the computed amount")
+        BigDecimal netAmountMaxIncreasePercent,
 
         // --- SLA (shipment lifecycle) — hours a shipment may sit in one status
         // before an auto-ticket is raised; capped at 720h (30 days)
