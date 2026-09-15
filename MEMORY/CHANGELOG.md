@@ -8,6 +8,38 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-15 — In Scan Pending stock shown on Branch Overview dashboard (0.58.16)
+
+Direct request: "show inscan pending stock on branch dashboard." New `BranchOverviewResponse.inScanPending`
+(backend `DashboardServiceImpl.branchOverview`) counts DISPATCHED shipments whose
+`nextLocationId` (or `deliveryBranchId`, the pre-V37-crossing fallback `ShipmentServiceImpl.scanOneIn`
+itself already uses) is the caller's own branch — stock physically dispatched toward this
+branch but not yet received via In Scan, distinct from the existing `pendingDelivery` tile
+(which is post-in-scan). New `ShipmentRepository.countInScanPendingByCompanyIdAndBranchId`.
+Frontend: `BranchOverview` Action Required card gained an "In scan pending" tile routing to
+`/movement/in-scan`, same shape as the other action items.
+
+`mvn -o test -Dtest=DashboardServiceImplTest` pass (added a stub + assertion for the new
+field). `tsc --noEmit` clean. **Verified live**: relaunched the stale verify-stack backend
+(`:8082`, profile `local`) to pick up the new code, confirmed `inScanPending: 3` from
+`/api/v1/dashboard/summary` as `pune@gmail.com` (BRANCH_MANAGER), then confirmed the tile
+rendered on `:4300` via `claude-in-chrome` (screenshot: "3 In scan pending" with an
+"In Scan" button).
+
+**Deployed to prod 2026-09-15**, same day, on direct request ("commit and push and then
+deploy" — user picked Prod EC2 over Dev EC2 when asked). Committed only the 6 files this
+task touched (left several other pre-existing uncommitted files — CompanySettings,
+InScanRequest, V75 migration, etc. — alone; not part of this task, look like another
+session's in-progress work). Pushed to `origin/main` (`23f3425`). Prod (`~/courier` on
+35.154.220.116) was clean and one commit behind — `git pull` fast-forwarded with no
+conflict, unlike the 2026-09-15 earlier deploy's drift. Rebuilt both `backend` and
+`frontend` images sequentially (memory-starved ~1.9GB box — built one at a time, checked
+`free -h`/`dmesg` for OOM between steps, none seen; dipped to ~74Mi free mid-build,
+recovered), `docker compose up -d backend frontend`. Both containers came up healthy;
+`docker stats` showed backend at 907MiB/1.86GiB, no OOM kills in `dmesg`.
+
+---
+
 ## Fixed 2026-09-15 — DRS print layout matched to THC's polished print (frontend only)
 
 Direct request: "DRS print should be same as THC print the diff is only two extra column
