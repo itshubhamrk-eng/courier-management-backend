@@ -2,6 +2,7 @@ package com.courier.modules.pricing.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -23,8 +24,29 @@ public record PricingRequest(
         @NotNull UUID packageTypeId,
         @NotNull UUID paymentModeId,
 
+        @Schema(description = "Normally the shipment's real actual weight. A caller that "
+                + "already knows its own chargeable weight (multi-item, its own volumetric "
+                + "calculation already done) may feed that in here instead, with length/"
+                + "width/height left null, to skip this engine re-deriving it from a single "
+                + "blended figure — in which case totalActualWeight carries the real actual "
+                + "weight separately.")
         @NotNull @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
         BigDecimal actualWeight,
+
+        @Schema(description = "The shipment's real total actual weight, only when it "
+                + "differs from actualWeight above (see its own doc). Optional — falls back "
+                + "to actualWeight when omitted, correct for every ordinary caller. Only a "
+                + "qty-level Applicable Charge (e.g. \"Hamali\") reads this, alongside "
+                + "numberOfPackages.")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal totalActualWeight,
+
+        @Schema(description = "Piece count. Optional, defaults to 1 — only matters for a "
+                + "qty-level Applicable Charge (e.g. \"Hamali\"), which slab-matches on "
+                + "totalActualWeight / this instead of chargeable weight, then multiplies "
+                + "the matched slab's value by this.")
+        @Min(value = 1, message = "must be at least 1")
+        Integer numberOfPackages,
 
         @Schema(description = "Centimetres. Optional; volumetric weight is 0 unless all "
                 + "three of length/width/height are supplied.")

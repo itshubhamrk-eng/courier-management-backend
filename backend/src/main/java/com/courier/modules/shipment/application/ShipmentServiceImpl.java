@@ -254,7 +254,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         PricingResult priced = priceIt(command.bookingBranchId(), resolvedDeliveryBranchId,
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
-                command.declaredValue(), bookingDate, command.freightFactorOverride());
+                command.declaredValue(), bookingDate, command.freightFactorOverride(),
+                weight.actualWeight(), command.numberOfPackages());
 
         PaymentMode paymentMode = paymentModeService.getById(command.paymentModeId());
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
@@ -397,7 +398,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         PricingResult priced = priceIt(shipment.getBookingBranchId(), resolvedDeliveryBranchId,
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
-                command.declaredValue(), bookingDate, command.freightFactorOverride());
+                command.declaredValue(), bookingDate, command.freightFactorOverride(),
+                weight.actualWeight(), command.numberOfPackages());
 
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
@@ -777,6 +779,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         List<com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator.Line> applicableChargeLines =
                 applicableChargesCalculator.resolve(shipment.getServiceTypeId(), shipment.getChargeableWeight(),
+                        shipment.getActualWeight(), shipment.getNumberOfPackages(),
                         shipment.getBookingBranchId(), shipment.getDeliveryBranchId(), charge.getFreight());
 
         return new ShipmentCharges(charge, resolveRouteCode(charge), resolveRateCode(charge), applicableChargeLines);
@@ -1672,11 +1675,12 @@ public class ShipmentServiceImpl implements ShipmentService {
                                   String pickupPincode, String deliveryPincode,
                                   UUID serviceTypeId, UUID packageTypeId, UUID paymentModeId,
                                   BigDecimal chargeableWeight, BigDecimal declaredValue,
-                                  LocalDate bookingDate, BigDecimal freightFactorOverride) {
+                                  LocalDate bookingDate, BigDecimal freightFactorOverride,
+                                  BigDecimal totalActualWeight, Integer numberOfPackages) {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 pickupPincode, deliveryPincode, serviceTypeId, packageTypeId, paymentModeId,
                 chargeableWeight, null, null, null, declaredValue, bookingDate, null, null,
-                freightFactorOverride);
+                freightFactorOverride, totalActualWeight, numberOfPackages);
         return pricingEngine.calculate(command);
     }
 

@@ -24,6 +24,7 @@ export interface Charge {
   chargeName: string;
   serviceTypeId: string;
   status: ChargeStatus;
+  isQtyLevel: boolean;
   version: number;
 }
 
@@ -57,6 +58,7 @@ export interface ChargeResponse {
   chargeName: string;
   serviceTypeId: string;
   status: ChargeStatus;
+  isQtyLevel: boolean;
   settings: ChargeSetting[];
   createdBy?: string | null;
   createdDate?: string | null;
@@ -69,12 +71,14 @@ export interface ChargeResponse {
 export interface CreateChargeRequest {
   chargeName: string;
   serviceTypeId: string;
+  isQtyLevel: boolean;
 }
 
 /** Body of PUT /charges/{id} — mirrors backend `UpdateChargeRequest`. */
 export interface UpdateChargeRequest {
   chargeName: string;
   serviceTypeId: string;
+  isQtyLevel: boolean;
   version: number;
 }
 

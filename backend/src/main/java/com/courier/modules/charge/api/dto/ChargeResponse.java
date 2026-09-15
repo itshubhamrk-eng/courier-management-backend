@@ -13,6 +13,7 @@ import java.util.UUID;
 @Schema(name = "ChargeResponse", description = "Charge configuration, in full, with its settings")
 public record ChargeResponse(
         UUID id, UUID companyId, String chargeName, UUID serviceTypeId, ChargeStatus status,
+        boolean isQtyLevel,
         List<ChargeSettingResponse> settings,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version
 ) {

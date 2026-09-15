@@ -3,7 +3,9 @@ import { Observable, of, shareReplay } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from '@core/services/api.service';
 import { Page, PageQuery } from '@core/models/page.model';
-import { MasterBootstrapResult, MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaRow, PincodeGeo } from '@core/models/master.model';
+import {
+  MasterBootstrapResult, MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaRow, PincodeGeo, ServiceType
+} from '@core/models/master.model';
 import { LookupSource, MASTER_DEFINITIONS, MasterDefinition, MasterKey } from './master.config';
 
 /** The branch fields this module reads — the two ends of a route, the postal code a
@@ -138,6 +140,7 @@ export class MasterDataService {
   clearOptionCache(): void {
     this.optionCache.clear();
     this.branchDirectory$ = null;
+    this.serviceTypeDirectory$ = null;
   }
 
   private masterOptions(key: MasterKey): Observable<MasterOption[]> {
@@ -183,6 +186,19 @@ export class MasterDataService {
   private branchOptions(): Observable<MasterOption[]> {
     return this.branchDirectory()
       .pipe(map((list) => list.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));
+  }
+
+  private serviceTypeDirectory$: Observable<ServiceType[]> | null = null;
+
+  /** Raw Service Type rows, `deliveryDays` included — Shipment Booking's expected-delivery
+   *  preview needs more than {value,label}. Cached like {@link branchDirectory}. */
+  serviceTypeDirectory(): Observable<ServiceType[]> {
+    if (!this.serviceTypeDirectory$) {
+      this.serviceTypeDirectory$ = this.api
+        .page<ServiceType>('/master/service-types', { page: 0, size: 200, status: 'ACTIVE' })
+        .pipe(map((p) => p.content), shareReplay({ bufferSize: 1, refCount: false }));
+    }
+    return this.serviceTypeDirectory$;
   }
 
   /** Any write invalidates the picker cache — the new row is usually the next one picked. */

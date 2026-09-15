@@ -91,7 +91,7 @@ class StandardPricingStrategyTest {
         when(applicableChargesCalculator.order()).thenReturn(55);
         when(applicableChargesCalculator.isEnabled(any())).thenReturn(true);
         when(applicableChargesCalculator.calculate(any())).thenReturn(new BigDecimal("15.00"));
-        when(applicableChargesCalculator.resolve(any(), any(), any(), any(), any())).thenReturn(List.of(
+        when(applicableChargesCalculator.resolve(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(
                 new ApplicableChargesCalculator.Line("Hamali", new BigDecimal("10.00")),
                 new ApplicableChargesCalculator.Line("Fuel Surcharge", new BigDecimal("5.00"))));
 

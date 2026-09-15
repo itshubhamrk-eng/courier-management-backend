@@ -4,6 +4,7 @@ import java.util.UUID;
 
 public record CreateChargeCommand(
         String chargeName,
-        UUID serviceTypeId
+        UUID serviceTypeId,
+        Boolean isQtyLevel
 ) {
 }

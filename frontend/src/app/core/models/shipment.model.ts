@@ -561,6 +561,16 @@ export interface PricingRequest {
   packageTypeId: string;
   paymentModeId: string;
   actualWeight: number;
+  /** The shipment's real total actual weight, only when it differs from actualWeight
+   *  above (this screen feeds actualWeight its already-computed chargeable weight, to
+   *  skip the engine re-deriving it — see priceIt$()). Optional; falls back to
+   *  actualWeight when omitted. Only a qty-level Applicable Charge (e.g. "Hamali") reads
+   *  this, alongside numberOfPackages. */
+  totalActualWeight?: number | null;
+  /** Piece count. Optional, defaults to 1 — only matters for a qty-level Applicable
+   *  Charge (e.g. "Hamali"), which slab-matches on totalActualWeight / this instead of
+   *  chargeable weight, then multiplies the matched slab's value by this. */
+  numberOfPackages?: number | null;
   length?: number | null;
   width?: number | null;
   height?: number | null;

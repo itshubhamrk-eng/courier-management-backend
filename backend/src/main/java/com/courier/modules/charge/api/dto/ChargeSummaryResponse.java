@@ -12,6 +12,6 @@ import java.util.UUID;
  */
 @Schema(name = "ChargeSummaryResponse", description = "Charge, list projection")
 public record ChargeSummaryResponse(
-        UUID id, String chargeName, UUID serviceTypeId, ChargeStatus status, Long version
+        UUID id, String chargeName, UUID serviceTypeId, ChargeStatus status, boolean isQtyLevel, Long version
 ) {
 }

@@ -8,6 +8,49 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-15 — Qty-level Applicable Charges — a Hamali-style charge can price on average per-piece weight, paid per piece (V74, 0.58.14)
+
+Direct request: "hamali charge should be total actual weight/qty, if total actual weight
+=40 qty=2 then get hamali charge by 40/20 =20 get slab of 20kg hamali and then return
+value * qty". Confirmed scope: new `isQtyLevel` flag on `Charge` itself (not per-setting —
+any SLAB row under a qty-level charge uses the new formula), weight basis is the
+shipment's real total actual weight (not chargeable weight), qty is `numberOfPackages`.
+
+New `charges.is_qty_level` column (`V74`), full CRUD plumbing (`CreateChargeRequest`/
+`UpdateChargeRequest`/`ChargeResponse`/`ChargeSummaryResponse`/commands/`ChargeMapper`/
+`ChargeServiceImpl`). `ApplicableChargesCalculator.resolve` gained `totalActualWeight`/
+`numberOfPackages` parameters: when a matched `Charge.isQtyLevel()`, slab-matches on
+`totalActualWeight / numberOfPackages` instead of chargeable weight, then multiplies the
+matched slab's value by `numberOfPackages` — every other charge (the common case)
+untouched, still chargeable-weight-based, no multiplication.
+
+Pricing Engine didn't track package count at all before this — `PricingCommand`/
+`PricingRequest` gained `totalActualWeight`/`numberOfPackages` (both optional, default to
+`actualWeight`/1, so every existing caller — including a hypothetical mobile app this repo
+doesn't contain — keeps working unchanged). `totalActualWeight` deliberately separate from
+`actualWeight`: `ShipmentServiceImpl.priceIt()` and the booking-preview's own
+`priceIt$()` both feed their already-known **chargeable** weight into `actualWeight` (skip
+re-deriving volumetric weight from a single blended figure — pre-existing quirk, untouched)
+— reusing that slot for the qty-level formula would have silently used the wrong weight.
+All four `ApplicableChargesCalculator.resolve` call sites updated (`calculate()`'s own
+chain, `StandardPricingStrategy`'s route/rate-matched path, `PricingEngineImpl`'s Freight
+Factor fallback, `ShipmentServiceImpl.getCharges()`'s read-time breakdown).
+
+Frontend: Charge form gained a "Qty Level" checkbox; charge list/detail show the slab
+basis. Booking screen's live pricing preview now sends `numberOfPackages` and the real
+`totalActualWeight` alongside its existing (chargeable-weight-as-actualWeight) call.
+
+**Verified**: `mvn test` full suite green (1034 tests — also fixed two pre-existing mock
+regressions in `ShipmentMovementServiceImplTest` left over from the In Scan fix above,
+unrelated to this feature but only surfaced once the full suite ran). `tsc --noEmit` clean;
+`charge.service.spec.ts` (vitest) 9/9 green. Live end-to-end on the `:8100` throwaway
+backend: created a qty-level charge with a 15-25kg/₹50 slab, priced a 40kg/2-package
+shipment — `POST /pricing/calculate` returned `{"chargeName":"...","amount":100.00}`
+(40/2=20kg → matched slab ₹50 × 2 = ₹100), while a pre-existing ordinary "Hamali" charge in
+the same fixture company still priced off the full 40kg unaffected (₹15).
+
+---
+
 ## Fixed 2026-09-14 — In Scan 404s "Branch not found" for a shipment booked at a different branch than the one receiving it (0.58.13)
 
 Direct report: BRANCH_MANAGER at Latur got "Branch not found: <uuid>" in-scanning a

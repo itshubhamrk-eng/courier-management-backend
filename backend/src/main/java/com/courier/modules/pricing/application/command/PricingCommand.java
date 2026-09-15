@@ -25,6 +25,18 @@ import java.util.UUID;
  *                              own matched cell. Must be greater than or equal to the matched
  *                              factor; a smaller value is refused, since this exists to let a
  *                              desk raise a quote, never undercut the configured grid
+ * @param totalActualWeight     the shipment's real total physical weight — deliberately
+ *                              separate from {@code actualWeight}, which Shipment Booking's
+ *                              own repricing helper ({@code ShipmentServiceImpl.priceIt})
+ *                              feeds its already-known <b>chargeable</b> weight into (no
+ *                              dims, to skip re-deriving volumetric weight from a single
+ *                              blended figure). Only a qty-level {@code Charge} (e.g.
+ *                              "Hamali") reads this, to slab-match on average per-piece
+ *                              weight instead of total chargeable weight — see {@code
+ *                              ApplicableChargesCalculator}
+ * @param numberOfPackages      piece count; paired with {@code totalActualWeight} for the
+ *                              same qty-level charge use — the average per-piece weight's
+ *                              matched slab value is multiplied by this
  */
 public record PricingCommand(
         UUID bookingBranchId,
@@ -42,6 +54,8 @@ public record PricingCommand(
         LocalDate bookingDate,
         BigDecimal discountPercentage,
         BigDecimal discountAmount,
-        BigDecimal freightFactorOverride
+        BigDecimal freightFactorOverride,
+        BigDecimal totalActualWeight,
+        Integer numberOfPackages
 ) {
 }

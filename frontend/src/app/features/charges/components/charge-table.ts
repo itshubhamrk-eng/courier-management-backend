@@ -25,6 +25,7 @@ export type ChargeAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'delete
       <ng-template #row let-c>
         <td><div class="cs">{{ c.chargeName }}</div></td>
         <td>{{ serviceTypeNames().get(c.serviceTypeId) || '—' }}</td>
+        <td>{{ c.isQtyLevel ? 'Per Piece' : '—' }}</td>
         <td><app-status-badge [value]="c.status" /></td>
         <td class="col-actions" (click)="$event.stopPropagation()">
           <button class="kebab" [matMenuTriggerFor]="menu" aria-label="Actions"><mat-icon>more_vert</mat-icon></button>
@@ -69,6 +70,7 @@ export class ChargeTable {
   readonly columns: TableColumn<Charge>[] = [
     { key: 'chargeName', header: 'Charge Name', sortable: true },
     { key: 'serviceType', header: 'Service Type' },
+    { key: 'isQtyLevel', header: 'Slab Basis', width: '110px' },
     { key: 'status', header: 'Status', sortable: true, width: '110px' },
     { key: 'actions', header: '', width: '56px', align: 'right' }
   ];

@@ -65,6 +65,7 @@ public class ChargeServiceImpl implements ChargeService {
                 .chargeName(command.chargeName())
                 .serviceTypeId(command.serviceTypeId())
                 .status(ChargeStatus.ACTIVE)
+                .qtyLevel(Boolean.TRUE.equals(command.isQtyLevel()))
                 .build();
         charge.applyInvariants();
         requireNameAvailable(companyId, charge.getServiceTypeId(), charge.getChargeName(), null);
@@ -90,6 +91,7 @@ public class ChargeServiceImpl implements ChargeService {
 
         charge.setChargeName(command.chargeName());
         charge.setServiceTypeId(command.serviceTypeId());
+        charge.setQtyLevel(Boolean.TRUE.equals(command.isQtyLevel()));
         charge.applyInvariants();
         requireNameAvailable(companyId, charge.getServiceTypeId(), charge.getChargeName(), charge.getId());
 
@@ -217,6 +219,7 @@ public class ChargeServiceImpl implements ChargeService {
         Map<String, Object> v = new LinkedHashMap<>();
         v.put("chargeName", c.getChargeName());
         v.put("serviceTypeId", String.valueOf(c.getServiceTypeId()));
+        v.put("isQtyLevel", c.isQtyLevel());
         return v;
     }
 

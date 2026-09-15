@@ -80,7 +80,7 @@ class ChargeServiceImplTest {
     @Test
     @DisplayName("a valid charge is created, ACTIVE, against an existing service type")
     void createSucceeds() {
-        Charge created = service.create(new CreateChargeCommand("Fuel Surcharge", SERVICE_TYPE));
+        Charge created = service.create(new CreateChargeCommand("Fuel Surcharge", SERVICE_TYPE, false));
 
         assertThat(created.getChargeName()).isEqualTo("Fuel Surcharge");
         assertThat(created.isActive()).isTrue();
@@ -92,7 +92,7 @@ class ChargeServiceImplTest {
     void unknownServiceTypeRejected() {
         when(serviceTypeService.getById(any())).thenThrow(new ResourceNotFoundException("ServiceType", SERVICE_TYPE));
 
-        assertThatThrownBy(() -> service.create(new CreateChargeCommand("X", SERVICE_TYPE)))
+        assertThatThrownBy(() -> service.create(new CreateChargeCommand("X", SERVICE_TYPE, false)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("No such service type");
     }
@@ -102,14 +102,14 @@ class ChargeServiceImplTest {
     void duplicateNameRejected() {
         when(repository.isNameTaken(eq(COMPANY), eq(SERVICE_TYPE), anyString(), any())).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(new CreateChargeCommand("Fuel Surcharge", SERVICE_TYPE)))
+        assertThatThrownBy(() -> service.create(new CreateChargeCommand("Fuel Surcharge", SERVICE_TYPE, false)))
                 .isInstanceOf(DuplicateResourceException.class);
     }
 
     @Test
     @DisplayName("a blank name is refused")
     void blankNameRejected() {
-        assertThatThrownBy(() -> service.create(new CreateChargeCommand("  ", SERVICE_TYPE)))
+        assertThatThrownBy(() -> service.create(new CreateChargeCommand("  ", SERVICE_TYPE, false)))
                 .isInstanceOf(BusinessRuleException.class);
     }
 
@@ -120,7 +120,7 @@ class ChargeServiceImplTest {
         when(repository.findByIdWithinCompany(existing.getId(), COMPANY)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.update(existing.getId(),
-                new UpdateChargeCommand("Y", SERVICE_TYPE, 2L)))
+                new UpdateChargeCommand("Y", SERVICE_TYPE, false, 2L)))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
 

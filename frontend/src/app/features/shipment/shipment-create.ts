@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -61,7 +61,7 @@ type FreightOutcome =
   selector: 'app-shipment-create',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, MatIconModule, UiSelect, UiAutocomplete, UiButton, UiCard, ItemEntryGrid, ChargeSummary, VoiceMicButton],
+  imports: [DatePipe, DecimalPipe, ReactiveFormsModule, MatIconModule, UiSelect, UiAutocomplete, UiButton, UiCard, ItemEntryGrid, ChargeSummary, VoiceMicButton],
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
@@ -97,7 +97,12 @@ type FreightOutcome =
                 <input class="fld__i" [value]="myBranchCity() ?? '—'" disabled /></label>
               <label class="fld"><span class="fld__l">To City</span>
                 <input class="fld__i" [value]="freightCalc()?.destinationCityName ?? (freightCalcLoading() ? 'Resolving…' : '—')" disabled /></label>
-              <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
+              <div class="fld">
+                <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
+                @if (expectedDeliveryPreview(); as edp) {
+                  <p class="hint">Expected delivery: {{ edp | date: 'mediumDate' }}</p>
+                }
+              </div>
               <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
                 <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
             </div>
@@ -575,6 +580,13 @@ export class ShipmentCreate implements OnInit {
   /** The booking branch's own city — shown as "From City" instead of a branch picker. */
   protected readonly myBranchCity = signal<string | null>(null);
   protected readonly serviceTypeOptions = signal<SelectOption[]>([]);
+  /** Service Type id -> `deliveryDays`, from the raw directory (options() only carries
+   *  {value,label}) — feeds {@link expectedDeliveryPreview}. */
+  private readonly serviceTypeDeliveryDays = signal<Map<string, number | null>>(new Map());
+  /** `bookingDate + serviceType.deliveryDays`, client-side and instant (mirrors the
+   *  server's own `ShipmentServiceImpl.expectedDeliveryDate`) — a live preview only, the
+   *  saved value still comes from the create/update response. */
+  protected readonly expectedDeliveryPreview = signal<string | null>(null);
   protected readonly packageTypeOptions = signal<SelectOption[]>([]);
   protected readonly paymentModeOptions = signal<SelectOption[]>([]);
 
@@ -963,6 +975,12 @@ export class ShipmentCreate implements OnInit {
       this.serviceTypeOptions.set(o);
       if (o.length && !this.form.get('serviceTypeId')?.value) this.form.get('serviceTypeId')?.setValue(o[0].value);
     });
+    this.masters.serviceTypeDirectory().subscribe((rows) => {
+      this.serviceTypeDeliveryDays.set(new Map(rows.map((r) => [r.id, r.deliveryDays])));
+      this.updateDeliveryPreview();
+    });
+    merge(this.c('serviceTypeId').valueChanges, this.c('bookingDate').valueChanges)
+      .subscribe(() => this.updateDeliveryPreview());
     this.masters.options('package-types').subscribe((o) => {
       this.packageTypeOptions.set(o);
       if (o.length && !this.form.get('packageTypeId')?.value) this.form.get('packageTypeId')?.setValue(o[0].value);
@@ -1099,6 +1117,22 @@ export class ShipmentCreate implements OnInit {
   private resetFreightFactor(): void {
     this.freightFactorOverride.set(null);
     this.matchedFreightFactor.set(null);
+  }
+
+  /** `bookingDate + serviceType.deliveryDays`, string arithmetic on the `yyyy-MM-dd` value
+   *  so it matches what the server stores regardless of local timezone. */
+  private updateDeliveryPreview(): void {
+    const days = this.serviceTypeDeliveryDays().get(this.c('serviceTypeId').value ?? '');
+    const bookingDate = this.c('bookingDate').value as string | null;
+    if (days == null || !bookingDate) {
+      this.expectedDeliveryPreview.set(null);
+      return;
+    }
+    const [y, m, d] = bookingDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() + days);
+    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    this.expectedDeliveryPreview.set(iso);
   }
 
   protected onFreightFactorInput(e: Event): void {
@@ -1477,8 +1511,15 @@ export class ShipmentCreate implements OnInit {
       bookingBranchId: v.bookingBranchId, deliveryBranchId: v.deliveryBranchId,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
-      actualWeight: this.weight().chargeable, declaredValue: v.declaredValue || null,
-      bookingDate: v.bookingDate || null, freightFactorOverride: this.freightFactorOverride()
+      // Fed as chargeableWeight, not actualWeight — matches the booking's own priceIt()
+      // quirk (skip PricingEngine re-deriving volumetric weight from a single blended
+      // figure; this screen's own WeightCalculator already did it, multi-item aware).
+      // totalActualWeight carries the real actual weight separately, for a qty-level
+      // Applicable Charge's per-piece slab match.
+      actualWeight: this.weight().chargeable, totalActualWeight: this.weight().actual,
+      declaredValue: v.declaredValue || null,
+      bookingDate: v.bookingDate || null, freightFactorOverride: this.freightFactorOverride(),
+      numberOfPackages: v.numberOfPackages || 1
     }).pipe(
       switchMap((data) => of({ ok: true, data }) as Observable<PriceOutcome>),
       catchError((e: HttpErrorResponse) =>

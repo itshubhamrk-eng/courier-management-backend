@@ -86,6 +86,7 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
     @Override
     public BigDecimal calculate(PricingContext context) {
         return resolve(context.command().serviceTypeId(), context.chargeableWeight(),
+                context.command().totalActualWeight(), context.command().numberOfPackages(),
                 context.command().bookingBranchId(), context.command().deliveryBranchId(),
                 context.charge(ChargeType.FREIGHT))
                 .stream()
@@ -104,8 +105,14 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
     /** Plain-parameter core of this calculator — no {@link PricingContext} required, so a
      *  read-time caller (a shipment's own stored booking/delivery branch, chargeable
      *  weight and freight, none of which need a fresh pricing run) can ask for the same
-     *  breakdown a booking itself would have gotten, live, without reconstructing one. */
-    public List<Line> resolve(UUID serviceTypeId, BigDecimal weight, UUID bookingBranchId,
+     *  breakdown a booking itself would have gotten, live, without reconstructing one.
+     *
+     *  <p>{@code chargeableWeight} slab-matches every ordinary charge; {@code
+     *  totalActualWeight}/{@code numberOfPackages} only matter for a {@code Charge} with
+     *  {@code isQtyLevel} on (e.g. "Hamali") — see {@link Charge#isQtyLevel()} — which
+     *  slab-matches on the average per-piece weight instead and pays out per piece. */
+    public List<Line> resolve(UUID serviceTypeId, BigDecimal chargeableWeight, BigDecimal totalActualWeight,
+                              Integer numberOfPackages, UUID bookingBranchId,
                               UUID deliveryBranchId, BigDecimal freight) {
         if (serviceTypeId == null) {
             return List.of();
@@ -119,6 +126,9 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
         }
 
         BigDecimal distanceKm = resolveDistanceKm(bookingBranchId, deliveryBranchId);
+        BigDecimal perPieceWeight = (totalActualWeight != null && numberOfPackages != null && numberOfPackages > 0)
+                ? totalActualWeight.divide(BigDecimal.valueOf(numberOfPackages), 4, RoundingMode.HALF_UP)
+                : null;
 
         // One round trip for every charge's settings instead of one per charge — this
         // runs on every pricing preview keystroke during booking, so N charges used to
@@ -131,13 +141,18 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
 
         List<Line> lines = new java.util.ArrayList<>();
         for (Charge charge : charges) {
+            boolean qtyLevel = charge.isQtyLevel() && perPieceWeight != null;
+            BigDecimal matchWeight = qtyLevel ? perPieceWeight : chargeableWeight;
             List<ChargeSetting> settings = settingsByCharge.getOrDefault(charge.getId(), List.of());
             for (ChargeSetting setting : settings) {
-                if (!applies(setting, weight, distanceKm)) {
+                if (!applies(setting, matchWeight, distanceKm)) {
                     continue;
                 }
-                lines.add(new Line(charge.getChargeName(),
-                        valueOf(setting, freight).setScale(2, RoundingMode.HALF_UP)));
+                BigDecimal amount = valueOf(setting, freight);
+                if (qtyLevel) {
+                    amount = amount.multiply(BigDecimal.valueOf(numberOfPackages));
+                }
+                lines.add(new Line(charge.getChargeName(), amount.setScale(2, RoundingMode.HALF_UP)));
                 break;
             }
         }

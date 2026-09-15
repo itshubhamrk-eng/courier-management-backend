@@ -53,7 +53,8 @@ public class StandardPricingStrategy implements PricingStrategy {
                 .map(ApplicableChargesCalculator.class::cast)
                 .findFirst()
                 .map(calculator -> calculator.resolve(context.command().serviceTypeId(),
-                        context.chargeableWeight(), context.command().bookingBranchId(),
+                        context.chargeableWeight(), context.command().totalActualWeight(),
+                        context.command().numberOfPackages(), context.command().bookingBranchId(),
                         context.command().deliveryBranchId(), context.charge(ChargeType.FREIGHT)))
                 .orElse(List.of());
 

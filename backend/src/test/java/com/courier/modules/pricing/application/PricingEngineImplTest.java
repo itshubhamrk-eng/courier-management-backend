@@ -74,7 +74,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("1.000"), new BigDecimal("30"), new BigDecimal("20"),
-                new BigDecimal("10"), null, bookingDate, null, null, null);
+                new BigDecimal("10"), null, bookingDate, null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenReturn(route);
         when(bookingValidation.validate(command)).thenReturn(bookingDate);
@@ -118,7 +118,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("1.000"), new BigDecimal("30"), new BigDecimal("20"),
-                new BigDecimal("10"), null, bookingDate, null, null, null);
+                new BigDecimal("10"), null, bookingDate, null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenReturn(route);
         when(bookingValidation.validate(command)).thenReturn(bookingDate);
@@ -149,7 +149,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("1.000"), new BigDecimal("30"), new BigDecimal("20"),
-                new BigDecimal("10"), null, bookingDate, null, null, null);
+                new BigDecimal("10"), null, bookingDate, null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenReturn(route);
         when(bookingValidation.validate(command)).thenReturn(bookingDate);
@@ -175,7 +175,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, null);
+                LocalDate.of(2026, 6, 1), null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new RouteRateUnavailableException("No route runs from branch %s to branch %s."
@@ -212,7 +212,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, null);
+                LocalDate.of(2026, 6, 1), null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new RouteRateUnavailableException("No route runs from branch %s to branch %s."
@@ -225,7 +225,7 @@ class PricingEngineImplTest {
         when(companySettingsService.get()).thenReturn(
                 com.courier.modules.company.domain.CompanySettings.builder()
                         .gstPercentage(new BigDecimal("18")).build());
-        when(applicableChargesCalculator.resolve(any(), any(), any(), any(), any()))
+        when(applicableChargesCalculator.resolve(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(List.of(new ApplicableChargesCalculator.Line("Hamali", new BigDecimal("10.00"))));
 
         PricingResult result = engine.calculate(command);
@@ -246,7 +246,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, new BigDecimal("5.00"));
+                LocalDate.of(2026, 6, 1), null, null, new BigDecimal("5.00"), null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new RouteRateUnavailableException("No route runs from branch %s to branch %s."
@@ -269,7 +269,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, new BigDecimal("10.00"));
+                LocalDate.of(2026, 6, 1), null, null, new BigDecimal("10.00"), null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new RouteRateUnavailableException("No route runs from branch %s to branch %s."
@@ -296,7 +296,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(UUID.randomUUID(), UUID.randomUUID(),
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, null);
+                LocalDate.of(2026, 6, 1), null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new BusinessRuleException("Pickup pincode 411001 is not serviceable."));
@@ -316,7 +316,7 @@ class PricingEngineImplTest {
         PricingCommand command = new PricingCommand(bookingBranchId, deliveryBranchId,
                 "411001", "400001", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 new BigDecimal("5.000"), null, null, null, null,
-                LocalDate.of(2026, 6, 1), null, null, null);
+                LocalDate.of(2026, 6, 1), null, null, null, null, null);
 
         when(routeValidation.validate(command)).thenThrow(
                 new RouteRateUnavailableException("No route runs from branch %s to branch %s."

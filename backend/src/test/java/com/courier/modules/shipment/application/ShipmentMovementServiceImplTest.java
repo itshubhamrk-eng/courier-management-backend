@@ -438,6 +438,7 @@ class ShipmentMovementServiceImplTest {
                         .build()));
         when(branchService.getById(shipment.getBookingBranchId())).thenReturn(
                 Branch.builder().branchCode("PUNE").instantCommission(true).build());
+        when(branchService.instantCommissionOf(shipment.getBookingBranchId())).thenReturn(true);
 
         service.inScan(DELIVERY_BRANCH, List.of(shipment.getTrackingNumber()), null, null);
 
@@ -733,6 +734,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Branch.builder().branchCode("PUNE").build());
         when(branchService.getById(BOOKING_BRANCH))
                 .thenReturn(Branch.builder().branchCode("MUMBAI").instantCommission(true).build());
+        when(branchService.instantCommissionOf(BOOKING_BRANCH)).thenReturn(true);
 
         service.deliver(shipment.getId(),
                 new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));

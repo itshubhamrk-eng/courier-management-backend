@@ -202,6 +202,7 @@ public class PricingEngineImpl implements PricingEngine {
                                                                          BigDecimal chargeableWeight,
                                                                          BigDecimal freight) {
         return applicableChargesCalculator.resolve(command.serviceTypeId(), chargeableWeight,
+                command.totalActualWeight(), command.numberOfPackages(),
                 command.bookingBranchId(), command.deliveryBranchId(), freight);
     }
 }

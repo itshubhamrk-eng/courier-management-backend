@@ -22,7 +22,7 @@ describe('ChargeService', () => {
   afterEach(() => http.verify());
 
   it('creates a charge with POST to the collection', () => {
-    service.create({ chargeName: 'Fuel Surcharge', serviceTypeId: 's-1' }).subscribe();
+    service.create({ chargeName: 'Fuel Surcharge', serviceTypeId: 's-1', isQtyLevel: false }).subscribe();
 
     const request = http.expectOne(`${base}/charges`);
     expect(request.request.method).toBe('POST');
@@ -31,7 +31,7 @@ describe('ChargeService', () => {
   });
 
   it('updates with PUT carrying the version', () => {
-    service.update('charge-1', { chargeName: 'Updated', serviceTypeId: 's-1', version: 2 }).subscribe();
+    service.update('charge-1', { chargeName: 'Updated', serviceTypeId: 's-1', isQtyLevel: false, version: 2 }).subscribe();
 
     const request = http.expectOne(`${base}/charges/charge-1`);
     expect(request.request.method).toBe('PUT');

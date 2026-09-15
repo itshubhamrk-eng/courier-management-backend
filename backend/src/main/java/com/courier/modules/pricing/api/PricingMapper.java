@@ -30,7 +30,9 @@ public class PricingMapper {
                 request.bookingDate(),
                 request.discountPercentage(),
                 request.discountAmount(),
-                request.freightFactorOverride());
+                request.freightFactorOverride(),
+                request.totalActualWeight() == null ? request.actualWeight() : request.totalActualWeight(),
+                request.numberOfPackages() == null ? 1 : request.numberOfPackages());
     }
 
     /**

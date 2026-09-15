@@ -25,11 +25,11 @@ public class ChargeMapper {
     }
 
     public CreateChargeCommand toCommand(CreateChargeRequest r) {
-        return new CreateChargeCommand(r.chargeName(), r.serviceTypeId());
+        return new CreateChargeCommand(r.chargeName(), r.serviceTypeId(), r.isQtyLevel());
     }
 
     public UpdateChargeCommand toCommand(UpdateChargeRequest r) {
-        return new UpdateChargeCommand(r.chargeName(), r.serviceTypeId(), r.version());
+        return new UpdateChargeCommand(r.chargeName(), r.serviceTypeId(), r.isQtyLevel(), r.version());
     }
 
     public ChargeCriteria toCriteria(ChargeSearchRequest r) {
@@ -40,11 +40,13 @@ public class ChargeMapper {
     public ChargeResponse toResponse(Charge c, List<ChargeSetting> settings) {
         return new ChargeResponse(
                 c.getId(), c.getCompanyId(), c.getChargeName(), c.getServiceTypeId(), c.getStatus(),
+                c.isQtyLevel(),
                 settings.stream().map(settingMapper::toResponse).toList(),
                 c.getCreatedBy(), c.getCreatedAt(), c.getUpdatedBy(), c.getUpdatedAt(), c.getVersion());
     }
 
     public ChargeSummaryResponse toSummary(Charge c) {
-        return new ChargeSummaryResponse(c.getId(), c.getChargeName(), c.getServiceTypeId(), c.getStatus(), c.getVersion());
+        return new ChargeSummaryResponse(
+                c.getId(), c.getChargeName(), c.getServiceTypeId(), c.getStatus(), c.isQtyLevel(), c.getVersion());
     }
 }
