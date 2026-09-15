@@ -477,8 +477,13 @@ export const routes: Routes = [
         loadComponent: () => import('@features/masters/master-list').then((m) => m.MasterList)
       },
       {
+        // Union at the route: SUPER_ADMIN writes the geography lists, COMPANY_ADMIN
+        // writes its own six catalogues (plus Pincode). Same split as the list/view
+        // routes above — MasterFormPage has no per-definition narrowing of its own, so
+        // hardcoding COMPANY_ADMIN here locked SUPER_ADMIN out of District/State edits;
+        // the backend's per-service @PreAuthorize is still the real enforcement.
         path: 'masters/:master/new', title: 'New Master Record', canActivate: [roleGuard],
-        data: { roles: [AppRole.COMPANY_ADMIN] },
+        data: { roles: MASTERS_READERS },
         loadComponent: () => import('@features/masters/master-form-page').then((m) => m.MasterFormPage)
       },
       {
@@ -487,7 +492,7 @@ export const routes: Routes = [
       },
       {
         path: 'masters/:master/:id/edit', title: 'Edit Master Record', canActivate: [roleGuard],
-        data: { roles: [AppRole.COMPANY_ADMIN] },
+        data: { roles: MASTERS_READERS },
         loadComponent: () => import('@features/masters/master-form-page').then((m) => m.MasterFormPage)
       },
       // hub module not built yet
