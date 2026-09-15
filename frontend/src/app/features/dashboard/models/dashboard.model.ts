@@ -184,6 +184,10 @@ export interface BranchOverview {
   /** Pending-delivery TO_PAY shipments — freight already debited from this branch's
    *  wallet at THC in-scan, not yet actually delivered. */
   toPayAwaitingDelivery: number;
+
+  /** Stock already dispatched toward this branch (a crossing hop or the final delivery
+   *  branch) but not yet received via In Scan. */
+  inScanPending: number;
 }
 
 /** The full aggregate the page consumes. Assembled from several endpoints by the service. */

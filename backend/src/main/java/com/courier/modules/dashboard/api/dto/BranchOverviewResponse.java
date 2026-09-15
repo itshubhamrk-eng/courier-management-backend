@@ -20,6 +20,7 @@ public record BranchOverviewResponse(
         List<DeliveryAgingBucketResponse> deliveryPendingAging,
         PodOverviewResponse podOverview,
         List<RejectedPodResponse> rejectedPods,
-        long toPayAwaitingDelivery
+        long toPayAwaitingDelivery,
+        long inScanPending
 ) {
 }

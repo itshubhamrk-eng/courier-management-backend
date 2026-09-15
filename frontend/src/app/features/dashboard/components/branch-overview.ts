@@ -202,6 +202,10 @@ export class BranchOverview {
       items.push({ key: 'dispatch', label: 'Manifests awaiting dispatch', count: d.manifestsAwaitingDispatch,
         icon: 'local_shipping', tone: 'info', actionLabel: 'Dispatch', route: '/movement/trip-hire-challan' });
     }
+    if (d.inScanPending > 0) {
+      items.push({ key: 'inScan', label: 'In scan pending', count: d.inScanPending,
+        icon: 'move_to_inbox', tone: 'warning', actionLabel: 'In Scan', route: '/movement/in-scan' });
+    }
     if (d.pendingDelivery > 0) {
       items.push({ key: 'delivery', label: 'Pending delivery', count: d.pendingDelivery,
         icon: 'call_received', tone: 'warning', actionLabel: 'View', route: '/movement/pending-delivery' });

@@ -204,6 +204,19 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     long countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
             UUID companyId, UUID currentLocationId, Collection<ShipmentStatus> excludedStatuses, LocalDate cutoff);
 
+    /** In Scan Pending backlog for the Branch Overview card: shipments already dispatched
+     *  (out of some other branch/hub) whose next stop is this branch, still awaiting the
+     *  receiving branch's own {@code scanOneIn} — stock physically incoming but not yet
+     *  booked into this branch's own pipeline. {@code nextLocationId} is the shipment's
+     *  real next stop (a crossing hub or the delivery branch); the {@code deliveryBranchId}
+     *  fallback covers pre-V37 rows that never had it written, same fallback
+     *  {@code ShipmentServiceImpl.scanOneIn} itself already applies. */
+    @Query("select count(s) from Shipment s where s.companyId = :companyId and s.status = :status "
+            + "and (s.nextLocationId = :branchId "
+            + "or (s.nextLocationId is null and s.deliveryBranchId = :branchId))")
+    long countInScanPendingByCompanyIdAndBranchId(@Param("companyId") UUID companyId,
+            @Param("branchId") UUID branchId, @Param("status") ShipmentStatus status);
+
     // ---------------------------------------------------------- booking-branch-scoped
     // Backs the dashboard's own KPI tiles/charts/lists for a caller with an own branch
     // (BRANCH_MANAGER/BRANCH_OPERATOR) — the company-scoped siblings above leaked

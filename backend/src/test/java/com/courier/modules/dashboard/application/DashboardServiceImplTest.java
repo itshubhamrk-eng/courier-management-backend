@@ -349,6 +349,8 @@ class DashboardServiceImplTest {
                 COMPANY, branch, ManifestStatus.CREATED)).thenReturn(7L);
         when(shipmentRepository.countByCompanyIdAndCurrentLocationIdAndStatusNotInAndBookingDateBefore(
                 eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class))).thenReturn(8L);
+        when(shipmentRepository.countInScanPendingByCompanyIdAndBranchId(
+                eq(COMPANY), eq(branch), eq(ShipmentStatus.DISPATCHED))).thenReturn(9L);
 
         // POD Dashboard pie + Rejected POD backlog: 4 candidate shipments at this branch —
         // one never had a POD run (pendingUpload, by omission from the map below), one
@@ -379,6 +381,7 @@ class DashboardServiceImplTest {
         assertThat(response.branchOverview().delayedShipments()).isEqualTo(8L);
         assertThat(response.branchOverview().deliveryPendingAging()).hasSize(4);
         assertThat(response.branchOverview().toPayAwaitingDelivery()).isEqualTo(1L);
+        assertThat(response.branchOverview().inScanPending()).isEqualTo(9L);
         assertThat(response.branchOverview().deliveryPendingAging())
                 .extracting("label", "count")
                 .containsExactly(

@@ -428,9 +428,13 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(s -> toPayModeIds.contains(s.getPaymentModeId()))
                 .count();
 
+        long inScanPending = shipmentRepository.countInScanPendingByCompanyIdAndBranchId(
+                companyId, branchId, ShipmentStatus.DISPATCHED);
+
         return new BranchOverviewResponse(pipeline, readyForManifest, manifestsAwaitingDispatch,
                 pendingDelivery, delayedShipments, deliveryPendingAging(companyId, pendingDeliveryShipments),
-                podOverview(companyId, branchId), rejectedPods(companyId, branchId), toPayAwaitingDelivery);
+                podOverview(companyId, branchId), rejectedPods(companyId, branchId), toPayAwaitingDelivery,
+                inScanPending);
     }
 
     /** TO_PAY-shaped payment mode ids for a company — collects at delivery, but not
