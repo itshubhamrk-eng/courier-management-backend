@@ -8,6 +8,31 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-15 — DRS print layout matched to THC's polished print (frontend only)
+
+Direct request: "DRS print should be same as THC print the diff is only two extra column
+sign and stamp." `printDrs()` in `out-for-delivery.ts` still used the old, unstyled print
+layout from before THC/Print 3 got their September polish pass (box-sizing, fixed 900px
+bordered card, `table-layout: fixed`, `@page A4 portrait margin: 8mm`) — no `@page` rule
+meant columns could overflow/cut off at actual print time. Rewrote it to mirror
+`trip-hire-challan.ts`'s `renderThcHtml` structure exactly (same CSS, same meta-grid
+header, same bordered table/footer), keeping DRS's own data columns (Receiver, Contact,
+Payment, Amount to collect — needed for COD collection, confirmed with user rather than
+dropping them to match THC's column set) plus the two extras: Receiver Sign, Stamp.
+
+**Verified live** without a real DRS-eligible shipment in hand (dev DB's existing test
+rows were already past DRS status): booted a throwaway verify-stack (backend `:8082`
+profile `local`, frontend `:4300`), then used `window.ng.getComponent()` on the mounted
+`app-out-for-delivery` element to inject fake shipment data directly and call
+`printDrs()`, with `window.open` patched to capture the generated HTML string instead of
+opening a popup (avoids the pop-up-blocker on a script-triggered `window.open` — see
+[[print-popup-freezes-chrome-automation]]) — stored via `localStorage` and rendered in a
+second tab. Confirmed: barcode + QR render in the DRS No box, borders are uniform, a long
+receiver name wraps without breaking the grid, nothing overlaps or gets cut off — matches
+THC's print exactly plus the two extra columns.
+
+**Files:** `frontend/src/app/features/shipment-movement/out-for-delivery.ts`
+
 ## Fixed 2026-09-15 — SUPER_ADMIN denied editing District/State (global masters `new`/`edit` routes hardcoded to COMPANY_ADMIN)
 
 Direct report: "Super admin not able to edit district and sate getting access denied."
