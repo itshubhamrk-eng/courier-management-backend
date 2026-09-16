@@ -8,6 +8,60 @@ All notable changes to this project. Format based on
 
 ---
 
+## Changed 2026-09-16 — Print 2/3 revised further: 2-per-page half-fold layout, larger text, terms fixes
+
+Follow-on iteration on the same session's earlier 3-per-page change, driven by more live
+feedback: "A4 page should be vertical... leave some space" → "3 copy per page?" → "side
+padding is very large" → "print should be 2 on A4... if i fold paper to half then half
+half page should be [split]" → "every text size increase by 1" → "print structure are
+broken check it" (the terms paragraph) → "add this also in terms and condition" (Pune
+District jurisdiction) → "from booking print remove lr number and in place of lr number
+add shipment number".
+
+**Layout**: both `ambox-consignment-print.util.ts` and `performa-bill-print.util.ts`
+moved from 3-per-page to 2 copies per A4-portrait page, each wrapped in a `.slot` sized
+to exactly half the page's usable height (138.5mm, derived from a 297mm page with 10mm
+margins) and centered via flexbox — so a physical fold down the page's middle lands in
+the blank space between copies, not across printed content, regardless of how tall any
+given copy's content happens to be. `page-break-after` moved from `.sheet:nth-child(3n)`
+to `.slot:nth-child(2n)`.
+
+**Text size**: every `font-size` in both files bumped +1px for readability, found via
+`grep -o 'font-size:[0-9.]*px'` and a small Python regex pass (handles decimals). One
+exception: ambox's `.terms .tx` (the "I/We hereby agree..." paragraph) sits in the
+tightest fixed-height flex slot on the whole sheet — already marginal before, the +1px
+bump made the paragraph wrap an extra line and overflow past the sheet's bottom edge
+(reported live: "print structure are broken", user pasted the exact broken paragraph).
+Fixed by tightening that one element to 7px/1.15 line-height instead of following the
+general bump, since it can't be reduced by fixing the layout that used the general +1.
+
+**Booking Receipt content changes**: the masthead's "LR No" box now shows
+`shipmentNumber` (not `trackingNumber`) under a "Shipment No" label; removed the
+now-redundant duplicate small shipment-number line that used to sit under the QR code.
+Terms & Conditions point 6 (previously a generic "courts at the booking branch's
+location only" clause) replaced verbatim with an explicit Pune District, Maharashtra
+jurisdiction clause per direct request.
+
+**Verified live** every iteration on throwaway `:4300`/`:8083` (real `:4200`/backend
+untouched, same technique as the prior 3-per-page entry): patched the iframe's
+`contentWindow.print` to capture generated HTML instead of triggering the real dialog,
+rendered via `localStorage` handoff + `document.write` in a fresh tab, checked
+`getComputedStyle`/`getBoundingClientRect` on `.slot`/`.sheet`/`.tx`/`.terms` for zoom,
+slot-fit, page-break placement and `scrollHeight` vs `clientHeight` overflow across all
+4 copies each time, then screenshotted (full page and zoomed crops) to confirm visually.
+
+**Deployed to prod** (35.154.220.116) same session: pushed two commits to
+`origin/main` (`d0f077a` docs, `dc62438` code) — this time prod had zero drift (clean
+`git status` besides two local-only `.claude/*` session files), a clean fast-forward from
+`b3e45e3`, no stash needed. Rebuilt the frontend Docker image, recreated the container,
+confirmed `200` on `localhost:8090` from the box. Committed only the two print-util files
+this session actually touched — a large, unrelated set of uncommitted changes already
+sitting in the working tree (a POD-verification status-model rewrite, migration V78, and
+several `shipment-movement` files) belongs to another concurrent session and was left
+untouched, not committed, not deployed.
+
+---
+
 ## Changed 2026-09-16 — Print 2 (Ambox) and Print 3 (Booking Receipt) switched to A4 portrait, 3 copies/page
 
 Direct request, iterated live: "add 2 print on page A4 size horizontal" → "A4 page
