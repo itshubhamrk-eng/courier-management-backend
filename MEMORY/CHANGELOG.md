@@ -8,6 +8,52 @@ All notable changes to this project. Format based on
 
 ---
 
+## Changed 2026-09-16 — Print 2 (Ambox) and Print 3 (Booking Receipt) switched to A4 portrait, 3 copies/page
+
+Direct request, iterated live: "add 2 print on page A4 size horizontal" → "A4 page
+should be vertical, print should be vertical, leave some space between" → "can we add
+3 copy per page?" → "side padding is very large." Both `ambox-consignment-print.util.ts`
+and `performa-bill-print.util.ts` previously printed one copy per A4-landscape page
+(4 pages for 4 copies). Both now use `@page{size:A4 portrait}`, a CSS `zoom` on `.sheet`
+to shrink each copy to fit, and `page-break-after` on `:nth-child(3n)` instead of every
+sheet — 3 copies per page, 2 pages for 4 copies. A `margin-bottom` gap (0.3in) separates
+stacked copies, reset to 0 on the page-ending sheet and the last sheet so no dead space
+lands at a page boundary.
+
+Ambox's sheet is a fixed 12in×6in (matches real stationery) — `zoom:0.56` fits 3 stacked
+copies inside A4-portrait's ~11.06in usable height with a safety margin against the
+tallest observed copy. Performa-bill's sheet is auto-height (variable content: amount
+table rows differ by copy/payment-mode, an optional appointment-delivery banner adds a
+row) — `zoom:0.56` plus a trimmed `@page margin:8mm→5mm` reduce the side gap after
+measuring the tallest live-rendered copy; zoom is intentionally kept below the
+theoretical max (~0.575) so a shipment with the appointment banner across all 3 copies on
+a page still fits. Full side-padding elimination isn't possible at 3/page — the sheet's
+fixed/near-fixed width is the binding constraint at that zoom, not the page margin; user
+chose "keep 3/page, trim what's controllable" over dropping to 2/page.
+
+**Verified live** each iteration on throwaway `:4300`/`:8083` (real `:4200`/backend
+untouched): patched the print util's hidden-iframe `contentWindow.print` to capture the
+generated HTML instead of invoking the real dialog (which — per
+`print-popup-freezes-chrome-automation` — hangs the Chrome automation tab), wrote the
+captured HTML into a fresh tab via `localStorage` handoff + `document.write`, then read
+`getComputedStyle`/`getBoundingClientRect` on each `.sheet` to confirm zoom, page-break
+placement, and no cross-page overlap before rendering to screenshot.
+
+**Deployed to prod** (35.154.220.116) same session: pushed to `origin/main`
+(`b3e45e3`), then found prod's working tree had drifted again (39 modified + 3
+untracked files, including a same-day edit to `performa-bill-print.util.ts` itself —
+active work from another session, not stale leftovers). `git stash push -u`, fast-
+forwarded prod onto `origin/main` (brought in commits prod was missing — the V75-V77
+migrations and most of the "drift" turned out to already be committed upstream, prod
+was just behind), then `git stash pop` — one real conflict, in `MEMORY/CHANGELOG.md`
+itself (both sides had appended entries), resolved by keeping both. Rebuilt the
+frontend Docker image (`docker compose build frontend`), recreated the container
+(`docker compose up -d frontend`); confirmed `200` on `localhost:8090` from the box
+itself. Stash entry left in place (not dropped — a destructive-action permission gate
+blocked it, and it's redundant once popped and resolved, no need to force it).
+
+---
+
 ## Fixed 2026-09-16 — Pricing calculate took ~10s: unconditional distance lookup on every call
 
 Direct report: "while getting pricing it taking 10 seconds." `ApplicableChargesCalculator`
