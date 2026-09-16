@@ -84,11 +84,23 @@ properly with a correct checksum. The data UPDATE itself was safe to keep — sa
 end-state the migration itself produces, exactly what [[keep-test-data-in-dev-db]]
 already established for this kind of fixture-preserving direct edit.
 
-**Not yet verified end-to-end live** (real backend not restarted this session — a
-restart is required to pick up the code change and would be the user's call, not taken
-unilaterally): unit-test coverage is full, but the actual Delivery-page upload →
-POD-Review-page decision round trip in a real browser session hasn't been re-run since
-this change. See `MEMORY/modules/pod-verification.md` for the fuller module history.
+**Follow-up (same day, separate session): committed, verified live, and deployed to
+prod** on explicit instruction ("all work should be commit and deploy" — this had been
+left uncommitted by the originating session as a deliberate choice not to restart the
+real backend unilaterally). Before touching anything: `mvn test` (1034/1034 green),
+`ng build --configuration=production` (clean), and confirmed via `flyway_schema_history`
+that another concurrent session had already applied V78 against dev's real `courier_db`
+with a correct checksum. Live-checked the actual gap this entry flagged — the
+Delivery-page upload → POD-Review-page decision round trip — on a throwaway backend
+(fresh port, real `courier_db`) + `:4300` (real `:4200` untouched): dashboard POD
+Overview pie renders with the renamed status, POD Review list shows a `PENDING` badge,
+detail view's Approve/Reject buttons render for a `PENDING` fixture row (the original
+bug report's exact ask). Pushed to `origin/main`, prod (35.154.220.116) pulled clean
+(no drift), backend **and** frontend images rebuilt and containers recreated (backend
+Java changed this time, not just frontend), V78 applied against prod's real database on
+startup (`Flyway applied 1 migration(s); schema now at version 78`), both containers
+healthy, `200` from both `:8090` and `:8091/actuator/health`. See
+`MEMORY/modules/pod-verification.md` for the fuller module history.
 
 ---
 
