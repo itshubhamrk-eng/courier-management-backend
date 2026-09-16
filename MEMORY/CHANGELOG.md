@@ -8,6 +8,34 @@ All notable changes to this project. Format based on
 
 ---
 
+## Changed 2026-09-15 — Print 1 ("Delivery Receipt") shows Taxable Amount + GST rows
+
+Direct request: default consignment-note print (`consignment-print.util.ts`, the
+"Delivery Receipt" button on `shipment-view.ts`) showed only a lump "Total
+Paid"/"Total Receivable" figure with no tax breakdown — Print 2 (`ambox-consignment-
+print.util.ts`) and Print 3 (`performa-bill-print.util.ts`) already break out Taxable
+Amount + GST above the final total. Added the same two rows to Print 1's `copy()`:
+`taxableAmount = total - d.charges.gstAmount` (identical formula to Print 3), shown
+above the total line for every copy/mode except `omitted` (ToPay, undisclosed until
+delivery — same rule the final-total row already follows). The final total itself was
+already `charges.netAmount`-derived, which the backend (`PricingEngineImpl.calculate`)
+already rounds (`netAmount = resolveRoundingRule(settings).apply(taxableSubtotal +
+gstAmount)`) — no backend change needed, round-off was already baked in. Row order
+requested next ("taxable, then gst, below that final net total"): moved the total row
+to sit directly under the tax rows, pushing the zero-valued placeholder rows (Unloading
+Delivery Charges, GST On Hamali, Demurrage, Reschedule Fine) below it instead of between.
+**Verified live** on throwaway `:8082`/`:4300` (real `:8100`/`:4200` untouched, real
+`courier_db`) — PUNE-000048 (Door Delivery, PAID, ₹2665 total): clicked "Delivery
+Receipt" on the shipment view, captured the iframe's rendered HTML by monkey-patching
+`document.body.appendChild` to no-op the iframe's `contentWindow.print` (the plain
+`window.open` patch from the earlier attempt didn't apply — this print path actually
+uses a hidden iframe + `iframe.contentWindow.print()`, not `window.open`, which is what
+froze the tab on the first two attempts; recovered via re-navigate each time). Rendered
+output confirmed the order: `Taxable Amount 2563.30` / `GST 101.70` / `Total Paid
+2665.00` (2563.30 + 101.70 = 2665.00 exactly, round-off already folded in).
+
+---
+
 ## Fixed 2026-09-15 — TO_PAY freight not debited at in-scan on prod (C-KOL-000010/000011)
 
 Direct report: booked C-KOL-000010 Kolhapur→Karad, TO_PAY, commission/topay not debited.

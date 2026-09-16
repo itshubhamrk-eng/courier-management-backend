@@ -227,6 +227,7 @@ type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Cop
 function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
   const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
+  const taxableAmount = total - d.charges.gstAmount;
   const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
   const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
@@ -265,9 +266,12 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
     isPaid ? 'paid' : 'normal';
 
   const collectTotal = isPaid ? 0 : total;
+  const taxRowsHtml = `<tr><td>Taxable Amount</td><td>${taxableAmount.toFixed(2)}</td></tr>` +
+    `<tr><td>GST</td><td>${d.charges.gstAmount.toFixed(2)}</td></tr>`;
   const amountSection = amountMode === 'omitted' ? '' : amountMode === 'paid' ? `
           <table class="charges">
             <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
+            ${taxRowsHtml}
             <tr class="total"><td>Total Paid</td><td>${total.toFixed(2)}</td></tr>
           </table>
           <div class="zero">${esc(amountInWords(total))} (Paid)</div>
@@ -279,8 +283,9 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
             <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
             ${amountMode === 'collect'
               ? `<tr><td>ToPay</td><td>${collectTotal.toFixed(2)}</td></tr>`
-              : chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('') +
-                `<tr class="total"><td>Total Receivable</td><td>${total.toFixed(2)}</td></tr>`}
+              : taxRowsHtml +
+                `<tr class="total"><td>Total Receivable</td><td>${total.toFixed(2)}</td></tr>` +
+                chargeRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.toFixed(2)}</td></tr>`).join('')}
           </table>
           <div class="zero">${esc(amountInWords(amountMode === 'collect' ? collectTotal : total))}</div>
           <div class="note">
