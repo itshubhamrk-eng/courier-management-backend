@@ -101,10 +101,9 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
         ${d.companyWebsite ? `<div class="addr">${esc(d.companyWebsite)}</div>` : ''}
       </div>
       <div class="lrbox">
-        <span class="lrbox-label">LR No</span>
-        <span class="lrbox-no">${esc(d.trackingNumber)}</span>
+        <span class="lrbox-label">Shipment No</span>
+        <span class="lrbox-no">${esc(d.shipmentNumber)}</span>
         <div class="lrbox-qr">${qrSvg(d.shipmentNumber)}</div>
-        <span class="lrbox-shipno">${esc(d.shipmentNumber)}</span>
       </div>
     </div>
 
@@ -201,8 +200,9 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
       natural calamity, strike, riot or government action.
       5. Prohibited, hazardous, fragile, or valuable articles (cash, jewellery, negotiable instruments)
       are not covered unless separately declared and accepted in writing at booking.
-      6. Any dispute is subject to the exclusive jurisdiction of the courts at the booking branch's
-      location only.
+      6. In case of any dispute, legal proceedings, or police complaint arising in connection with
+      this shipment, the matter shall be subject to the jurisdiction of Pune District, Maharashtra,
+      in accordance with applicable law.
     </div>
 
     <!-- FOOTER -->
@@ -227,9 +227,13 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:#e9e9e9;font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;color:#000;padding:10px}
-  .sheet{width:1100px;max-width:100%;margin:0 auto 0.3in;background:#fff;border:2px solid #000;zoom:0.56}
-  .sheet:nth-child(3n){page-break-after:always;margin-bottom:0}
-  .sheet:last-child{page-break-after:auto;margin-bottom:0}
+  .sheet{width:1100px;max-width:100%;margin:0 auto;background:#fff;border:2px solid #000;zoom:0.65}
+  /* Half of A4 portrait's usable height (297mm page, 10mm margin top+bottom) — each
+     copy is centered inside its own half so a physical fold down the page's middle
+     lands in the blank space between copies, not across printed content. */
+  .slot{height:138.5mm;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .slot:nth-child(2n){page-break-after:always}
+  .slot:last-child{page-break-after:auto}
   .row{display:flex;border-bottom:1px solid #000}
   .row:last-child{border-bottom:none}
 
@@ -239,42 +243,41 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   .brand{width:1.9in;display:flex;align-items:center;justify-content:center}
   .logo{line-height:1;text-align:center}
   .logo .mark{max-width:100%;max-height:50px;object-fit:contain}
-  .logo .word{font-size:17px;font-weight:800;letter-spacing:-.3px}
+  .logo .word{font-size:18px;font-weight:800;letter-spacing:-.3px}
   .logo .swoosh{display:block;margin:2px auto 0}
-  .logo .tag{font-size:9px;color:#e67e22;font-weight:600;margin-top:2px}
-  .co{flex:1;display:flex;flex-direction:column;justify-content:center;font-size:12px;text-align:center}
-  .co .name{font-weight:700;font-size:13px;margin-bottom:1px}
+  .logo .tag{font-size:10px;color:#e67e22;font-weight:600;margin-top:2px}
+  .co{flex:1;display:flex;flex-direction:column;justify-content:center;font-size:13px;text-align:center}
+  .co .name{font-weight:700;font-size:14px;margin-bottom:1px}
   .co .addr{color:#333;line-height:1.35}
   .lrbox{width:1.9in;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px}
-  .lrbox-label{font-size:10px;font-weight:700;color:#333}
-  .lrbox-no{font-size:14px;font-weight:800}
+  .lrbox-label{font-size:11px;font-weight:700;color:#333}
+  .lrbox-no{font-size:15px;font-weight:800}
   .lrbox-qr{line-height:0}
   .lrbox-qr svg{width:64px;height:64px}
-  .lrbox-shipno{font-size:10px;font-weight:700}
 
-  .routebar{justify-content:space-between;align-items:center;padding:4px 8px;font-weight:700;font-size:14px}
+  .routebar{justify-content:space-between;align-items:center;padding:4px 8px;font-weight:700;font-size:15px}
 
   .fields{align-items:stretch}
-  .cell{padding:4px 8px;border-right:1px solid #000;font-size:12px;display:flex;align-items:center}
+  .cell{padding:4px 8px;border-right:1px solid #000;font-size:13px;display:flex;align-items:center}
   .cell:last-child{border-right:none}
   .k{font-weight:700;margin-right:4px}
   .f1,.f2{flex:1.3}
   .f3{width:1in}
   .f4{width:1.7in}
-  .f5.doctype{width:2in;flex-direction:column;align-items:flex-start;justify-content:center;font-weight:700;font-size:11px;text-align:center}
+  .f5.doctype{width:2in;flex-direction:column;align-items:flex-start;justify-content:center;font-weight:700;font-size:12px;text-align:center}
   .doctype{text-align:center}
-  .copytag{font-weight:700;font-size:12px;align-self:center}
+  .copytag{font-weight:700;font-size:13px;align-self:center}
   .g1,.g2{flex:1}
   .g3,.g4{width:1.6in}
   .appt{align-items:center;background:#fff3cd;border-top:1px solid #000}
-  .appt-badge{background:#e67e22;color:#fff;font-weight:700;font-size:12px;letter-spacing:.04em;padding:4px 10px;border-right:1px solid #000}
-  .appt-info{flex:1;padding:4px 8px;font-weight:700;font-size:12px}
+  .appt-badge{background:#e67e22;color:#fff;font-weight:700;font-size:13px;letter-spacing:.04em;padding:4px 10px;border-right:1px solid #000}
+  .appt-info{flex:1;padding:4px 8px;font-weight:700;font-size:13px}
   .h1,.h2,.h3{flex:1}
   .h4{flex:1}
   .h5{flex:1}
 
   table.items{width:100%;border-collapse:collapse;border-bottom:1px solid #000}
-  table.items th,table.items td{border:1px solid #000;border-top:none;border-bottom:none;padding:4px 8px;font-size:12px;text-align:left}
+  table.items th,table.items td{border:1px solid #000;border-top:none;border-bottom:none;padding:4px 8px;font-size:13px;text-align:left}
   table.items th{background:#f2f2f2;font-weight:700}
   table.items tr:first-child th{border-top:none}
   table.items tr:last-child td{border-bottom:none}
@@ -282,27 +285,27 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   .parties{align-items:stretch}
   .party{flex:1;padding:4px 8px;border-right:1px solid #000}
   .party .hd{font-weight:700;letter-spacing:.08em;margin-bottom:4px}
-  .party .line{font-size:12px;margin-top:2px}
+  .party .line{font-size:13px;margin-top:2px}
   .amount{width:2.6in;padding:4px 8px;display:flex;flex-direction:column;align-items:center}
   table.desc{width:100%;border-collapse:collapse}
-  table.desc th,table.desc td{border:1px solid #000;padding:4px 8px;font-size:12px}
+  table.desc th,table.desc td{border:1px solid #000;padding:4px 8px;font-size:13px}
   table.desc th:last-child,table.desc td:last-child{text-align:right}
   table.desc .total td{font-weight:700}
-  .words{font-size:11px;font-style:italic;margin-top:4px;text-align:center}
+  .words{font-size:12px;font-style:italic;margin-top:4px;text-align:center}
 
-  .terms{border-top:1px solid #000;padding:4px 8px;font-size:9px;line-height:1.3;color:#333;text-align:justify}
-  .terms .t-title{font-weight:700;font-size:10px;color:#000;margin-bottom:2px}
+  .terms{border-top:1px solid #000;padding:4px 8px;font-size:10px;line-height:1.3;color:#333;text-align:justify}
+  .terms .t-title{font-weight:700;font-size:11px;color:#000;margin-bottom:2px}
 
-  .foot{justify-content:space-between;align-items:center;padding:4px 8px;font-size:11px}
+  .foot{justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px}
   .foottext{line-height:1.4}
-  .createdby{font-weight:700;font-size:12px}
+  .createdby{font-weight:700;font-size:13px}
   .doorbox{border:1px solid #000;font-weight:700;padding:3px 10px}
-  .sign{justify-content:space-between;padding:10px 8px 4px;font-size:12px;font-weight:700;border-bottom:none}
+  .sign{justify-content:space-between;padding:10px 8px 4px;font-size:13px;font-weight:700;border-bottom:none}
 
-  @page{size:A4 portrait;margin:5mm}
+  @page{size:A4 portrait;margin:10mm}
   @media print{ body{background:#fff;padding:0} }
 </style></head><body>
-  ${COPY_LABELS.map((label) => sheet(data, label)).join('')}
+  ${COPY_LABELS.map((label) => `<div class="slot">${sheet(data, label)}</div>`).join('')}
   <script>window.onload = () => setTimeout(() => window.print(), 50);</script>
 </body></html>`;
 }
