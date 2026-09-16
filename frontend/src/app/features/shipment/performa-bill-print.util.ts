@@ -35,11 +35,11 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   // print 1 on print 3"). Already-Paid orders show the amount as Paid (not a "ToPay"
   // figure), the Driver copy drops the amount block entirely once Paid (nothing left
   // to collect), the Delivery copy always shows the ToPay-to-collect figure (0 once
-  // Paid), and ToPay orders omit the amount block on every copy (undisclosed until
-  // actual delivery).
-  // Taxable Amount / GST Applied print on every copy regardless of amount-visibility mode
-  // (ToPay's undisclosed-until-delivery rule and Paid/collect's collapsed rows only ever
-  // applied to the final payable figure, not to the tax breakdown itself).
+  // Paid), and ToPay orders skip the ToPay/Paid collection row on every copy (undisclosed
+  // until actual delivery) but still show Taxable Amount / GST Applied / Net Total — the
+  // tax breakdown and net figure aren't the collectible amount, so ToPay's non-disclosure
+  // doesn't apply to them.
+  // Net Total = total, which already bakes in charges.roundOff via netAmount.
   const taxRowsHtml = `<tr><td>Taxable Amount</td><td>&#8377; ${taxableAmount.toFixed(2)}</td></tr>` +
     `<tr><td>GST Applied</td><td>&#8377; ${d.charges.gstAmount.toFixed(2)}</td></tr>`;
   const chargeRows: Array<[string, number]> = [
@@ -57,6 +57,7 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>
           ${taxRowsHtml}
+          <tr class="total"><td>Net Total</td><td>&#8377; ${total.toFixed(2)}</td></tr>
         </table>` : amountMode === 'paid' ? `
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>

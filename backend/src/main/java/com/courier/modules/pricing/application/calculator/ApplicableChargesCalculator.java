@@ -9,11 +9,9 @@ import com.courier.modules.charge.domain.ChargeSlabType;
 import com.courier.modules.charge.domain.ChargeSpecifications;
 import com.courier.modules.charge.domain.ChargeStatus;
 import com.courier.modules.charge.domain.ChargeValueType;
-import com.courier.modules.distance.application.AddressDistanceService;
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.domain.ChargeType;
 import com.courier.shared.company.CompanyContext;
-import com.courier.shared.exception.BusinessRuleException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -66,7 +64,6 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
 
     private final ChargeRepository chargeRepository;
     private final ChargeSettingRepository chargeSettingRepository;
-    private final AddressDistanceService addressDistanceService;
 
     @Override
     public ChargeType type() {
@@ -159,20 +156,14 @@ public class ApplicableChargesCalculator implements ChargeCalculator {
         return lines;
     }
 
-    /** Null whenever a real branch-pair distance can't be resolved (either id missing, the
-     *  same branch on both ends, or an ungeocoded branch) — never thrown, see the class doc. */
+    /** Distance resolution is disabled for now — lat/long isn't in use, so every
+     *  uncached branch pair paid a real Nominatim + OSRM network round trip on every
+     *  pricing call (this calculator runs on every booking/preview, not just the
+     *  no-route fallback), which was the actual cause of ~10s pricing latency. Always
+     *  null until distance-based booking pricing is wired up for real — a KM/BOTH-slab
+     *  charge setting simply doesn't match any booking in the meantime. */
     private BigDecimal resolveDistanceKm(UUID bookingBranchId, UUID deliveryBranchId) {
-        if (bookingBranchId == null || deliveryBranchId == null || bookingBranchId.equals(deliveryBranchId)) {
-            return null;
-        }
-        try {
-            return addressDistanceService.resolveBranchDistance(bookingBranchId, deliveryBranchId).getDistanceKm();
-        } catch (BusinessRuleException e) {
-            log.debug("Applicable Charges: no branch-pair distance for {} -> {} ({}) — "
-                    + "KM/BOTH-slab charge settings won't match this booking.",
-                    bookingBranchId, deliveryBranchId, e.getMessage());
-            return null;
-        }
+        return null;
     }
 
     private BigDecimal valueOf(ChargeSetting setting, BigDecimal freight) {

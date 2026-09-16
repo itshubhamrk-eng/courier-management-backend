@@ -8,6 +8,59 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-16 — Pricing calculate took ~10s: unconditional distance lookup on every call
+
+Direct report: "while getting pricing it taking 10 seconds." `ApplicableChargesCalculator`
+(order 55, runs on every pricing call — the normal Route/Rate path too, not just the
+no-route Freight Factor fallback) unconditionally called
+`AddressDistanceService.resolveBranchDistance` to feed KM/BOTH-slab charge settings, even
+when none exist. Since branches have no lat/long (not used by this deployment), every
+uncached branch pair paid a real, synchronous network round trip to Nominatim (geocode
+attempt, 3s connect + 5s read timeout) and OSRM's public demo server (3s connect + 8s
+read timeout) on every single pricing request — never cached, since a failed geocode
+never persists a row to short-circuit on next time.
+
+`resolveDistanceKm` now returns `null` unconditionally instead of calling
+`AddressDistanceService` — a KM/BOTH-slab charge setting simply doesn't match any booking
+for now, same "degrades gracefully" behavior an unresolved distance already had. Removed
+the now-unused `AddressDistanceService` field/import from the calculator.
+`ApplicableChargesCalculatorTest` updated to match: dropped the mock and its two
+distance-specific tests, replaced with one asserting a KM slab never matches while
+resolution is disabled. `mvn test` green (`com.courier.modules.pricing.**`,
+`com.courier.modules.shipment.**`). Not verified live in-browser this session — plain
+code fix removing a dead network call, no new behavior to click through.
+
+---
+
+## Fixed 2026-09-16 — Hamali (qty-level charge) multiplied by package count, not piece quantity
+
+Direct report: "calculate hamali on qty not package — currently calculating base on
+package it should be qty." `ApplicableChargesCalculator.resolve()` already had the
+right shape for a qty-level `Charge` (e.g. "Hamali") — slab-match on average per-piece
+weight, pay out per piece — but `ShipmentServiceImpl` fed it `command.numberOfPackages()`,
+the operator-entered box/carton count, instead of the item grid's real total piece
+quantity (`ShipmentItem.quantity`, summed across rows). A carton booked as 1 package
+holding 10 identical pieces underpaid Hamali 10x.
+
+Added `ShipmentServiceImpl.totalQuantity(items)` (sums each item's `quantity`, same
+null-defaults-to-1 rule the domain already uses) and pass it into `priceIt(...)` in
+place of `command.numberOfPackages()` at both the create and edit call sites (lines
+~258/403). `shipment.numberOfPackages` itself — the stored box-count field, used for
+display/labels — is untouched; only the value flowing into pricing changed.
+
+**Verified live** on throwaway `:8082` (real `courier_db`, real `:4200`/prod untouched)
+— logged in as `pune@gmail.com`/COMPANY-C1, booked a shipment (`PUNE-000050`) with 2
+item rows of quantity 3 each (6 pieces total actual weight 120kg, 2 "packages"), against
+the existing qty-level test charge "Hamali Test 1789455106" (SLAB 15–25kg per piece,
+AMOUNT 50.00, Express service type). `GET .../charges` returned `applicableCharges:
+325.00` = 25.00 (an unrelated flat, chargeableWeight-based "Hamali" charge, unaffected)
++ 300.00 (50.00 × 6 real pieces) — confirming the fix; the old code would have produced
+50.00 × 2 = 100.00 instead. Test fixtures left in dev DB per convention: shipments
+PUNE-000049/000050, package type `BULKTEST` (200kg ceiling, created only so a non-
+Document package type existed to test a >5kg per-piece weight).
+
+---
+
 ## Changed 2026-09-15 — Print 1 ("Delivery Receipt") shows Taxable Amount + GST rows
 
 Direct request: default consignment-note print (`consignment-print.util.ts`, the

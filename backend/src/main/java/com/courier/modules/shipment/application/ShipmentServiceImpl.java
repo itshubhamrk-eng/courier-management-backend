@@ -255,7 +255,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
                 command.declaredValue(), bookingDate, command.freightFactorOverride(),
-                weight.actualWeight(), command.numberOfPackages());
+                weight.actualWeight(), totalQuantity(items));
 
         PaymentMode paymentMode = paymentModeService.getById(command.paymentModeId());
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
@@ -400,7 +400,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
                 command.declaredValue(), bookingDate, command.freightFactorOverride(),
-                weight.actualWeight(), command.numberOfPackages());
+                weight.actualWeight(), totalQuantity(items));
 
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
@@ -1827,6 +1827,19 @@ public class ShipmentServiceImpl implements ShipmentService {
         BigDecimal chargeable = ChargeableWeightCalculator.calculate(
                 normalisedActual, normalisedVolumetric, minimumChargeable);
         return new WeightSummary(normalisedActual, normalisedVolumetric, chargeable);
+    }
+
+    /** Sum of every item row's own {@code quantity} — the piece count a qty-level
+     *  {@code Charge} (e.g. "Hamali") slab-matches and pays out on, per {@link
+     *  ApplicableChargesCalculator}. Deliberately not {@code command.numberOfPackages()},
+     *  a separate operator-entered box/carton count that can undercount the real piece
+     *  total (e.g. one carton of 10 identical pieces booked as 1 package, 10 quantity). */
+    private int totalQuantity(List<ShipmentItem> items) {
+        int total = 0;
+        for (ShipmentItem item : items) {
+            total += item.getQuantity() == null ? 1 : item.getQuantity();
+        }
+        return total;
     }
 
     // -------------------------------------------------------------- persistence

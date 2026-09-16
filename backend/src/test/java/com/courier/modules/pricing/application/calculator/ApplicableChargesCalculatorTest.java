@@ -9,12 +9,9 @@ import com.courier.modules.charge.domain.ChargeStatus;
 import com.courier.modules.charge.domain.ChargeType;
 import com.courier.modules.charge.domain.ChargeValueType;
 import com.courier.modules.charge.domain.CommissionType;
-import com.courier.modules.distance.application.AddressDistanceService;
-import com.courier.modules.distance.domain.AddressDistance;
 import com.courier.modules.pricing.application.PricingContext;
 import com.courier.modules.pricing.application.PricingTestSupport;
 import com.courier.shared.company.CompanyContext;
-import com.courier.shared.exception.BusinessRuleException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +47,6 @@ class ApplicableChargesCalculatorTest {
 
     @Mock private ChargeRepository chargeRepository;
     @Mock private ChargeSettingRepository chargeSettingRepository;
-    @Mock private AddressDistanceService addressDistanceService;
 
     private ApplicableChargesCalculator calculator;
     // Every stubbed setting across stubSettings() calls, filtered per-invocation the same
@@ -60,11 +56,8 @@ class ApplicableChargesCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new ApplicableChargesCalculator(chargeRepository, chargeSettingRepository, addressDistanceService);
+        calculator = new ApplicableChargesCalculator(chargeRepository, chargeSettingRepository);
         CompanyContext.setCompanyId(COMPANY);
-        // Harmless default for every test that doesn't care about distance (KG/FACTOR
-        // charges) — the two KM-specific tests below override it per case.
-        lenient().when(addressDistanceService.resolveBranchDistance(any(), any())).thenReturn(distance("0"));
         lenient().when(chargeSettingRepository.findByCompanyIdAndChargeIdInAndStatus(
                 eq(COMPANY), anyCollection(), eq(ChargeStatus.ACTIVE)))
                 .thenAnswer(invocation -> {
@@ -173,39 +166,14 @@ class ApplicableChargesCalculatorTest {
     }
 
     @Test
-    @DisplayName("a KM slab charge matches the booking/delivery branch pair's own resolved "
-            + "distance — never a matched Route, which most bookings (District Level Freight's "
-            + "own Freight Factor fallback) never set at all")
-    void kmSlabUsesResolvedBranchDistance() {
-        UUID chargeId = UUID.randomUUID();
-        stubCharges(charge(chargeId));
-        stubSettings(chargeId, kmSlab("0", "50", "40"), kmSlab("51", "9999", "80"));
-
-        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
-                .thenReturn(distance("30"));
-        assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("40.00");
-
-        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
-                .thenReturn(distance("120"));
-        assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("80.00");
-    }
-
-    @Test
-    @DisplayName("an unresolvable branch-pair distance (ungeocoded branch, etc.) degrades to no "
-            + "KM known instead of blocking the booking — the KM slab just doesn't match")
-    void unresolvableDistanceDoesNotBlockBooking() {
+    @DisplayName("a KM slab charge never matches — branch-pair distance resolution is disabled "
+            + "for now (lat/long isn't in use), so no booking has a known distance")
+    void kmSlabNeverMatchesWhileDistanceResolutionIsDisabled() {
         UUID chargeId = UUID.randomUUID();
         stubCharges(charge(chargeId));
         stubSettings(chargeId, kmSlab("0", "9999", "40"));
 
-        when(addressDistanceService.resolveBranchDistance(PricingTestSupport.BOOKING_BRANCH, PricingTestSupport.DELIVERY_BRANCH))
-                .thenThrow(new BusinessRuleException("Branch is not geocoded."));
-
         assertThat(calculator.calculate(context(new BigDecimal("10.000")))).isEqualByComparingTo("0.00");
-    }
-
-    private AddressDistance distance(String km) {
-        return AddressDistance.builder().distanceKm(new BigDecimal(km)).build();
     }
 
     // ---------------------------------------------------------------- fixtures
