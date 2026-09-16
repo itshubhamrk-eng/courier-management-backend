@@ -236,8 +236,9 @@ function renderAmboxHtml(data: ConsignmentPrintData): string {
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:#e9edf2;font-family:"Arial Narrow",Arial,Helvetica,sans-serif;color:var(--text);-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:20px 14px 48px}
-  .sheet{width:12in;height:6in;margin:0 auto;background:var(--paper);border:1px solid var(--rule-strong);display:flex;flex-direction:column;overflow:hidden;page-break-after:always}
-  .sheet:last-child{page-break-after:auto}
+  .sheet{width:12in;height:6in;margin:0 auto 0.3in;background:var(--paper);border:1px solid var(--rule-strong);display:flex;flex-direction:column;overflow:hidden;zoom:0.56}
+  .sheet:nth-child(3n){page-break-after:always;margin-bottom:0}
+  .sheet:last-child{page-break-after:auto;margin-bottom:0}
   .row{display:flex}
   .cell{border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
   .cell:last-child{border-right:none}
@@ -368,7 +369,7 @@ function renderAmboxHtml(data: ConsignmentPrintData): string {
   .podbox .dt .t{color:var(--ink);font-weight:700;font-size:9.5px}
   .podbox .sign{flex:1;color:var(--ink);font-weight:700;font-size:9.5px;padding:4px 6px}
   .copytag{text-align:right;color:var(--ink);font-weight:700;font-size:12px;padding:2px 8px 4px}
-  @page{size:A4 landscape;margin:8mm}
+  @page{size:A4 portrait;margin:8mm}
   @media print{ body{background:#fff;padding:0} .sheet{box-shadow:none} }
 </style></head><body>
   ${COPY_LABELS.map((label) => sheet(data, label)).join('')}

@@ -227,8 +227,9 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:#e9e9e9;font-family:"Segoe UI",Calibri,Arial,Helvetica,sans-serif;color:#000;padding:10px}
-  .sheet{width:1100px;max-width:100%;margin:0 auto 16px;background:#fff;border:2px solid #000;page-break-after:always}
-  .sheet:last-child{page-break-after:auto}
+  .sheet{width:1100px;max-width:100%;margin:0 auto 0.3in;background:#fff;border:2px solid #000;zoom:0.56}
+  .sheet:nth-child(3n){page-break-after:always;margin-bottom:0}
+  .sheet:last-child{page-break-after:auto;margin-bottom:0}
   .row{display:flex;border-bottom:1px solid #000}
   .row:last-child{border-bottom:none}
 
@@ -298,7 +299,7 @@ export function renderPerformaHtml(data: ConsignmentPrintData): string {
   .doorbox{border:1px solid #000;font-weight:700;padding:3px 10px}
   .sign{justify-content:space-between;padding:10px 8px 4px;font-size:12px;font-weight:700;border-bottom:none}
 
-  @page{size:A4 landscape;margin:8mm}
+  @page{size:A4 portrait;margin:5mm}
   @media print{ body{background:#fff;padding:0} }
 </style></head><body>
   ${COPY_LABELS.map((label) => sheet(data, label)).join('')}
