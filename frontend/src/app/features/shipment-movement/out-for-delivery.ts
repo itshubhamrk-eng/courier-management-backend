@@ -73,7 +73,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
                   <tr>
                     <th><input type="checkbox" [checked]="allSelected()" (change)="toggleAll($event)" /></th>
                     <th>#</th>
-                    <th>Tracking No.</th>
+                    <th>Shipment No.</th>
                     <th>Receiver</th>
                     <th>Contact</th>
                     <th>From Branch → To Branch</th>
@@ -86,7 +86,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
                     <tr>
                       <td><input type="checkbox" [checked]="isSelected(s.id)" (change)="toggleOne(s.id)" /></td>
                       <td>{{ i + 1 }}</td>
-                      <td>{{ s.trackingNumber }}</td>
+                      <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.receiverName }}</td>
                       <td>{{ s.receiverContact }}</td>
                       <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
@@ -404,7 +404,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
     const totalAmount = rows.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
     const tableRows = rows.map((s, i) => `<tr>
       <td class="center">${i + 1}</td>
-      <td>${this.esc(s.trackingNumber)}</td>
+      <td>${this.esc(s.shipmentNumber)}</td>
       <td>${this.esc(s.ewayBillNumber) || '—'}</td>
       <td>${this.esc(s.receiverName)}</td>
       <td>${this.esc(s.receiverContact)}</td>
@@ -477,7 +477,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
         <table>
           <thead><tr>
             <th class="c-sr">SR<br>NO.</th>
-            <th>TRACKING NO.</th>
+            <th>SHIPMENT NO.</th>
             <th>E-WAY BILL NO.</th>
             <th>RECEIVER</th>
             <th>CONTACT</th>

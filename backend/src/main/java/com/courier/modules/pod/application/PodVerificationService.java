@@ -39,12 +39,12 @@ public interface PodVerificationService {
     Map<UUID, PodVerification> latestByShipmentIds(Collection<UUID> shipmentIds);
 
     /**
-     * A reviewer's decision on a {@code REVIEW}-status verification — approve moves it to
+     * A reviewer's decision on a {@code PENDING} verification — approve moves it to
      * {@code PASS}, reject moves it to {@code FAIL}. Stamps {@code reviewedBy}/{@code
      * reviewedAt}.
      *
      * @throws com.courier.shared.exception.BusinessRuleException the verification is not
-     *         currently {@code REVIEW} — same "illegal transition" shape every other
+     *         currently {@code PENDING} — same "illegal transition" shape every other
      *         module's lifecycle actions use
      */
     PodVerification review(UUID shipmentId, ReviewPodCommand command);
@@ -53,7 +53,7 @@ public interface PodVerificationService {
      * Company-level POD upload — no branch/delivery-assignment context needed, unlike
      * {@link #verify}. On direct user request: {@code COMPANY_ADMIN} can upload a POD for
      * any of the company's own shipments this way, and it is always auto-approved (no AI
-     * call, no {@code REVIEW} step) — the company vouching for it directly.
+     * call, no {@code PENDING} step) — the company vouching for it directly.
      *
      * @throws com.courier.shared.exception.BusinessRuleException the shipment is not
      *         {@code OUT_FOR_DELIVERY}/{@code DELIVERED}, or the photo is missing/unreadable

@@ -5,8 +5,8 @@ package com.courier.modules.pod.application.provider;
  * draw for their own external dependencies. {@link com.courier.modules.pod.application
  * .PodVerificationServiceImpl} never talks to an AI vendor directly, never inspects raw AI
  * text, and never lets a provider decide a shipment's status — it only ever reads the
- * structured {@link PodAnalysisResult} this interface returns and applies this module's own
- * configurable score thresholds on top.
+ * structured {@link PodAnalysisResult} this interface returns and shows it to the human
+ * reviewer as reference; the AI itself never decides PASS/FAIL.
  *
  * <p>The only implementation shipped in this codebase, {@link HeuristicPodVerificationProvider},
  * is a deterministic local scorer — there is no AI vendor credential configured in this
@@ -26,8 +26,9 @@ public interface PodVerificationProvider {
 
     /**
      * Analyses one POD capture and returns a structured result. Never returns a status or
-     * business decision — only signals; {@link com.courier.modules.pod.application
-     * .PodVerificationServiceImpl} owns turning them into PASS/REVIEW/FAIL.
+     * business decision — only signals, shown to the human reviewer as reference; {@link
+     * com.courier.modules.pod.application.PodVerificationServiceImpl} always stores the run
+     * as PENDING, a human decides PASS/FAIL.
      *
      * @throws PodProviderUnavailableException the provider cannot run right now (disabled,
      *         unreachable, or the environment has none configured) — the caller must route

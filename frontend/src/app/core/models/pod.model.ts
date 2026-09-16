@@ -1,7 +1,7 @@
 /** POD Auto Verification — see MEMORY/modules/pod-verification.md. Mirrors backend
  *  PodVerificationResponse. AI never itself moves a shipment to DELIVERED; a PASS/approved
  *  result only unlocks the existing "Complete Delivery" action. */
-export type PodVerificationStatus = 'PASS' | 'REVIEW' | 'FAIL';
+export type PodVerificationStatus = 'PASS' | 'PENDING' | 'FAIL';
 
 export interface PodVerification {
   id: string;

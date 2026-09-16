@@ -71,10 +71,12 @@ public class PodVerificationController {
     private final ShipmentMapper shipmentMapper;
 
     @PostMapping(value = "/api/v1/shipments/{shipmentId}/pod/verify", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload a POD and run AI verification",
+    @Operation(summary = "Upload a POD and run AI scoring",
             description = "Shipment must be OUT_FOR_DELIVERY. Stores the photo (required) and "
-                    + "signature (optional) via the existing document store, scores them, and "
-                    + "returns PASS/REVIEW/FAIL. Never itself changes the shipment's status.")
+                    + "signature (optional) via the existing document store, scores them for "
+                    + "reference, and always returns PENDING — a human always makes the "
+                    + "PASS/FAIL call via the review endpoint. Never itself changes the "
+                    + "shipment's status.")
     public ApiResponse<PodVerificationResponse> verify(
             @PathVariable UUID shipmentId,
             @RequestParam("photo") MultipartFile photo,
@@ -101,8 +103,8 @@ public class PodVerificationController {
     }
 
     @PostMapping("/api/v1/shipments/{shipmentId}/pod/review")
-    @Operation(summary = "Approve or reject a REVIEW-status POD verification",
-            description = "Only valid while the latest verification is REVIEW. Approve -> PASS, "
+    @Operation(summary = "Approve or reject a PENDING POD verification",
+            description = "Only valid while the latest verification is PENDING. Approve -> PASS, "
                     + "reject -> FAIL. Stamps the reviewer and timestamp.")
     public ApiResponse<PodVerificationResponse> review(@PathVariable UUID shipmentId,
                                                         @Valid @RequestBody PodReviewRequest request) {
@@ -115,7 +117,7 @@ public class PodVerificationController {
     @Operation(summary = "Company-level POD upload — no branch login required",
             description = "COMPANY_ADMIN only. Uploads a POD for any of the company's own "
                     + "OUT_FOR_DELIVERY/DELIVERED shipments, independent of branch context, "
-                    + "and always auto-approves it — no AI call, no REVIEW step.")
+                    + "and always auto-approves it — no AI call, no PENDING step.")
     public ApiResponse<PodVerificationResponse> uploadByCompany(
             @PathVariable UUID shipmentId,
             @RequestParam("photo") MultipartFile photo,
@@ -132,7 +134,7 @@ public class PodVerificationController {
 
     @GetMapping("/api/v1/pod/pending-review")
     @Operation(summary = "Manual Review worklist",
-            description = "Every POD verification currently REVIEW-status, oldest first — the "
+            description = "Every POD verification currently PENDING, oldest first — the "
                     + "POD Review screen's list.")
     public ApiResponse<List<PodVerificationResponse>> pendingReview() {
         return ApiResponse.success(podVerificationService.listPendingReview().stream()

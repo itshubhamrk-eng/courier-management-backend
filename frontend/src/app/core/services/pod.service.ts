@@ -46,7 +46,7 @@ export class PodService {
     return this.api.post<PodVerification>(`${API.pod(shipmentId)}/review`, request);
   }
 
-  /** The Manual Review screen's worklist — every REVIEW-status verification, oldest first. */
+  /** The Manual Review screen's worklist — every PENDING verification, oldest first. */
   pendingReview() {
     return this.api.get<PodVerification[]>('/pod/pending-review');
   }
@@ -60,7 +60,7 @@ export class PodService {
 
   /** Company-level upload — no branch login required. Works against any of the company's
    *  own OUT_FOR_DELIVERY/DELIVERED shipments and is always auto-approved (no AI call, no
-   *  REVIEW step). COMPANY_ADMIN only. */
+   *  PENDING step). COMPANY_ADMIN only. */
   uploadByCompany(shipmentId: string, params: { photo: File; signature?: File | null; receiverName: string }) {
     const body = new FormData();
     body.append('photo', params.photo);

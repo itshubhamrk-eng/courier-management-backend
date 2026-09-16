@@ -278,7 +278,6 @@ pod:
       connect-timeout: 5s
       read-timeout: 20s
   verification:
-    auto-verify-threshold: ${POD_AUTO_VERIFY_THRESHOLD:85}
     manual-review-threshold: ${POD_MANUAL_REVIEW_THRESHOLD:60}
 
 pricing:

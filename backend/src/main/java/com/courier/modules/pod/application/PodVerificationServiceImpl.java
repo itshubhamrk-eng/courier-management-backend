@@ -12,11 +12,6 @@ import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentStatus;
-import com.courier.modules.support.application.TicketCategoryService;
-import com.courier.modules.support.application.TicketService;
-import com.courier.modules.support.application.command.CreateTicketCommand;
-import com.courier.modules.support.domain.TicketCategory;
-import com.courier.modules.support.domain.TicketPriority;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
@@ -63,15 +58,11 @@ public class PodVerificationServiceImpl implements PodVerificationService {
     private static final String REVIEWERS = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     private static final String READERS = "isAuthenticated()";
 
-    private static final String POD_TICKET_CATEGORY = "POD Verification Issue";
-
     private final PodVerificationRepository podVerificationRepository;
     private final ShipmentService shipmentService;
     private final PodVerificationProvider provider;
     private final PodVerificationProperties properties;
     private final AuditService auditService;
-    private final TicketService ticketService;
-    private final TicketCategoryService ticketCategoryService;
 
     @Override
     @Transactional
@@ -136,12 +127,13 @@ public class PodVerificationServiceImpl implements PodVerificationService {
             shipmentService.attachPodAsset(shipmentId, "SIGNATURE", signatureUrl);
         }
 
-        PodVerificationStatus status = resolveStatus(result);
-
         PodVerification verification = PodVerification.builder()
                 .shipmentId(shipmentId)
                 .podDocumentId(photoAsset.getId())
-                .verificationStatus(status)
+                // Always PENDING — the AI score/reasons below are informational only, a
+                // human always makes the PASS/FAIL call via review(). See
+                // PodVerificationStatus's own javadoc.
+                .verificationStatus(PodVerificationStatus.PENDING)
                 .verificationScore(result.score())
                 .detectedReceiverName(result.detectedReceiverName())
                 .detectedAwb(result.detectedAwb())
@@ -158,63 +150,9 @@ public class PodVerificationServiceImpl implements PodVerificationService {
 
         auditService.record(AuditAction.POD_VERIFICATION_RUN, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", shipment.getShipmentNumber(),
-                        "status", status.name(), "score", result.score()));
-
-        // Only PASS ever earns delivery commission — markPodApproved() itself credits it
-        // right away if the shipment already happens to be DELIVERED (verify() can also be
-        // reached after "Complete Delivery" was already clicked, since delivery isn't
-        // gated on POD status any more).
-        if (status == PodVerificationStatus.PASS) {
-            shipmentService.markPodApproved(shipmentId);
-        }
-
-        // AI is informational, never a delivery blocker (deliver() never reads this table) —
-        // so a ticket-raise failure here must not roll back the verification itself. Swallowed
-        // deliberately; a missing category or a support-module hiccup is a staffing problem to
-        // fix, not a reason to lose the POD record or block the courier.
-        if (status == PodVerificationStatus.REVIEW || status == PodVerificationStatus.FAIL) {
-            try {
-                raisePodTicketIfNeeded(shipment, saved, status);
-            } catch (RuntimeException e) {
-                log.error("Failed to auto-raise a POD ticket for shipment {}",
-                        shipment.getShipmentNumber(), e);
-            }
-        }
+                        "status", PodVerificationStatus.PENDING.name(), "score", result.score()));
 
         return saved;
-    }
-
-    /** One open "POD Verification Issue" ticket per shipment is enough — a courier retrying a
-     *  FAIL a few times via Upload New POD must not spam a fresh ticket every attempt, so this
-     *  goes through the dedup-guarded {@code raiseSystemTicketIfNoneOpen}. */
-    private void raisePodTicketIfNeeded(Shipment shipment, PodVerification verification,
-                                         PodVerificationStatus status) {
-        TicketCategory category = ticketCategoryService.listCategories().stream()
-                .filter(c -> POD_TICKET_CATEGORY.equalsIgnoreCase(c.getName()))
-                .findFirst()
-                .orElse(null);
-        if (category == null) {
-            log.error("No '{}' ticket category found — skipping auto-ticket for shipment {}",
-                    POD_TICKET_CATEGORY, shipment.getShipmentNumber());
-            return;
-        }
-
-        TicketPriority priority = status == PodVerificationStatus.FAIL
-                ? TicketPriority.HIGH
-                : TicketPriority.MEDIUM;
-        String reasonSummary = verification.reasons().isEmpty()
-                ? "No specific reasons reported."
-                : String.join("; ", verification.reasons());
-        String description = "POD Auto Verification scored this delivery %d/100 (%s).%nReasons: %s"
-                .formatted(verification.getVerificationScore(), status, reasonSummary);
-
-        CreateTicketCommand command = new CreateTicketCommand(
-                "POD %s — shipment %s".formatted(status, shipment.getShipmentNumber()),
-                description, category.getId(), null, priority,
-                shipment.getId(), null, shipment.getDeliveryBranchId(), null);
-
-        ticketService.raiseSystemTicketIfNoneOpen(command, null,
-                "Auto-raised: POD verification " + status);
     }
 
     @Override
@@ -260,7 +198,7 @@ public class PodVerificationServiceImpl implements PodVerificationService {
                 .orElseThrow(() -> new ResourceNotFoundException(ENTITY, shipmentId));
 
         if (!verification.isPendingReview()) {
-            throw new BusinessRuleException("This POD verification is %s — only a REVIEW result "
+            throw new BusinessRuleException("This POD verification is %s — only a PENDING result "
                     .formatted(verification.getVerificationStatus())
                     + "can be approved or rejected.");
         }
@@ -313,7 +251,7 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         }
 
         // A company-direct upload is always auto-approved, on direct user request ("if
-        // uploaded by company then it should be direct approved") — no AI call, no REVIEW
+        // uploaded by company then it should be direct approved") — no AI call, no PENDING
         // step. Skips the AI provider entirely rather than routing through it only to
         // override its result, since the whole point is the company vouching for it directly.
         PodVerification verification = PodVerification.builder()
@@ -340,19 +278,6 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         shipmentService.markPodApproved(shipmentId);
 
         return saved;
-    }
-
-    private PodVerificationStatus resolveStatus(PodAnalysisResult result) {
-        if (result.mustReviewRegardlessOfScore() && result.score() >= properties.getAutoVerifyThreshold()) {
-            return PodVerificationStatus.REVIEW;
-        }
-        if (result.score() >= properties.getAutoVerifyThreshold()) {
-            return PodVerificationStatus.PASS;
-        }
-        if (result.score() >= properties.getManualReviewThreshold()) {
-            return PodVerificationStatus.REVIEW;
-        }
-        return PodVerificationStatus.FAIL;
     }
 
     private UUID requireCompany() {

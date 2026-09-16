@@ -7,6 +7,29 @@
 
 ## Current Version
 
+`0.59.0` — **POD verification: AI no longer auto-decides PASS/FAIL.** Direct request
+("when upload POD status should be PENDING then we view POD then APPROVED or REJECT
+it"), surfaced while investigating a "can't see Approve/Reject button" report that
+turned out to be a data gap, not a bug. `PodVerificationStatus.REVIEW` renamed `PENDING`
+(migration `V78`); `PodVerificationServiceImpl.verify()`'s 85/60 score-threshold
+auto-decide logic is deleted — every delivery-app upload now always lands `PENDING`, AI
+score/reasons are informational only, a human (`COMPANY_ADMIN`) always decides via the
+existing `POST .../pod/review`. Auto-ticket-raise on REVIEW/FAIL removed on user
+confirmation (would have fired per-delivery otherwise). Company-direct upload path
+(always auto-`PASS`) untouched. `mvn test` 1034/1034, frontend `tsc` clean. Not yet
+re-verified live in a browser (real backend restart needed, not done unilaterally). Full
+detail in `CHANGELOG.md` 2026-09-16 "POD verification no longer AI auto-decides
+PASS/FAIL" and `MEMORY/modules/pod-verification.md`.
+
+**Note:** this file's own "keep updated after every change" rule had drifted — several
+sessions' worth of changes (Print 2/3 A4 layout, pricing N+1/latency fix, Hamali qty
+calc, booking-print GST/Net-Total rows, TO_PAY overdraft) landed in `CHANGELOG.md`
+between the previous entry below and this one without a corresponding bump here. Not
+backfilled in this session (out of scope of this task) — `CHANGELOG.md` is the
+authoritative source for that gap, newest-first.
+
+Previously current:
+
 `0.58.10` — **Department Master, and user creation picks a department instead of typing a
 designation.** Direct request. New company-owned module `Department`/`departments` (V71),
 many-to-many to `company_roles` via `DepartmentRole`/`department_roles` (a department can

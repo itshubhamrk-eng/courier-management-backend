@@ -1,19 +1,18 @@
 package com.courier.modules.pod.domain;
 
 /**
- * Outcome of one POD Auto Verification run. There is no {@code PENDING}/processing state —
- * verification runs synchronously against the uploaded photo/signature and always resolves
- * to one of these three before the request returns; an unavailable AI provider resolves to
- * {@link #REVIEW}, never left unresolved.
+ * Outcome of one POD verification row. A delivery-app upload ({@code verify()}) always lands
+ * {@link #PENDING} — the AI score/reasons are informational only, a human always makes the
+ * PASS/FAIL call via {@code POST /shipments/{id}/pod/review}. A company-direct upload
+ * ({@code uploadByCompany()}) skips AI entirely and always writes {@link #PASS} — the company
+ * vouching for it directly.
  */
 public enum PodVerificationStatus {
-    /** High confidence — the frontend may offer "Complete Delivery" directly. */
+    /** Awaiting a human Approve/Reject decision — every delivery-app POD upload starts here. */
+    PENDING,
+    /** Approved — either by a human reviewer, or a company-direct upload. Delivery commission
+     *  credits on this transition. */
     PASS,
-    /** Medium confidence, or a safety signal (duplicate/tampering) fired — a human must
-     *  approve or reject via {@code POST /shipments/{id}/pod/review} before delivery can
-     *  be completed. */
-    REVIEW,
-    /** Low confidence — delivery must not be completed from this POD; the delivery user
-     *  must capture a new one. */
+    /** Rejected by a human reviewer — the delivery user must capture a new POD. */
     FAIL
 }

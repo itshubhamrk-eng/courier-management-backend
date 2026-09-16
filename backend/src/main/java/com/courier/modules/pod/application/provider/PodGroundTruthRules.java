@@ -21,8 +21,9 @@ final class PodGroundTruthRules {
 
     /** Applies the AWB/QR mismatch hard-zero and the duplicate-photo-hash penalty on top of
      *  {@code score}, appending human-readable reasons to the caller's mutable {@code reasons}
-     *  list. Returns the adjusted score and whether the result must be routed to REVIEW
-     *  regardless of score. */
+     *  list. Returns the adjusted score and {@code mustReview} — a safety flag surfaced to the
+     *  human reviewer alongside {@code reasons}; every result is stored PENDING regardless, so
+     *  this no longer forces a status on its own (a human can still approve despite it). */
     static Outcome applyHardFailRules(int score, List<String> reasons, PodAnalysisRequest request) {
         boolean awbMismatch = isMismatch(request.claimedAwb(), request.shipmentActualAwb())
                 || isMismatch(request.claimedShipmentNumber(), request.shipmentActualNumber());
@@ -30,9 +31,9 @@ final class PodGroundTruthRules {
             // Hard fail, not a point deduction: ground truth already lives in this platform's
             // own DB record (shipmentActualAwb/shipmentActualNumber), so a mismatch here is not
             // a quality signal to weigh against others — it means this POD was captured for a
-            // different shipment. Zeroing the score keeps it out of both PASS and REVIEW no
-            // matter how clean the rest of the photo looks; a re-upload against the right
-            // shipment is the only way forward, never a manual approve.
+            // different shipment. Zeroing the score surfaces that clearly to whoever reviews
+            // it, however clean the rest of the photo looks — the decision itself is still the
+            // human reviewer's call.
             score = 0;
             reasons.add("Provided AWB/shipment number does not match this shipment's own record.");
         }

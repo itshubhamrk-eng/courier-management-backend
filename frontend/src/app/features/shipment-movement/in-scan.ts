@@ -84,14 +84,14 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th></tr>
+                  <tr><th></th><th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th></tr>
                 </thead>
                 <tbody>
                   @for (s of receivingManifestShipments(); track s.id; let i = $index) {
                     <tr>
                       <td><input type="checkbox" [checked]="isChecked(s.trackingNumber)" (change)="toggleReceiveShipment(s.trackingNumber)" /></td>
                       <td>{{ i + 1 }}</td>
-                      <td>{{ s.trackingNumber }}</td>
+                      <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.senderName }} → {{ s.receiverName }}</td>
                       <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                       <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>

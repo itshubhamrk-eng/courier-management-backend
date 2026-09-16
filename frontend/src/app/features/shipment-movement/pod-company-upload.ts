@@ -19,7 +19,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
  * context required. Looks a shipment up by tracking/shipment number (the same `GET
  * /shipments/track/{trackingNumber}` the public Track Shipment page uses), then uploads a
  * POD for it directly via `PodService.uploadByCompany`, which is always auto-approved
- * server-side (no AI call, no REVIEW step) — the company vouching for it directly, on
+ * server-side (no AI call, no PENDING step) — the company vouching for it directly, on
  * direct user request ("if uploaded by company then it should be direct approved").
  */
 @Component({
@@ -52,7 +52,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
       @if (shipment(); as s) {
         <app-card>
           <div class="sh">
-            <div><strong>{{ s.trackingNumber }}</strong>
+            <div><strong>{{ s.shipmentNumber }}</strong>
               <span class="text-caption">{{ s.senderName }} → {{ s.receiverName }} · {{ s.status }}</span></div>
             <app-button variant="stroked" icon="close" (pressed)="reset()">Back to Search</app-button>
           </div>
@@ -151,7 +151,7 @@ export class PodCompanyUpload {
       next: (s) => {
         this.searching.set(false);
         if (s.status !== 'OUT_FOR_DELIVERY' && s.status !== 'DELIVERED') {
-          this.notify.error(`${s.trackingNumber} is ${s.status} — a company POD upload only applies to an OUT_FOR_DELIVERY or DELIVERED shipment.`);
+          this.notify.error(`${s.shipmentNumber} is ${s.status} — a company POD upload only applies to an OUT_FOR_DELIVERY or DELIVERED shipment.`);
           return;
         }
         this.shipment.set(s);

@@ -118,6 +118,6 @@ public class PodVerification extends CompanyOwnedEntity {
     }
 
     public boolean isPendingReview() {
-        return verificationStatus == PodVerificationStatus.REVIEW;
+        return verificationStatus == PodVerificationStatus.PENDING;
     }
 }

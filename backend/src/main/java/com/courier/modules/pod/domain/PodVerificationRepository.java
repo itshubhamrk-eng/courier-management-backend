@@ -22,7 +22,7 @@ public interface PodVerificationRepository extends JpaRepository<PodVerification
     /** Every verification currently awaiting a human decision, within the caller's company —
      *  the Manual Review screen's worklist. */
     @Query("select v from PodVerification v where v.companyId = :companyId "
-            + "and v.verificationStatus = com.courier.modules.pod.domain.PodVerificationStatus.REVIEW "
+            + "and v.verificationStatus = com.courier.modules.pod.domain.PodVerificationStatus.PENDING "
             + "order by v.createdAt asc")
     java.util.List<PodVerification> findAllPendingReviewWithinCompany(@Param("companyId") UUID companyId);
 

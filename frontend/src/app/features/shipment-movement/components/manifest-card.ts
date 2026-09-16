@@ -68,7 +68,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
           <table class="tbl">
             <thead>
               <tr>
-                <th>#</th><th>LR / Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th>
+                <th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th>
                 @if (showRemoveAction()) { <th></th> }
               </tr>
             </thead>
@@ -76,7 +76,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
               @for (s of shipments(); track s.id; let i = $index) {
                 <tr>
                   <td>{{ i + 1 }}</td>
-                  <td><a [routerLink]="['/shipments', s.id]">{{ s.trackingNumber }}</a></td>
+                  <td><a [routerLink]="['/shipments', s.id]">{{ s.shipmentNumber }}</a></td>
                   <td>{{ s.senderName }} → {{ s.receiverName }}</td>
                   <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                   <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
@@ -153,7 +153,7 @@ export class ManifestCard implements OnInit {
   protected removeShipment(shipment: Shipment): void {
     this.confirm.confirm({
       title: 'Remove shipment',
-      message: `${shipment.trackingNumber} will come off this manifest and go back to BOOKED.`,
+      message: `${shipment.shipmentNumber} will come off this manifest and go back to BOOKED.`,
       confirmLabel: 'Remove', danger: true
     }).subscribe((ok) => { if (ok) this.doRemove(shipment.id); });
   }

@@ -22,10 +22,10 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
 
 /** POD Review — every delivered shipment, whether or not POD Auto Verification ever ran
  *  against it, with a click-to-enlarge preview of the captured photo/signature. A row whose
- *  latest verification is REVIEW gets the Approve/Reject decision form (PodService.review);
+ *  latest verification is PENDING gets the Approve/Reject decision form (PodService.review);
  *  every other row (PASS, FAIL, or no POD at all) is view-only. AI itself never decides a
- *  REVIEW outcome — a human always does, which is the whole point of the status existing.
- *  See MEMORY/modules/pod-verification.md. */
+ *  PASS/FAIL outcome — a human always does, which is why every delivery-app upload starts
+ *  PENDING. See MEMORY/modules/pod-verification.md. */
 @Component({
   selector: 'app-pod-review',
   standalone: true,
@@ -38,7 +38,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
         <div class="page__head-row">
           <app-pin-illustration class="page__head-ill" [size]="52" />
           <div><h1 class="text-h1">POD Review</h1>
-          <p class="text-caption">Every delivered order and its captured proof of delivery — REVIEW-flagged ones need a decision.</p></div>
+          <p class="text-caption">Every delivered order and its captured proof of delivery — PENDING ones need a decision.</p></div>
         </div>
         @if (!selected()) {
           <div class="page__actions">
@@ -58,13 +58,13 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From</th><th>To</th><th>Received</th><th>Delivered</th><th>POD</th><th>AI Status</th><th>Score</th><th></th></tr>
+                  <tr><th>#</th><th>Shipment No.</th><th>Receiver</th><th>From</th><th>To</th><th>Received</th><th>Delivered</th><th>POD</th><th>AI Status</th><th>Score</th><th></th></tr>
                 </thead>
                 <tbody>
                   @for (row of page().content; track row.shipmentId; let i = $index) {
                     <tr class="tbl__row--actionable" (click)="select(row)">
                       <td>{{ page().page * page().size + i + 1 }}</td>
-                      <td>{{ row.trackingNumber || row.shipmentNumber }}</td>
+                      <td>{{ row.shipmentNumber }}</td>
                       <td>{{ row.receiverName || '—' }}</td>
                       <td>{{ branchLabel(row.bookingBranchId) }}</td>
                       <td>{{ branchLabel(row.deliveryBranchId) }}</td>
@@ -97,7 +97,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
       @if (selected(); as row) {
         <app-card>
           <div class="sh">
-            <div><strong>{{ row.trackingNumber || row.shipmentNumber }}</strong>
+            <div><strong>{{ row.shipmentNumber }}</strong>
               <span class="text-caption">
                 @if (row.verificationScore != null) { Score {{ row.verificationScore }}/100 · }
                 {{ row.verificationStatus || 'No POD verification' }}
@@ -146,7 +146,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
           </app-card>
         }
 
-        @if (row.verificationStatus === 'REVIEW') {
+        @if (row.verificationStatus === 'PENDING') {
           @if (canDecide()) {
             <app-card title="Decision">
               <form [formGroup]="form" class="df">
@@ -181,7 +181,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
     .pod-thumb--sm img { width:100%; height:100%; object-fit:cover; display:block; }
     .status-badge { display:inline-block; padding:2px 10px; border-radius:999px; font:600 11px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; }
     .status-badge--PASS { background:var(--success-bg, #e6f6ec); color:var(--success, #1a7f4a); }
-    .status-badge--REVIEW { background:var(--warning-bg, #fff4e0); color:var(--warning, #a15c00); }
+    .status-badge--PENDING { background:var(--warning-bg, #fff4e0); color:var(--warning, #a15c00); }
     .status-badge--FAIL { background:var(--danger-bg); color:var(--danger); }
     .status-badge--none { background:var(--surface-muted); color:var(--content-muted); }
     .sh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
@@ -267,7 +267,7 @@ export class PodReview implements OnInit {
 
   preview(event: Event, url: string | null, row: DeliveredShipmentPod): void {
     event.stopPropagation();
-    if (url) this.dialog.previewImage(url, row.trackingNumber || row.shipmentNumber);
+    if (url) this.dialog.previewImage(url, row.shipmentNumber);
   }
 
   select(row: DeliveredShipmentPod): void {

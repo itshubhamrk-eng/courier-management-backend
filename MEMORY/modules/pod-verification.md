@@ -4,6 +4,27 @@
 `V48`/`V49`. Integrated into Shipment Movement's own delivery flow
 (`com.courier.modules.shipment`) rather than replacing it — see "Integration point" below.
 
+**2026-09-16 update — AI no longer auto-decides PASS/FAIL; every delivery-app upload
+lands `PENDING`, human always approves/rejects.** Direct request ("when upload POD
+status should be PENDING then we view POD then APPROVED or REJECT it"), surfaced while
+investigating a "can't see Approve/Reject" report that turned out to be a data gap (no
+`REVIEW` row existed yet in dev DB), not a bug. `PodVerificationStatus.REVIEW` renamed
+`PENDING` (full enum rename, migration `V78`, not just a UI label swap — user's explicit
+choice). `PodVerificationServiceImpl.verify()`'s threshold-based `resolveStatus()`
+(85/60 score bands) is deleted; `verify()` always persists `PENDING` regardless of AI
+score, duplicate-hash flag, ground-truth mismatch, or provider availability — the AI
+score/reasons are now informational only, shown to the reviewer. Only `review()` (human)
+and `uploadByCompany()` (company-direct, unchanged) can ever produce PASS/FAIL.
+Auto-ticket-raise on REVIEW/FAIL (`raisePodTicketIfNeeded`) removed entirely on user
+confirmation, rather than firing one per delivery now that every upload is PENDING — can
+be reintroduced later if wanted. `PodVerificationProperties.autoVerifyThreshold` deleted
+(dead); `manualReviewThreshold` repurposed as just the AI-unavailable fallback score.
+Full file list and the live-DB verification note (including a caught-and-reverted mistake
+— briefly hand-inserted a fake `flyway_schema_history` row, deleted before it could break
+Flyway's checksum validation) in `CHANGELOG.md`'s own 2026-09-16 entry. **Not yet
+re-verified end-to-end in a real browser session** — real backend needs a restart to pick
+this up, deliberately not done unilaterally this session.
+
 **2026-09-08 update — POD approval now gates delivery commission; company-level upload;
 POD Dashboard pie:**
 1. **Commission crediting moved off `deliver()` onto POD approval.** `V59` adds

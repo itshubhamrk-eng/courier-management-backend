@@ -44,7 +44,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>#</th><th>Tracking No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Address</th><th>Contact</th><th>From</th><th>To</th><th>Payment</th>
+                  <th>#</th><th>Shipment No.</th><th>E-Way Bill No.</th><th>Receiver</th><th>Address</th><th>Contact</th><th>From</th><th>To</th><th>Payment</th>
                   <th class="tbl--right">Amount</th><th>Status</th><th>Delivered At</th>
                 </tr>
               </thead>
@@ -52,7 +52,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
                 @for (s of detail()!.shipments; track s.shipmentId; let i = $index) {
                   <tr>
                     <td>{{ i + 1 }}</td>
-                    <td class="mono">{{ s.trackingNumber }}</td>
+                    <td class="mono">{{ s.shipmentNumber }}</td>
                     <td class="mono">{{ s.ewayBillNumber || '—' }}</td>
                     <td>{{ s.receiverName }}</td>
                     <td class="tbl--address">{{ s.receiverAddress || '—' }}</td>

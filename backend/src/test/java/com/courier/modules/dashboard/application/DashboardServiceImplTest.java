@@ -354,19 +354,19 @@ class DashboardServiceImplTest {
 
         // POD Dashboard pie + Rejected POD backlog: 4 candidate shipments at this branch —
         // one never had a POD run (pendingUpload, by omission from the map below), one
-        // REVIEW, one PASS, one FAIL (the rejected one, needing a re-upload).
+        // PENDING, one PASS, one FAIL (the rejected one, needing a re-upload).
         UUID noPodShipment = UUID.randomUUID();
-        UUID reviewShipment = UUID.randomUUID();
+        UUID pendingShipment = UUID.randomUUID();
         UUID passShipment = UUID.randomUUID();
         UUID failShipment = UUID.randomUUID();
         when(shipmentRepository.findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(eq(COMPANY), eq(branch), any()))
-                .thenReturn(List.of(noPodShipment, reviewShipment, passShipment, failShipment));
+                .thenReturn(List.of(noPodShipment, pendingShipment, passShipment, failShipment));
         Shipment rejectedShipment = Shipment.builder().shipmentNumber("SHP-REJECTED").receiverName("Ramesh").build();
         rejectedShipment.setId(failShipment);
         when(shipmentRepository.findAllByCompanyIdAndIdIn(eq(COMPANY), any()))
                 .thenReturn(List.of(rejectedShipment));
         when(podVerificationService.latestByShipmentIds(any())).thenReturn(Map.of(
-                reviewShipment, podVerification(reviewShipment, PodVerificationStatus.REVIEW),
+                pendingShipment, podVerification(pendingShipment, PodVerificationStatus.PENDING),
                 passShipment, podVerification(passShipment, PodVerificationStatus.PASS),
                 failShipment, podVerification(failShipment, PodVerificationStatus.FAIL)));
 

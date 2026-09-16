@@ -30,18 +30,19 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
 
 /** Delivery — a filterable worklist of this branch's IN_SCAN / OUT_FOR_DELIVERY / DELIVERED
  *  orders (status + text search over tracking/shipment number/receiver), then a capture ->
- *  AI verification -> decision flow for an OUT_FOR_DELIVERY row:
+ *  AI scoring -> decision flow for an OUT_FOR_DELIVERY row:
  *
  *  Upload POD (photo required, signature optional, real file picker) -> optionally scan the
  *  label's own QR (device camera, jsQR) -> "Run AI Verification" (PodService.verify, POD Auto
- *  Verification module) -> PASS shows "Complete Delivery" (the existing, unchanged
- *  ShipmentMovementService.deliver — AI never itself marks a shipment DELIVERED), REVIEW
- *  shows a pending state with a manual "Check Review Status" refresh (a POD Review screen
- *  elsewhere approves/rejects it), FAIL shows "Upload New POD" to recapture. The QR scan is
- *  optional at this screen (unlike the photo) — the backend falls back to decoding the QR out
- *  of the uploaded photo itself when no live scan was made; either way it's a real independent
- *  cross-check, not an echo of the already-selected shipment's own trackingNumber/
- *  shipmentNumber (sent regardless, below). See MEMORY/modules/pod-verification.md. */
+ *  Verification module) always lands PENDING — shows a manual "Check Review Status" refresh
+ *  (a POD Review screen elsewhere approves/rejects it) alongside "Complete Delivery" (the
+ *  existing, unchanged ShipmentMovementService.deliver — AI never itself marks a shipment
+ *  DELIVERED, nor decides PASS/FAIL). FAIL (set only by a later human rejection) shows
+ *  "Upload New POD" to recapture. The QR scan is optional at this screen (unlike the photo) —
+ *  the backend falls back to decoding the QR out of the uploaded photo itself when no live
+ *  scan was made; either way it's a real independent cross-check, not an echo of the
+ *  already-selected shipment's own trackingNumber/shipmentNumber (sent regardless, below).
+ *  See MEMORY/modules/pod-verification.md. */
 @Component({
   selector: 'app-delivery',
   standalone: true,
@@ -79,13 +80,13 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th></th></tr>
+                  <tr><th>#</th><th>Shipment No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                   @for (s of filteredShipments(); track s.id; let i = $index) {
                     <tr [class.tbl__row--actionable]="s.status === 'OUT_FOR_DELIVERY'" (click)="selectShipment(s)">
                       <td>{{ i + 1 }}</td>
-                      <td>{{ s.trackingNumber }}</td>
+                      <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.receiverName }}</td>
                       <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                       <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
@@ -107,7 +108,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
       @if (shipment(); as s) {
         <app-card>
           <div class="sh">
-            <div><strong>{{ s.trackingNumber }}</strong>
+            <div><strong>{{ s.shipmentNumber }}</strong>
               <span class="text-caption">{{ s.senderName }} → {{ s.receiverName }}, {{ s.receiverContact }}</span><br>
               <span class="text-caption">{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }} &nbsp;·&nbsp; {{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</span></div>
             <app-button variant="stroked" icon="close" (pressed)="reset()">Back to List</app-button>
@@ -187,7 +188,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
 
             @if (verification(); as v) {
               <div class="ai-result" [class.ai-result--pass]="v.verificationStatus === 'PASS'"
-                   [class.ai-result--review]="v.verificationStatus === 'REVIEW'"
+                   [class.ai-result--review]="v.verificationStatus === 'PENDING'"
                    [class.ai-result--fail]="v.verificationStatus === 'FAIL'">
                 <div class="ai-result__head">
                   <mat-icon>{{ statusIcon(v) }}</mat-icon>
@@ -209,14 +210,14 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
 
                 <div class="df__bar">
                   <app-button icon="task_alt" [loading]="delivering()" (pressed)="deliver()">Complete Delivery</app-button>
-                  @if (v.verificationStatus === 'REVIEW') {
+                  @if (v.verificationStatus === 'PENDING') {
                     <app-button variant="stroked" icon="refresh" [loading]="checkingReview()" (pressed)="checkReviewStatus()">
                       Check Review Status
                     </app-button>
-                    <span class="ai-result__hint">AI flagged this for manual review — a ticket has been raised, but you can still complete delivery now.</span>
+                    <span class="ai-result__hint">Awaiting a company decision on this POD, but you can still complete delivery now.</span>
                   } @else if (v.verificationStatus === 'FAIL') {
                     <app-button variant="stroked" icon="upload" (pressed)="uploadNewPod()">Upload New POD</app-button>
-                    <span class="ai-result__hint">AI verification failed — a ticket has been raised, but you can still complete delivery, or capture a new POD first.</span>
+                    <span class="ai-result__hint">This POD was rejected — you can still complete delivery, or capture a new POD first.</span>
                   }
                 </div>
               </div>
@@ -363,12 +364,12 @@ export class Delivery implements OnInit {
   }
 
   protected statusIcon(v: PodVerification): string {
-    return v.verificationStatus === 'PASS' ? 'verified' : v.verificationStatus === 'REVIEW' ? 'warning' : 'cancel';
+    return v.verificationStatus === 'PASS' ? 'verified' : v.verificationStatus === 'PENDING' ? 'warning' : 'cancel';
   }
 
   protected statusLabel(v: PodVerification): string {
     return v.verificationStatus === 'PASS' ? 'Verified'
-      : v.verificationStatus === 'REVIEW' ? 'Manual Review Required' : 'Verification Failed';
+      : v.verificationStatus === 'PENDING' ? 'Pending Decision' : 'Verification Failed';
   }
 
   load(): void {
@@ -408,7 +409,7 @@ export class Delivery implements OnInit {
     this.form.patchValue({ receiverName: s.receiverName });
     this.masters.get(MASTER_DEFINITIONS['payment-modes'], s.paymentModeId)
       .subscribe((pm) => this.paymentMode.set(pm as PaymentMode));
-    // A prior REVIEW/PASS may already exist (e.g. the delivery user navigated away and
+    // A prior PENDING/PASS may already exist (e.g. the delivery user navigated away and
     // back) — hydrate it silently so the AI step isn't repeated unnecessarily.
     this.podService.getLatest(s.id).subscribe({
       next: (v) => this.verification.set(v),
@@ -530,7 +531,7 @@ export class Delivery implements OnInit {
       next: (v) => {
         this.checkingReview.set(false);
         this.verification.set(v);
-        if (v.verificationStatus === 'REVIEW') this.notify.error('Still awaiting manual review.');
+        if (v.verificationStatus === 'PENDING') this.notify.error('Still awaiting a company decision.');
       },
       error: () => this.checkingReview.set(false)
     });
@@ -550,7 +551,7 @@ export class Delivery implements OnInit {
     }).subscribe({
       next: () => {
         this.delivering.set(false);
-        this.notify.success(`Shipment ${shipment.trackingNumber} delivered.`);
+        this.notify.success(`Shipment ${shipment.shipmentNumber} delivered.`);
         this.reset();
       },
       error: (e: HttpErrorResponse) => { this.delivering.set(false); this.notify.error(e.error?.message ?? 'Could not close the delivery.'); }

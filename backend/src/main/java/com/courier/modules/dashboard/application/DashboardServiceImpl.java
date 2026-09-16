@@ -461,7 +461,7 @@ public class DashboardServiceImpl implements DashboardService {
             return new PodOverviewResponse(0, 0, 0, 0);
         }
         Map<UUID, PodVerification> latest = podVerificationService.latestByShipmentIds(candidateIds);
-        long pendingVerification = countByStatus(latest, PodVerificationStatus.REVIEW);
+        long pendingVerification = countByStatus(latest, PodVerificationStatus.PENDING);
         long approved = countByStatus(latest, PodVerificationStatus.PASS);
         long rejected = countByStatus(latest, PodVerificationStatus.FAIL);
         long pendingUpload = candidateIds.size() - latest.size();

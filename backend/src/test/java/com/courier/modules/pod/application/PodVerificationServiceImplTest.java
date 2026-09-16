@@ -11,8 +11,6 @@ import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentStatus;
-import com.courier.modules.support.application.TicketCategoryService;
-import com.courier.modules.support.application.TicketService;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
@@ -58,8 +56,6 @@ class PodVerificationServiceImplTest {
     @Mock private ShipmentService shipmentService;
     @Mock private PodVerificationProvider provider;
     @Mock private AuditService auditService;
-    @Mock private TicketService ticketService;
-    @Mock private TicketCategoryService ticketCategoryService;
 
     private PodVerificationProperties properties;
     private PodVerificationServiceImpl service;
@@ -68,8 +64,7 @@ class PodVerificationServiceImplTest {
     void setUp() {
         properties = new PodVerificationProperties();
         service = new PodVerificationServiceImpl(podVerificationRepository, shipmentService, provider,
-                properties, auditService, ticketService, ticketCategoryService);
-        when(ticketCategoryService.listCategories()).thenReturn(List.of());
+                properties, auditService);
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.BRANCH_MANAGER);
 
@@ -94,40 +89,30 @@ class PodVerificationServiceImplTest {
     // ------------------------------------------------------------------ verify
 
     @Test
-    @DisplayName("a high-confidence result resolves to PASS")
-    void highScorePasses() {
+    @DisplayName("a high-confidence result still lands PENDING — AI never auto-decides")
+    void highScoreStillPending() {
         when(provider.analyze(any())).thenReturn(result(92, false, false));
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PASS);
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PENDING);
         assertThat(saved.getVerificationScore()).isEqualTo(92);
         verify(shipmentService).uploadPodFile(eq(SHIPMENT_ID), any());
         verify(shipmentService).attachPodAsset(eq(SHIPMENT_ID), eq("PHOTO"), anyString());
-        // PASS is the only outcome that earns delivery commission (2026-09-08) — markPodApproved
-        // is what actually credits it, if/once the shipment is DELIVERED.
-        verify(shipmentService).markPodApproved(SHIPMENT_ID);
-    }
-
-    @Test
-    @DisplayName("a mid-confidence result resolves to REVIEW")
-    void midScoreReview() {
-        when(provider.analyze(any())).thenReturn(result(70, false, false));
-
-        PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.REVIEW);
+        // Commission only ever credits on a human/company approval (review()/uploadByCompany()),
+        // never straight off verify() any more.
         verify(shipmentService, never()).markPodApproved(any());
     }
 
     @Test
-    @DisplayName("a low-confidence result (e.g. blurred/dark image) resolves to FAIL")
-    void lowScoreFails() {
+    @DisplayName("a low-confidence result also lands PENDING, not an auto FAIL")
+    void lowScoreAlsoPending() {
         when(provider.analyze(any())).thenReturn(result(30, false, false));
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PENDING);
+        assertThat(saved.getVerificationScore()).isEqualTo(30);
         verify(shipmentService, never()).markPodApproved(any());
     }
 
@@ -145,8 +130,8 @@ class PodVerificationServiceImplTest {
     }
 
     @Test
-    @DisplayName("a duplicate-hash match forces REVIEW even at a high score")
-    void duplicateForcesReview() {
+    @DisplayName("a duplicate-hash match is passed through to the provider and still lands PENDING")
+    void duplicateSuspectedStillPending() {
         when(podVerificationRepository.findDuplicatesWithinCompany(eq(COMPANY), anyString(), eq(SHIPMENT_ID)))
                 .thenReturn(List.of(mockExisting()));
         when(provider.analyze(any())).thenReturn(new PodAnalysisResult(95,
@@ -156,7 +141,7 @@ class PodVerificationServiceImplTest {
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.REVIEW);
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PENDING);
 
         ArgumentCaptor<PodAnalysisRequest> captor = ArgumentCaptor.forClass(PodAnalysisRequest.class);
         verify(provider).analyze(captor.capture());
@@ -193,13 +178,13 @@ class PodVerificationServiceImplTest {
     }
 
     @Test
-    @DisplayName("an unavailable AI provider routes to REVIEW, never a silent PASS")
-    void providerUnavailableRoutesToReview() {
+    @DisplayName("an unavailable AI provider still lands PENDING, never a silent PASS")
+    void providerUnavailableStillPending() {
         when(provider.analyze(any())).thenThrow(new PodProviderUnavailableException("down"));
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.REVIEW);
+        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.PENDING);
         assertThat(saved.getAiProvider()).isEqualTo("unavailable");
     }
 
@@ -225,75 +210,6 @@ class PodVerificationServiceImplTest {
         verify(provider, never()).analyze(any());
     }
 
-    // ------------------------------------------------------------------ ticket auto-raise
-
-    @Test
-    @DisplayName("a REVIEW result auto-raises a ticket when the category exists")
-    void reviewRaisesTicket() {
-        when(ticketCategoryService.listCategories()).thenReturn(
-                List.of(com.courier.modules.support.domain.TicketCategory.builder()
-                        .name("POD Verification Issue").active(true).build()));
-        when(provider.analyze(any())).thenReturn(result(70, false, false));
-
-        service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        verify(ticketService).raiseSystemTicketIfNoneOpen(any(), eq(null), anyString());
-    }
-
-    @Test
-    @DisplayName("a FAIL result auto-raises a ticket at HIGH priority")
-    void failRaisesHighPriorityTicket() {
-        when(ticketCategoryService.listCategories()).thenReturn(
-                List.of(com.courier.modules.support.domain.TicketCategory.builder()
-                        .name("POD Verification Issue").active(true).build()));
-        when(provider.analyze(any())).thenReturn(result(30, false, false));
-
-        service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        ArgumentCaptor<com.courier.modules.support.application.command.CreateTicketCommand> captor =
-                ArgumentCaptor.forClass(com.courier.modules.support.application.command.CreateTicketCommand.class);
-        verify(ticketService).raiseSystemTicketIfNoneOpen(captor.capture(), eq(null), anyString());
-        assertThat(captor.getValue().priority()).isEqualTo(com.courier.modules.support.domain.TicketPriority.HIGH);
-        assertThat(captor.getValue().relatedShipmentId()).isEqualTo(SHIPMENT_ID);
-    }
-
-    @Test
-    @DisplayName("a PASS result never raises a ticket")
-    void passNeverRaisesTicket() {
-        when(provider.analyze(any())).thenReturn(result(92, false, false));
-
-        service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        verify(ticketService, never()).raiseSystemTicketIfNoneOpen(any(), any(), anyString());
-    }
-
-    @Test
-    @DisplayName("a missing ticket category skips the raise without failing verification")
-    void missingCategorySkipsRaiseSilently() {
-        when(ticketCategoryService.listCategories()).thenReturn(List.of());
-        when(provider.analyze(any())).thenReturn(result(30, false, false));
-
-        PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
-        verify(ticketService, never()).raiseSystemTicketIfNoneOpen(any(), any(), anyString());
-    }
-
-    @Test
-    @DisplayName("a ticket-raise failure never breaks the verification itself")
-    void ticketRaiseFailureDoesNotBreakVerification() {
-        when(ticketCategoryService.listCategories()).thenReturn(
-                List.of(com.courier.modules.support.domain.TicketCategory.builder()
-                        .name("POD Verification Issue").active(true).build()));
-        when(ticketService.raiseSystemTicketIfNoneOpen(any(), any(), anyString()))
-                .thenThrow(new RuntimeException("support module down"));
-        when(provider.analyze(any())).thenReturn(result(30, false, false));
-
-        PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
-
-        assertThat(saved.getVerificationStatus()).isEqualTo(PodVerificationStatus.FAIL);
-    }
-
     // ------------------------------------------------------------------ getLatest
 
     @Test
@@ -308,9 +224,9 @@ class PodVerificationServiceImplTest {
     // ------------------------------------------------------------------ review
 
     @Test
-    @DisplayName("approving a REVIEW result moves it to PASS and stamps the reviewer")
+    @DisplayName("approving a PENDING result moves it to PASS and stamps the reviewer")
     void approveMovesToPass() {
-        PodVerification existing = reviewVerification();
+        PodVerification existing = pendingVerification();
         when(podVerificationRepository.findLatestByShipmentIdWithinCompany(SHIPMENT_ID, COMPANY))
                 .thenReturn(Optional.of(existing));
 
@@ -325,9 +241,9 @@ class PodVerificationServiceImplTest {
     }
 
     @Test
-    @DisplayName("rejecting a REVIEW result moves it to FAIL")
+    @DisplayName("rejecting a PENDING result moves it to FAIL")
     void rejectMovesToFail() {
-        PodVerification existing = reviewVerification();
+        PodVerification existing = pendingVerification();
         when(podVerificationRepository.findLatestByShipmentIdWithinCompany(SHIPMENT_ID, COMPANY))
                 .thenReturn(Optional.of(existing));
 
@@ -341,7 +257,7 @@ class PodVerificationServiceImplTest {
     @Test
     @DisplayName("reviewing an already-decided verification is refused")
     void reviewIllegalWhenNotPending() {
-        PodVerification existing = reviewVerification();
+        PodVerification existing = pendingVerification();
         existing.setVerificationStatus(PodVerificationStatus.PASS);
         when(podVerificationRepository.findLatestByShipmentIdWithinCompany(SHIPMENT_ID, COMPANY))
                 .thenReturn(Optional.of(existing));
@@ -453,9 +369,9 @@ class PodVerificationServiceImplTest {
         return v;
     }
 
-    private static PodVerification reviewVerification() {
+    private static PodVerification pendingVerification() {
         PodVerification v = PodVerification.builder().shipmentId(SHIPMENT_ID)
-                .verificationStatus(PodVerificationStatus.REVIEW).verificationScore(70)
+                .verificationStatus(PodVerificationStatus.PENDING).verificationScore(70)
                 .aiProvider("heuristic-local").aiModel("structural-v1").build();
         v.setId(UUID.randomUUID());
         return v;

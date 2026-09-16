@@ -58,14 +58,14 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                 <div class="tbl__wrap">
                   <table class="tbl">
                     <thead>
-                      <tr><th></th><th>#</th><th>Tracking No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
+                      <tr><th></th><th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
                     </thead>
                     <tbody>
                       @for (s of bookedShipments(); track s.id; let i = $index) {
                         <tr (click)="toggleShipment(s.id)">
                           <td><input type="checkbox" [checked]="isSelected(s.id)" (click)="$event.stopPropagation()" (change)="toggleShipment(s.id)" /></td>
                           <td>{{ i + 1 }}</td>
-                          <td>{{ s.trackingNumber }}</td>
+                          <td>{{ s.shipmentNumber }}</td>
                           <td>{{ s.senderName }} → {{ s.receiverName }}</td>
                           <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                           <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
@@ -301,7 +301,7 @@ export class LoadingSheet implements OnInit {
     const bookingDate = (s: Shipment) => s.bookingDate ? this.esc(new Date(s.bookingDate).toLocaleDateString('en-GB')) : '—';
     const rows = shipments.map((s, i) => `<tr>
       <td class="center">${i + 1}</td>
-      <td>${this.esc(s.trackingNumber)}</td>
+      <td>${this.esc(s.shipmentNumber)}</td>
       <td>${this.esc(s.senderName)}</td>
       <td>${this.esc(s.receiverName)}</td>
       <td>${this.esc(s.fromCity) || '—'}</td>
@@ -382,7 +382,7 @@ export class LoadingSheet implements OnInit {
         <table>
           <thead><tr>
             <th class="c-sr">SR<br>NO.</th>
-            <th>TRACKING NO</th>
+            <th>SHIPMENT NO</th>
             <th>CONSIGNOR NAME</th>
             <th>CONSIGNEE NAME</th>
             <th>FROM CITY</th>

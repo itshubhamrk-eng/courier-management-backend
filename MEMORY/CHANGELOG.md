@@ -8,6 +8,90 @@ All notable changes to this project. Format based on
 
 ---
 
+## Changed 2026-09-16 — POD verification no longer AI auto-decides PASS/FAIL; every delivery-app upload lands PENDING, human always approves/rejects
+
+Started as a bug report ("company login POD Review page im not able to see POD APROVED
+or REJECT button") — investigation found the buttons were correctly gated (role was
+`COMPANY_ADMIN`, matching `PodReview`'s `canDecide()` and the backend's `REVIEWERS`), the
+real cause was that dev DB had zero `REVIEW`-status rows to decide (only one `PASS` row
+existed) — confirmed by querying `pod_verification` directly, then flipping that one row
+to `REVIEW` as a fixture so the buttons could be seen/tested. That surfaced the actual
+ask underneath: "when upload POD status should be PENDING then we view POD then APPROVED
+or REJECT it" — the AI's own PASS/FAIL auto-decision at upload time (85/60 score
+thresholds) is removed entirely; every delivery-app POD upload (`verify()`) now always
+persists `PENDING`, and a human (`COMPANY_ADMIN`) always makes the PASS/FAIL call via the
+existing `POST .../pod/review`. Confirmed with the user before touching code: (1) skip
+auto-ticket-raise entirely for now rather than firing one on every single delivery (was
+previously gated to REVIEW/FAIL only — raising one per delivery would have been ticket
+spam), and (2) do a full enum rename `REVIEW` → `PENDING` (not just a UI label swap) —
+new migration `V78__pod_verification_review_to_pending.sql` (data-only, `VARCHAR(20)`
+column, no CHECK constraint) renames existing rows in place so history isn't lost.
+
+**What changed:**
+- `PodVerificationStatus`: `REVIEW` → `PENDING`, javadoc rewritten — PENDING is now the
+  universal starting state for `verify()`, not a medium-confidence-only outcome.
+- `PodVerificationServiceImpl.verify()`: `resolveStatus()` (the threshold decision logic)
+  deleted; status is now hardcoded `PENDING`. The `if (status == PASS) markPodApproved()`
+  and the whole `raisePodTicketIfNeeded` ticket-raise path (plus its now-unused
+  `ticketService`/`ticketCategoryService` fields) are gone — both were unreachable/moot
+  once `verify()` can never itself resolve PASS/FAIL. Commission crediting now only ever
+  happens via `review()` (human approve) or `uploadByCompany()` (company-direct), both
+  already unchanged. AI score/reasons/duplicate-flag are still computed and stored — now
+  purely informational, shown to the reviewer, never decide the status.
+- `PodVerificationProperties`: `autoVerifyThreshold` deleted (dead — was only read by the
+  now-deleted `resolveStatus()`), including its `POD_AUTO_VERIFY_THRESHOLD` env key in
+  `application.yml`. `manualReviewThreshold` kept — repurposed as just the fallback score
+  stamped when the AI provider is unavailable, no longer a status boundary.
+- `PodVerificationRepository.findAllPendingReviewWithinCompany`: JPQL literal updated to
+  `PodVerificationStatus.PENDING`.
+- `DashboardServiceImpl.podOverview`: `countByStatus(..., PodVerificationStatus.REVIEW)` →
+  `.PENDING` — the POD Dashboard pie's "pending verification" slice is unaffected in
+  shape, just counts differently now that every upload starts there.
+- Frontend: `PodVerificationStatus` type `'PASS' | 'REVIEW' | 'FAIL'` →
+  `'PASS' | 'PENDING' | 'FAIL'`; `pod-review.ts` and `delivery.ts` updated everywhere
+  (badge CSS class, template conditionals, `statusIcon`/`statusLabel`, hint text no
+  longer mentions an auto-raised ticket).
+- Every doc comment across the module (`PodVerificationController`,
+  `PodVerificationService`, `PodVerificationProvider`, `PodAnalysisResult`,
+  `PodGroundTruthRules`) updated to stop claiming the AI/thresholds decide PASS/REVIEW/
+  FAIL — `PodGroundTruthRules`'s AWB/QR-mismatch hard-zero and the duplicate-hash
+  `mustReview` flag are now explicitly "surfaced to the reviewer, no longer forces a
+  status" (a human can now approve despite a ground-truth mismatch, which they couldn't
+  before — a real, intentional behavior change, not just a rename).
+- `company-direct` upload path (`uploadByCompany`, always auto-approved `PASS`) is
+  untouched — a distinct, already-established feature (2026-09-08), not what this ask was
+  about.
+
+Backend test suite rewritten for the new contract (`PodVerificationServiceImplTest`):
+removed the whole "ticket auto-raise" `@Test` section and the three-way
+PASS/REVIEW/FAIL-by-score tests, replaced with tests asserting `verify()` always lands
+PENDING regardless of score/duplicate/provider-availability, and that `markPodApproved`
+is never called from `verify()` any more (only from `review()`/`uploadByCompany()`).
+`DashboardServiceImplTest` renamed its `reviewShipment` fixture variable and enum
+reference. `mvn test`: 1034/1034 green. Frontend `tsc --noEmit`: clean.
+
+**Verified/applied on dev DB directly** (`courier_db`, real `:4200`/backend untouched):
+ran `UPDATE pod_verification SET verification_status='PENDING' WHERE
+verification_status='REVIEW'` by hand ahead of the real backend restart, since the new
+JPA enum has no `REVIEW` constant any more and Hibernate would throw deserializing an
+old row on first read otherwise. **Caught and corrected a mistake in the same step**:
+initially also hand-inserted a matching `flyway_schema_history` row with a fabricated
+`checksum=NULL` to mark V78 "already applied" — wrong, Flyway computes checksums from
+the actual migration file and a real run against a NULL-checksum row would fail
+validation; deleted that row immediately after, leaving history at V77 so Flyway's own
+next real `migrate()` (throwaway stack or the real backend's next restart) applies V78
+properly with a correct checksum. The data UPDATE itself was safe to keep — same
+end-state the migration itself produces, exactly what [[keep-test-data-in-dev-db]]
+already established for this kind of fixture-preserving direct edit.
+
+**Not yet verified end-to-end live** (real backend not restarted this session — a
+restart is required to pick up the code change and would be the user's call, not taken
+unilaterally): unit-test coverage is full, but the actual Delivery-page upload →
+POD-Review-page decision round trip in a real browser session hasn't been re-run since
+this change. See `MEMORY/modules/pod-verification.md` for the fuller module history.
+
+---
+
 ## Changed 2026-09-16 — Print 2/3 revised further: 2-per-page half-fold layout, larger text, terms fixes
 
 Follow-on iteration on the same session's earlier 3-per-page change, driven by more live

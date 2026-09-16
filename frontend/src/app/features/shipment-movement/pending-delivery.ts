@@ -51,13 +51,13 @@ import { ShipmentMovementService } from './shipment-movement.service';
             <div class="tbl__wrap">
               <table class="tbl">
                 <thead>
-                  <tr><th>#</th><th>Tracking No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th class="tbl--right">Actions</th></tr>
+                  <tr><th>#</th><th>Shipment No.</th><th>Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th>Status</th><th class="tbl--right">Actions</th></tr>
                 </thead>
                 <tbody>
                   @for (s of pendingDelivery(); track s.id; let i = $index) {
                     <tr>
                       <td>{{ i + 1 }}</td>
-                      <td>{{ s.trackingNumber }}</td>
+                      <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.receiverName }}</td>
                       <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                       <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
@@ -148,7 +148,7 @@ export class PendingDelivery implements OnInit {
         this.assigningId.set(null);
         const failed = r.results.find((o) => !o.success);
         if (failed) this.notify.error(failed.message ?? 'Could not assign.');
-        else this.notify.success(`${s.trackingNumber} DRS.`);
+        else this.notify.success(`${s.shipmentNumber} DRS.`);
         this.load();
       },
       error: (e: HttpErrorResponse) => { this.assigningId.set(null); this.notify.error(e.error?.message ?? 'Could not assign.'); }
