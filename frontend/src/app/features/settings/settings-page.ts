@@ -113,6 +113,15 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                 </div>
               }
               @if (s.key === 'finance') {
+                <div class="dcw">
+                  <label class="text-caption" for="gst-input">GST Percentage</label>
+                  <div class="dcw__row">
+                    <input id="gst-input" class="dcw__i" type="number" min="0" max="100" step="0.01"
+                           [value]="gstPercentageInput() ?? ''" (input)="onGstPercentageInput($event)" />
+                    <button type="button" class="dcw__save" [disabled]="savingGst() || gstPercentageInput() == null"
+                            (click)="saveGstPercentage()">{{ savingGst() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
                 <div class="rzp">
                   <div class="rzp__head">
                     <span class="text-caption">Payment Gateway (Razorpay)</span>
@@ -218,6 +227,11 @@ export class SettingsPage implements OnInit {
   readonly razorpayKeySecretInput = signal('');
   readonly savingRazorpay = signal(false);
 
+  /** Finance's first inline field — same "no full edit dialog yet" treatment as
+   *  Razorpay/Round Off/Net Amount bounds below. */
+  readonly gstPercentageInput = signal<number | null>(null);
+  readonly savingGst = signal(false);
+
   /** Finance's second inline field — same "no full edit dialog yet" treatment as
    *  Razorpay above and Shipment's default weight. */
   readonly roundOffRuleInput = signal('NEAREST_FIVE');
@@ -253,8 +267,11 @@ export class SettingsPage implements OnInit {
           this.defaultAppointmentChargeInput.set(Number(shipment.defaultAppointmentDeliveryCharge));
         }
         const finance = (d as { finance?: {
-          roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
+          gstPercentage?: number; roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
         } })?.finance;
+        if (finance?.gstPercentage != null) {
+          this.gstPercentageInput.set(Number(finance.gstPercentage));
+        }
         if (finance?.roundOffRule) {
           this.roundOffRuleInput.set(finance.roundOffRule);
         }
@@ -348,6 +365,26 @@ export class SettingsPage implements OnInit {
         this.notify.success('Razorpay configuration updated');
       },
       error: () => this.savingRazorpay.set(false)
+    });
+  }
+
+  onGstPercentageInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.gstPercentageInput.set(v === '' ? null : Number(v));
+  }
+
+  saveGstPercentage(): void {
+    const value = this.gstPercentageInput();
+    if (value == null) return;
+    this.savingGst.set(true);
+    this.service.patchSection('finance', { gstPercentage: value }).subscribe({
+      next: (d) => {
+        const finance = (d as { finance?: unknown })?.finance;
+        if (finance) this.data.update((prev) => ({ ...prev, finance }));
+        this.savingGst.set(false);
+        this.notify.success('GST percentage updated');
+      },
+      error: () => this.savingGst.set(false)
     });
   }
 
