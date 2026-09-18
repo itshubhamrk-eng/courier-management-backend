@@ -79,6 +79,14 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     List<Shipment> findTop5ByOrderByCreatedAtDesc();
 
+    /** Public Track Shipment (login page, no auth): looked up cross-company by either
+     *  column, same ambiguity {@code findAllByCompanyIdAndTrackingNumberInOrShipmentNumberIn}
+     *  already tolerates. Only ever called from {@code PublicTrackingService}, which returns
+     *  a redacted projection — never hand the raw {@link Shipment} entity back to an
+     *  unauthenticated caller. */
+    @Query("select s from Shipment s where s.trackingNumber = :number or s.shipmentNumber = :number")
+    Optional<Shipment> findByTrackingNumberOrShipmentNumberForPublicTracking(@Param("number") String number);
+
     /** Backs the platform-wide "Shipment Trend" chart — one row per day that had at
      *  least one booking; days with none simply don't appear (DashboardServiceImpl
      *  fills the gaps with zero). */

@@ -111,7 +111,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
         </app-card>
 
         @if (m.status === 'CREATED') {
-          <app-card title="Shipments on this Manifest" subtitle="Uncheck a shipment to leave it off this THC — it's removed from the loading sheet when you click Dispatch.">
+          <app-card title="Shipments on this THC" subtitle="Uncheck a shipment to leave it off this THC — it's removed from the loading sheet when you click Dispatch.">
             @if (loadingShipments()) {
               <app-loader [minHeight]="80" caption="Loading…" />
             } @else if (!manifestShipments().length) {
@@ -270,7 +270,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
    *  send (first send or resend alike), ticks down once a second. */
   readonly resendCooldown = signal(0);
   private resendTimer: ReturnType<typeof setInterval> | null = null;
-  /** Ids unchecked in "Shipments on this Manifest" — dropped from the row list right
+  /** Ids unchecked in "Shipments on this THC" — dropped from the row list right
    *  away, but not actually detached (ManifestService.removeShipment) until dispatch()
    *  fires, so unchecking causes no server-side change on its own. */
   readonly pendingRemovals = signal<string[]>([]);

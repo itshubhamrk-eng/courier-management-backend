@@ -20,12 +20,17 @@ import java.util.UUID;
  *
  * <p>Not accepted: {@code companyId} (from the JWT), {@code trackingNumber} (always
  * generated), {@code status} (a new shipment starts {@code BOOKED}), {@code
- * deliveryBranchId} (no longer picked at booking — resolved server-side off {@code
- * deliveryPincode}'s own branch mapping; see {@code ShipmentServiceImpl}),
- * {@code actualWeight}/{@code volumetricWeight}/{@code chargeableWeight} as top-level
- * writes (computed from {@code items}; the bare {@code actualWeight}/dimension fields here
- * are the fallback used only when {@code items} is empty — see
- * {@code ShipmentServiceImpl}).
+ * deliveryBranchId} (not decided at booking at all any more — a real delivery branch,
+ * or Direct Company Delivery, is assigned later at Load Sheet; see
+ * {@code ShipmentServiceImpl}), {@code actualWeight}/{@code volumetricWeight}/
+ * {@code chargeableWeight} as top-level writes (computed from {@code items}; the bare
+ * {@code actualWeight}/dimension fields here are the fallback used only when
+ * {@code items} is empty — see {@code ShipmentServiceImpl}).
+ *
+ * <p>{@code declaredValue} is mandatory and must equal {@code invoiceValue} whenever both
+ * are supplied — the frontend derives both as the same sum of every item's own declared
+ * value, on direct request, so they can never legitimately differ; see
+ * {@code Shipment.applyInvariants}.
  */
 @Schema(name = "CreateShipmentRequest", description = "New shipment booking")
 public record CreateShipmentRequest(
@@ -47,7 +52,9 @@ public record CreateShipmentRequest(
         @NotNull UUID paymentModeId,
         ShipmentType shipmentType,
         @Schema(description = "Defaults to today") LocalDate bookingDate,
-        @DecimalMin(value = "0") BigDecimal declaredValue,
+        @NotNull(message = "Declared Value is required")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal declaredValue,
         @Min(1) Integer numberOfPackages,
         @Size(max = 500) String remarks,
         @DecimalMin(value = "0") BigDecimal otherCharges,

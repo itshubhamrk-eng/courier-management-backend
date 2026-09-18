@@ -89,6 +89,11 @@ export const routes: Routes = [
     loadComponent: () => import('@features/public/public-page').then((m) => m.PublicPage)
   })),
   {
+    path: 'track-shipment',
+    title: 'Track Shipment — Amazing Logistics',
+    loadComponent: () => import('@features/public/track-shipment').then((m) => m.TrackShipment)
+  },
+  {
     path: 'login',
     canActivate: [guestGuard],
     loadComponent: () => import('@layouts/auth-layout/auth-layout').then((m) => m.AuthLayout),

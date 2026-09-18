@@ -137,7 +137,7 @@ type FreightOutcome =
               <label class="fld fld--sm"><span class="fld__l">Number of Packages</span>
                 <input class="fld__i" type="number" [value]="c('numberOfPackages').value" disabled /></label>
               <label class="fld fld--sm"><span class="fld__l">Declared Value</span>
-                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('declaredValue')" /></label>
+                <input class="fld__i" type="number" [value]="c('declaredValue').value ?? 0" readonly title="Sum of every item's own Value above" /></label>
             </app-item-entry-grid>
             <div class="spacer"></div>
             <label class="fld"><span class="fld__l">Remarks</span>
@@ -278,7 +278,7 @@ type FreightOutcome =
           <app-card title="E-Way Bill" subtitle="Required over the mandatory invoice value; optional below it. Generated automatically after booking.">
             <div class="grid3">
               <label class="fld"><span class="fld__l">Invoice Value</span>
-                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('invoiceValue')" placeholder="0.00" /></label>
+                <input class="fld__i" type="number" [value]="c('invoiceValue').value ?? 0" readonly title="Same as Declared Value — the sum of every item's own Value" /></label>
               <div class="fld">
                 <span class="fld__l">Status</span>
                 @if (ewayBillMandatory()) {
@@ -445,7 +445,8 @@ type FreightOutcome =
             <div class="sum__cta">
               <app-button icon="check" [loading]="submitting()"
                 [disabled]="!pricing() || pricingLoading() || !freightCalc() || freightCalcLoading()
-                  || form.invalid || ewayBillReason() !== null || appointmentDeliveryReason() !== null"
+                  || form.invalid || ewayBillReason() !== null || appointmentDeliveryReason() !== null
+                  || !c('declaredValue').value"
                 (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
@@ -1066,10 +1067,19 @@ export class ShipmentCreate implements OnInit {
     return this.myBranchName() ?? '—';
   }
 
-  /** Just keeps the booking payload's item list current — an item's name never affects
-   *  price, and its weight/dimensions already reschedule pricing through {@link onWeight}. */
+  /** Keeps the booking payload's item list current — an item's name never affects price,
+   *  and its weight/dimensions already reschedule pricing through {@link onWeight}. Also
+   *  the single source of Declared Value: rather than typing it twice (once per item,
+   *  once at shipment level), the shipment-level figure is just the sum of every item's
+   *  own Value — and Invoice Value (E-Way Bill) mirrors it exactly, on direct request,
+   *  so the two can never diverge. Both fields are read-only in the template; this is the
+   *  only place either one is ever set. */
   protected onItems(items: ShipmentItemRequest[]): void {
     this.items.set(items);
+    const total = items.reduce((sum, i) => sum + (i.declaredValue ?? 0), 0);
+    const value = total > 0 ? total : null;
+    this.c('declaredValue').setValue(value);
+    this.c('invoiceValue').setValue(value);
   }
 
   protected onWeight(weight: { actual: number; volumetric: number; chargeable: number }): void {
@@ -1505,6 +1515,10 @@ export class ShipmentCreate implements OnInit {
     const f = this.freightCalc();
     if (!p || !f || this.form.invalid || this.ewayBillReason() !== null) return;
     const v = this.form.getRawValue();
+    if (!v.declaredValue || v.declaredValue <= 0) {
+      this.notify.error('Declared Value is required — enter a Value for at least one item.');
+      return;
+    }
 
     const body: CreateShipmentRequest = {
       bookingBranchId: v.bookingBranchId, manualShipmentNumber: v.manualShipmentNumber?.trim() || null,

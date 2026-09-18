@@ -90,7 +90,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
               <label class="fld"><span class="fld__l">Number of Packages</span>
                 <input class="fld__i" type="number" min="1" [formControl]="c('numberOfPackages')" /></label>
               <label class="fld"><span class="fld__l">Declared Value</span>
-                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('declaredValue')" /></label>
+                <input class="fld__i" type="number" [value]="c('declaredValue').value ?? 0" readonly title="Sum of every item's own Value below" /></label>
               <label class="fld"><span class="fld__l">Other Charges</span>
                 <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
             </div>
@@ -134,7 +134,7 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
           </app-card>
 
           <app-card title="Items">
-            <app-item-entry-grid [initial]="hydrateItems()" [defaultWeightKg]="defaultChargeableWeightKg()" (itemsChange)="items.set($event)" (weightChange)="weight.set($event)" />
+            <app-item-entry-grid [initial]="hydrateItems()" [defaultWeightKg]="defaultChargeableWeightKg()" (itemsChange)="onItems($event)" (weightChange)="weight.set($event)" />
           </app-card>
 
           <app-card title="Remarks">
@@ -263,6 +263,7 @@ export class ShipmentEdit implements OnInit {
       && v.senderName && v.senderAddress && v.senderContact
       && v.receiverName && v.receiverAddress && v.receiverContact
       && this.items().length > 0 && this.weight().chargeable > 0
+      && !!v.declaredValue
       && this.appointmentDeliveryReason() === null
     );
   }
@@ -318,6 +319,15 @@ export class ShipmentEdit implements OnInit {
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
   branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id; }
+
+  /** Declared Value is the sum of every item's own Value, not typed separately — matches
+   *  Shipment Booking's own rule (direct request: never typed twice, never diverges from
+   *  the items). This screen has no Invoice Value field to also mirror. */
+  protected onItems(items: ShipmentItemRequest[]): void {
+    this.items.set(items);
+    const total = items.reduce((sum, i) => sum + (i.declaredValue ?? 0), 0);
+    this.c('declaredValue').setValue(total > 0 ? total : null);
+  }
 
   private load(): void {
     this.loading.set(true);

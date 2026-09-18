@@ -24,6 +24,7 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
         <h1 class="text-h1">Welcome back</h1>
         <p class="text-caption">Sign in to your Courier SaaS console.</p>
       </div>
+      <a class="login__track" routerLink="/track-shipment">Track your shipment without signing in →</a>
       <form class="login__form" [formGroup]="form" (ngSubmit)="submit()">
         @if (devMode || companyLocked()) {
           <app-input [control]="ctrl('companyCode')" label="Company code" placeholder="e.g. ACME_LOGISTICS"
@@ -74,7 +75,9 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
   styles: [`
     .login-wrap { width:400px; max-width:100%; display:flex; flex-direction:column; gap:20px; }
     .login { padding:36px; }
-    .login__head { margin-bottom:24px; }
+    .login__head { margin-bottom:16px; }
+    .login__track { display:inline-block; margin-bottom:20px; font:600 13px var(--font-sans); color:var(--brand-600); text-decoration:none; }
+    .login__track:hover { text-decoration:underline; }
     .login__form { display:flex; flex-direction:column; gap:16px; }
     .login__row { display:flex; align-items:center; justify-content:space-between; }
     .login__remember { display:flex; align-items:center; gap:8px; font:500 13px var(--font-sans); color:var(--content-muted); cursor:pointer; }

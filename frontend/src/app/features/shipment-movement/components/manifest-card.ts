@@ -68,7 +68,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
           <table class="tbl">
             <thead>
               <tr>
-                <th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th>
+                <th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From City → To City</th><th class="tbl--right">Weight</th><th>Status</th>
                 @if (showRemoveAction()) { <th></th> }
               </tr>
             </thead>
@@ -78,7 +78,6 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
                   <td>{{ i + 1 }}</td>
                   <td><a [routerLink]="['/shipments', s.id]">{{ s.shipmentNumber }}</a></td>
                   <td>{{ s.senderName }} → {{ s.receiverName }}</td>
-                  <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                   <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                   <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                   <td><app-shipment-status-badge [status]="s.status" /></td>

@@ -8,6 +8,47 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-18 — Public Track Shipment (no login) from the login screen
+
+Direct request: "on login page add option to track shipment" / "without login able to
+track shipment". `/api/v1/track/**` was already listed as a public endpoint in
+`SecurityConfig.PUBLIC_ENDPOINTS` (comment: "public parcel tracking, returns a redacted
+projection") but nothing was ever mounted there — this fills that gap in.
+
+**Backend:** New `PublicTrackController` (`GET /api/v1/track/{number}`), matched against
+either tracking number or shipment number, backed by a new `PublicTrackingService` kept
+deliberately separate from the authenticated `ShipmentService` (every method there is
+`@PreAuthorize`-gated; this is the one lookup that must work with no token at all, so it
+lives in its own class rather than relying on a method that happens to have no
+annotation). Returns `PublicTrackResponse` — a redacted projection (tracking/shipment
+number, status, booking/expected-delivery date, from/to city, status timeline) with no
+address, contact, pricing or internal id (branch/vehicle/user) — anyone with the AWB can
+call this, so it carries nothing more than what's printed on the parcel's own label.
+Two new cross-company repository methods
+(`ShipmentRepository.findByTrackingNumberOrShipmentNumberForPublicTracking`,
+`ShipmentStatusHistoryRepository.findAllByShipmentIdOrderByChangedAtAsc`), following the
+module's existing "explicit cross-tenant query, only called from one named place" pattern
+— safe because `CompanyFilterAspect` already leaves the Hibernate `companyFilter` off
+entirely for an unauthenticated request (`CompanyResolutionFilter`'s own comment already
+anticipated this: "Public endpoint (login, tracking, docs)").
+
+**Frontend:** New public (no-login) page `features/public/track-shipment.ts` at
+`/track-shipment` — same box-plus-result shape as the authenticated `TrackBox`/`Track`
+page, styled like the existing public info pages (`PublicPage`) rather than the app
+shell. Login screen (`login.ts`) gained a "Track your shipment without signing in →" link
+under the header. Calls `GET /track/{number}` via `ApiService`/`SILENT_ERRORS` (a miss is
+an expected case, not a toast-worthy error) — no bearer token attached regardless of
+whether one happens to be in storage, since the endpoint tolerates both.
+
+`mvn test` 1045/1045 (no new backend tests — this endpoint has no `@PreAuthorize` to
+regression-test and no company-scoped state to fixture), `ng build` clean. **Verified
+live** on a throwaway `:8082`/`:4300` stack: `curl` with no auth header against real dev
+`courier_db` returned the redacted projection for both a tracking number and its sibling
+shipment number, and a 404 for a made-up number; walked the same three cases in a real
+browser from `/login` → "Track your shipment without signing in" → `/track-shipment`.
+
+---
+
 ## Removed 2026-09-17 — Shipment Booking no longer resolves (or even looks up) a delivery branch at all, from either end
 
 Direct follow-up to the same day's pricing-preview fix: "no need to check map pincode

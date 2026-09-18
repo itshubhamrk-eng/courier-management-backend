@@ -301,8 +301,15 @@ public class Shipment extends CompanyOwnedEntity {
         if (numberOfPackages == null || numberOfPackages < 1) {
             this.numberOfPackages = 1;
         }
-        if (declaredValue != null && declaredValue.signum() < 0) {
-            throw new BusinessRuleException("Declared value cannot be negative.");
+        if (declaredValue == null || declaredValue.signum() <= 0) {
+            throw new BusinessRuleException("A shipment needs a declared value greater than zero.");
+        }
+        // The frontend derives both as the same sum of every item's own declared value —
+        // on direct request, they can never legitimately differ. Only enforced when
+        // invoiceValue is actually supplied (still optional in its own right; it only
+        // drives the E-Way Bill mandatory-threshold decision).
+        if (invoiceValue != null && invoiceValue.compareTo(declaredValue) != 0) {
+            throw new BusinessRuleException("Invoice value must equal declared value.");
         }
         if (shipmentType == null) {
             this.shipmentType = ShipmentType.NON_DOCUMENT;

@@ -25,6 +25,9 @@ export const API = {
   charges: '/charges',
   chargeSettings: (chargeId: string) => `/charges/${chargeId}/settings`,
   shipments: '/shipments',
+  /** Public (no-login) Track Shipment — reached from the login screen. Redacted
+   *  projection, matched against either tracking or shipment number. */
+  publicTrack: (number: string) => `/track/${number}`,
   /** POD Auto Verification — verify/{id}, verification/{id}, review/{id}. See
    *  MEMORY/modules/pod-verification.md. */
   pod: (shipmentId: string) => `/shipments/${shipmentId}/pod`,

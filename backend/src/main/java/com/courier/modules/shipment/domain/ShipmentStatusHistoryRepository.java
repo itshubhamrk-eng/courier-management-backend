@@ -42,4 +42,10 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
      *  activity to a branch-scoped caller's Recent Activity feed. */
     List<ShipmentStatusHistory> findTop5ByCompanyIdAndBranchIdAndStatusOrderByChangedAtDesc(
             UUID companyId, UUID branchId, ShipmentStatus status);
+
+    /** Public Track Shipment (login page, no auth): cross-company by shipment id, the same
+     *  unfiltered discipline as {@code findTop5ByStatusOrderByChangedAtDesc} above — only
+     *  ever called from {@code PublicTrackingService} for a shipment id already resolved via
+     *  the public track lookup. */
+    List<ShipmentStatusHistory> findAllByShipmentIdOrderByChangedAtAsc(UUID shipmentId);
 }

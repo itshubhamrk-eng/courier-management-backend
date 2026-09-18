@@ -35,7 +35,9 @@ public record UpdateShipmentRequest(
         @NotNull UUID paymentModeId,
         ShipmentType shipmentType,
         LocalDate bookingDate,
-        @DecimalMin(value = "0") BigDecimal declaredValue,
+        @NotNull(message = "Declared Value is required")
+        @DecimalMin(value = "0.0", inclusive = false, message = "must be greater than zero")
+        BigDecimal declaredValue,
         @Min(1) Integer numberOfPackages,
         @Size(max = 500) String remarks,
         @DecimalMin(value = "0") BigDecimal otherCharges,

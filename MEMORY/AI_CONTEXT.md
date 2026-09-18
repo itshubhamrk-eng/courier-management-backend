@@ -7,6 +7,22 @@
 
 ## Current Version
 
+`0.63.0` — **Public Track Shipment (no login) from the login screen.** Direct request:
+"on login page add option to track shipment" / "without login able to track shipment".
+`/api/v1/track/**` was already listed public in `SecurityConfig` ("public parcel
+tracking, returns a redacted projection") but nothing was mounted there — new
+`PublicTrackController`/`PublicTrackingService` (kept deliberately separate from the
+`@PreAuthorize`-gated `ShipmentService`) fill it in, returning a redacted projection
+(status, cities, dates, timeline — no address/contact/pricing/internal ids) matched by
+tracking or shipment number, via two new explicit cross-company repository methods. New
+public page `features/public/track-shipment.ts` at `/track-shipment`; login screen got a
+"Track your shipment without signing in" link. `mvn test` 1045/1045, `ng build` clean.
+**Verified live**: `curl` with no auth header against real dev `courier_db` (both lookup
+keys + a 404 miss), and the same three cases walked in a real browser from `/login`.
+Full detail in `CHANGELOG.md` 2026-09-18 "Public Track Shipment (no login)".
+
+Previously current:
+
 `0.62.0` — **Shipment Booking no longer resolves or looks up a delivery branch at all,
 from either end.** Direct follow-up to 0.61.1: "no need to check map pincode for
 delivery branch... when shipment booking we do not set branch when create loading sheet

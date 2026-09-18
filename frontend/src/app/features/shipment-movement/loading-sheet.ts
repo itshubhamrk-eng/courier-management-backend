@@ -80,7 +80,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                 <div class="tbl__wrap">
                   <table class="tbl">
                     <thead>
-                      <tr><th></th><th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From Branch → To Branch</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
+                      <tr><th></th><th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From City → To City</th><th class="tbl--right">Weight</th></tr>
                     </thead>
                     <tbody>
                       @for (s of bookedShipments(); track s.id; let i = $index) {
@@ -89,7 +89,6 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                           <td>{{ i + 1 }}</td>
                           <td>{{ s.shipmentNumber }}</td>
                           <td>{{ s.senderName }} → {{ s.receiverName }}</td>
-                          <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
                           <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                           <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
                         </tr>
@@ -109,7 +108,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
       </app-card>
 
       <div class="ml-head">
-        <h2 class="text-h2 section-title">Open Manifests</h2>
+        <h2 class="text-h2 section-title">Open Loading Sheet</h2>
         <div class="ml-filters">
           <app-autocomplete [control]="filterBranchControl" [options]="allBranchOptions()" placeholder="All lanes" />
           <app-select [control]="sortControl" [options]="sortOptions" />
