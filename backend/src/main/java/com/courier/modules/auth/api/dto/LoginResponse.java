@@ -38,6 +38,10 @@ public record LoginResponse(
         String displayName,
         Set<String> roles,
 
+        @Schema(description = "Effective permission codes — role defaults unioned with any "
+                + "per-user override, resolved once at issuance")
+        Set<String> permissions,
+
         @Schema(description = "The branch this account is staffed at, if any — null for "
                 + "a company admin or a user with no branch assignment")
         UUID branchId,
@@ -66,6 +70,7 @@ public record LoginResponse(
                 result.user().getEmail(),
                 result.user().displayName(),
                 result.user().roleNames(),
+                result.permissions(),
                 result.user().getBranchId(),
                 result.user().getHubId(),
                 company != null ? company.name() : null,

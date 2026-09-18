@@ -2,6 +2,7 @@ package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.port.BranchDirectoryPort;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
+import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.LoginFailureReason;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.Role;
@@ -72,6 +73,7 @@ class AuthServiceTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private CompanyDirectoryPort companyDirectory;
     @Mock private BranchDirectoryPort branchDirectory;
+    @Mock private UserPermissionsPort userPermissionsPort;
     @Mock private SessionService sessionService;
     @Mock private TokenIssuer tokenIssuer;
     @Mock private LoginAttemptService loginAttemptService;
@@ -93,8 +95,9 @@ class AuthServiceTest {
         properties = new AuthProperties();
         authService = new AuthService(
                 authenticationManager, userRepository, refreshTokenRepository, companyDirectory, branchDirectory,
-                sessionService, tokenIssuer, loginAttemptService, emailVerificationService,
+                userPermissionsPort, sessionService, tokenIssuer, loginAttemptService, emailVerificationService,
                 tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder);
+        when(userPermissionsPort.resolveEffectivePermissions(any())).thenReturn(Set.of());
 
         companyId = UUID.randomUUID();
         userId = UUID.randomUUID();
@@ -520,7 +523,7 @@ class AuthServiceTest {
                 .thenReturn(List.of(companyAdmin));
 
         when(jwtTokenProvider.generateImpersonationAccessToken(
-                eq(companyAdminId), eq(targetCompanyId), eq("admin@target.test"), anySet(),
+                eq(companyAdminId), eq(targetCompanyId), eq("admin@target.test"), anySet(), anySet(),
                 any(), any(), eq("Target Co"), any(), eq(superAdminId), eq("super@platform.test"), any()))
                 .thenReturn("impersonation-jwt");
 
@@ -553,7 +556,7 @@ class AuthServiceTest {
 
         verify(companyDirectory, never()).findById(any());
         verify(jwtTokenProvider, never()).generateImpersonationAccessToken(
-                any(), any(), any(), anySet(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), anySet(), anySet(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -623,7 +626,7 @@ class AuthServiceTest {
                 .thenReturn(List.of(branchManager));
 
         when(jwtTokenProvider.generateImpersonationAccessToken(
-                eq(managerId), eq(companyId), eq("manager@acme.test"), anySet(),
+                eq(managerId), eq(companyId), eq("manager@acme.test"), anySet(), anySet(),
                 any(), any(), eq("Acme Co"), any(), eq(companyAdminId), eq("admin@acme.test"), any()))
                 .thenReturn("impersonation-jwt");
 
@@ -660,7 +663,7 @@ class AuthServiceTest {
                 .isInstanceOf(com.courier.shared.exception.ResourceNotFoundException.class);
 
         verify(jwtTokenProvider, never()).generateImpersonationAccessToken(
-                any(), any(), any(), anySet(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), anySet(), anySet(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

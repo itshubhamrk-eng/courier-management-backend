@@ -31,6 +31,7 @@ import java.util.UUID;
  *   cid    companyId          <- the only trusted source of company binding
  *   email  user email
  *   roles  ["COMPANY_ADMIN"]  <- access tokens only
+ *   permissions ["SHIPMENT_CREATE", ...] <- access tokens only, resolved at issuance
  *   typ    "access" | "refresh"
  *   jti    token id, used for logout and denylisting
  * </pre>
@@ -56,6 +57,12 @@ public class JwtTokenProvider {
 
     private static final String CLAIM_EMAIL = "email";
     private static final String CLAIM_ROLES = "roles";
+    /**
+     * Effective permission codes, resolved once at issuance via {@code UserPermissionsPort}
+     * (role defaults unioned with any per-user override). Same spelling the frontend's
+     * {@code decodeJwt}/{@code hydrate()} already expects — see {@code auth.service.ts}.
+     */
+    private static final String CLAIM_PERMISSIONS = "permissions";
     private static final String CLAIM_TYPE = "typ";
     /** Optional — present only when the user is staffed at a branch/hub of their own. */
     private static final String CLAIM_BRANCH_ID = "bid";
@@ -124,10 +131,12 @@ public class JwtTokenProvider {
     // ---------------------------------------------------------------- generation
 
     public String generateAccessToken(UUID userId, UUID companyId, String email, Set<String> roles) {
-        return generateAccessToken(userId, companyId, email, roles, null, null, null, null);
+        return generateAccessToken(userId, companyId, email, roles, Set.of(), null, null, null, null);
     }
 
     /**
+     * @param permissions effective permission codes (role defaults already unioned with
+     *                    any per-user override) — see {@link AuthenticatedUser#permissions()}
      * @param branchId    the caller's own branch, if staffed at one — carried so a client
      *                    can render "book from my branch" without a second round trip after
      *                    login; never trusted for authorisation, same as every other claim
@@ -137,12 +146,14 @@ public class JwtTokenProvider {
      * @param companyLogo logo URL of the signed-in company, same reason as {@code companyName}
      */
     public String generateAccessToken(UUID userId, UUID companyId, String email, Set<String> roles,
+                                       Set<String> permissions,
                                        UUID branchId, UUID hubId, String companyName, String companyLogo) {
         Instant now = Instant.now();
         var claims = new java.util.HashMap<String, Object>(Map.of(
                 CLAIM_COMPANY_ID, companyId != null ? companyId.toString() : "",
                 CLAIM_EMAIL, email,
                 CLAIM_ROLES, List.copyOf(roles),
+                CLAIM_PERMISSIONS, List.copyOf(permissions == null ? Set.of() : permissions),
                 CLAIM_TYPE, TYPE_ACCESS));
         if (branchId != null) claims.put(CLAIM_BRANCH_ID, branchId.toString());
         if (hubId != null) claims.put(CLAIM_HUB_ID, hubId.toString());
@@ -175,6 +186,7 @@ public class JwtTokenProvider {
      *                          {@code app.jwt.access-token-ttl}
      */
     public String generateImpersonationAccessToken(UUID userId, UUID companyId, String email, Set<String> roles,
+                                                     Set<String> permissions,
                                                      UUID branchId, UUID hubId, String companyName, String companyLogo,
                                                      UUID impersonatorId, String impersonatorEmail, Duration ttl) {
         Instant now = Instant.now();
@@ -186,6 +198,7 @@ public class JwtTokenProvider {
                 CLAIM_IMPERSONATION, true,
                 CLAIM_IMPERSONATOR_ID, impersonatorId.toString(),
                 CLAIM_IMPERSONATOR_EMAIL, impersonatorEmail));
+        claims.put(CLAIM_PERMISSIONS, List.copyOf(permissions == null ? Set.of() : permissions));
         if (branchId != null) claims.put(CLAIM_BRANCH_ID, branchId.toString());
         if (hubId != null) claims.put(CLAIM_HUB_ID, hubId.toString());
         if (companyName != null && !companyName.isBlank()) claims.put(CLAIM_COMPANY_NAME, companyName);
@@ -285,7 +298,8 @@ public class JwtTokenProvider {
                 UUID.fromString(claims.getSubject()),
                 (company == null || company.isBlank()) ? null : UUID.fromString(company),
                 claims.get(CLAIM_EMAIL, String.class),
-                extractRoles(claims),
+                extractStringSet(claims, CLAIM_ROLES),
+                extractStringSet(claims, CLAIM_PERMISSIONS),
                 claims.getId());
     }
 
@@ -302,8 +316,8 @@ public class JwtTokenProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private Set<String> extractRoles(Claims claims) {
-        Object raw = claims.get(CLAIM_ROLES);
+    private Set<String> extractStringSet(Claims claims, String claimName) {
+        Object raw = claims.get(claimName);
         if (raw instanceof List<?> list) {
             return new HashSet<>((List<String>) list);
         }

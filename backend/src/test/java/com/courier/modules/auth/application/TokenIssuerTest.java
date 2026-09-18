@@ -1,6 +1,7 @@
 package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
+import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.shared.audit.application.AuditService;
@@ -47,6 +48,7 @@ class TokenIssuerTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private AuditService auditService;
     @Mock private CompanyDirectoryPort companyDirectory;
+    @Mock private UserPermissionsPort userPermissionsPort;
     @Mock private Claims claims;
 
     private TokenIssuer tokenIssuer;
@@ -57,7 +59,8 @@ class TokenIssuerTest {
 
     @BeforeEach
     void setUp() {
-        tokenIssuer = new TokenIssuer(jwtTokenProvider, refreshTokenRepository, auditService, companyDirectory);
+        tokenIssuer = new TokenIssuer(
+                jwtTokenProvider, refreshTokenRepository, auditService, companyDirectory, userPermissionsPort);
         userId = UUID.randomUUID();
         familyId = UUID.randomUUID();
 

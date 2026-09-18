@@ -1,6 +1,7 @@
 package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
+import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.User;
@@ -48,6 +49,7 @@ public class TokenIssuer {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AuditService auditService;
     private final CompanyDirectoryPort companyDirectory;
+    private final UserPermissionsPort userPermissionsPort;
 
     /** A freshly minted pair plus the metadata the caller needs to respond. */
     public record TokenPair(String accessToken,
@@ -136,6 +138,7 @@ public class TokenIssuer {
         CompanyDirectoryPort.CompanyRef company = companyDirectory.findById(user.getCompanyId()).orElse(null);
         String accessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getCompanyId(), user.getEmail(), user.roleNames(),
+                userPermissionsPort.resolveEffectivePermissions(user.getId()),
                 user.getBranchId(), user.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getCompanyId());

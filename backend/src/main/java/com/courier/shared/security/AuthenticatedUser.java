@@ -21,6 +21,12 @@ import java.util.UUID;
  * @param companyId owning company — the sole source of truth for company binding
  * @param email    for logging and {@code /auth/me}
  * @param roles    role names without the {@code ROLE_} prefix
+ * @param permissions effective permission codes (e.g. {@code SHIPMENT_CREATE}) — role
+ *                    defaults already unioned with any per-user override at token
+ *                    issuance, see {@code UserPermissionsPort}. Carried as plain
+ *                    (unprefixed) authorities alongside the {@code ROLE_*} ones, so
+ *                    {@code @PreAuthorize("hasAuthority('SHIPMENT_CREATE')")} and the
+ *                    existing {@code hasRole(...)} checks both keep working unchanged.
  * @param tokenId  the token's {@code jti}, needed for logout/denylisting
  */
 public record AuthenticatedUser(
@@ -28,13 +34,26 @@ public record AuthenticatedUser(
         UUID companyId,
         String email,
         Set<String> roles,
+        Set<String> permissions,
         String tokenId
 ) {
 
+    /**
+     * Pre-permissions convenience constructor — every unit test building a principal by
+     * hand to drive a {@code @PreAuthorize} role check goes through this one, and none of
+     * them care about permission-code authorities. Defaults to none.
+     */
+    public AuthenticatedUser(UUID userId, UUID companyId, String email, Set<String> roles, String tokenId) {
+        this(userId, companyId, email, roles, Set.of(), tokenId);
+    }
+
     public Collection<? extends GrantedAuthority> authorities() {
-        return roles.stream()
-                .map(role -> new SimpleGrantedAuthority(Roles.ROLE_PREFIX + role))
-                .toList();
+        java.util.stream.Stream<GrantedAuthority> roleAuthorities = roles.stream()
+                .map(role -> new SimpleGrantedAuthority(Roles.ROLE_PREFIX + role));
+        java.util.stream.Stream<GrantedAuthority> permissionAuthorities =
+                (permissions == null ? Set.<String>of() : permissions).stream()
+                        .map(SimpleGrantedAuthority::new);
+        return java.util.stream.Stream.concat(roleAuthorities, permissionAuthorities).toList();
     }
 
     public boolean isPlatformAdmin() {

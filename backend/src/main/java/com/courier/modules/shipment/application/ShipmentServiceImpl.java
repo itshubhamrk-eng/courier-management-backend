@@ -196,7 +196,11 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    // Narrower than WRITERS: booking is the one method named in the Menu + Permission
+    // Management example (Shipment Booking -> SHIPMENT_CREATE), retrofit onto the
+    // permission catalogue rather than the coarser role-tier check every other WRITERS
+    // method here still uses.
+    @PreAuthorize("hasAuthority('SHIPMENT_CREATE')")
     public Shipment create(CreateShipmentCommand command) {
         UUID companyId = requireCompany();
 
@@ -476,14 +480,18 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    // Narrower than READERS: the three nav leaves the Menu + Permission Management
+    // example names (Shipment Booking's own reads, Shipment List, Shipment Tracking) —
+    // retrofit onto the permission catalogue. Every other READERS method here is
+    // untouched.
+    @PreAuthorize("hasAuthority('SHIPMENT_READ')")
     public Shipment getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize("hasAuthority('SHIPMENT_READ')")
     public Shipment getByTrackingNumber(String trackingNumber) {
         UUID companyId = requireCompany();
         return shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, trackingNumber)
@@ -509,7 +517,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize("hasAuthority('SHIPMENT_READ')")
     public Page<Shipment> search(ShipmentCriteria criteria, Pageable pageable) {
         return shipmentRepository.findAll(buildSpecification(criteria), pageable);
     }

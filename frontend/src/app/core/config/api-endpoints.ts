@@ -17,6 +17,11 @@ export const API = {
   roles: '/roles',
   departments: '/departments',
   permissions: '/permissions',
+  /** The menu/submenu hierarchy — GET .../tree feeds the User Permissions screen's tree UI. */
+  menuItems: '/menu-items',
+  /** One user's menu permissions (role defaults + overrides). See
+   *  MEMORY/modules/permission.md. */
+  userMenuPermissions: (userId: string) => `/users/${userId}/menu-permissions`,
   branches: '/branches',
   customers: '/customers',
   rates: '/rates',

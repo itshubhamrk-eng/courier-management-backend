@@ -86,7 +86,11 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    // Narrower than WRITERS: create/list/dispatch are the three methods the Menu +
+    // Permission Management example names (Manifest -> Create Manifest/Manifest
+    // List/Dispatch), retrofit onto the permission catalogue. removeShipment/
+    // summaryStats stay on the class's coarser role-tier constants.
+    @PreAuthorize("hasAuthority('MANIFEST_CREATE')")
     public Manifest create(CreateManifestCommand command) {
         UUID companyId = requireCompany();
 
@@ -131,14 +135,14 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize("hasAuthority('MANIFEST_READ')")
     public Manifest getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize("hasAuthority('MANIFEST_READ')")
     public Page<Manifest> search(ManifestCriteria criteria, Pageable pageable) {
         return manifestRepository.findAll(ManifestSpecifications.matching(criteria), pageable);
     }
@@ -170,7 +174,7 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize("hasAuthority('MANIFEST_DISPATCH')")
     public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
             BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
         UUID companyId = requireCompany();
@@ -234,7 +238,7 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize("hasAuthority('MANIFEST_DISPATCH')")
     public DispatchOtpIssued requestDispatchOtp(UUID manifestId, UUID driverUserId) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(manifestId, companyId);
@@ -264,7 +268,7 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize("hasAuthority('MANIFEST_DISPATCH')")
     public void verifyDispatchOtp(UUID manifestId, UUID driverUserId, String otp) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(manifestId, companyId);

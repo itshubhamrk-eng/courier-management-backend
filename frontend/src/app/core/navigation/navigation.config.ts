@@ -89,6 +89,10 @@ export const NAVIGATION: NavNode[] = [
       { id: 'roles', title: 'Roles', icon: 'badge', route: '/roles', permission: 'ROLE_VIEW', roles: ADMINS },
       { id: 'permissions', title: 'Permissions', icon: 'key', route: '/permissions', permission: 'PERMISSION_VIEW', roles: ADMINS },
       { id: 'permission-assign', title: 'Assign Permissions', icon: 'rule', route: '/permissions/assign', permission: 'PERMISSION_ASSIGN', roles: [AppRole.COMPANY_ADMIN] },
+      // Menu + Permission Management: one user's menu tree on top of their role's
+      // defaults. MENU_ASSIGN, never PERMISSION_ASSIGN — see permission-assign's own
+      // leaf above and DefaultRoleCatalog's BRANCH_MANAGER definition.
+      { id: 'user-permissions', title: 'User Permissions', icon: 'checklist', route: '/permissions/users', permission: 'MENU_ASSIGN', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
       { id: 'branches', title: 'Branches', icon: 'store', route: '/branches', permission: 'BRANCH_VIEW', roles: COMPANY_ONLY },
       // { id: 'hubs', title: 'Hubs', icon: 'hub', route: '/hubs', permission: 'HUB_VIEW', roles: MANAGERS }, // hub module not built yet
       { id: 'company-settings', title: 'Company Settings', icon: 'tune', route: '/settings', permission: 'SETTINGS_VIEW', roles: COMPANY_ONLY }

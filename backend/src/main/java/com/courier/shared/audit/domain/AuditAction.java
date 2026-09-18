@@ -276,6 +276,13 @@ public enum AuditAction {
     CHARGE_SETTING_ACTIVATED,
     CHARGE_SETTING_DEACTIVATED,
 
+    // --- Menu + Permission Management: the menu hierarchy catalogue (SUPER_ADMIN) and
+    // per-user permission overrides on top of a role's defaults (COMPANY_ADMIN/BRANCH_MANAGER).
+    MENU_ITEM_CREATED,
+    MENU_ITEM_UPDATED,
+    MENU_ITEM_DELETED,
+    USER_PERMISSIONS_UPDATED,
+
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,
     UPDATED,

@@ -8,6 +8,126 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-18 — Menu + Permission Management: menu hierarchy, JWT-carried effective
+## permissions, per-user overrides on top of role defaults
+
+Direct request: unlimited-depth menu/submenu tree, default CRUD permissions per role per
+menu item, a new user auto-inheriting its role's defaults, a User Permissions screen to
+override one user without touching the role, backend-enforced (frontend only hides/
+disables). Research first: most of this was already half-built and waiting —
+`PermissionModule.MENU` (`MENU_READ`/`MENU_ASSIGN`) existed with a doc comment describing
+exactly this feature but no backing entity; `RolePermissionService
+.resolveEffectiveCodes`'s own javadoc said "what User Management will call" and was never
+called; the frontend nav tree, `NavigationService.setMenuFromApi`, and
+`PermissionService.canAccess` already consumed a `permissions()` signal that
+`LoginResponse` never populated. This is a completion of that scaffolding, not a
+from-scratch build — see `MEMORY/modules/permission.md` for the full picture.
+
+**New tables (`V84`):** `menu_items` — platform-level, self-referencing `parent_id`,
+unlimited depth, each leaf optionally naming a `permission_module` (null = pure group
+node); seeded from the real current `navigation.config.ts` tree (Administration,
+Customers, Rate Master, Masters, Shipment Management incl. nested Manifest, Finance,
+Reports, Settings), not a placeholder. `user_permission_overrides` — company-owned,
+mirrors `role_permissions` (denormalised `permission_code`), holds only the *deltas*
+between a user's role default and what an admin explicitly set — a checkbox left at the
+role default gets no row, so a new user with zero overrides already gets exactly their
+role's grants, and a later role change still flows through for anyone who never
+overrode that specific right.
+
+**Reuse, not a second permission system:** a menu leaf's CREATE/READ/UPDATE/DELETE
+checkboxes are literally that leaf's module's `<MODULE>_CREATE/_READ/_UPDATE/_DELETE`
+rows in the existing 200-ish-row `permissions` catalogue — no new grant type. A module
+missing an action (e.g. `TRACKING` has no UPDATE/DELETE) simply omits that checkbox.
+
+**Backend:** `MenuService`/`MenuController` (`GET /menu-items/tree`, SUPER_ADMIN CRUD).
+`UserPermissionService`/`UserPermissionController`
+(`GET`/`PUT /users/{id}/menu-permissions`) — `resolveEffectivePermissionCodes` (role
+codes ∪ granted overrides ∖ revoked overrides) is the one function both the matrix screen
+and JWT issuance call; deliberately not `@PreAuthorize`-gated since it runs during login
+before an admin-shaped `SecurityContext` exists, and reads the raw `RolePermissionRepository`
+rather than `RolePermissionService` for the same reason (that service's own
+`resolveEffectiveCodes` is admin-gated). `COMPANY_ADMIN` (any user) or `BRANCH_MANAGER`
+(their own branch's users only, mirroring `UserServiceImpl.assignRole`'s existing scoping)
+may edit. **JWT wiring**: `AuthenticatedUser` gained a `permissions` field folded into
+`authorities()` as plain (unprefixed) `SimpleGrantedAuthority`s alongside the existing
+`ROLE_*` ones, so `hasAuthority('SHIPMENT_CREATE')` and untouched `hasRole(...)` checks
+both work; `JwtTokenProvider` gained a `permissions` claim (same spelling the frontend's
+`decodeJwt`/`hydrate()` already expected); new `UserPermissionsPort` (mirrors
+`CompanyDirectoryPort`'s seam) lets `TokenIssuer`/`AuthService` resolve permissions at
+issuance without auth depending on the company module directly. `LoginResponse` gained
+`permissions`. **Enforcement retrofit**, scoped deliberately narrow (see below):
+`ShipmentServiceImpl.create/getById/getByTrackingNumber/search` and
+`ManifestServiceImpl.create/getById/search/dispatch/requestDispatchOtp/verifyDispatchOtp`
+switched from the class's coarse `hasAnyRole(...)` constants to
+`hasAuthority('<CODE>')` — the exact methods the user's own worked example named
+(Shipment Booking/List/Tracking, Manifest Create/List/Dispatch). Read checks use
+`SHIPMENT_READ`/`MANIFEST_READ` alone, not also `_SEARCH`: the CRUD-checkbox model has no
+SEARCH checkbox, so gating on `_SEARCH` too would make a user-level READ revoke
+unenforceable for any role that also holds SEARCH (every seeded role does). Every other
+`@PreAuthorize` in the app — all ~30 other modules — is untouched on purpose; retrofitting
+the whole app in one pass was out of scope (see the plan's own Non-Goals).
+
+**Frontend:** `menu-permission.model.ts`, `UserPermissionService`
+(`features/user-permissions/`), a new recursive `MenuPermissionNodeComponent` (unlimited
+depth, unlike the existing flat module-list `permission-tree.ts`) with per-leaf CRUD
+checkboxes, a "Custom" dot where a value differs live from the role default, cascading
+per-node Select All plus a global Expand/Collapse/Select/Deselect All toolbar. New
+`features/user-permissions/user-permissions.ts` page: user autocomplete, tree, Save/Reset
+footer. New nav leaf "User Permissions" under Administration
+(`permission: 'MENU_ASSIGN'`, `roles: [...ADMINS, BRANCH_MANAGER]`) and route
+`/permissions/users`. No changes needed to `NavigationService`/`PermissionService`/
+`AuthService` — already wired, just fed real data for the first time.
+
+**Two real bugs found live-testing, both fixed same day:**
+1. `UiAutocomplete`'s `<input [formControl]>` updates the control on every keystroke, not
+   just a real selection — `userCtrl.valueChanges` fired an API call per character typed.
+   Fixed with `switchMap` + a "does this value match a known user id" filter, so a
+   mid-typing fragment never reaches the API and a later keystroke's response can't land
+   out of order and stomp the real selection's tree. Separately, `currentUser` was a
+   `computed()` reading `FormControl.value` directly — a plain property, invisible to
+   signals' dependency tracking, so the computed memoized its first (null) result forever;
+   fixed by bridging `valueChanges` through `toSignal`.
+2. Three menu leaves (Shipment Booking/List/Tracking) all name the `SHIPMENT` module —
+   the *same* right shown on three screens, not three independent ones. The editor
+   originally keyed its live edit state by `menuItemId`, so toggling CREATE on one leaf
+   didn't visually sync its siblings, and saving sent the same permission code three times
+   with independently-stale before/after snapshots — reworked to key by `permissionModule`
+   instead, so sibling leaves sharing a right always show and save it in lockstep.
+   Separately, reverting a right to its role default soft-deletes its override row, but
+   the unique key `(company_id, user_id, permission_id)` does not know about `deleted`
+   (same class of gotcha `Permission`/`CompanyRole` uniqueness checks already document) —
+   toggling the same right off, back to default, then off again tried to *insert* a second
+   row and hit the constraint; fixed with a native-query "resurrect the soft-deleted row"
+   path before falling back to a real insert.
+
+`mvn test` 1061/1061 (was 1046, +15 new), `ng build` clean, `ng test` 156/157 (same
+pre-existing unrelated nav failure). **Verified live** on a throwaway `:8082`/`:4300`
+stack against real dev `courier_db` (`V84` applied clean): logged in as the current dev
+BRANCH_MANAGER fixture (`shubham@gmail.com` / `AMAZING_LOGISTICS`), confirmed `permissions`
+arrives on both the JWT and `LoginResponse`; walked the actual User Permissions screen in
+a real browser — tree render, sibling sync, Save; via `curl`, revoked `SHIPMENT_READ` for
+that user and confirmed `GET /shipments` went from 200 to 403 `ACCESS_DENIED`, then
+reverted to the role default and confirmed 200 returned and the override row was cleanly
+soft-deleted (not left dangling); confirmed a second untouched user of the same role kept
+full access throughout (the role's own `role_permissions` grants were never touched).
+
+**Known pre-existing gap, not touched by this change:** staff created with a
+non-`BRANCH_MANAGER`/`COMPANY_ADMIN` company role (`BOOKING_OPERATOR`,
+`DELIVERY_OPERATOR`, `ACCOUNTS`, `FINANCE_USER`, `CUSTOMER_SERVICE`, `HUB_MANAGER`) get no
+row in `user_roles` (the separate, JWT-only `auth.Role` element collection —
+`UserServiceImpl`'s own `assignRoles` only ever writes `user_company_roles`), so their JWT
+`roles` claim is empty and any endpoint still gated on `hasRole(...)`/`hasAnyRole(...)`
+denies them regardless of this change. Confirmed via a direct query of the dev
+`user_roles` table: only `COMPANY_ADMIN`/`BRANCH_MANAGER`/`SUPER_ADMIN` rows exist, zero
+`OPERATOR` rows, despite real `BOOKING_OPERATOR` users in the same database. This
+change's own new `permissions` claim is unaffected (sourced from `user_company_roles` via
+`RolePermissionRepository`, not the empty `auth.Role` set), and the modules retrofitted
+onto `hasAuthority(...)` above now work correctly for those roles for the first time —
+but every other still-`hasRole`-gated endpoint remains as broken for them as before this
+change, not newly so.
+
+---
+
 ## Added 2026-09-18 — Company Razorpay config: separate Test and Live credential slots
 
 Direct request, prompted by an "unexpected error" (`INTERNAL_ERROR`) saving Razorpay

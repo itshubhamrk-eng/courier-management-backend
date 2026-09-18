@@ -7,6 +7,42 @@
 
 ## Current Version
 
+`0.65.0` — **Menu + Permission Management: menu hierarchy, JWT-carried effective
+permissions, per-user overrides on top of role defaults.** Direct request. Completed
+scaffolding that was already half-built and waiting (`PermissionModule.MENU`,
+`RolePermissionService.resolveEffectiveCodes`, the frontend's unused `permissions()`
+signal) rather than inventing a parallel grant system — a menu leaf's CRUD checkboxes
+read/write the existing `permissions` catalogue's `<MODULE>_CREATE/_READ/_UPDATE/_DELETE`
+rows directly. New `menu_items` (platform-level, unlimited-depth, self-referencing
+`parent_id`) and `user_permission_overrides` (company-owned, deltas only) tables (`V84`).
+`AuthenticatedUser`/`JwtTokenProvider`/`LoginResponse` all gained a `permissions` field,
+resolved once at issuance by the one function (`UserPermissionService
+.resolveEffectivePermissionCodes`) both the JWT and the new admin screen call.
+`ShipmentServiceImpl`/`ManifestServiceImpl` retrofitted from role-tier `hasAnyRole(...)`
+to `hasAuthority('<CODE>')` on exactly the methods the user's own worked example named
+(booking/list/tracking, manifest create/list/dispatch) — every other `@PreAuthorize` in
+the app is untouched, on purpose. New `/permissions/users` screen: recursive unlimited-
+depth tree, per-leaf CRUD checkboxes, live "Custom" indicator, cascading select-all.
+`mvn test` 1061/1061 (+15), `ng build` clean. **Verified live**: JWT/login response
+confirmed carrying real permission codes for a real BRANCH_MANAGER fixture; walked the
+User Permissions screen in a real browser; `curl`-revoked `SHIPMENT_READ` for a live user
+and confirmed `GET /shipments` flipped 200→403→200 across revoke/restore, with the
+override row cleanly soft-deleted on restore (not left dangling) and a second, untouched
+user of the same role unaffected throughout. Two real bugs found and fixed during that
+verification: `UiAutocomplete`'s per-keystroke `FormControl` updates were racing API
+calls and a `computed()` reading `.value` directly never re-evaluated (fixed with
+`switchMap`+filter and `toSignal`); three menu leaves sharing one module
+(`SHIPMENT_CREATE` on Booking/List/Tracking) could desync and double-write on save (fixed
+by keying the live edit state by module, not menu item, plus a soft-delete/unique-key
+resurrection path for repeated toggles). **Known pre-existing gap, not caused or touched
+by this change**: non-`BRANCH_MANAGER`/`COMPANY_ADMIN` company roles get no `user_roles`
+(JWT-only `auth.Role`) row at all, confirmed via direct dev-DB query — their JWT `roles`
+claim is empty regardless of this change, so any endpoint still gated on `hasRole(...)`
+denies them exactly as it did before. Full detail in `CHANGELOG.md` 2026-09-18 "Menu +
+Permission Management".
+
+Previously current:
+
 `0.64.0` — **Wallet top-up request now requires a proof-of-payment image.** Direct
 request: "while top up request from branch then upload image for proof mandatory". New
 `proof_image_url` column (`V81`, nullable at the DB level for pre-existing rows, but

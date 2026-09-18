@@ -2,6 +2,7 @@ package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.port.BranchDirectoryPort;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
+import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.LoginFailureReason;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
@@ -69,6 +70,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final CompanyDirectoryPort companyDirectory;
     private final BranchDirectoryPort branchDirectory;
+    private final UserPermissionsPort userPermissionsPort;
     private final SessionService sessionService;
     private final TokenIssuer tokenIssuer;
     private final LoginAttemptService loginAttemptService;
@@ -230,7 +232,8 @@ public class AuthService {
         log.info("User {} signed in to company {} (session {}, rememberMe={})",
                 user.getId(), companyId, session.getId(), command.rememberMe());
 
-        return new AuthResult(user, tokens, session, companyBrand(companyId));
+        return new AuthResult(user, tokens, session, companyBrand(companyId),
+                userPermissionsPort.resolveEffectivePermissions(user.getId()));
     }
 
     /**
@@ -386,6 +389,7 @@ public class AuthService {
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
                 target.getId(), targetCompanyId, target.getEmail(), target.roleNames(),
+                userPermissionsPort.resolveEffectivePermissions(target.getId()),
                 target.getBranchId(), target.getHubId(), company.name(), company.logo(),
                 superAdmin.getId(), superAdmin.getEmail(), IMPERSONATION_TTL);
 
@@ -449,6 +453,7 @@ public class AuthService {
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
                 target.getId(), principal.companyId(), target.getEmail(), target.roleNames(),
+                userPermissionsPort.resolveEffectivePermissions(target.getId()),
                 target.getBranchId(), target.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null,
                 companyAdmin.getId(), companyAdmin.getEmail(), IMPERSONATION_TTL);
@@ -513,7 +518,8 @@ public class AuthService {
         TokenIssuer.TokenPair tokens = tokenIssuer.completeRotation(
                 user, session, presented, refreshTtl, ipAddress, userAgent);
 
-        return new AuthResult(user, tokens, session, companyBrand(companyId));
+        return new AuthResult(user, tokens, session, companyBrand(companyId),
+                userPermissionsPort.resolveEffectivePermissions(user.getId()));
     }
 
     /** Display name and logo for the session's brand — best-effort, null when unresolvable. */
@@ -593,6 +599,7 @@ public class AuthService {
      *                null in the unexpected case the company row cannot be resolved
      */
     public record AuthResult(User user, TokenIssuer.TokenPair tokens, UserSession session,
-                             CompanyDirectoryPort.CompanyRef company) {
+                             CompanyDirectoryPort.CompanyRef company,
+                             java.util.Set<String> permissions) {
     }
 }

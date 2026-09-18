@@ -246,10 +246,22 @@ data migration ran for real:
 
 ## Next
 
-- [ ] **User Management** — assign roles to users, honour `isDefault`, and decide what
-      happens to holders when a role is deleted.
-- [ ] **Authorise on permissions, not JWT role names.** `@PreAuthorize` still checks
-      roles, so re-permissioning a role does not yet change what its users can reach.
-      This is the module that makes the catalogue actually load-bearing.
-- [ ] Cache effective permissions per user; today every check would be a query.
+- [x] **User Management** — assign roles to users, honour `isDefault`, and decide what
+      happens to holders when a role is deleted. Done (Phase 3, before this doc's own
+      "Next" list was last touched).
+- [x] **Authorise on permissions, not JWT role names**, and **cache effective permissions
+      per user** — both closed together by **Menu + Permission Management**
+      (2026-09-18, `MEMORY/CHANGELOG.md`): `resolveEffectiveCodes`/the new
+      `UserPermissionService.resolveEffectivePermissionCodes` is now called at JWT
+      issuance (`AuthenticatedUser.permissions`, a `permissions` JWT claim) — the JWT
+      *is* the cache, same trade-off already accepted for `roles`. `hasAuthority(...)`
+      now actually gates `ShipmentServiceImpl`/`ManifestServiceImpl`'s create/read/
+      dispatch methods; every other module's `@PreAuthorize` is still role-name-based —
+      that full retrofit remains open, deliberately out of scope for one pass.
 - [ ] Method-security integration slice for the catalogue/grant split.
+- [ ] Retrofit the remaining ~30 modules' `@PreAuthorize` from `hasRole`/`hasAnyRole` to
+      `hasAuthority` — Menu + Permission Management only did Shipment/Manifest's
+      booking/list/tracking/dispatch methods as a scoped, tested slice.
+- [ ] `[[menu-permission-management]]` — see the new module doc / `MEMORY/CHANGELOG.md`
+      2026-09-18 for the menu hierarchy + per-user override layer this catalogue now
+      feeds; not yet written up as its own `MEMORY/modules/*.md` file.

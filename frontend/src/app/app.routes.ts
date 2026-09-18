@@ -632,6 +632,15 @@ export const routes: Routes = [
         loadComponent: () => import('@features/permissions/permission-assign').then((m) => m.PermissionAssign)
       },
       {
+        // Menu + Permission Management: one user's menu tree, on top of their role's
+        // defaults. BRANCH_MANAGER included — "assign menus" is their own responsibility
+        // #2, gated on MENU_ASSIGN, the same as UserServiceImpl's own role-assignment
+        // endpoints (see DefaultRoleCatalog).
+        path: 'permissions/users', title: 'User Permissions', canActivate: [roleGuard],
+        data: { roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/user-permissions/user-permissions').then((m) => m.UserPermissions)
+      },
+      {
         path: 'permissions/:id', title: 'Permission', canActivate: [roleGuard], data: { roles: ADMINS },
         loadComponent: () => import('@features/permissions/permission-view').then((m) => m.PermissionView)
       },
