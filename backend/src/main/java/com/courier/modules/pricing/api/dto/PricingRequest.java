@@ -26,7 +26,10 @@ public record PricingRequest(
         @NotBlank String deliveryPincode,
 
         @NotNull UUID serviceTypeId,
-        @NotNull UUID packageTypeId,
+        @Schema(description = "No longer picked at booking — see CreateShipmentRequest's "
+                + "own doc. Optional here for the same reason: this preview must tolerate "
+                + "whatever the real booking call now tolerates.")
+        UUID packageTypeId,
         @NotNull UUID paymentModeId,
 
         @Schema(description = "Normally the shipment's real actual weight. A caller that "

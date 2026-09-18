@@ -158,7 +158,7 @@ public class Shipment extends CompanyOwnedEntity {
     private UUID serviceTypeId;
 
     @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "package_type_id", columnDefinition = "BINARY(16)", nullable = false)
+    @Column(name = "package_type_id", columnDefinition = "BINARY(16)")
     private UUID packageTypeId;
 
     @JdbcTypeCode(SqlTypes.BINARY)

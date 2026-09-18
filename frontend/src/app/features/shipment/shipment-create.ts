@@ -133,7 +133,6 @@ type FreightOutcome =
 
           <app-card title="Items" subtitle="Add every package on this shipment; weight and dimensions drive the chargeable weight.">
             <app-item-entry-grid [initial]="voiceItems()" [defaultWeightKg]="defaultChargeableWeightKg()" (itemsChange)="onItems($event)" (weightChange)="onWeight($event)" (packagesChange)="onPackages($event)">
-              <app-autocomplete class="fld--sm" [control]="c('packageTypeId')" label="Package Type" [options]="packageTypeOptions()" placeholder="Search package type…" />
               <label class="fld fld--sm"><span class="fld__l">Number of Packages</span>
                 <input class="fld__i" type="number" [value]="c('numberOfPackages').value" disabled /></label>
               <label class="fld fld--sm"><span class="fld__l">Declared Value</span>
@@ -588,7 +587,6 @@ export class ShipmentCreate implements OnInit {
    *  server's own `ShipmentServiceImpl.expectedDeliveryDate`) — a live preview only, the
    *  saved value still comes from the create/update response. */
   protected readonly expectedDeliveryPreview = signal<string | null>(null);
-  protected readonly packageTypeOptions = signal<SelectOption[]>([]);
   protected readonly paymentModeOptions = signal<SelectOption[]>([]);
 
   protected readonly items = signal<ShipmentItemRequest[]>([]);
@@ -758,7 +756,6 @@ export class ShipmentCreate implements OnInit {
     receiverAddress: ['', [Validators.required, Validators.maxLength(500)]],
     receiverContact: ['', [Validators.required, Validators.maxLength(20)]],
     serviceTypeId: [null as string | null, Validators.required],
-    packageTypeId: [null as string | null, Validators.required],
     paymentModeId: [null as string | null, Validators.required],
     bookingDate: [{ value: today(), disabled: true }],
     numberOfPackages: [1],
@@ -951,10 +948,6 @@ export class ShipmentCreate implements OnInit {
     });
     merge(this.c('serviceTypeId').valueChanges, this.c('bookingDate').valueChanges)
       .subscribe(() => this.updateDeliveryPreview());
-    this.masters.options('package-types').subscribe((o) => {
-      this.packageTypeOptions.set(o);
-      if (o.length && !this.form.get('packageTypeId')?.value) this.form.get('packageTypeId')?.setValue(o[0].value);
-    });
     this.masters.options('payment-modes').subscribe((o) => {
       this.paymentModeOptions.set(o);
       const paid = o.find((opt) => opt.label.endsWith('(PAID)'));
@@ -967,7 +960,7 @@ export class ShipmentCreate implements OnInit {
     // /pricing/calculate on every keystroke there. There is no delivery branch to price
     // against any more — `deliveryPincode` is what actually signals a destination change.
     const PRICE_AFFECTING_CONTROLS = ['deliveryPincode', 'serviceTypeId',
-      'packageTypeId', 'paymentModeId', 'declaredValue', 'bookingDate'];
+      'paymentModeId', 'declaredValue', 'bookingDate'];
     merge(...PRICE_AFFECTING_CONTROLS.map((name) => this.form.get(name)!.valueChanges))
       .subscribe(() => { this.resetFreightFactor(); this.schedulePricing(); });
 
@@ -1388,8 +1381,8 @@ export class ShipmentCreate implements OnInit {
     const serviceTypeId = fields.serviceTypeText && this.matchOption(this.serviceTypeOptions(), fields.serviceTypeText);
     setIfPresent('serviceTypeId', serviceTypeId || null, 'service type');
 
-    const packageTypeId = fields.packageTypeText && this.matchOption(this.packageTypeOptions(), fields.packageTypeText);
-    setIfPresent('packageTypeId', packageTypeId || null, 'package type');
+    // No Package Type to set from voice any more — it's no longer picked at booking at
+    // all (fields.packageTypeText, if a voice command names one, is simply not applied).
 
     const paymentModeId = fields.paymentModeText && this.matchOption(this.paymentModeOptions(), fields.paymentModeText);
     setIfPresent('paymentModeId', paymentModeId || null, 'payment mode');
@@ -1437,7 +1430,7 @@ export class ShipmentCreate implements OnInit {
     // via the Book button's own `form.invalid` check). There is no Delivery Branch any
     // more — Load Sheet is where one gets assigned, not booking — so `deliveryPincode` is
     // what signals "a destination has been entered".
-    return !!(v.bookingBranchId && v.deliveryPincode && v.serviceTypeId && v.packageTypeId
+    return !!(v.bookingBranchId && v.deliveryPincode && v.serviceTypeId
       && v.paymentModeId && this.weight().chargeable > 0);
   }
 
@@ -1493,7 +1486,7 @@ export class ShipmentCreate implements OnInit {
     return this.service.preview({
       bookingBranchId: v.bookingBranchId,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
-      serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
+      serviceTypeId: v.serviceTypeId, paymentModeId: v.paymentModeId,
       // Fed as chargeableWeight, not actualWeight — matches the booking's own priceIt()
       // quirk (skip PricingEngine re-deriving volumetric weight from a single blended
       // figure; this screen's own WeightCalculator already did it, multi-item aware).
@@ -1525,7 +1518,7 @@ export class ShipmentCreate implements OnInit {
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
       receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
-      serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
+      serviceTypeId: v.serviceTypeId, paymentModeId: v.paymentModeId,
       bookingDate: v.bookingDate || null,
       declaredValue: v.declaredValue || null, numberOfPackages: v.numberOfPackages || 1,
       remarks: v.remarks || null, otherCharges: this.otherCharges() || null,
@@ -1594,7 +1587,7 @@ export class ShipmentCreate implements OnInit {
             senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
             receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
             serviceTypeLabel: this.labelOf(this.serviceTypeOptions(), v.serviceTypeId),
-            packageTypeLabel: this.labelOf(this.packageTypeOptions(), v.packageTypeId),
+            packageTypeLabel: '—',
             paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
             deliveryType: v.deliveryType,
             numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,

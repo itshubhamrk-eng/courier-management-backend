@@ -497,7 +497,7 @@ export class ShipmentView implements OnInit {
 
   branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
   serviceTypeLabel(id: string): string { return this.serviceTypeOptions().find((o) => o.value === id)?.label ?? id; }
-  packageTypeLabel(id: string): string { return this.packageTypeOptions().find((o) => o.value === id)?.label ?? id; }
+  packageTypeLabel(id: string | null | undefined): string { return this.packageTypeOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
   paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? id; }
 
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }

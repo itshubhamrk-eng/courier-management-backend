@@ -142,7 +142,9 @@ export interface ShipmentResponse {
   receiverAddress: string;
   receiverContact: string;
   serviceTypeId: string;
-  packageTypeId: string;
+  /** No longer picked at booking — null on any shipment booked after that change. Still
+   *  populated on older bookings. */
+  packageTypeId?: string | null;
   paymentModeId: string;
   shipmentType: ShipmentType;
   expectedDeliveryDate?: string | null;
@@ -382,7 +384,9 @@ export interface ShipmentFields {
   receiverAddress: string;
   receiverContact: string;
   serviceTypeId: string;
-  packageTypeId: string;
+  /** No longer picked at Shipment Booking's own page (still required on Update — see
+   *  `shipment-edit.ts`). Optional here so `CreateShipmentRequest` can omit it. */
+  packageTypeId?: string | null;
   paymentModeId: string;
   shipmentType?: ShipmentType | null;
   bookingDate?: string | null;
@@ -567,7 +571,9 @@ export interface PricingRequest {
   pickupPincode: string;
   deliveryPincode: string;
   serviceTypeId: string;
-  packageTypeId: string;
+  /** No longer picked at Shipment Booking — see `CreateShipmentRequest`'s own doc.
+   *  Optional purely because the backend DTO still accepts one from other callers. */
+  packageTypeId?: string | null;
   paymentModeId: string;
   actualWeight: number;
   /** The shipment's real total actual weight, only when it differs from actualWeight

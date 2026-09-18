@@ -1786,6 +1786,9 @@ public class ShipmentServiceImpl implements ShipmentService {
      * books against it. Read-only; this module adds no ceiling of its own.
      */
     private void requireWithinPackageTypeCeiling(UUID packageTypeId, BigDecimal actualWeight) {
+        if (packageTypeId == null) {
+            return;
+        }
         PackageType packageType = packageTypeService.getById(packageTypeId);
         BigDecimal ceiling = packageType.getMaxWeightKg();
         if (ceiling != null && actualWeight.compareTo(ceiling) > 0) {

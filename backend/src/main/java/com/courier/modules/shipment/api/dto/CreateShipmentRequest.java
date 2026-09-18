@@ -48,7 +48,12 @@ public record CreateShipmentRequest(
         @NotBlank @Size(max = 500) String receiverAddress,
         @NotBlank @Size(max = 20) String receiverContact,
         @NotNull UUID serviceTypeId,
-        @NotNull UUID packageTypeId,
+        @Schema(description = "No longer picked at booking — the concept never priced "
+                + "anything once Route/Rate's old branch-pair matching stopped running "
+                + "(delivery branch is never known at booking any more). Left optional, "
+                + "not removed outright, so an existing integration that still sends one "
+                + "keeps working.")
+        UUID packageTypeId,
         @NotNull UUID paymentModeId,
         ShipmentType shipmentType,
         @Schema(description = "Defaults to today") LocalDate bookingDate,
