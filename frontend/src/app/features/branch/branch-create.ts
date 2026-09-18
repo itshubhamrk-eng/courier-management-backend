@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
+import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { BranchResponse, CreateBranchRequest, UpdateBranchRequest } from '@core/models/branch.model';
@@ -41,6 +42,7 @@ export class BranchCreate implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
+  private readonly auth = inject(AuthService);
 
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -89,7 +91,10 @@ export class BranchCreate implements OnInit {
     }
     this.dialog
       .open(BranchCredentialsDialog, {
-        data: { branchCode: branch.branchCode, branchName: branch.branchName, user },
+        data: {
+          branchCode: branch.branchCode, branchName: branch.branchName, user,
+          companyCode: this.auth.companyCode
+        },
         autoFocus: false, disableClose: true, panelClass: 'app-dialog'
       })
       .afterClosed()

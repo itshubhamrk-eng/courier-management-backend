@@ -8,6 +8,10 @@ export interface BranchCredentialsData {
   branchCode: string;
   branchName: string;
   user: BranchUserResponse;
+  /** The code the branch's own login page needs (see AuthService.companyCode). Null
+   *  when this session has none stashed — the copy button then omits that line rather
+   *  than guessing. */
+  companyCode: string | null;
 }
 
 /**
@@ -33,6 +37,10 @@ export interface BranchCredentialsData {
       </div>
 
       <dl class="bc__grid">
+        @if (data.companyCode) {
+          <dt>Company code</dt>
+          <dd class="mono">{{ data.companyCode }}</dd>
+        }
         <dt>Login email</dt>
         <dd class="mono">{{ data.user.email }}</dd>
         <dt>Password</dt>
@@ -90,10 +98,19 @@ export class BranchCredentialsDialog {
       .join(' ');
   }
 
+  /**
+   * Full login triple, in the order the login form itself asks for them — company
+   * code, email, password — so this can be pasted straight into that form or handed
+   * to the branch as-is, not just the email+password the dialog used to copy.
+   */
   copy(): void {
-    const text = `${this.data.branchName} (${this.data.branchCode})\n`
-      + `Email: ${this.data.user.email}\nPassword: ${this.data.user.temporaryPassword}`;
-    navigator.clipboard?.writeText(text).then(
+    const lines = [
+      `${this.data.branchName} (${this.data.branchCode})`,
+      ...(this.data.companyCode ? [`Company code: ${this.data.companyCode}`] : []),
+      `Email: ${this.data.user.email}`,
+      `Password: ${this.data.user.temporaryPassword}`
+    ];
+    navigator.clipboard?.writeText(lines.join('\n')).then(
       () => this.copied.set(true),
       // Clipboard access can be refused; the password is on screen either way, so this
       // must not look like the account failed.

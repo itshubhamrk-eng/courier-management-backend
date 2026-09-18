@@ -11,6 +11,10 @@ const COMPANY = 'cs.company';
  *  session from the token alone — would otherwise fall back to showing the email
  *  where a name belongs. Stashed alongside the tokens for the same reason. */
 const DISPLAY_NAME = 'cs.dname';
+/** The code typed into the login form. Not a token claim (the backend resolves it to
+ *  a companyId before minting), so it is stashed the same way as DISPLAY_NAME — purely
+ *  so branch-credentials can show the full login triple without a re-fetch. */
+const COMPANY_CODE = 'cs.ccode';
 /** Backup of the real (non-impersonating) session's tokens while a SUPER_ADMIN
  *  "login as company" session is active — see {@link stash}/{@link restoreStash}. */
 const STASH_ACCESS = 'cs.stash.access';
@@ -25,6 +29,7 @@ export class TokenService {
   /** Impersonated company for a platform admin; sent as X-Company-ID when present. */
   get companyId(): string | null { return storage.get(COMPANY); }
   get displayName(): string | null { return storage.get(DISPLAY_NAME); }
+  get companyCode(): string | null { return storage.get(COMPANY_CODE); }
   /** True while the real session is stashed under a "login as company" session. */
   get isImpersonating(): boolean { return storage.get(STASH_ACCESS) !== null; }
 
@@ -38,11 +43,15 @@ export class TokenService {
   setDisplayName(name: string | null): void {
     name ? storage.set(DISPLAY_NAME, name) : storage.remove(DISPLAY_NAME);
   }
+  setCompanyCode(code: string | null): void {
+    code ? storage.set(COMPANY_CODE, code) : storage.remove(COMPANY_CODE);
+  }
   clear(): void {
     storage.remove(ACCESS);
     storage.remove(REFRESH);
     storage.remove(COMPANY);
     storage.remove(DISPLAY_NAME);
+    storage.remove(COMPANY_CODE);
     storage.remove(STASH_ACCESS);
     storage.remove(STASH_REFRESH);
     storage.remove(STASH_DISPLAY_NAME);

@@ -18,6 +18,7 @@ describe('BranchCredentialsDialog — the granted role', () => {
     const data: BranchCredentialsData = {
       branchCode: 'PUNE_MAIN',
       branchName: 'Pune Main',
+      companyCode: 'LEGACY_CO',
       user: {
         userId: 'u-1',
         email: 'pune-main@legacy-co.local',

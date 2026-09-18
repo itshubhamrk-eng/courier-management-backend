@@ -36,9 +36,19 @@ export class AuthService {
 
   login(request: LoginRequest): Observable<LoginResponse> {
     return this.api.post<LoginResponse>(API.auth.login, request).pipe(
-      tap((res) => this.applySession(res))
+      tap((res) => {
+        this.applySession(res);
+        this.tokens.setCompanyCode(request.companyCode ?? null);
+      })
     );
   }
+
+  /** The code this session logged in with (see TokenService.COMPANY_CODE) — null for a
+   *  session hydrated from a stored token alone (e.g. a reload) with no login request.
+   *  A plain getter, not a computed: it has no signal dependency to react to, and a
+   *  dependency-free computed caches its first value forever (see MEMORY's OnPush/Map
+   *  gotcha — same trap, different shape). */
+  get companyCode(): string | null { return this.tokens.companyCode; }
 
   /** Starts a password reset. Always resolves 200 — the message never reveals if the account exists. */
   forgotPassword(request: ForgotPasswordRequest): Observable<void> {
