@@ -54,8 +54,8 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
             <button type="button" class="login__dev-btn" (click)="fill('admin')">Super Admin</button>
             <button type="button" class="login__dev-btn" (click)="fill('company')">Company Admin</button>
             <button type="button" class="login__dev-btn" (click)="fill('pune')">Pune Branch</button>
-            <button type="button" class="login__dev-btn" (click)="fill('latur')">Latur Branch</button>
-            <button type="button" class="login__dev-btn" (click)="fill('hub')">Hub</button>
+            <button type="button" class="login__dev-btn" (click)="fill('satara')">Satara Branch</button>
+            <button type="button" class="login__dev-btn" (click)="fill('kolhapur')">Kolhapur Branch</button>
           </div>
         </div>
       }
@@ -146,16 +146,18 @@ export class Login {
   ctrl(name: 'companyCode' | 'email' | 'password') { return this.form.controls[name]; }
 
   /** Fills known dev credentials. Super admin signs in with no company code; the rest use
-   *  the current dev company, COMPANY-C1 ("First Company") — LEGACY_CO's fixtures were
-   *  wiped in the 2026-07-30 DB truncation and never rebuilt. */
-  fill(kind: 'admin' | 'company' | 'pune' | 'latur' | 'hub'): void {
+   *  the current dev company, AMAZING_LOGISTICS — COMPANY-C1's fixtures were wiped when
+   *  courier_db was replaced with a prod dump on 2026-09-18. No Latur/Hub branch exists
+   *  under this company, so those slots were repointed to real branches (Satara/Kolhapur)
+   *  instead of being left broken. */
+  fill(kind: 'admin' | 'company' | 'pune' | 'satara' | 'kolhapur'): void {
     this.error.set(null);
     const creds: Record<typeof kind, { companyCode: string; email: string; password: string }> = {
-      admin:   { companyCode: '', email: 'super.admin@gmail.com', password: 'Pass@1234' },
-      company: { companyCode: 'COMPANY-C1', email: 'first.admin@gmail.com', password: 'Password@1234' },
-      pune:    { companyCode: 'COMPANY-C1', email: 'pune@gmail.com', password: 'Password@1234' },
-      latur:   { companyCode: 'COMPANY-C1', email: 'latur@gmail.com', password: 'Password@1234' },
-      hub:     { companyCode: 'COMPANY-C1', email: 'hub@legacy.test', password: 'Password@123' }
+      admin:     { companyCode: '', email: 'it.shubham.rk@gmail.com', password: 'Password@1234' },
+      company:   { companyCode: 'AMAZING_LOGISTICS', email: 'ashwin@amazinglpl.com', password: 'Password@1234' },
+      pune:      { companyCode: 'AMAZING_LOGISTICS', email: 'shubham@gmail.com', password: 'Password@1234' },
+      satara:    { companyCode: 'AMAZING_LOGISTICS', email: 'jagtaptransportservice@gmail.com', password: 'Password@1234' },
+      kolhapur:  { companyCode: 'AMAZING_LOGISTICS', email: 'mohasinbargir007@gmail.in', password: 'Password@1234' }
     };
     const { companyCode, email, password } = creds[kind];
     this.form.patchValue({ companyCode, email, password });
