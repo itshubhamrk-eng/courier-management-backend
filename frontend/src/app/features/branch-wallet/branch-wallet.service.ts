@@ -57,6 +57,13 @@ export class BranchWalletService {
   debit(body: DebitRequest) { return this.api.post<WalletTransaction>(`${this.base}/debit`, body); }
 
   // ---- top-up requests (branch asks, company admin decides) -----------------
+  /** Uploads proof of payment (cash slip, transfer screenshot) — pass the returned URL
+   *  into createTopupRequest()'s proofImageUrl, which is mandatory. */
+  uploadTopupProof(file: File) {
+    const body = new FormData();
+    body.append('file', file);
+    return this.api.post<{ url: string }>(`${this.base}/topup-requests/upload-proof`, body);
+  }
   /** Raise a request. A branch caller's own branch is used regardless of `branchId`. */
   createTopupRequest(body: CreateTopupRequestRequest) {
     return this.api.post<TopupRequest>(`${this.base}/topup-requests`, body);

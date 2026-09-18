@@ -62,7 +62,7 @@ const STATUS_OPTIONS: SelectOption[] = [
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>#</th><th>Amount</th><th>Remarks</th><th>Status</th><th>Requested</th>
+                  <th>#</th><th>Amount</th><th>Remarks</th><th>Proof</th><th>Status</th><th>Requested</th>
                   @if (isAdmin()) { <th class="tbl--right">Actions</th> }
                 </tr>
               </thead>
@@ -72,6 +72,11 @@ const STATUS_OPTIONS: SelectOption[] = [
                     <td>{{ i + 1 }}</td>
                     <td class="mono">{{ money(r.requestedAmount) }}</td>
                     <td>{{ r.remarks || '—' }}</td>
+                    <td>
+                      @if (r.proofImageUrl) {
+                        <button type="button" class="link-btn" (click)="viewProof(r)">View</button>
+                      } @else { — }
+                    </td>
                     <td><span class="badge" [class]="'badge--' + r.status.toLowerCase()">{{ r.status }}</span></td>
                     <td class="text-caption">{{ r.createdAt | date: 'medium' }}</td>
                     @if (isAdmin()) {
@@ -107,6 +112,7 @@ const STATUS_OPTIONS: SelectOption[] = [
     .tbl--right { text-align:right; }
     .mono { font-family:var(--font-mono, ui-monospace); }
     .rowbtns { display:flex; justify-content:flex-end; gap:8px; }
+    .link-btn { border:none; background:none; padding:0; font:600 13px var(--font-sans); color:var(--brand-500); cursor:pointer; text-decoration:underline; }
     .badge { display:inline-flex; padding:3px 10px; border-radius:999px; font:600 11px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; }
     .badge--pending { background:var(--warning-bg); color:var(--warning); }
     .badge--approved { background:var(--success-bg); color:var(--success); }
@@ -145,6 +151,11 @@ export class TopupRequests implements OnInit {
   }
 
   money(n: number): string { return formatMoney(n); }
+
+  viewProof(r: TopupRequest): void {
+    if (!r.proofImageUrl) return;
+    this.confirmDialog.previewImage(r.proofImageUrl, `Top-up proof — ${this.money(r.requestedAmount)}`);
+  }
 
   load(): void {
     this.loading.set(true);

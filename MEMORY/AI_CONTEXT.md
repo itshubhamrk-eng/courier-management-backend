@@ -7,6 +7,31 @@
 
 ## Current Version
 
+`0.64.0` — **Wallet top-up request now requires a proof-of-payment image.** Direct
+request: "while top up request from branch then upload image for proof mandatory". New
+`proof_image_url` column (`V81`, nullable at the DB level for pre-existing rows, but
+`CreateTopupRequestRequest.proofImageUrl` is `@NotBlank` so every new request must carry
+one, enforced again server-side in `WalletTopupRequestServiceImpl.create`). New
+`POST /branch-wallet/topup-requests/upload-proof` mirrors `ShipmentService
+.uploadInScanPhoto` one-to-one, reusing the same `FileStoragePort` (S3) the shipment
+module already uses for POD/in-scan — no new storage plumbing. `RequestTopupDialog`
+gained a mandatory file input that uploads then chains into `createTopupRequest()`; the
+admin's Top-up Requests queue gained a Proof column linking to the image. `mvn test`
+1045/1045, `ng build` clean. **Verified live** on a throwaway `:8082`/`:4300` stack with
+`AWS_S3_ENABLED=true` against the real `courier-saas-pod-547268988887` bucket: `curl`
+proved the missing-proof rejection, and `upload-proof` actually landed an object in S3
+(confirmed with `aws s3 ls`); walked the full dialog in a real browser as the Pune
+branch user — upload, submit, "Top-up request sent.", then opened the admin's Top-up
+Requests queue and clicked its Proof "View" link, which loaded the real S3 object.
+Same-day follow-up: Proof "View" now opens `ImagePreviewDialog` (view + explicit
+download icon, the same component POD/signature captures use) instead of a raw
+`target="_blank"` link — verified an already-`APPROVED` request's proof still opens
+this way after approving live.
+Full detail in
+`CHANGELOG.md` 2026-09-18 "Wallet top-up request: proof-of-payment image now mandatory".
+
+Previously current:
+
 `0.63.0` — **Public Track Shipment (no login) from the login screen.** Direct request:
 "on login page add option to track shipment" / "without login able to track shipment".
 `/api/v1/track/**` was already listed public in `SecurityConfig` ("public parcel

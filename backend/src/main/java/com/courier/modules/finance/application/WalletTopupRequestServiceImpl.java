@@ -12,10 +12,12 @@ import com.courier.modules.finance.domain.WalletTopupRequestCriteria;
 import com.courier.modules.finance.domain.WalletTopupRequestRepository;
 import com.courier.modules.finance.domain.WalletTopupRequestSpecifications;
 import com.courier.modules.finance.domain.WalletTransaction;
+import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ForbiddenException;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.AuthenticatedUser;
@@ -33,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -53,10 +56,13 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
     private static final String BRANCH_WRITERS =
             "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '" + Roles.BRANCH_MANAGER + "')";
 
+    private static final Set<String> PROOF_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "heic");
+
     private final WalletTopupRequestRepository repository;
     private final WalletService walletService;
     private final BranchDirectoryPort branchDirectory;
     private final AuditService auditService;
+    private final FileStoragePort fileStoragePort;
 
     @Override
     @Transactional
@@ -65,6 +71,7 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
         UUID companyId = requireCompany();
         UUID branchId = resolveBranchForWrite(command.branchId(), companyId);
         BigDecimal amount = requirePositiveAmount(command.amount());
+        String proofImageUrl = requireProofImage(command.proofImageUrl());
 
         Wallet wallet = walletService.getOrCreateForBranch(branchId);
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
@@ -74,6 +81,7 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
                 .branchId(branchId)
                 .requestedAmount(amount)
                 .remarks(trimOrNull(command.remarks()))
+                .proofImageUrl(proofImageUrl)
                 .status(TopupRequestStatus.PENDING)
                 .requestedBy(caller.userId())
                 .build();
@@ -179,6 +187,32 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
         return saved;
     }
 
+    @Override
+    @Transactional
+    @PreAuthorize(BRANCH_WRITERS)
+    public String uploadProofImage(UploadProofImageCommand command) {
+        UUID companyId = requireCompany();
+
+        String extension = extensionOf(command.filename());
+        if (!PROOF_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new BusinessRuleException(ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                    "Only JPEG/PNG/WEBP/HEIC images are accepted as top-up proof.");
+        }
+
+        String key = "%s/topup-proof/photo-%s.%s".formatted(companyId, UUID.randomUUID(), extension);
+        FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
+                command.content(), key, command.contentType(), "topup-proof"));
+        return stored.url();
+    }
+
+    private static String extensionOf(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase();
+    }
+
     // ------------------------------------------------------------------ scoping
 
     private UUID resolveBranchForWrite(UUID requested, UUID companyId) {
@@ -247,6 +281,13 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
             throw new BusinessRuleException("Amount must be greater than zero.");
         }
         return Wallet.normalise(amount);
+    }
+
+    private static String requireProofImage(String proofImageUrl) {
+        if (!hasText(proofImageUrl)) {
+            throw new BusinessRuleException("Upload proof of payment before raising a top-up request.");
+        }
+        return proofImageUrl.trim();
     }
 
     private static String trimOrNull(String value) {

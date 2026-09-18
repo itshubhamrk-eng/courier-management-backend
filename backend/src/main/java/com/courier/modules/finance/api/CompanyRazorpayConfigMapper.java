@@ -11,14 +11,18 @@ import org.springframework.stereotype.Component;
 public class CompanyRazorpayConfigMapper {
 
     public CompanyRazorpayConfigCommand toCommand(CompanyRazorpayConfigRequest r) {
-        return new CompanyRazorpayConfigCommand(r.enabled(), r.keyId(), r.keySecret());
+        return new CompanyRazorpayConfigCommand(
+                r.enabled(), r.mode(), r.testKeyId(), r.testKeySecret(), r.liveKeyId(), r.liveKeySecret());
     }
 
     public CompanyRazorpayConfigResponse toResponse(CompanyRazorpayConfig c) {
         return new CompanyRazorpayConfigResponse(
                 c.isEnabled(),
-                c.getKeyId(),
-                c.getKeySecret() != null && !c.getKeySecret().isBlank(),
+                c.getMode(),
+                c.getTestKeyId(),
+                c.getTestKeySecret() != null && !c.getTestKeySecret().isBlank(),
+                c.getLiveKeyId(),
+                c.getLiveKeySecret() != null && !c.getLiveKeySecret().isBlank(),
                 c.getUpdatedAt());
     }
 }

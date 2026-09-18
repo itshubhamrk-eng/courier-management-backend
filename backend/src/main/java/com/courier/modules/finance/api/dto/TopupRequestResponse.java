@@ -18,6 +18,7 @@ public record TopupRequestResponse(
 
         BigDecimal requestedAmount,
         String remarks,
+        String proofImageUrl,
         TopupRequestStatus status,
 
         UUID requestedBy,

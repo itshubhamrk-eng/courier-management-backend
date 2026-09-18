@@ -8,6 +8,106 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-18 — Company Razorpay config: separate Test and Live credential slots
+
+Direct request, prompted by an "unexpected error" (`INTERNAL_ERROR`) saving Razorpay
+credentials on prod: "there should be test and prod key option to store in db". The old
+`company_razorpay_config` row held exactly one key id/secret pair — switching between a
+test key (to try something) and the real live key meant overwriting the other every time.
+
+**Root cause of the reported prod error, separately confirmed**: reproduced locally by
+hitting a stale leftover verify-stack backend on `:8082` (from an earlier session, never
+killed) whose `SECRETS_ENCRYPTION_KEY` didn't match — `EncryptedStringConverter` throws
+`IllegalStateException` at the point of encrypting the secret for storage, which
+`GlobalExceptionHandler` turns into exactly the generic `INTERNAL_ERROR` reported. Not
+something this change fixes by itself — whoever manages prod should confirm
+`SECRETS_ENCRYPTION_KEY` is actually set there (see `EncryptedStringConverter`'s own doc).
+
+**Backend:** `V82` adds `mode` (`TEST`/`LIVE`, default `TEST`), `test_key_id`/
+`test_key_secret_encrypted`, `live_key_id`/`live_key_secret_encrypted` to
+`company_razorpay_config`; existing rows backfill into the live slot with `mode = LIVE`
+(the only kind ever configured before this), then the old single `key_id`/
+`key_secret_encrypted` columns are dropped. `CompanyRazorpayConfig` keeps
+`getKeyId()`/`getKeySecret()`/`hasCredentials()` as derived accessors resolving to
+whichever pair `mode` currently selects — `CompanyPaymentGatewayResolver` needed no
+changes at all. `CompanyRazorpayConfigCommand`/`Request`/`Response` all carry both pairs
+plus `mode`; either secret blank keeps what's already stored, same rule as before, now
+per-pair. `CompanyRazorpayConfigServiceImpl.update` validates only the *active* mode's
+key id + secret when enabling — the inactive pair can be saved incomplete or left blank.
+
+**Frontend:** `RazorpayConfigService`/`settings-page.ts` gained a mode `<select>`
+(Test/Live) plus separate Key ID/Key Secret inputs for each pair; the "Configured" badge
+reflects whichever mode is currently selected.
+
+Backend compiles clean, `CompanyRazorpayConfigServiceImplTest` (updated for the new
+fields) passes. **Verified live** on a throwaway `:8082` stack against real dev
+`courier_db` (`V82` applied clean) as `first.admin@gmail.com` (COMPANY_ADMIN): saved both
+a test and a live pair in one request, confirmed both round-trip independently; switched
+`mode` to `LIVE` with blank secrets and confirmed both stored secrets survived (blank =
+keep existing, per pair); attempted to enable with the active mode's key id blank and got
+`BUSINESS_RULE_VIOLATION` with no partial write (checked via a follow-up `GET` — the
+already-saved test/live key ids were untouched, confirming the validation failure rolled
+back the whole transaction rather than partially applying the id changes already `set()`
+on the entity before the check).
+
+---
+
+## Added 2026-09-18 — Wallet top-up request: proof-of-payment image now mandatory
+
+Direct request: "while top up request from branch then upload image for proof
+mandatory". `WalletTopupRequest` (branch asks its own company admin to fund the wallet,
+distinct from a Recharge) had no evidence attached to the ask at all — a company admin
+approving one had only the amount and free-text remarks to go on.
+
+**Backend:** New `proof_image_url` column (`V81`, nullable at the DB level only so
+requests raised before this feature stay valid) on `wallet_topup_requests`.
+`CreateTopupRequestRequest.proofImageUrl` is `@NotBlank` — every new request must carry
+one — enforced again in `WalletTopupRequestServiceImpl.create` (`requireProofImage`,
+same belt-and-suspenders shape as `requirePositiveAmount`). New
+`POST /branch-wallet/topup-requests/upload-proof` (multipart, JPEG/PNG/WEBP/HEIC only)
+mirrors `ShipmentService.uploadInScanPhoto` exactly — stores via the same
+`FileStoragePort` (S3) the shipment module already uses for POD/in-scan photos, no new
+storage plumbing — and returns a URL the frontend passes into `proofImageUrl`.
+`TopupRequestResponse`/`TopupRequestMapper`/`CreateTopupRequestCommand` all carry the
+new field through.
+
+**Frontend:** `RequestTopupDialog` gained a mandatory "Proof of payment" file input;
+`save()` uploads the file first (`BranchWalletService.uploadTopupProof`) then chains into
+`createTopupRequest()` via `switchMap`, blocking client-side with "Upload a proof image
+before sending." if nothing is selected. `TopupRequests` (the admin's approval queue)
+gained a Proof column linking straight to the stored image so a decision can be made
+without leaving the page.
+
+`mvn test` 1045/1045 (no new backend tests — this only adds a field/validation and a
+one-to-one endpoint mirror of the existing upload pattern), `ng build` clean. **Verified
+live** on a throwaway `:8082`/`:4300` stack against real dev `courier_db`, this time with
+`AWS_S3_ENABLED=true`/`AWS_S3_BUCKET=courier-saas-pod-547268988887` pointed at the real
+S3 bucket (credentials via the local AWS CLI profile, same default-provider-chain path
+the EC2 instance role uses in prod): `curl` proved `proofImageUrl` is rejected as missing
+(`VALIDATION_FAILED`); `POST .../upload-proof` actually landed an object in that bucket
+(confirmed with `aws s3 ls`) and returned its real `https://…s3.us-east-1.amazonaws.com/…`
+URL; a request created with it persists and round-trips through the list endpoint. Then
+walked the whole thing in a real browser as the Pune branch user end to end: selected a
+file in `RequestTopupDialog`, submitted, got "Top-up request sent.", and confirmed the
+object in S3 (`aws s3 ls`) matched what the dialog uploaded; opened the Top-up Requests
+queue as the same session and clicked its new Proof "View" link, which loaded the actual
+S3 object URL in a new tab — the full upload-to-view loop, not just the create call.
+
+Follow-up same day: "while approved request able to view and download upload proof" —
+`topup-requests.ts`'s Proof column's plain `<a target="_blank">` swapped for
+`DialogService.previewImage()` (`ImagePreviewDialog`, the same click-to-enlarge-plus-
+download component POD/signature captures already use elsewhere), so viewing carries an
+explicit download affordance rather than relying on however the browser happens to
+render a raw image URL. This is display-only — the Proof column already rendered for
+every status, so `PENDING`/`APPROVED`/`REJECTED` all worked before; nothing server-side
+changed here. Verified live in the same browser session as company admin: approved a
+`PENDING` request with a real proof image (wallet credited, confirmed via the "Request
+approved, wallet credited." toast), switched the Status filter to `Approved`, and
+clicked "View" on that now-`APPROVED` row — same preview dialog with a working download
+icon opened, proving proof stays reachable after a decision is made.
+
+---
+
 ## Added 2026-09-18 — Public Track Shipment (no login) from the login screen
 
 Direct request: "on login page add option to track shipment" / "without login able to

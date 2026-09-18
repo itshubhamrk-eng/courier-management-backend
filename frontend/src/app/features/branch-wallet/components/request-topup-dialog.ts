@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { switchMap } from 'rxjs/operators';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { NotificationService } from '@core/services/notification.service';
@@ -37,6 +38,15 @@ export interface RequestTopupDialogData {
           @if (invalid('amount')) { <span class="amt__err">Enter an amount greater than zero.</span> }
         </label>
         <app-input [control]="c('remarks')" label="Remarks" placeholder="Why the branch needs it" [maxLength]="300" />
+        <label class="proof">
+          <span class="proof__l">Proof of payment<i>*</i></span>
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" (change)="onProofSelected($event)" />
+          @if (selectedProof(); as f) {
+            <span class="text-caption">{{ f.name }}</span>
+            <app-button variant="stroked" icon="close" (pressed)="clearProof()">Remove</app-button>
+          }
+          @if (proofMissing()) { <span class="amt__err">Upload a proof image before sending.</span> }
+        </label>
         <div class="md__actions">
           <app-button variant="stroked" (pressed)="ref.close(null)">Cancel</app-button>
           <app-button type="submit" icon="send" [loading]="busy()">Send Request</app-button>
@@ -58,6 +68,9 @@ export interface RequestTopupDialogData {
     .amt__cur { font:600 13px var(--font-sans); color:var(--content-muted); }
     .amt__i { border:0; outline:0; background:transparent; flex:1; font:700 20px var(--font-sans); color:var(--content-fg); }
     .amt__err { font:500 12px var(--font-sans); color:var(--danger); }
+    .proof { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+    .proof__l { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .proof__l i { color:var(--danger); margin-left:2px; font-style:normal; }
   `]
 })
 export class RequestTopupDialog {
@@ -68,6 +81,8 @@ export class RequestTopupDialog {
   private readonly notify = inject(NotificationService);
 
   readonly busy = signal(false);
+  readonly selectedProof = signal<File | null>(null);
+  readonly proofMissing = signal(false);
 
   protected readonly form: FormGroup = this.fb.group({
     amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
@@ -77,17 +92,35 @@ export class RequestTopupDialog {
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
   protected invalid(name: string): boolean { const ct = this.c(name); return ct.invalid && (ct.touched || ct.dirty); }
 
+  protected onProofSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    this.selectedProof.set(file);
+    if (file) this.proofMissing.set(false);
+  }
+
+  protected clearProof(): void {
+    this.selectedProof.set(null);
+  }
+
   save(): void {
     if (this.busy()) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    const proof = this.selectedProof();
+    if (!proof) { this.proofMissing.set(true); return; }
+
     const v = this.form.getRawValue();
-    const body: CreateTopupRequestRequest = {
-      branchId: this.data.branchId,
-      amount: Number(v.amount),
-      remarks: v.remarks?.trim() || null
-    };
     this.busy.set(true);
-    this.service.createTopupRequest(body).subscribe({
+    this.service.uploadTopupProof(proof).pipe(
+      switchMap((uploaded) => {
+        const body: CreateTopupRequestRequest = {
+          branchId: this.data.branchId,
+          amount: Number(v.amount),
+          remarks: v.remarks?.trim() || null,
+          proofImageUrl: uploaded.url
+        };
+        return this.service.createTopupRequest(body);
+      })
+    ).subscribe({
       next: (r: TopupRequest) => { this.busy.set(false); this.notify.success('Top-up request sent.'); this.ref.close(r); },
       error: (e) => { this.busy.set(false); this.notify.error(e?.error?.message ?? 'Could not send the request.'); }
     });

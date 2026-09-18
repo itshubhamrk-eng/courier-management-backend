@@ -63,6 +63,13 @@ public class WalletTopupRequest extends CompanyOwnedEntity {
     @Column(name = "remarks", updatable = false, length = 500)
     private String remarks;
 
+    /** Proof of payment/cash handover the branch attaches to the ask. Mandatory on every
+     *  new request (enforced in {@code CreateTopupRequestRequest}/the service layer, not
+     *  the column itself — nullable here only so requests raised before this feature
+     *  existed stay valid). */
+    @Column(name = "proof_image_url", updatable = false, length = 500)
+    private String proofImageUrl;
+
     @Setter
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)

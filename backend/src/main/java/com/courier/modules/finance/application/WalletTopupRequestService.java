@@ -34,4 +34,13 @@ public interface WalletTopupRequestService {
 
     /** Marks the request REJECTED. Moves nothing. {@code COMPANY_ADMIN} only. */
     WalletTopupRequest reject(UUID id, String decisionRemarks);
+
+    /** Stores a proof-of-payment image and returns its URL, to pass into {@link
+     *  com.courier.modules.finance.application.command.CreateTopupRequestCommand} as
+     *  {@code proofImageUrl}. Not tied to any request yet — mirrors {@code
+     *  ShipmentService.uploadInScanPhoto}. */
+    String uploadProofImage(UploadProofImageCommand command);
+
+    record UploadProofImageCommand(byte[] content, String filename, String contentType) {
+    }
 }

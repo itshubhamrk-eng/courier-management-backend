@@ -2,18 +2,26 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 
-/** Never carries the key secret itself — only whether one has been saved. */
+export type RazorpayMode = 'TEST' | 'LIVE';
+
+/** Never carries either key secret itself — only whether each one has been saved. */
 export interface RazorpayConfigResponse {
   enabled: boolean;
-  keyId: string | null;
-  keySecretConfigured: boolean;
+  mode: RazorpayMode;
+  testKeyId: string | null;
+  testKeySecretConfigured: boolean;
+  liveKeyId: string | null;
+  liveKeySecretConfigured: boolean;
 }
 
-/** `keySecret` omitted or blank means "keep the one already stored". */
+/** Either `keySecret` field omitted or blank means "keep the one already stored" for that pair. */
 export interface RazorpayConfigRequest {
   enabled: boolean;
-  keyId: string;
-  keySecret?: string | null;
+  mode: RazorpayMode;
+  testKeyId: string;
+  testKeySecret?: string | null;
+  liveKeyId: string;
+  liveKeySecret?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

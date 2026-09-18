@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 public class TopupRequestMapper {
 
     public CreateTopupRequestCommand toCommand(CreateTopupRequestRequest request) {
-        return new CreateTopupRequestCommand(request.branchId(), request.amount(), request.remarks());
+        return new CreateTopupRequestCommand(
+                request.branchId(), request.amount(), request.remarks(), request.proofImageUrl());
     }
 
     public WalletTopupRequestCriteria toCriteria(TopupRequestSearchRequest search) {
@@ -25,7 +26,7 @@ public class TopupRequestMapper {
     public TopupRequestResponse toResponse(WalletTopupRequest r) {
         return new TopupRequestResponse(
                 r.getId(), r.getCompanyId(), r.getWalletId(), r.getBranchId(),
-                r.getRequestedAmount(), r.getRemarks(), r.getStatus(),
+                r.getRequestedAmount(), r.getRemarks(), r.getProofImageUrl(), r.getStatus(),
                 r.getRequestedBy(), r.getCreatedAt(),
                 r.getDecidedBy(), r.getDecidedAt(), r.getDecisionRemarks(), r.getTransactionId(),
                 r.getVersion());

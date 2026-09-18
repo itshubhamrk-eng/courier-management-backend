@@ -185,6 +185,7 @@ export interface TopupRequest {
   branchId: string;
   requestedAmount: number;
   remarks?: string | null;
+  proofImageUrl?: string | null;
   status: TopupRequestStatus;
   requestedBy: string;
   createdAt: string;
@@ -195,11 +196,13 @@ export interface TopupRequest {
   version: number;
 }
 
-/** Body of `POST /branch-wallet/topup-requests`. */
+/** Body of `POST /branch-wallet/topup-requests`. `proofImageUrl` is mandatory — upload
+ *  first via `POST /branch-wallet/topup-requests/upload-proof`. */
 export interface CreateTopupRequestRequest {
   branchId?: string | null;
   amount: number;
   remarks?: string | null;
+  proofImageUrl: string;
 }
 
 /** Body of the approve/reject endpoints — both optional, a decision needs no reason. */

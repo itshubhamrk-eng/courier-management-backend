@@ -6,7 +6,7 @@ import { NotificationService } from '@core/services/notification.service';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { SettingsService } from './settings.service';
-import { RazorpayConfigService, RazorpayConfigResponse } from './razorpay-config.service';
+import { RazorpayConfigService, RazorpayConfigResponse, RazorpayMode } from './razorpay-config.service';
 import { SettingsSectionDialog, SectionField } from './components/settings-section-dialog';
 
 interface Section { key: string; title: string; icon: string; desc: string; }
@@ -125,8 +125,9 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                 <div class="rzp">
                   <div class="rzp__head">
                     <span class="text-caption">Payment Gateway (Razorpay)</span>
-                    <span class="rzp__badge" [class.rzp__badge--on]="razorpay()?.keySecretConfigured">
-                      {{ razorpay()?.keySecretConfigured ? 'Configured' : 'Not configured' }}
+                    <span class="rzp__badge"
+                          [class.rzp__badge--on]="razorpayModeInput() === 'LIVE' ? razorpay()?.liveKeySecretConfigured : razorpay()?.testKeySecretConfigured">
+                      {{ (razorpayModeInput() === 'LIVE' ? razorpay()?.liveKeySecretConfigured : razorpay()?.testKeySecretConfigured) ? 'Configured' : 'Not configured' }}
                     </span>
                   </div>
                   <label class="rzp__check">
@@ -134,13 +135,57 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                            (change)="onRazorpayEnabledInput($event)" />
                     <span>Use this company's own Razorpay account</span>
                   </label>
-                  <label class="text-caption" for="rzp-key-id">Key ID</label>
-                  <input id="rzp-key-id" class="dcw__i" type="text" placeholder="rzp_live_…"
-                         [value]="razorpayKeyIdInput()" (input)="onRazorpayKeyIdInput($event)" />
-                  <label class="text-caption" for="rzp-key-secret">Key Secret</label>
-                  <input id="rzp-key-secret" class="dcw__i" type="password"
-                         [placeholder]="razorpay()?.keySecretConfigured ? 'Leave blank to keep existing' : 'rzp secret'"
-                         [value]="razorpayKeySecretInput()" (input)="onRazorpayKeySecretInput($event)" />
+
+                  <div class="rzp__field">
+                    <span class="text-caption">Active Mode</span>
+                    <div class="rzp__toggle" role="group" aria-label="Active Mode">
+                      <button type="button" class="rzp__toggle-btn"
+                              [class.rzp__toggle-btn--active]="razorpayModeInput() === 'TEST'"
+                              (click)="setRazorpayMode('TEST')">Test</button>
+                      <button type="button" class="rzp__toggle-btn"
+                              [class.rzp__toggle-btn--active]="razorpayModeInput() === 'LIVE'"
+                              (click)="setRazorpayMode('LIVE')">Live</button>
+                    </div>
+                  </div>
+
+                  <div class="rzp__group">
+                    <span class="rzp__group-title">Test credentials</span>
+                    <div class="rzp__row2">
+                      <div class="rzp__field">
+                        <label class="text-caption" for="rzp-test-key-id">Key ID</label>
+                        <input id="rzp-test-key-id" class="dcw__i" type="text" placeholder="rzp_test_…"
+                               autocomplete="off" name="rzp-test-key-id-nofill"
+                               [value]="razorpayTestKeyIdInput()" (input)="onRazorpayTestKeyIdInput($event)" />
+                      </div>
+                      <div class="rzp__field">
+                        <label class="text-caption" for="rzp-test-key-secret">Key Secret</label>
+                        <input id="rzp-test-key-secret" class="dcw__i" type="password"
+                               autocomplete="new-password" name="rzp-test-key-secret-nofill"
+                               [placeholder]="razorpay()?.testKeySecretConfigured ? 'Leave blank to keep existing' : 'rzp test secret'"
+                               [value]="razorpayTestKeySecretInput()" (input)="onRazorpayTestKeySecretInput($event)" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="rzp__group">
+                    <span class="rzp__group-title">Live credentials</span>
+                    <div class="rzp__row2">
+                      <div class="rzp__field">
+                        <label class="text-caption" for="rzp-live-key-id">Key ID</label>
+                        <input id="rzp-live-key-id" class="dcw__i" type="text" placeholder="rzp_live_…"
+                               autocomplete="off" name="rzp-live-key-id-nofill"
+                               [value]="razorpayLiveKeyIdInput()" (input)="onRazorpayLiveKeyIdInput($event)" />
+                      </div>
+                      <div class="rzp__field">
+                        <label class="text-caption" for="rzp-live-key-secret">Key Secret</label>
+                        <input id="rzp-live-key-secret" class="dcw__i" type="password"
+                               autocomplete="new-password" name="rzp-live-key-secret-nofill"
+                               [placeholder]="razorpay()?.liveKeySecretConfigured ? 'Leave blank to keep existing' : 'rzp live secret'"
+                               [value]="razorpayLiveKeySecretInput()" (input)="onRazorpayLiveKeySecretInput($event)" />
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="dcw__row">
                     <button type="button" class="dcw__save" [disabled]="savingRazorpay()"
                             (click)="saveRazorpay()">{{ savingRazorpay() ? 'Saving…' : 'Save' }}</button>
@@ -197,6 +242,13 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
     .rzp__badge{font:600 11px var(--font-sans);padding:2px 8px;border-radius:999px;background:var(--surface-muted);color:var(--content-muted)}
     .rzp__badge--on{background:var(--brand-100,#e0e7ff);color:var(--brand-700,#3730a3)}
     .rzp__check{display:flex;align-items:center;gap:8px;font:400 13px var(--font-sans);color:var(--content-fg);margin:4px 0}
+    .rzp__field{flex:1;min-width:160px;display:flex;flex-direction:column;gap:4px}
+    .rzp__group{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--surface-border);border-radius:8px;background:var(--surface-muted)}
+    .rzp__group-title{font:600 11px var(--font-sans);text-transform:uppercase;letter-spacing:.04em;color:var(--content-muted)}
+    .rzp__row2{display:flex;gap:10px;flex-wrap:wrap}
+    .rzp__toggle{display:inline-flex;padding:2px;border:1px solid var(--surface-border);border-radius:8px;background:var(--surface);width:fit-content}
+    .rzp__toggle-btn{height:30px;padding:0 16px;border:0;border-radius:6px;background:transparent;color:var(--content-muted);font:600 13px var(--font-sans);cursor:pointer}
+    .rzp__toggle-btn--active{background:var(--brand-600);color:#fff}
     @media (max-width:900px){.grid{grid-template-columns:1fr}}
   `]
 })
@@ -223,8 +275,11 @@ export class SettingsPage implements OnInit {
    *  it's its own COMPANY_ADMIN-only backend resource, not part of /company-settings. */
   readonly razorpay = signal<RazorpayConfigResponse | null>(null);
   readonly razorpayEnabledInput = signal(false);
-  readonly razorpayKeyIdInput = signal('');
-  readonly razorpayKeySecretInput = signal('');
+  readonly razorpayModeInput = signal<RazorpayMode>('TEST');
+  readonly razorpayTestKeyIdInput = signal('');
+  readonly razorpayTestKeySecretInput = signal('');
+  readonly razorpayLiveKeyIdInput = signal('');
+  readonly razorpayLiveKeySecretInput = signal('');
   readonly savingRazorpay = signal(false);
 
   /** Finance's first inline field — same "no full edit dialog yet" treatment as
@@ -289,7 +344,9 @@ export class SettingsPage implements OnInit {
       next: (r) => {
         this.razorpay.set(r);
         this.razorpayEnabledInput.set(r.enabled);
-        this.razorpayKeyIdInput.set(r.keyId ?? '');
+        this.razorpayModeInput.set(r.mode);
+        this.razorpayTestKeyIdInput.set(r.testKeyId ?? '');
+        this.razorpayLiveKeyIdInput.set(r.liveKeyId ?? '');
       },
       error: () => { /* Settings is COMPANY_ADMIN-only already; nothing further to show. */ }
     });
@@ -342,25 +399,41 @@ export class SettingsPage implements OnInit {
     this.razorpayEnabledInput.set((e.target as HTMLInputElement).checked);
   }
 
-  onRazorpayKeyIdInput(e: Event): void {
-    this.razorpayKeyIdInput.set((e.target as HTMLInputElement).value);
+  setRazorpayMode(mode: RazorpayMode): void {
+    this.razorpayModeInput.set(mode);
   }
 
-  onRazorpayKeySecretInput(e: Event): void {
-    this.razorpayKeySecretInput.set((e.target as HTMLInputElement).value);
+  onRazorpayTestKeyIdInput(e: Event): void {
+    this.razorpayTestKeyIdInput.set((e.target as HTMLInputElement).value);
+  }
+
+  onRazorpayTestKeySecretInput(e: Event): void {
+    this.razorpayTestKeySecretInput.set((e.target as HTMLInputElement).value);
+  }
+
+  onRazorpayLiveKeyIdInput(e: Event): void {
+    this.razorpayLiveKeyIdInput.set((e.target as HTMLInputElement).value);
+  }
+
+  onRazorpayLiveKeySecretInput(e: Event): void {
+    this.razorpayLiveKeySecretInput.set((e.target as HTMLInputElement).value);
   }
 
   saveRazorpay(): void {
     this.savingRazorpay.set(true);
     this.razorpayService.update({
       enabled: this.razorpayEnabledInput(),
-      keyId: this.razorpayKeyIdInput().trim(),
-      keySecret: this.razorpayKeySecretInput().trim() || null
+      mode: this.razorpayModeInput(),
+      testKeyId: this.razorpayTestKeyIdInput().trim(),
+      testKeySecret: this.razorpayTestKeySecretInput().trim() || null,
+      liveKeyId: this.razorpayLiveKeyIdInput().trim(),
+      liveKeySecret: this.razorpayLiveKeySecretInput().trim() || null
     }).subscribe({
       next: (r) => {
         this.razorpay.set(r);
-        // Never leave the raw secret sitting in the DOM/memory longer than it takes to save.
-        this.razorpayKeySecretInput.set('');
+        // Never leave a raw secret sitting in the DOM/memory longer than it takes to save.
+        this.razorpayTestKeySecretInput.set('');
+        this.razorpayLiveKeySecretInput.set('');
         this.savingRazorpay.set(false);
         this.notify.success('Razorpay configuration updated');
       },

@@ -39,15 +39,17 @@ public class CompanyRazorpayConfigServiceImpl implements CompanyRazorpayConfigSe
     private static final String COMPANY_ADMIN_ONLY = "hasRole('" + Roles.COMPANY_ADMIN + "')";
 
     private final CompanyRazorpayConfigRepository repository;
+    private final CompanyRazorpayConfigRepairService repairService;
     private final AuditService auditService;
 
     /**
-     * A stored {@code keySecret} that no longer decrypts under the running
+     * A stored secret that no longer decrypts under the running
      * {@code SECRETS_ENCRYPTION_KEY} (rotated after the row was saved, or the row was
      * written under a different key) must not 500 every read of company settings — this is
-     * a masked read, not a use of the secret. Treated the same as "never configured"; the
-     * company admin has to re-enter the credentials to actually fix it. Logged loudly since
-     * it hides a real data problem otherwise.
+     * a masked read, not a use of the secret. Treated the same as "never configured", and
+     * the unreadable secret(s) are cleared in the DB (see {@link CompanyRazorpayConfigRepairService})
+     * so a later {@link #update} doesn't hit the same failure trying to load this row.
+     * Logged loudly since it hides a real data problem otherwise.
      */
     @Override
     @Transactional(readOnly = true)
@@ -58,9 +60,10 @@ public class CompanyRazorpayConfigServiceImpl implements CompanyRazorpayConfigSe
             return repository.findByCompanyId(companyId).orElseGet(CompanyRazorpayConfig::new);
         } catch (DataAccessException | IllegalStateException e) {
             log.warn("Razorpay config for company {} could not be decrypted — treating as "
-                    + "not configured. The stored key_secret_encrypted no longer matches "
-                    + "SECRETS_ENCRYPTION_KEY; the company admin must re-enter it.",
-                    companyId, e);
+                    + "not configured and clearing the unreadable secret(s). The stored "
+                    + "ciphertext no longer matches SECRETS_ENCRYPTION_KEY; the company "
+                    + "admin must re-enter it.", companyId, e);
+            repairService.clearUnreadableSecrets(companyId);
             return new CompanyRazorpayConfig();
         }
     }
@@ -70,34 +73,58 @@ public class CompanyRazorpayConfigServiceImpl implements CompanyRazorpayConfigSe
     @PreAuthorize(COMPANY_ADMIN_ONLY)
     public CompanyRazorpayConfig update(CompanyRazorpayConfigCommand command) {
         UUID companyId = requireCompany();
-        CompanyRazorpayConfig config = repository.findByCompanyId(companyId)
-                .orElseGet(CompanyRazorpayConfig::new);
+        CompanyRazorpayConfig config;
+        try {
+            config = repository.findByCompanyId(companyId).orElseGet(CompanyRazorpayConfig::new);
+        } catch (DataAccessException | IllegalStateException e) {
+            log.warn("Razorpay config for company {} could not be decrypted while updating — "
+                    + "clearing the unreadable secret(s) in a separate transaction. The "
+                    + "Hibernate session that just failed cannot be reused, so this attempt "
+                    + "stops here; the next save (now against a clean row) will succeed.",
+                    companyId, e);
+            repairService.clearUnreadableSecrets(companyId);
+            throw new BusinessRuleException(
+                    "The previously stored Razorpay secret could not be read (it no longer "
+                            + "matches the server's current encryption key) and has been "
+                            + "cleared. Please enter the key id/secret again and save.");
+        }
 
-        String keyId = command.keyId() == null ? null : command.keyId().trim();
+        String testKeyId = command.testKeyId() == null ? null : command.testKeyId().trim();
+        String liveKeyId = command.liveKeyId() == null ? null : command.liveKeyId().trim();
+
+        config.setTestKeyId(testKeyId);
+        if (command.hasNewTestSecret()) {
+            config.setTestKeySecret(command.testKeySecret().trim());
+        }
+        config.setLiveKeyId(liveKeyId);
+        if (command.hasNewLiveSecret()) {
+            config.setLiveKeySecret(command.liveKeySecret().trim());
+        }
+        config.setMode(command.mode());
 
         if (command.enabled()) {
-            if (keyId == null || keyId.isBlank()) {
-                throw new BusinessRuleException("A key id is required to enable Razorpay.");
+            String activeKeyId = config.getKeyId();
+            if (activeKeyId == null || activeKeyId.isBlank()) {
+                throw new BusinessRuleException(
+                        "A " + command.mode().name().toLowerCase() + " key id is required to enable Razorpay.");
             }
-            boolean hasSecret = command.hasNewSecret()
-                    || (config.getKeySecret() != null && !config.getKeySecret().isBlank());
-            if (!hasSecret) {
-                throw new BusinessRuleException("A key secret is required to enable Razorpay.");
+            String activeSecret = config.getKeySecret();
+            if (activeSecret == null || activeSecret.isBlank()) {
+                throw new BusinessRuleException(
+                        "A " + command.mode().name().toLowerCase() + " key secret is required to enable Razorpay.");
             }
         }
-
         config.setEnabled(command.enabled());
-        config.setKeyId(keyId);
-        if (command.hasNewSecret()) {
-            config.setKeySecret(command.keySecret().trim());
-        }
 
         CompanyRazorpayConfig saved = repository.save(config);
 
         auditService.record(AuditAction.COMPANY_RAZORPAY_CONFIG_UPDATED, ENTITY, saved.getId(),
                 Map.of("enabled", saved.isEnabled(),
-                        "keyId", saved.getKeyId() == null ? "" : saved.getKeyId(),
-                        "secretRotated", command.hasNewSecret()));
+                        "mode", saved.getMode().name(),
+                        "testKeyId", saved.getTestKeyId() == null ? "" : saved.getTestKeyId(),
+                        "liveKeyId", saved.getLiveKeyId() == null ? "" : saved.getLiveKeyId(),
+                        "testSecretRotated", command.hasNewTestSecret(),
+                        "liveSecretRotated", command.hasNewLiveSecret()));
 
         return saved;
     }

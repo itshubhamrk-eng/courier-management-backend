@@ -1,9 +1,12 @@
 package com.courier.modules.finance.application;
 
+import com.courier.modules.finance.application.command.CompanyRazorpayConfigCommand;
 import com.courier.modules.finance.domain.CompanyRazorpayConfig;
 import com.courier.modules.finance.domain.CompanyRazorpayConfigRepository;
+import com.courier.modules.finance.domain.RazorpayMode;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.exception.BusinessRuleException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +19,8 @@ import org.springframework.dao.DataRetrievalFailureException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -32,13 +37,15 @@ class CompanyRazorpayConfigServiceImplTest {
     @Mock
     private CompanyRazorpayConfigRepository repository;
     @Mock
+    private CompanyRazorpayConfigRepairService repairService;
+    @Mock
     private AuditService auditService;
 
     private CompanyRazorpayConfigServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CompanyRazorpayConfigServiceImpl(repository, auditService);
+        service = new CompanyRazorpayConfigServiceImpl(repository, repairService, auditService);
         CompanyContext.setCompanyId(COMPANY);
     }
 
@@ -59,6 +66,9 @@ class CompanyRazorpayConfigServiceImplTest {
         assertThat(result.isEnabled()).isFalse();
         assertThat(result.getKeyId()).isNull();
         assertThat(result.getKeySecret()).isNull();
+        assertThat(result.getTestKeyId()).isNull();
+        assertThat(result.getLiveKeyId()).isNull();
+        verify(repairService).clearUnreadableSecrets(COMPANY);
     }
 
     @Test
@@ -70,5 +80,21 @@ class CompanyRazorpayConfigServiceImplTest {
         CompanyRazorpayConfig result = service.get();
 
         assertThat(result.isEnabled()).isFalse();
+        verify(repairService).clearUnreadableSecrets(COMPANY);
+    }
+
+    @Test
+    @DisplayName("update() clears the unreadable row and asks for a retry instead of 500ing")
+    void updateClearsUnreadableRowAndAsksToRetry() {
+        when(repository.findByCompanyId(COMPANY))
+                .thenThrow(new IllegalStateException("Could not decrypt a stored value."));
+        CompanyRazorpayConfigCommand command = new CompanyRazorpayConfigCommand(
+                true, RazorpayMode.TEST, "rzp_test_new", "newsecret", null, null);
+
+        assertThatThrownBy(() -> service.update(command))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("cleared");
+
+        verify(repairService).clearUnreadableSecrets(COMPANY);
     }
 }

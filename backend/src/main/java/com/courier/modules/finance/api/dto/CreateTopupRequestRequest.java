@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -26,6 +27,11 @@ public record CreateTopupRequestRequest(
 
         @Size(max = 500)
         @Schema(description = "Why the branch needs it", example = "Cash running low for COD payouts")
-        String remarks
+        String remarks,
+
+        @NotBlank(message = "Upload proof of payment before raising a top-up request")
+        @Size(max = 500)
+        @Schema(description = "URL of the uploaded proof image, from POST .../upload-proof")
+        String proofImageUrl
 ) {
 }
