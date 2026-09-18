@@ -199,7 +199,7 @@ public class WalletTopupRequestServiceImpl implements WalletTopupRequestService 
                     "Only JPEG/PNG/WEBP/HEIC images are accepted as top-up proof.");
         }
 
-        String key = "%s/topup-proof/photo-%s.%s".formatted(companyId, UUID.randomUUID(), extension);
+        String key = "%s/photo-%s.%s".formatted(companyId, UUID.randomUUID(), extension);
         FileStoragePort.StoredFile stored = fileStoragePort.upload(new FileStoragePort.UploadRequest(
                 command.content(), key, command.contentType(), "topup-proof"));
         return stored.url();
