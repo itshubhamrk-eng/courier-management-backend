@@ -4,6 +4,8 @@ import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchCriteria;
 import com.courier.modules.company.domain.BranchRepository;
 import com.courier.modules.company.domain.BranchSpecifications;
+import com.courier.modules.company.domain.CompanyUserRepository;
+import com.courier.modules.company.domain.User;
 import com.courier.modules.districtfreight.domain.BranchLookupPort;
 import com.courier.shared.company.CompanyContext;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import java.util.stream.Collectors;
 public class CompanyDistrictFreightBranchDirectory implements BranchLookupPort {
 
     private final BranchRepository branchRepository;
+    private final CompanyUserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -69,6 +72,15 @@ public class CompanyDistrictFreightBranchDirectory implements BranchLookupPort {
         return CompanyContext.runAs(companyId, () -> branchRepository.findByBranchCodeIgnoreCase(trimmed)
                 .or(() -> branchRepository.findByBranchNameIgnoreCase(trimmed))
                 .map(this::toRef));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findOwnBranchId(UUID userId, UUID companyId) {
+        if (userId == null || companyId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findByIdWithinCompany(userId, companyId).map(User::getBranchId);
     }
 
     private BranchRef toRef(Branch branch) {

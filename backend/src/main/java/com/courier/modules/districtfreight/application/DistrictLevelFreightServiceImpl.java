@@ -15,6 +15,7 @@ import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.DuplicateResourceException;
 import com.courier.shared.exception.ResourceNotFoundException;
+import com.courier.shared.security.AuthenticatedUser;
 import com.courier.shared.security.Roles;
 import com.courier.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -130,7 +132,25 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
     @PreAuthorize(READ)
     public Page<DistrictLevelFreight> search(DistrictLevelFreightCriteria criteria, Pageable pageable) {
         DistrictLevelFreightCriteria safe = criteria == null ? DistrictLevelFreightCriteria.none() : criteria;
+        safe = restrictToOwnBranch(safe);
         return repository.findAll(DistrictLevelFreightSpecifications.matching(safe), pageable);
+    }
+
+    /**
+     * A branch manager sees only their own branch's rows, no matter what (or whether) a
+     * From Station filter was requested — mirrors {@code UserServiceImpl}'s
+     * {@code restrictToManagerScope}. COMPANY_ADMIN and platform-tier callers are unrestricted.
+     */
+    private DistrictLevelFreightCriteria restrictToOwnBranch(DistrictLevelFreightCriteria criteria) {
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (caller.isSuperAdmin() || caller.isPlatformAdmin() || caller.hasRole(Roles.COMPANY_ADMIN)
+                || !caller.hasRole(Roles.BRANCH_MANAGER)) {
+            return criteria;
+        }
+        UUID ownBranchId = branchLookup.findOwnBranchId(caller.userId(), caller.companyId())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "You are not placed at a branch, so you have no rates to see."));
+        return new DistrictLevelFreightCriteria(Set.of(ownBranchId), criteria.districtIds(), criteria.statuses());
     }
 
     // ---------------------------------------------------------------- lifecycle

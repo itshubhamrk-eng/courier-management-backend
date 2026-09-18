@@ -45,7 +45,9 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
       </header>
 
       <div class="filters">
-        <app-select [control]="branchFilter" label="From Station" [options]="branchOptions()" [allowEmpty]="true" placeholder="All stations" />
+        @if (canFilterByBranch()) {
+          <app-select [control]="branchFilter" label="From Station" [options]="branchOptions()" [allowEmpty]="true" placeholder="All stations" />
+        }
         <app-select [control]="districtFilter" label="District" [options]="districtOptions()" [allowEmpty]="true" placeholder="All districts" />
         <app-select [control]="statusFilter" label="Status" [options]="statusOptions" [allowEmpty]="true" placeholder="All statuses" />
       </div>
@@ -93,6 +95,10 @@ export class DistrictFreightList implements OnInit {
     lifecycle: this.perms.canAccess({ roles: WRITERS }),
     delete: this.perms.canAccess({ roles: WRITERS })
   }));
+  // A branch manager's rows are always scoped server-side to their own branch (see
+  // DistrictLevelFreightServiceImpl#restrictToOwnBranch) — the "From Station" picker would
+  // just be a dead dropdown for them, so it's shown only to callers who can see other branches.
+  readonly canFilterByBranch = computed(() => this.perms.canAccess({ roles: WRITERS }));
   readonly tablePerms = computed<DistrictFreightPerms>(() => ({
     update: this.can().update, lifecycle: this.can().lifecycle, delete: this.can().delete
   }));

@@ -31,4 +31,11 @@ public interface BranchLookupPort {
      * label, not its id. Code is tried first since it's the stabler identifier.
      */
     Optional<BranchRef> findBranchByLabel(String label, UUID companyId);
+
+    /**
+     * The branch a caller is placed at, i.e. the account's own {@code branchId} — not a
+     * "From Station" lookup. Used to scope a BRANCH_MANAGER's view to their own branch's
+     * rows rather than the whole company's.
+     */
+    Optional<UUID> findOwnBranchId(UUID userId, UUID companyId);
 }
