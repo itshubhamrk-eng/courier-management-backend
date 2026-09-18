@@ -51,6 +51,12 @@ public final class ShipmentSpecifications {
             if (safe.paymentModeId() != null) {
                 predicates.add(cb.equal(root.get("paymentModeId"), safe.paymentModeId()));
             }
+            if (hasText(safe.toCity())) {
+                predicates.add(cb.equal(cb.lower(root.get("toCity")), safe.toCity().trim().toLowerCase()));
+            }
+            if (Boolean.TRUE.equals(safe.unassignedDeliveryBranch())) {
+                predicates.add(cb.isNull(root.get("deliveryBranchId")));
+            }
             if (hasText(safe.search())) {
                 String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
                 predicates.add(cb.or(

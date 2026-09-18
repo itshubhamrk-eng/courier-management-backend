@@ -16,6 +16,12 @@ import java.util.UUID;
  */
 public interface PincodeCoverageLookupPort {
 
+    /** {@code cityName} is the pincode's own master-data name (its post office/locality —
+     *  the same string {@code master_pincodes.name} shows everywhere else), not the
+     *  {@code City} master row further up the chain. The chain is still walked up to
+     *  {@code City} for {@code District} (below) — {@code City}'s own name is purely an
+     *  intermediate rung, display-only and often coarser or mislabeled relative to what a
+     *  specific pincode actually needs shown as its "city". */
     record CoverageRef(UUID pincodeId, String pincodeCode, boolean serviceable, boolean odaApplicable,
                         UUID districtId, String districtCode, String districtName, boolean districtActive,
                         String cityName) {

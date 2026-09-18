@@ -98,10 +98,14 @@ public class ShipmentMovementController {
                 request.driverUserId(), request.departureTime(),
                 request.fuelCost(), request.driverAdvance(), request.tollAmount(), request.otherAmount());
         // The shipments themselves are already DISPATCHED by the time this call returns —
-        // count them by that status rather than MANIFEST_CREATED, which none of them are anymore.
+        // count them by that status rather than MANIFEST_CREATED, which none of them are
+        // anymore. A DIRECT_COMPANY_DELIVERY manifest's shipments go one hop further, to
+        // IN_SCAN, in this same call (see ManifestServiceImpl.dispatch/
+        // ShipmentServiceImpl.markPickedUpForDirectDelivery — no delivery branch exists to
+        // receive them later), so both statuses count as "dispatched" here.
         ShipmentCriteria dispatchedOnThisManifest = new ShipmentCriteria(
-                Set.of(ShipmentStatus.DISPATCHED), null, null, null, null, manifest.getId(),
-                null, null, null, null, null, null);
+                Set.of(ShipmentStatus.DISPATCHED, ShipmentStatus.IN_SCAN), null, null, null, null, manifest.getId(),
+                null, null, null, null, null, null, null, null);
         int dispatchedCount = (int) shipmentService.search(dispatchedOnThisManifest, Pageable.unpaged())
                 .getTotalElements();
         return ApiResponse.success(new DispatchManifestResponse(

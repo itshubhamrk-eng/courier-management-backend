@@ -59,7 +59,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
         <app-card>
           <div class="mh">
             <div><strong>{{ rm.manifestNumber }}</strong>
-              <span class="text-caption">{{ branchNames().get(rm.bookingBranchId) || '—' }} → {{ branchNames().get(rm.deliveryBranchId) || '—' }} &nbsp;·&nbsp; Uncheck any shipment not physically in this THC before receiving.</span></div>
+              <span class="text-caption">{{ branchNames().get(rm.bookingBranchId) || '—' }} → {{ (rm.deliveryBranchId ? branchNames().get(rm.deliveryBranchId) : null) || '—' }} &nbsp;·&nbsp; Uncheck any shipment not physically in this THC before receiving.</span></div>
             <app-button variant="stroked" icon="close" (pressed)="cancelReceive()">Cancel</app-button>
           </div>
         </app-card>

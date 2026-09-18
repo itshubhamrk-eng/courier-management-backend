@@ -57,11 +57,17 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
           <p class="text-caption">Close a delivery against the consignee.</p></div>
         </div>
         @if (!shipment()) {
-          <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
+          <div class="head-actions">
+            @if (myBranchId) {
+              <app-button [variant]="directMode() ? 'stroked' : 'primary'" (pressed)="setDirectMode(false)">My Branch</app-button>
+              <app-button [variant]="directMode() ? 'primary' : 'stroked'" (pressed)="setDirectMode(true)">Direct Company Delivery</app-button>
+            }
+            <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
+          </div>
         }
       </header>
 
-      @if (!myBranchId) {
+      @if (!myBranchId && !directMode()) {
         <app-card><p class="empty">No branch assigned — ask an admin.</p></app-card>
       } @else if (!shipment()) {
         <app-card>
@@ -74,7 +80,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
         @if (loading()) {
           <app-loader [minHeight]="120" caption="Loading…" />
         } @else if (!filteredShipments().length) {
-          <app-card><p class="empty">Nothing matches at your branch.</p></app-card>
+          <app-card><p class="empty">{{ directMode() ? 'Nothing matches for Direct Company Delivery.' : 'Nothing matches at your branch.' }}</p></app-card>
         } @else {
           <app-card>
             <div class="tbl__wrap">
@@ -88,7 +94,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                       <td>{{ i + 1 }}</td>
                       <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.receiverName }}</td>
-                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ s.deliveryBranchId ? (branchNames().get(s.deliveryBranchId) || '—') : 'Direct Company Delivery' }}</td>
                       <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                       <td><app-shipment-status-badge [status]="s.status" /></td>
                       <td class="tbl--right">
@@ -110,7 +116,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
           <div class="sh">
             <div><strong>{{ s.shipmentNumber }}</strong>
               <span class="text-caption">{{ s.senderName }} → {{ s.receiverName }}, {{ s.receiverContact }}</span><br>
-              <span class="text-caption">{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }} &nbsp;·&nbsp; {{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</span></div>
+              <span class="text-caption">{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ s.deliveryBranchId ? (branchNames().get(s.deliveryBranchId) || '—') : 'Direct Company Delivery' }} &nbsp;·&nbsp; {{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</span></div>
             <app-button variant="stroked" icon="close" (pressed)="reset()">Back to List</app-button>
           </div>
           @if (paymentMode(); as pm) {
@@ -229,6 +235,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
   `,
   styles: [`
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; }
+    .head-actions { display:flex; align-items:center; gap:8px; }
     .filters { display:flex; gap:16px; flex-wrap:wrap; }
     .filters app-input { flex:1; min-width:220px; }
     .filters app-select { min-width:200px; }
@@ -298,6 +305,10 @@ export class Delivery implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  /** Direct Company Delivery shipments have no delivery branch at all, so they never show
+   *  up under "my branch" — this switches the worklist to every such shipment company-wide
+   *  instead. Defaults on for a caller with no own branch (e.g. a pure COMPANY_ADMIN). */
+  readonly directMode = signal(!this.auth.user()?.branchId);
 
   readonly shipment = signal<Shipment | null>(null);
   readonly paymentMode = signal<PaymentMode | null>(null);
@@ -372,13 +383,20 @@ export class Delivery implements OnInit {
       : v.verificationStatus === 'PENDING' ? 'Pending Decision' : 'Verification Failed';
   }
 
+  protected setDirectMode(directMode: boolean): void {
+    this.directMode.set(directMode);
+    this.load();
+  }
+
   load(): void {
-    if (!this.myBranchId) return;
+    if (!this.myBranchId && !this.directMode()) return;
     this.loading.set(true);
     const filter = this.statusControl.value ?? 'ALL';
     const statuses = filter === 'ALL' ? LIST_STATUSES : [filter as ShipmentStatus];
     forkJoin(statuses.map((status) =>
-      this.shipmentService.list({ page: 0, size: 100, deliveryBranchId: this.myBranchId!, status })
+      this.shipmentService.list(this.directMode()
+        ? { page: 0, size: 100, unassignedDeliveryBranch: true, status }
+        : { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status })
     )).subscribe({
       next: (pages) => {
         const list = pages.flatMap((p) => p.content);

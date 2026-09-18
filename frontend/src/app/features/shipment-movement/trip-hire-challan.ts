@@ -100,7 +100,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
         <app-card>
           <div class="mh">
             <div><strong>{{ m.manifestNumber }}</strong>
-              <span class="text-caption">{{ branchNames().get(m.bookingBranchId) || '—' }} → {{ branchNames().get(m.deliveryBranchId) || '—' }} &nbsp;·&nbsp; Status: {{ m.status }}</span></div>
+              <span class="text-caption">{{ branchNames().get(m.bookingBranchId) || '—' }} → {{ manifestToLabel(m) }} &nbsp;·&nbsp; Status: {{ m.status }}</span></div>
             <div class="mh__actions">
               @if (m.status !== 'CREATED') {
                 <app-button variant="stroked" icon="visibility" [loading]="previewing()" (pressed)="previewThc()">Preview THC</app-button>
@@ -504,6 +504,13 @@ export class TripHireChallan implements OnInit, OnDestroy {
     return options.find((o) => o.value === id)?.label ?? id ?? '—';
   }
 
+  /** DIRECT_COMPANY_DELIVERY has no delivery branch — a real label for it beats a bare
+   *  dash, same treatment ManifestCard/Loading Sheet's own print already give it. */
+  protected manifestToLabel(m: Manifest): string {
+    if (m.deliveryMode === 'DIRECT_COMPANY_DELIVERY') return 'Direct Company Delivery';
+    return (m.deliveryBranchId ? this.branchNames().get(m.deliveryBranchId) : null) ?? '—';
+  }
+
   private esc(s: string | null | undefined): string {
     return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -623,7 +630,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
           <div><span class="label">DATE</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleDateString('en-GB')) : '—'}</div>
           <div><span class="label">TIME</span>${dispatchedDate ? this.esc(dispatchedDate.toLocaleTimeString()) : '—'}</div>
           <div><span class="label">FROM</span>${this.esc(this.branchNames().get(m.bookingBranchId) ?? '—')}</div>
-          <div><span class="label">TO</span>${this.esc(this.branchNames().get(m.deliveryBranchId) ?? '—')}</div>
+          <div><span class="label">TO</span>${this.esc(this.manifestToLabel(m))}</div>
           <div><span class="label">VEHICLE NO</span>${this.esc(this.label(m.vehicleId, this.vehicleOptions()))}</div>
           <div><span class="label">DRIVER NAME</span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</div>
           <div><span class="label">DRIVER MOBILE</span>${this.esc(driver?.mobile) || '—'}</div>

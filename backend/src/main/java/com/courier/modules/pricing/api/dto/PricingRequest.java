@@ -15,7 +15,12 @@ import java.util.UUID;
 public record PricingRequest(
 
         @NotNull UUID bookingBranchId,
-        @NotNull UUID deliveryBranchId,
+        @Schema(description = "Optional since a destination pincode with no branch mapped "
+                + "yet is a normal, bookable state (see Shipment.deliveryBranchId's own "
+                + "doc) — this preview must tolerate the same null ShipmentServiceImpl's "
+                + "own priceIt() already does, calling PricingEngine directly with no "
+                + "request-level validation in between.")
+        UUID deliveryBranchId,
 
         @NotBlank String pickupPincode,
         @NotBlank String deliveryPincode,

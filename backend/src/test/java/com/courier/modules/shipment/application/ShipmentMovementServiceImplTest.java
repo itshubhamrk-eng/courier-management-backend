@@ -59,6 +59,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -103,7 +104,6 @@ class ShipmentMovementServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private com.courier.modules.districtfreight.application.FreightCalculationService freightCalculationService;
-    @Mock private com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
     @Mock private com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -126,7 +126,7 @@ class ShipmentMovementServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, freightCalculationService, branchPincodeMappingService,
+                ewayBillService, freightCalculationService,
                 applicableChargesCalculator, auditService, eventPublisher, fileStoragePort,
                 shipmentAssetRepository, deliveryDispatchOtpRepository, passwordEncoder, companySettingsService,
                 communicationSettingService, smsProvider, objectMapper);
@@ -165,7 +165,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(shipment));
 
         assertThatThrownBy(() -> service.attachToManifest(
-                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH))
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("BOOKED");
     }
@@ -178,7 +178,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(shipment));
 
         assertThatThrownBy(() -> service.attachToManifest(
-                shipment.getId(), MANIFEST, UUID.randomUUID(), DELIVERY_BRANCH))
+                shipment.getId(), MANIFEST, UUID.randomUUID(), DELIVERY_BRANCH, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("different lane");
     }
@@ -190,10 +190,60 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
 
-        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH);
+        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null);
 
         assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
         assertThat(result.getManifestId()).isEqualTo(MANIFEST);
+    }
+
+    @Test
+    @DisplayName("attachToManifest matches a freshly booked shipment by destination city "
+            + "when Load Sheet hasn't assigned it a delivery branch yet")
+    void attachMatchesByDestinationCityWhenUnassigned() {
+        Shipment shipment = shipment(ShipmentStatus.BOOKED);
+        shipment.setDeliveryBranchId(null);
+        shipment.setNextLocationId(null);
+        shipment.setToCity("Pune");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, "Pune");
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
+        assertThat(result.getDeliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(result.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
+    }
+
+    @Test
+    @DisplayName("attachToManifest refuses an unassigned shipment going to a different city")
+    void attachRefusesWrongDestinationCity() {
+        Shipment shipment = shipment(ShipmentStatus.BOOKED);
+        shipment.setDeliveryBranchId(null);
+        shipment.setNextLocationId(null);
+        shipment.setToCity("Mumbai");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        assertThatThrownBy(() -> service.attachToManifest(
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, "Pune"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Pune");
+    }
+
+    @Test
+    @DisplayName("attachToManifest refuses an unassigned shipment when the manifest has no destination city")
+    void attachRefusesWhenManifestHasNoDestinationCity() {
+        Shipment shipment = shipment(ShipmentStatus.BOOKED);
+        shipment.setDeliveryBranchId(null);
+        shipment.setNextLocationId(null);
+        shipment.setToCity("Pune");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        assertThatThrownBy(() -> service.attachToManifest(
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("destination city");
     }
 
     @Test
@@ -206,7 +256,7 @@ class ShipmentMovementServiceImplTest {
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
 
-        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, CROSSING_BRANCH, DELIVERY_BRANCH);
+        Shipment result = service.attachToManifest(shipment.getId(), MANIFEST, CROSSING_BRANCH, DELIVERY_BRANCH, null);
 
         assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
     }
@@ -221,7 +271,7 @@ class ShipmentMovementServiceImplTest {
                 .thenReturn(Optional.of(shipment));
 
         assertThatThrownBy(() -> service.attachToManifest(
-                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH))
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("different lane");
     }
@@ -597,6 +647,66 @@ class ShipmentMovementServiceImplTest {
         assertThat(assignment.getStatus()).isEqualTo(DeliveryAssignmentStatus.DELIVERED);
         assertThat(assignment.getReceiverName()).isEqualTo("Rahul Verma");
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.CodCollectedAtDelivery.class));
+    }
+
+    @Test
+    @DisplayName("delivering a Direct Company Delivery shipment (no delivery branch) publishes none "
+            + "of the delivery-branch-attributed money — no DRS charge, no weight commission, no COD debit")
+    void deliverOnDirectDeliverySkipsAllDeliveryBranchMoney() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setDeliveryBranchId(null);
+        shipment.setPodApproved(true);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(codPaymentMode());
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(ShipmentCharge.builder().netAmount(new BigDecimal("450.0000")).build()));
+
+        Shipment delivered = service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        assertThat(delivered.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.CodCollectedAtDelivery.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
+        verify(branchService, never()).getById(isNull());
+    }
+
+    @Test
+    @DisplayName("delivering a Direct Company Delivery PAID shipment credits the booking branch's "
+            + "own commission here, since it never got a real in-scan to credit it at")
+    void deliverOnDirectDeliveryCreditsCollectAtBookingCommission() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setDeliveryBranchId(null);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(true));
+        when(chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(ShipmentCharge.builder()
+                        .commissionOnBasicFreight(new BigDecimal("10.0000"))
+                        .branchCommissionOnOtherAmount(new BigDecimal("5.0000"))
+                        .build()));
+        when(branchService.instantCommissionOf(shipment.getBookingBranchId())).thenReturn(true);
+
+        service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", "Left at gate", "1234", null, null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ShipmentEvent.InScanCommissionEarned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().branchCommission()).isEqualByComparingTo("15.0000");
+        assertThat(captor.getValue().bookingBranchId()).isEqualTo(shipment.getBookingBranchId());
     }
 
     @Test

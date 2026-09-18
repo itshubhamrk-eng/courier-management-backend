@@ -82,11 +82,11 @@ public class Shipment extends CompanyOwnedEntity {
     private UUID bookingBranchId;
 
     /**
-     * Resolved server-side off {@code deliveryPincode}'s own {@code
-     * branch_pincode_mapping} row (never trusted from the client) — booking no longer
-     * asks the operator to pick a Delivery Branch, only a destination pincode/area, so
-     * this is null whenever that pincode isn't mapped to a branch yet. Filled in for real
-     * once Loading Sheet/THC generation resolves it.
+     * Always null at booking — the operator only picks a destination pincode/area, never
+     * a Delivery Branch, and {@code ShipmentServiceImpl.create}/{@code update} resolve one
+     * off {@code branch_pincode_mapping} only to price the booking, never to persist it
+     * here. Filled in for real, once, the first time a Load Sheet (Manifest) is created
+     * for this shipment's {@code toCity} — see {@code ShipmentServiceImpl.attachToManifest}.
      */
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "delivery_branch_id", columnDefinition = "BINARY(16)")
@@ -122,7 +122,8 @@ public class Shipment extends CompanyOwnedEntity {
 
     /**
      * Where this shipment is headed next — the crossing branch when one was picked at
-     * booking time, otherwise the delivery branch directly. No physical FK.
+     * booking time, otherwise null until a Load Sheet assigns a real delivery branch (set
+     * to the same value as {@code deliveryBranchId} from that point on). No physical FK.
      */
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "next_location_id", columnDefinition = "BINARY(16)")

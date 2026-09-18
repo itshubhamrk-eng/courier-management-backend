@@ -259,15 +259,25 @@ public interface ShipmentService {
 
     /**
      * Called only by {@code ManifestServiceImpl.create} — attaches a {@code BOOKED}
-     * shipment travelling exactly {@code expectedBookingBranchId} ->
-     * {@code expectedDeliveryBranchId} to a newly created manifest and transitions it to
-     * {@code MANIFEST_CREATED}. Not exposed on its own REST endpoint.
+     * shipment to a newly created manifest and transitions it to {@code MANIFEST_CREATED}.
+     * Not exposed on its own REST endpoint.
+     *
+     * <p>Two ways a shipment can qualify: if it already carries a real next stop
+     * ({@code nextLocationId} or, failing that, {@code deliveryBranchId} — a crossing hop,
+     * or a legacy row from before Load Sheet deferred branch assignment), it must travel
+     * exactly {@code expectedBookingBranchId} -&gt; {@code expectedDeliveryBranchId}, same
+     * as ever. Otherwise (the normal case since Load Sheet — booked with no branch
+     * resolved yet) it is matched by destination city instead: it must be sitting at
+     * {@code expectedBookingBranchId} and its own {@code toCity} must match
+     * {@code manifestDestinationCity} — {@code deliveryBranchId}/{@code nextLocationId} are
+     * then set to {@code expectedDeliveryBranchId} for the first time.
      *
      * @throws com.courier.shared.exception.BusinessRuleException the shipment is not
-     *         {@code BOOKED}, or travels a different lane than the manifest
+     *         {@code BOOKED}/{@code READY_FOR_MANIFEST}, travels a different lane than the
+     *         manifest, or (city path) isn't going to {@code manifestDestinationCity}
      */
     Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
-                             UUID expectedDeliveryBranchId);
+                             UUID expectedDeliveryBranchId, String manifestDestinationCity);
 
     /**
      * Called only by {@code ManifestServiceImpl.removeShipment} — the inverse of
@@ -287,6 +297,13 @@ public interface ShipmentService {
      * subset. */
     List<Shipment> findManifestCreatedShipments(UUID manifestId);
 
+    /** Load Sheet's own "which city am I creating this for" picker — every distinct
+     *  {@code toCity} among this branch's own BOOKED/READY_FOR_MANIFEST shipments that
+     *  have no delivery branch resolved yet ({@code attachToManifest}'s city-matching
+     *  path). A shipment already carrying a real next stop (crossing hop, or a legacy row)
+     *  never appears here — it is attached the old, branch-matching way instead. */
+    List<String> findEligibleDestinationCities(UUID currentLocationId);
+
     /**
      * Called only by {@code ManifestServiceImpl.dispatch}, after the manifest itself has
      * already been validated and moved to {@code DISPATCHED} — moves every given shipment
@@ -295,6 +312,20 @@ public interface ShipmentService {
      */
     List<Shipment> transitionToDispatched(List<UUID> shipmentIds, UUID manifestId, UUID vehicleId,
                                           UUID bookingBranchId);
+
+    /**
+     * Called only by {@code ManifestServiceImpl.dispatch}, immediately after {@link
+     * #transitionToDispatched}, and only for a {@code DeliveryMode.DIRECT_COMPANY_DELIVERY}
+     * manifest — moves every given (already {@code DISPATCHED}) shipment straight to
+     * {@code IN_SCAN}, since no delivery branch exists to receive it and the company
+     * vehicle/driver just assigned carries it the rest of the way itself. Publishes no
+     * wallet/commission event (unlike a real branch in-scan) — see
+     * {@code ShipmentServiceImpl.deliver} for where a Direct Company Delivery shipment's
+     * own booking-branch commission is credited instead, and its javadoc for which
+     * delivery-branch-attributed money (TO_PAY debit, COD debit, DRS charge, delivery
+     * weight commission) is deliberately skipped for these shipments.
+     */
+    List<Shipment> markPickedUpForDirectDelivery(List<UUID> shipmentIds);
 
     /**
      * Receives every tracking number at {@code receivingBranchId}. Each must resolve to

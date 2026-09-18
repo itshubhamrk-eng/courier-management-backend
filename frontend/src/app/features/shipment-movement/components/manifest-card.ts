@@ -136,7 +136,10 @@ export class ManifestCard implements OnInit {
   protected readonly fromLabel = computed(() =>
     this.branchNames().get(this.manifest().bookingBranchId) ?? 'Booking branch');
   protected readonly toLabel = computed(() =>
-    this.branchNames().get(this.manifest().deliveryBranchId) ?? 'Delivery branch');
+    this.manifest().deliveryMode === 'DIRECT_COMPANY_DELIVERY'
+      ? 'Direct Company Delivery'
+      : (this.manifest().deliveryBranchId ? this.branchNames().get(this.manifest().deliveryBranchId!) : null)
+        ?? 'Delivery branch');
   protected readonly totalWeight = computed(() =>
     this.shipments().reduce((sum, s) => sum + (s.chargeableWeight ?? 0), 0));
   protected readonly totalParcels = computed(() => this.shipments().length);

@@ -13,7 +13,7 @@ import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomple
 import { MasterDataService } from '@features/masters/master-data.service';
 import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { ShipmentService } from '@features/shipment/shipment.service';
-import { Manifest, Shipment } from '@core/models/shipment.model';
+import { DeliveryMode, Manifest, Shipment } from '@core/models/shipment.model';
 import { ManifestService } from '@features/manifest/manifest.service';
 import { ManifestCard } from './components/manifest-card';
 import { WarehouseIllustration } from '@shared/components/illustrations/warehouse-illustration';
@@ -45,13 +45,35 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
       </header>
 
-      <app-card title="Create Loading Sheet" subtitle="Group booked shipments travelling this branch pair.">
+      <app-card title="Create Loading Sheet" subtitle="Group booked shipments travelling to one destination, then assign a delivery branch.">
+        <div class="mode-toggle">
+          <app-button [variant]="cityMode() ? 'primary' : 'stroked'" (pressed)="setCityMode(true)">By Destination City</app-button>
+          <app-button [variant]="!cityMode() ? 'primary' : 'stroked'" (pressed)="setCityMode(false)">By Delivery Branch (crossing hub)</app-button>
+        </div>
         <form [formGroup]="createForm" (ngSubmit)="createManifest()" class="df">
-          <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search branch…" />
-          @if (!loadingBranches() && !branchOptions().length) {
-            <p class="empty">No branch has a BOOKED shipment from your branch right now.</p>
+          @if (cityMode()) {
+            <app-select [control]="c('destinationCity')" label="Destination City" [options]="destinationCities()" placeholder="Select destination city…" />
+            @if (!loadingCities() && !destinationCities().length) {
+              <p class="empty">No BOOKED shipment from your branch is awaiting a delivery branch yet.</p>
+            }
+            @if (c('destinationCity').value) {
+              <div class="mode-toggle">
+                <app-button [variant]="c('deliveryMode').value === 'BRANCH_DELIVERY' ? 'primary' : 'stroked'" (pressed)="setDeliveryMode('BRANCH_DELIVERY')">Branch Delivery</app-button>
+                <app-button [variant]="c('deliveryMode').value === 'DIRECT_COMPANY_DELIVERY' ? 'primary' : 'stroked'" (pressed)="setDeliveryMode('DIRECT_COMPANY_DELIVERY')">Direct Company Delivery</app-button>
+              </div>
+              @if (c('deliveryMode').value === 'BRANCH_DELIVERY') {
+                <app-autocomplete [control]="c('deliveryBranchId')" label="Assign Delivery Branch" [options]="assignableBranchOptions()" placeholder="Search branch…" />
+              } @else {
+                <p class="text-caption">No delivery branch needed — a company vehicle and driver are assigned at Dispatch (THC), and these shipments go straight out for delivery once picked up.</p>
+              }
+            }
+          } @else {
+            <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search branch…" />
+            @if (!loadingBranches() && !branchOptions().length) {
+              <p class="empty">No branch has a BOOKED shipment from your branch right now.</p>
+            }
           }
-          @if (c('deliveryBranchId').value) {
+          @if ((cityMode() && cityModeReady()) || (!cityMode() && c('deliveryBranchId').value)) {
             @if (bookedShipments().length) {
               <div>
                 <span class="text-caption">Booked shipments on this lane — select the ones to manifest</span>
@@ -112,6 +134,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
     .ml-head { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
     .ml-filters { display:flex; gap:10px; min-width:220px; }
     .ml-filters app-select, .ml-filters app-autocomplete { min-width:170px; }
+    .mode-toggle { display:flex; gap:8px; margin-bottom:12px; }
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
     .section-title { margin:8px 0 0; }
@@ -148,10 +171,26 @@ export class LoadingSheet implements OnInit {
    *  "To Pay Freight" definition THC's own print uses; see TripHireChallan.topayModeIds. */
   readonly topayModeIds = signal<Set<string>>(new Set());
 
+  /** true = the normal case since Load Sheet moved delivery-branch assignment here:
+   *  BOOKED shipments with no branch resolved yet, matched by destination city and
+   *  assigned a branch right here. false = the old branch-first flow, still needed for a
+   *  crossing hub's own shipments (already carrying a real next-stop branch) or any
+   *  legacy shipment booked before this change. */
+  readonly cityMode = signal(true);
+  readonly destinationCities = signal<SelectOption[]>([]);
+  readonly loadingCities = signal(true);
+
   protected readonly allBranchOptions = computed<SelectOption[]>(() =>
     [...this.branchNames().entries()]
       .map(([id, label]) => ({ value: id, label }))
       .sort((a, b) => a.label.localeCompare(b.label)));
+
+  /** Every branch but this one — Load Sheet's "assign a delivery branch" picker, once a
+   *  destination city is chosen. Unlike `branchOptions`, not derived from any shipment's
+   *  own data: nothing has decided a branch for these shipments yet, so any branch is a
+   *  valid destination. */
+  protected readonly assignableBranchOptions = computed<SelectOption[]>(() =>
+    this.allBranchOptions().filter((o) => o.value !== this.myBranchId));
 
   readonly sortOptions: SelectOption[] = [
     { value: 'createdAt,desc', label: 'Newest First' },
@@ -163,9 +202,23 @@ export class LoadingSheet implements OnInit {
   readonly sortControl = new FormControl<string>('createdAt,desc');
 
   readonly createForm: FormGroup = this.fb.group({
-    deliveryBranchId: [null as string | null, Validators.required],
+    destinationCity: [null as string | null],
+    deliveryMode: ['BRANCH_DELIVERY' as DeliveryMode],
+    deliveryBranchId: [null as string | null],
     shipmentIds: [[] as string[], Validators.required]
   });
+
+  /** True once the operator has picked everything Load Sheet's own city-first flow
+   *  needs before a shipment can be selected: a destination city, and — only for
+   *  BRANCH_DELIVERY — a delivery branch too (DIRECT_COMPANY_DELIVERY needs neither branch
+   *  nor vehicle/driver yet; those come later, at Dispatch/THC, same as BRANCH_DELIVERY's
+   *  own vehicle/driver). Not a signal — reactive forms already trigger this OnPush
+   *  component's own change detection on every value change, the same as every other
+   *  `c(...).value` read already in this template. */
+  protected cityModeReady(): boolean {
+    return !!this.c('destinationCity').value
+      && (this.c('deliveryMode').value === 'DIRECT_COMPANY_DELIVERY' || !!this.c('deliveryBranchId').value);
+  }
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
@@ -174,7 +227,14 @@ export class LoadingSheet implements OnInit {
         [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
       this.loadEligibleDeliveryBranches();
     });
-    this.createForm.get('deliveryBranchId')!.valueChanges.subscribe((id) => this.loadBooked(id));
+    this.loadDestinationCities();
+    this.createForm.get('destinationCity')!.valueChanges.subscribe((city) => {
+      this.createForm.get('deliveryBranchId')!.setValue(null);
+      if (this.cityMode()) this.loadBookedByCity(city);
+    });
+    this.createForm.get('deliveryBranchId')!.valueChanges.subscribe((id) => {
+      if (!this.cityMode()) this.loadBooked(id);
+    });
     this.filterBranchControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.sortControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
@@ -191,6 +251,20 @@ export class LoadingSheet implements OnInit {
   onShipmentRemoved(): void {
     this.loadOpenManifests();
     this.loadEligibleDeliveryBranches();
+    this.loadDestinationCities();
+  }
+
+  protected setCityMode(cityMode: boolean): void {
+    this.cityMode.set(cityMode);
+    this.createForm.reset({ destinationCity: null, deliveryMode: 'BRANCH_DELIVERY', deliveryBranchId: null, shipmentIds: [] });
+    this.bookedShipments.set([]);
+  }
+
+  /** DIRECT_COMPANY_DELIVERY needs no delivery branch at all — clearing it here means a
+   *  branch picked before switching mode can never be silently submitted with it. */
+  protected setDeliveryMode(mode: DeliveryMode): void {
+    this.createForm.get('deliveryMode')!.setValue(mode);
+    this.createForm.get('deliveryBranchId')!.setValue(null);
   }
 
   protected c(name: string): FormControl { return this.createForm.get(name) as FormControl; }
@@ -241,6 +315,36 @@ export class LoadingSheet implements OnInit {
     });
   }
 
+  /** Destination City lists every distinct city among this branch's own BOOKED/
+   *  READY_FOR_MANIFEST shipments that have no delivery branch resolved yet — the normal
+   *  case since a shipment no longer gets one at booking. */
+  private loadDestinationCities(): void {
+    if (!this.myBranchId) { this.loadingCities.set(false); return; }
+    this.loadingCities.set(true);
+    this.manifestService.eligibleDestinations(this.myBranchId).subscribe({
+      next: (cities) => {
+        this.destinationCities.set(cities.map((city) => ({ value: city, label: city })));
+        this.loadingCities.set(false);
+      },
+      error: () => { this.destinationCities.set([]); this.loadingCities.set(false); }
+    });
+  }
+
+  /** The shipment picker for a chosen destination city — every shipment at this branch,
+   *  going to that city, with no delivery branch resolved yet. */
+  private loadBookedByCity(destinationCity: string | null): void {
+    this.bookedShipments.set([]);
+    this.createForm.get('shipmentIds')!.setValue([]);
+    if (!destinationCity || !this.myBranchId) return;
+    this.shipmentService.list({
+      page: 0, size: 100, currentLocationId: this.myBranchId, toCity: destinationCity,
+      unassignedDeliveryBranch: true, status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
+    }).subscribe({
+      next: (p) => this.bookedShipments.set(p.content),
+      error: () => this.bookedShipments.set([])
+    });
+  }
+
   loadOpenManifests(): void {
     this.loadingManifests.set(true);
     this.manifestService.list({
@@ -271,16 +375,30 @@ export class LoadingSheet implements OnInit {
   createManifest(): void {
     if (this.createForm.invalid || !this.myBranchId) { this.createForm.markAllAsTouched(); return; }
     const v = this.createForm.getRawValue();
+    const deliveryMode: DeliveryMode = this.cityMode() ? v.deliveryMode : 'BRANCH_DELIVERY';
+    if (this.cityMode() && !v.destinationCity) {
+      this.notify.error('Pick a destination city first.');
+      return;
+    }
+    if (deliveryMode === 'BRANCH_DELIVERY' && !v.deliveryBranchId) {
+      this.notify.error('Pick a delivery branch first.');
+      return;
+    }
     this.creating.set(true);
     this.manifestService.create({
-      bookingBranchId: this.myBranchId, deliveryBranchId: v.deliveryBranchId, shipmentIds: v.shipmentIds
+      bookingBranchId: this.myBranchId,
+      deliveryBranchId: deliveryMode === 'BRANCH_DELIVERY' ? v.deliveryBranchId : null,
+      deliveryMode,
+      destinationCity: this.cityMode() ? v.destinationCity : null,
+      shipmentIds: v.shipmentIds
     }).subscribe({
       next: (m) => {
         this.creating.set(false);
         this.notify.success(`Manifest ${m.manifestNumber} created.`);
-        this.createForm.reset({ deliveryBranchId: null, shipmentIds: [] });
+        this.createForm.reset({ destinationCity: null, deliveryMode: 'BRANCH_DELIVERY', deliveryBranchId: null, shipmentIds: [] });
         this.loadOpenManifests();
         this.loadEligibleDeliveryBranches();
+        this.loadDestinationCities();
       },
       error: (e: HttpErrorResponse) => { this.creating.set(false); this.notify.error(e.error?.message ?? 'Could not create the manifest.'); }
     });
@@ -314,7 +432,9 @@ export class LoadingSheet implements OnInit {
     const companyName = this.esc(this.auth.companyName() ?? 'Loading Sheet');
     const companyLogo = this.auth.companyLogo();
     const fromLabel = this.esc(this.branchNames().get(m.bookingBranchId) ?? '—');
-    const toLabel = this.esc(this.branchNames().get(m.deliveryBranchId) ?? '—');
+    const toLabel = m.deliveryMode === 'DIRECT_COMPANY_DELIVERY'
+      ? 'Direct Company Delivery'
+      : this.esc((m.deliveryBranchId ? this.branchNames().get(m.deliveryBranchId) : null) ?? '—');
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>Loading Sheet ${this.esc(m.manifestNumber)}</title>
       <style>

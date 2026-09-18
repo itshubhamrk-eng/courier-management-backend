@@ -108,7 +108,8 @@ public class ShipmentMapper {
         return new ShipmentCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(),
                 safe.currentLocationId(), safe.nextLocationId(),
                 safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
-                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.paymentModeId(), safe.search());
+                safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.paymentModeId(), safe.search(),
+                safe.toCity(), safe.unassignedDeliveryBranch());
     }
 
     public ShipmentService.AddDocumentCommand toCommand(AddShipmentDocumentRequest r) {

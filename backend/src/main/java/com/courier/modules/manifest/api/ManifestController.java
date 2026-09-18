@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -102,6 +103,15 @@ public class ManifestController {
         return ApiResponse.success(mapper.toSummaryStats(manifestService.summaryStats(mapper.toCriteria(search))));
     }
 
+    @GetMapping("/eligible-destinations")
+    @Operation(summary = "Distinct destination cities eligible for a new Load Sheet from this branch",
+            description = "Every distinct destination city among this branch's own BOOKED/READY_FOR_MANIFEST "
+                    + "shipments with no delivery branch resolved yet — Load Sheet's first picker, ahead of "
+                    + "the shipment checklist.")
+    public ApiResponse<List<String>> eligibleDestinations(@RequestParam UUID bookingBranchId) {
+        return ApiResponse.success(shipmentService.findEligibleDestinationCities(bookingBranchId));
+    }
+
     private ManifestShipmentAggregate aggregateFor(UUID manifestId) {
         return ManifestShipmentAggregate.of(shipmentService.findByManifestIds(List.of(manifestId)));
     }
@@ -112,7 +122,7 @@ public class ManifestController {
                     + "manifest picker both read this.")
     public ApiResponse<List<ShipmentSummaryResponse>> shipments(@PathVariable UUID id) {
         manifestService.getById(id); // 404s a foreign/unknown manifest before listing anything
-        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, id, null, null, null, null, null, null);
+        ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, id, null, null, null, null, null, null, null, null);
         Page<Shipment> page = shipmentService.search(criteria, Pageable.unpaged());
         List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
         Map<UUID, BigDecimal> netAmounts = shipmentService.netAmountsFor(ids);

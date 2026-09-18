@@ -178,7 +178,6 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final TicketCategoryService ticketCategoryService;
     private final EwayBillService ewayBillService;
     private final FreightCalculationService freightCalculationService;
-    private final com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
     private final com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
 
     private final AuditService auditService;
@@ -244,14 +243,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                 weight.chargeableWeight());
         requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
 
-        // Delivery Branch is no longer picked at booking — the operator only sees From
-        // City/To City (see freightCalc.destinationCityName() below). Resolved here off
-        // the destination pincode's own branch_pincode_mapping row, same lookup Delivery
-        // Branch used to auto-select from; null when that pincode isn't mapped yet, which
-        // no longer blocks booking — see Shipment.applyInvariants.
-        UUID resolvedDeliveryBranchId = resolveDeliveryBranchId(freightCalc.destinationPincodeId());
-
-        PricingResult priced = priceIt(command.bookingBranchId(), resolvedDeliveryBranchId,
+        // Delivery Branch is no longer picked, decided, or even resolved at booking —
+        // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
+        // destination city (see ShipmentServiceImpl.attachToManifest), or never at all
+        // for Direct Company Delivery. Pricing (Route/Rate's old branch-pair matching)
+        // runs with no delivery branch every time now; District Level Freight (the
+        // authoritative freight figure) never needed one — it keys off district, not
+        // branch.
+        PricingResult priced = priceIt(command.bookingBranchId(), null,
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
                 command.declaredValue(), bookingDate, command.freightFactorOverride(),
@@ -282,11 +281,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .trackingNumber(nextTrackingNumber(companyId))
                 .bookingDate(bookingDate)
                 .bookingBranchId(command.bookingBranchId())
-                .deliveryBranchId(resolvedDeliveryBranchId)
+                .deliveryBranchId(null)
                 .fromCity(bookingBranch.getCity())
                 .toCity(freightCalc.destinationCityName())
                 .currentLocationId(command.bookingBranchId())
-                .nextLocationId(crossing ? firstCrossingBranch : resolvedDeliveryBranchId)
+                .nextLocationId(crossing ? firstCrossingBranch : null)
                 .pickupPincode(command.pickupPincode())
                 .deliveryPincode(command.deliveryPincode())
                 .senderName(command.senderName())
@@ -394,9 +393,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 weight.chargeableWeight());
         requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
 
-        UUID resolvedDeliveryBranchId = resolveDeliveryBranchId(freightCalc.destinationPincodeId());
-
-        PricingResult priced = priceIt(shipment.getBookingBranchId(), resolvedDeliveryBranchId,
+        // No delivery branch to resolve any more — pricing runs with none, same as
+        // create(). A BOOKED shipment's deliveryBranchId stays whatever it already was
+        // (always null pre-Load-Sheet, since isEditable() only allows this method to run
+        // before any manifest has touched the shipment).
+        PricingResult priced = priceIt(shipment.getBookingBranchId(), null,
                 command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
                 command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
                 command.declaredValue(), bookingDate, command.freightFactorOverride(),
@@ -404,7 +405,6 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
 
-        shipment.setDeliveryBranchId(resolvedDeliveryBranchId);
         shipment.setToCity(freightCalc.destinationCityName());
         shipment.setPickupPincode(command.pickupPincode());
         shipment.setDeliveryPincode(command.deliveryPincode());
@@ -898,7 +898,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional
     @PreAuthorize(WRITERS)
     public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
-                                     UUID expectedDeliveryBranchId) {
+                                     UUID expectedDeliveryBranchId, String manifestDestinationCity) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
 
@@ -907,20 +907,44 @@ public class ShipmentServiceImpl implements ShipmentService {
                     .formatted(shipment.getShipmentNumber(), shipment.getStatus())
                     + "added to a manifest.");
         }
-        // Compared against where the shipment actually is / is headed next, not its fixed
-        // booking/delivery branch — the same value for a single-leg shipment (current ==
-        // booking, next == delivery), but different once a crossing shipment has advanced
-        // past its first hop (see ShipmentServiceImpl.scanOneIn). Pre-V37 rows fall back to
-        // the fixed branches, since they never got current/nextLocationId written.
+        // Compared against where the shipment actually is right now, not its fixed booking
+        // branch — the same value for a single-leg shipment, but different once a crossing
+        // shipment has advanced past its first hop (see ShipmentServiceImpl.scanOneIn).
         UUID actualPosition = shipment.getCurrentLocationId() != null
                 ? shipment.getCurrentLocationId() : shipment.getBookingBranchId();
-        UUID actualNextStop = shipment.getNextLocationId() != null
-                ? shipment.getNextLocationId() : shipment.getDeliveryBranchId();
-        if (!Objects.equals(actualPosition, expectedBookingBranchId)
-                || !Objects.equals(actualNextStop, expectedDeliveryBranchId)) {
-            throw new BusinessRuleException(
-                    "Shipment %s travels a different lane than this manifest.".formatted(
-                            shipment.getShipmentNumber()));
+
+        if (shipment.getNextLocationId() == null && shipment.getDeliveryBranchId() == null) {
+            // Load Sheet's normal case since delivery-branch assignment moved here: nothing
+            // has decided this shipment's next stop yet, so it can't be matched by branch —
+            // matched by its own resolved destination city instead. Assigning the branch for
+            // real, right here, is this shipment's very first delivery-branch assignment.
+            if (!Objects.equals(actualPosition, expectedBookingBranchId)) {
+                throw new BusinessRuleException(
+                        "Shipment %s is not at this branch.".formatted(shipment.getShipmentNumber()));
+            }
+            if (manifestDestinationCity == null || manifestDestinationCity.isBlank()) {
+                throw new BusinessRuleException(
+                        "This Load Sheet has no destination city — pick one before adding shipments.");
+            }
+            if (shipment.getToCity() == null
+                    || !shipment.getToCity().trim().equalsIgnoreCase(manifestDestinationCity.trim())) {
+                throw new BusinessRuleException(
+                        "Shipment %s is going to %s, not %s.".formatted(
+                                shipment.getShipmentNumber(), shipment.getToCity(), manifestDestinationCity));
+            }
+            shipment.setDeliveryBranchId(expectedDeliveryBranchId);
+            shipment.setNextLocationId(expectedDeliveryBranchId);
+        } else {
+            // Already has a real next stop — a crossing hop still ahead, or a legacy row
+            // booked before Load Sheet deferred branch assignment. Same lane check as ever.
+            UUID actualNextStop = shipment.getNextLocationId() != null
+                    ? shipment.getNextLocationId() : shipment.getDeliveryBranchId();
+            if (!Objects.equals(actualPosition, expectedBookingBranchId)
+                    || !Objects.equals(actualNextStop, expectedDeliveryBranchId)) {
+                throw new BusinessRuleException(
+                        "Shipment %s travels a different lane than this manifest.".formatted(
+                                shipment.getShipmentNumber()));
+            }
         }
 
         ShipmentStatus previous = shipment.getStatus();
@@ -967,8 +991,18 @@ public class ShipmentServiceImpl implements ShipmentService {
     public List<Shipment> findManifestCreatedShipments(UUID manifestId) {
         ShipmentCriteria criteria = new ShipmentCriteria(
                 java.util.Set.of(ShipmentStatus.MANIFEST_CREATED), null, null, null, null, manifestId,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         return shipmentRepository.findAll(ShipmentSpecifications.matching(criteria));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<String> findEligibleDestinationCities(UUID currentLocationId) {
+        UUID companyId = requireCompany();
+        return shipmentRepository.findDistinctToCityByCompanyIdAndCurrentLocationIdAndStatusIn(
+                companyId, currentLocationId,
+                java.util.Set.of(ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST));
     }
 
     @Override
@@ -990,6 +1024,25 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
         auditService.record(AuditAction.MANIFEST_DISPATCHED, "Manifest", manifestId,
                 Map.of("shipmentCount", saved.size(), "vehicleId", vehicleId.toString()));
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public List<Shipment> markPickedUpForDirectDelivery(List<UUID> shipmentIds) {
+        UUID companyId = requireCompany();
+        List<Shipment> shipments = shipmentRepository.findAllByCompanyIdAndIdIn(companyId, shipmentIds);
+        List<Shipment> saved = new ArrayList<>(shipments.size());
+        for (Shipment shipment : shipments) {
+            ShipmentStatus previous = shipment.getStatus();
+            shipment.transitionTo(ShipmentStatus.IN_SCAN);
+            Shipment s = shipmentRepository.save(shipment);
+            appendHistory(s, companyId, previous, ShipmentStatus.IN_SCAN,
+                    "Picked up by company vehicle for direct delivery — no delivery branch",
+                    null, s.getManifestId(), null);
+            saved.add(s);
+        }
         return saved;
     }
 
@@ -1341,7 +1394,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         eventPublisher.publishEvent(new ShipmentEvent.Delivered(saved.getId(), companyId, Instant.now()));
 
         PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
-        if (paymentMode.isCollectAtDelivery()) {
+        // Direct Company Delivery (no deliveryBranchId — see DeliveryMode's own doc) has no
+        // delivery branch wallet to debit at all, so COD's collected-cash debit below is
+        // skipped for it, same as TO_PAY's own in-scan debit already never fires for it
+        // (scanOneIn never runs on a Direct Company Delivery shipment — see
+        // ManifestServiceImpl.dispatch/markPickedUpForDirectDelivery). That money is
+        // deliberately not attributed to any branch, on direct request.
+        if (paymentMode.isCollectAtDelivery() && saved.getDeliveryBranchId() != null) {
             // COD's amount is the consignee's, only real once actually collected here — TO_PAY
             // already debited its freight earlier, at in-scan (see scanOneIn), so it does not
             // repeat that debit on delivery. This is cash actually collected, a debit not a
@@ -1354,6 +1413,17 @@ public class ShipmentServiceImpl implements ShipmentService {
                         saved.getId(), companyId, saved.getDeliveryBranchId(), saved.getShipmentNumber(),
                         charge.getNetAmount(), Instant.now()));
             }
+        }
+
+        // Collect-at-booking (PAID) commission normally credits at in-scan (see
+        // publishInScanCommissionIfEarned/scanOneIn) — a Direct Company Delivery shipment
+        // never gets a real in-scan, so it credits here instead, at the one moment every
+        // Direct Company Delivery shipment does pass through. Booking-branch commission,
+        // not delivery-branch — unaffected by there being no delivery branch.
+        if (saved.getDeliveryBranchId() == null && paymentMode.isCollectAtBooking()) {
+            ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
+            publishInScanCommissionIfEarned(saved, companyId, charge);
         }
 
         // Covers the common case: POD Auto Verification already reached PASS before this
@@ -1386,27 +1456,33 @@ public class ShipmentServiceImpl implements ShipmentService {
             publishDeliveryCommissionIfEarned(shipment, companyId, charge);
         }
 
-        int totalQty = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
-                .mapToInt(ShipmentItem::getQuantity).sum();
-        com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
-        BigDecimal drsCharge = deliveryBranch.getDrsChargePerQty().multiply(BigDecimal.valueOf(totalQty));
-        if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
-            eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(
-                    shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
-                    drsCharge, Instant.now()));
-        }
+        // DRS charge and delivery-weight commission are both a *delivery branch's* own
+        // configured rates, credited to that branch's wallet — a Direct Company Delivery
+        // shipment has no delivery branch to own either rate or receive either credit, so
+        // both are skipped for it entirely, on direct request (not deferred anywhere else).
+        if (shipment.getDeliveryBranchId() != null) {
+            int totalQty = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
+                    .mapToInt(ShipmentItem::getQuantity).sum();
+            com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
+            BigDecimal drsCharge = deliveryBranch.getDrsChargePerQty().multiply(BigDecimal.valueOf(totalQty));
+            if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
+                eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(
+                        shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
+                        drsCharge, Instant.now()));
+            }
 
-        // Independent of DRS charge: a per-kg commission on the shipment's own chargeable
-        // weight, with a floor so a very light shipment still earns the floor's worth.
-        BigDecimal chargeableWeight = shipment.getChargeableWeight() == null
-                ? BigDecimal.ZERO : shipment.getChargeableWeight();
-        BigDecimal billableWeight = chargeableWeight.max(deliveryBranch.getDeliveryCommissionMinWeightKg());
-        BigDecimal deliveryWeightCommission = deliveryBranch.getDeliveryCommissionRatePerKg()
-                .multiply(billableWeight);
-        if (deliveryWeightCommission.compareTo(BigDecimal.ZERO) > 0) {
-            eventPublisher.publishEvent(new ShipmentEvent.DeliveryWeightCommissionApplicable(
-                    shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
-                    deliveryWeightCommission, Instant.now()));
+            // Independent of DRS charge: a per-kg commission on the shipment's own chargeable
+            // weight, with a floor so a very light shipment still earns the floor's worth.
+            BigDecimal chargeableWeight = shipment.getChargeableWeight() == null
+                    ? BigDecimal.ZERO : shipment.getChargeableWeight();
+            BigDecimal billableWeight = chargeableWeight.max(deliveryBranch.getDeliveryCommissionMinWeightKg());
+            BigDecimal deliveryWeightCommission = deliveryBranch.getDeliveryCommissionRatePerKg()
+                    .multiply(billableWeight);
+            if (deliveryWeightCommission.compareTo(BigDecimal.ZERO) > 0) {
+                eventPublisher.publishEvent(new ShipmentEvent.DeliveryWeightCommissionApplicable(
+                        shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
+                        deliveryWeightCommission, Instant.now()));
+            }
         }
 
         shipment.setCommissionCredited(true);
@@ -1681,21 +1757,6 @@ public class ShipmentServiceImpl implements ShipmentService {
      * caller of {@link PricingEngine#calculate} gets it, not just this one) — see {@code
      * PricingEngineImpl.priceByDistanceAndWeight}.
      */
-    /** Delivery Branch is resolved here, never trusted from the client — the destination
-     *  pincode's own {@code branch_pincode_mapping} row (V53's one-branch-per-pincode
-     *  rule), the same lookup Shipment Booking's Destination Pincode field used to
-     *  auto-select a Delivery Branch from. Null when that pincode isn't mapped to any
-     *  branch yet — the shipment still books (see {@code Shipment.applyInvariants}); it
-     *  gets filled in for real once Loading Sheet/THC generation resolves it. */
-    private UUID resolveDeliveryBranchId(UUID destinationPincodeId) {
-        if (destinationPincodeId == null) {
-            return null;
-        }
-        return branchPincodeMappingService.findBranchForPincode(destinationPincodeId)
-                .map(com.courier.modules.company.domain.Branch::getId)
-                .orElse(null);
-    }
-
     private PricingResult priceIt(UUID bookingBranchId, UUID deliveryBranchId,
                                   String pickupPincode, String deliveryPincode,
                                   UUID serviceTypeId, UUID packageTypeId, UUID paymentModeId,

@@ -57,9 +57,30 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "booking_branch_id", columnDefinition = "BINARY(16)", nullable = false, updatable = false)
     private UUID bookingBranchId;
 
+    /** Null only for {@link DeliveryMode#DIRECT_COMPANY_DELIVERY} — that mode has no
+     *  delivery branch at all, the company's own vehicle/driver carries the shipment the
+     *  rest of the way. Required (validated in {@code ManifestServiceImpl.create}) for
+     *  {@link DeliveryMode#BRANCH_DELIVERY}, same as ever. */
     @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "delivery_branch_id", columnDefinition = "BINARY(16)", nullable = false, updatable = false)
+    @Column(name = "delivery_branch_id", columnDefinition = "BINARY(16)", updatable = false)
     private UUID deliveryBranchId;
+
+    /** Who is responsible for delivery — see {@link DeliveryMode}'s own doc. Every
+     *  manifest before this field existed is {@code BRANCH_DELIVERY} (the only mode that
+     *  ever existed), backfilled by {@code V80}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_mode", nullable = false, length = 30, updatable = false)
+    @Builder.Default
+    private DeliveryMode deliveryMode = DeliveryMode.BRANCH_DELIVERY;
+
+    /** The destination city this Load Sheet was created for — drives which BOOKED
+     *  shipments (no delivery branch resolved yet, see {@code Shipment.deliveryBranchId})
+     *  are eligible to attach, by matching their own {@code toCity} rather than a branch
+     *  that doesn't exist for them yet. Null for a manifest created the old way, where
+     *  every shipment it groups already carries a real next-stop branch (e.g. a crossing
+     *  hop) — see {@code ShipmentServiceImpl.attachToManifest}. */
+    @Column(name = "destination_city", length = 120, updatable = false)
+    private String destinationCity;
 
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "vehicle_id", columnDefinition = "BINARY(16)")

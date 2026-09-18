@@ -8,6 +8,331 @@ All notable changes to this project. Format based on
 
 ---
 
+## Removed 2026-09-17 — Shipment Booking no longer resolves (or even looks up) a delivery branch at all, from either end
+
+Direct follow-up to the same day's pricing-preview fix: "no need to check map pincode
+for delivery branch as we develop new feature as when shipment booking we do not set
+branch when create loading sheet that time we set delivery branch or direct company
+vehical." The `branch_pincode_mapping` lookup at booking time was already reduced to a
+pricing-only side effect (never persisted, per 0.60.0) — this removes that lookup
+entirely, on both ends, since Load Sheet is now unconditionally the only place a
+shipment's delivery branch (or Direct Company Delivery's vehicle/driver) gets decided.
+
+**Backend:** `ShipmentServiceImpl.create()`/`update()` no longer call
+`resolveDeliveryBranchId` — deleted entirely, along with the now-unused
+`BranchPincodeMappingService` field/constructor dependency. `priceIt(...)` is now always
+called with a literal `null` delivery branch (confirmed identical pricing output live,
+same as the previous fix's finding — District Level Freight, the authoritative freight
+figure, was never branch-keyed to begin with). `GET /branches/by-pincode/{pincodeId}`
+itself is untouched (still a legitimate lookup for other callers/admin tooling) — only
+Shipment Booking's own use of it is gone.
+
+**Frontend:** `shipment-create.ts`'s `deliveryBranchId` form control removed entirely
+(it had no visible picker since 0.55.0 — purely an internal pricing-preview field). Its
+whole support apparatus went with it: the `destinationPincode` → `branchForPincode` →
+auto-set-`deliveryBranchId` pipeline (now just resolves Areas, nothing else), the
+`deliveryBranchFromPincode` re-entrancy flag, the `deliveryBranchId`-driven postalCode
+sync, AI Voice Booking's `deliveryBranchText` → `deliveryBranchId` mapping, and
+`deliveryBranchId` from both `PRICE_AFFECTING_CONTROLS` and the freight-reschedule
+trigger. `crossingBranchOptions` (Crossing Branch's own picker, an unrelated still-active
+feature) no longer excludes "whichever branch is picked as Delivery Branch" — there
+isn't one — just excludes the caller's own branch, same as `branchOptions` already did.
+`PricingRequest.deliveryBranchId` (frontend model) is now optional, matching the
+already-relaxed backend DTO.
+
+**Verified live**: throwaway `:8082`/`:4300` stack — typed a destination pincode into
+Shipment Booking and confirmed via `read_network_requests` that **no** `by-pincode` call
+fires at all any more (only pincode search, pincode areas, and `/pricing/calculate` —
+the last one succeeding with no `deliveryBranchId` in the payload at all). Full pricing
+breakdown (Freight, Hamali, GST, Net Amount) rendered correctly. `mvn test` 1045/1045
+(2 test files' constructor calls updated for the removed dependency — no behavior
+assertions changed, since `BranchPincodeMappingService`'s only prior use was already
+dead weight after the previous fix). `ng build` clean, `ng test` 156/157 (same
+pre-existing unrelated nav failure).
+
+---
+
+## Fixed 2026-09-17 — Shipment Booking's live pricing preview stuck forever on "Enter a destination pincode…" for a pincode with no branch mapped
+
+Direct bug report: unmapping a pincode from its branch (`branch_pincode_mapping`, V53)
+and then booking to that same pincode left the Booking Summary panel showing the
+empty-state hint permanently — no freight, no GST, no net amount — even though the
+actual `POST /shipments` booking already succeeded fine for exactly this case (0.55.0's
+whole point: an unmapped pincode books, `deliveryBranchId` just stays null).
+
+**Root cause**: two independent gates, both stale since 0.55.0 dropped the Delivery
+Branch picker:
+1. `shipment-create.ts`'s `readyToPrice()` required `deliveryBranchId` truthy before
+   ever calling the pricing preview. `deliveryBranchId` is only set client-side when
+   `branchForPincode` actually resolves a branch (see `destinationPincodeQuery$`'s own
+   subscriber) — for an unmapped pincode it's never set at all, so the preview call was
+   never even attempted.
+2. `PricingRequest.deliveryBranchId` (`POST /pricing/calculate`, the standalone preview
+   endpoint) carried `@NotNull` — a leftover from before 0.55.0. Confirmed live that the
+   *actual* booking path (`ShipmentServiceImpl.priceIt` → `PricingEngine.calculate`
+   directly, no request-level validation in between) already tolerates a null
+   `deliveryBranchId` fine and produces the identical freight/GST/commission figures —
+   the preview endpoint was simply stricter than the real booking path it's supposed to
+   preview.
+
+**Fix**: dropped `@NotNull` from `PricingRequest.deliveryBranchId` (backend, one line).
+`readyToPrice()` now requires `deliveryPincode` instead of `deliveryBranchId` as its
+"a destination has been entered" signal; `deliveryPincode` also added to
+`PRICE_AFFECTING_CONTROLS` (it's now the only thing that reliably changes for an
+unmapped destination — `deliveryBranchId` never does).
+
+**Verified live**: throwaway `:8082`/`:4300` stack, soft-deleted pincode `413520`'s
+`branch_pincode_mapping` row (restored after), typed it into Shipment Booking — Booking
+Summary now shows the full breakdown (Freight ₹300, Hamali ₹10+₹50, GST ₹64.80, Net
+₹425) identical to when the pincode was mapped, confirming no pricing degradation. `mvn
+test` 1045/1045, `ng build` clean.
+
+---
+
+## Added 2026-09-17 — Direct Company Delivery: a Load Sheet can now skip the delivery branch entirely, handing a shipment straight to a company vehicle/driver
+
+Direct request, building on 0.60.0's Load Sheet: courier businesses also run shipments
+where no branch ever receives the parcel at the destination end — a company-owned
+vehicle picks it up and delivers it directly. Booking is unaffected (already
+branch-free since 0.60.0); the new decision — Branch Delivery vs. Direct Company
+Delivery — is made at Load Sheet creation, per `Manifest`, exactly where the business
+brief placed it ("Destination is decided during Shipment Booking, but Delivery
+Responsibility is decided later during Load Sheet/Movement creation").
+
+Two real-money questions had to be resolved with the user before writing any code,
+since Direct Company Delivery has no delivery branch to attribute money to at all:
+1. **Delivery-branch-attributed money** (TO_PAY debit at in-scan, COD debit at
+   delivery, DRS charge, delivery-weight commission — all four literally debit/credit
+   *the delivery branch's own wallet*) — **skipped entirely** for Direct Company
+   Delivery, on explicit instruction. Not deferred anywhere else; that money simply
+   never moves for these shipments.
+2. **Collect-at-booking (PAID) commission**, which normally credits at in-scan (a step
+   Direct Company Delivery shipments never have) — **credited at Deliver instead**,
+   the one moment every Direct Company Delivery shipment does pass through. Still the
+   *booking* branch's own commission, unaffected by there being no delivery branch.
+3. **Dispatch step** — kept as a separate THC-style action (not folded into Load Sheet
+   creation), so vehicle/driver assignment works identically for both delivery modes.
+
+**Backend:**
+- New `DeliveryMode` enum (`BRANCH_DELIVERY` | `DIRECT_COMPANY_DELIVERY`) on
+  `Manifest` (`V80`, `NOT NULL DEFAULT 'BRANCH_DELIVERY'` — every existing manifest is
+  backfilled to the only mode that ever existed). `Manifest.deliveryBranchId` and
+  `delivery_assignment.delivery_branch_id` both made nullable (`V80`) — required for
+  `BRANCH_DELIVERY`, refused if present for `DIRECT_COMPANY_DELIVERY`
+  (`ManifestServiceImpl.create`).
+- `ManifestServiceImpl.dispatch()`: unchanged for `BRANCH_DELIVERY`. For
+  `DIRECT_COMPANY_DELIVERY`, immediately after the existing `transitionToDispatched`
+  call, also calls new `ShipmentService.markPickedUpForDirectDelivery` — moves each
+  shipment one hop further, straight to `IN_SCAN` (no new `ShipmentStatus` value; the
+  `DISPATCHED -> IN_SCAN` edge already existed), since no delivery branch exists to
+  perform a real in-scan. Publishes no wallet/commission event, unlike a real branch
+  in-scan (`scanOneIn`) — see point 1 above.
+- `ShipmentServiceImpl.deliver()`: the existing COD wallet-debit branch and
+  `creditDeliveryCommissionsIfEligible`'s DRS-charge/delivery-weight-commission block
+  both now guard on `shipment.getDeliveryBranchId() != null` — skipped for Direct
+  Company Delivery (point 1). A new block fires the existing
+  `publishInScanCommissionIfEarned` (previously in-scan-only) when
+  `deliveryBranchId == null && paymentMode.isCollectAtBooking()` (point 2). Every other
+  branch-service/pricing/freight/wallet-provisioning code path — completely untouched.
+- `ShipmentMovementController.dispatch()`'s `dispatchedCount` in the response now
+  counts `DISPATCHED` *or* `IN_SCAN` shipments on the manifest (was `DISPATCHED` only)
+  — a Direct Company Delivery dispatch call was otherwise reporting 0, since its
+  shipments land on `IN_SCAN` by the time the response is built.
+- RBAC unchanged — same role-gated `WRITERS`/`READERS` everywhere, no new permission
+  codes.
+
+**Database:** `V80__direct_company_delivery.sql` — one new column
+(`manifests.delivery_mode`), two nullability relaxations
+(`manifests.delivery_branch_id`, `delivery_assignment.delivery_branch_id`).
+
+**Frontend:**
+- `loading-sheet.ts`'s "By Destination City" mode gained a Branch Delivery / Direct
+  Company Delivery toggle once a destination city is picked. Direct Company Delivery
+  hides the delivery-branch autocomplete entirely (a caption explains vehicle/driver
+  come later, at Dispatch) and the shipment checklist becomes selectable immediately
+  (no branch needed to enable it). The legacy "By Delivery Branch (crossing hub)" mode
+  is untouched — always `BRANCH_DELIVERY`.
+- `ManifestCard`/`trip-hire-challan.ts`/`loading-sheet.ts`'s own printed challan all
+  show **"Direct Company Delivery"** in place of a blank/undefined branch label when
+  `deliveryMode === 'DIRECT_COMPANY_DELIVERY'`.
+- `out-for-delivery.ts` (Generate DRS) and `delivery.ts` (Delivery/POD) both gained a
+  "My Branch" / "Direct Company Delivery" toggle — the existing pages were hard-gated
+  on the caller's own `branchId` and filtered by `deliveryBranchId`, which would never
+  match a Direct Company Delivery shipment (`deliveryBranchId` always null) and blocked
+  a branchless `COMPANY_ADMIN` outright. Direct Company Delivery mode queries
+  `unassignedDeliveryBranch: true` instead, with no branch-ownership gate, and defaults
+  on for a caller with no own branch. `in-scan.ts` needed a null-safety fix only (a
+  Direct Company Delivery manifest never actually reaches In Scan's own worklist, since
+  no branch ever receives it).
+- `Manifest`/`CreateManifestRequest` frontend models gained `deliveryMode`;
+  `deliveryBranchId` is now `string | null`.
+
+**Tests:** `ManifestServiceImplTest` — 5 new tests (`deliveryMode` defaulting,
+`BRANCH_DELIVERY` requires a branch, `DIRECT_COMPANY_DELIVERY` refuses one, attaches
+with a null branch, dispatch calls `markPickedUpForDirectDelivery`).
+`ShipmentServiceImplTest` — 1 new test (`markPickedUpForDirectDelivery` moves
+`DISPATCHED` straight to `IN_SCAN`, publishes nothing). `ShipmentMovementServiceImplTest`
+— 2 new tests (`deliver` on a Direct Company Delivery shipment skips every
+delivery-branch-attributed event; credits collect-at-booking commission instead).
+`mvn test`: **1045/1045** (was 1037, +8 new). `ng build` clean, `ng test`: **156/157**
+(the one failure, `navigation.config.spec.ts`'s `reports-dashboard` nav node,
+pre-existing and unrelated).
+
+**Verified live** on a throwaway `:8082`/`:4300` stack against the real dev
+`courier_db` (`V80` applied): booked a PAID shipment to a `413520`/Ausa-served pincode
+with no delivery branch, created a `DIRECT_COMPANY_DELIVERY` Load Sheet for "Ausa",
+dispatched it (shipment jumped straight to `IN_SCAN`, `deliveryBranchId` still null),
+generated DRS, delivered it (flipped `pod_approved` directly in dev DB to exercise the
+gate, since this throwaway stack has no file-storage backend configured for a real POD
+upload — see [[no-file-storage-backend-configured]]) — confirmed via
+`wallet_transactions` exactly two rows for the shipment: the existing booking debit
+(`SBK`) and a **new** commission credit (`COM`, ₹30) to the booking branch, and
+confirmed **no** DRS-charge/weight-commission/COD/TO_PAY rows exist for it at all. Also
+walked Loading Sheet's new toggle in a real browser — selecting "Direct Company
+Delivery" hid the branch field, the shipment checklist stayed selectable, and the
+created manifest's card correctly read "Pune (PUNE) — Pune → Direct Company Delivery".
+
+---
+
+## Fixed 2026-09-17 — Shipment's resolved city (`toCity`/District Level Freight's `destinationCityName`) now the pincode's own name, not its parent City master row
+
+Surfaced live-testing 0.60.0's Load Sheet feature: booking to pincode `413520` (`Ausa`)
+showed destination city "Osmanabad" — geographically wrong-looking (Osmanabad reads as a
+district, not this pincode's actual town). Traced the chain (`Pincode -> Area -> City ->
+District`, `MasterDistrictFreightCoverageDirectory`): `413520`'s own name is "Ausa", its
+`Area` is "Almala", its `City` master row is named "Osmanabad", its `District` is "Latur"
+— so the resolution was working exactly as coded, just returning the `City` row's name
+(a coarser, in this fixture mislabeled, intermediate rung) instead of the pincode's own
+name. Confirmed with the user before changing anything (data-fix vs. code-fix): they
+chose the code fix, aware of the tradeoff — a pincode whose own name is a granular
+post-office/locality tag (e.g. `440019` = "C.R.P.F. Nagpur") will now show that instead of
+the tidier city name ("Nagpur") it showed before.
+
+**What changed:** `MasterDistrictFreightCoverageDirectory.findByPincode`/
+`findByPincodeAndArea` now build `PincodeCoverageLookupPort.CoverageRef.cityName` from
+`pincode.getName()` instead of `city.getName()` — one line each, two call sites. `City` is
+still walked for `District` (unchanged — District is what District Level Freight actually
+prices off; `cityName` was always display-only, feeding `Shipment.fromCity`/`toCity` and
+nothing else). `PincodeCoverageLookupPort.CoverageRef`'s own javadoc updated to say so
+explicitly, so this isn't mistaken for a City-name field again.
+
+**Not touched:** pricing/freight/route/rate calculation itself — District Level Freight
+keys off `districtId`, confirmed unaffected live (a Pune→Nagpur booking still correctly
+refused with "No District Level Freight configuration exists for PUNE -> Nagpur", the
+same district-keyed lookup as before).
+
+**Verified live**: throwaway `:8082` stack against the real dev `courier_db` (no new
+migration — display-only field, no schema change). Booked a shipment to `413520` again —
+`toCity` now `"Ausa"` (was `"Osmanabad"`). `mvn test` 1037/1037.
+
+---
+
+## Added 2026-09-16 — Load Sheet workflow: shipment booking no longer stores a delivery branch at all, Load Sheet assigns it by destination city
+
+Direct request, with a worked example: Branch 1 books a shipment "to Pune" with no
+Delivery Branch selected (only the destination city/district is stored); creating a
+Load Sheet for "Pune" shows every such eligible shipment, the operator assigns the real
+Delivery Branch (e.g. "Pune Branch") plus Vehicle/Driver at that point, and finalizing
+writes that Delivery Branch onto every shipment added — after which the existing chain
+(BOOKED → LOAD SHEET → OUT SCAN → DISPATCH → delivery-branch IN SCAN → OUT FOR DELIVERY →
+DELIVERED) proceeds completely unchanged.
+
+Investigated first: 0.55.0 had already removed the Delivery Branch *picker* from
+Shipment Booking, but it still auto-resolved and **persisted** `deliveryBranchId`
+server-side off the destination pincode's `branch_pincode_mapping` row (V53's
+one-branch-per-pincode rule) immediately at booking, precisely so Route/Rate/District
+Level Freight pricing — all keyed off a real `(bookingBranchId, deliveryBranchId)` pair —
+kept working unchanged. This request asks for that persistence to go away entirely (a
+shipment should carry only its destination city until a real Load Sheet assigns a
+branch), which is a genuine reversal of that specific 0.55.0 decision, not an extension
+of it — confirmed with the user before implementing, choosing to keep the pricing
+resolution **in memory only** (never written to the entity) rather than reintroducing a
+picker or leaving pricing unresolved.
+
+**Backend:**
+- `ShipmentServiceImpl.create()`/`update()`: `resolveDeliveryBranchId(...)` still runs,
+  unchanged, and its result still feeds `priceIt(...)` — the exact same freight/route/
+  rate/GST/discount/round-off calculation as before, untouched. What changed is that the
+  resolved value is no longer written onto the `Shipment` being saved: `deliveryBranchId`
+  is now always persisted `null` at booking (both create and update), and `nextLocationId`
+  follows the same rule for a non-crossing shipment (`crossing ? firstCrossingBranch :
+  null`, was `crossing ? firstCrossingBranch : resolvedDeliveryBranchId`). Crossing
+  routing itself is completely unchanged — `firstCrossingBranch` still gets written to
+  `nextLocationId` exactly as before, which is what keeps multi-hop shipments on the old
+  code path below.
+- `Manifest` gains `destination_city VARCHAR(120) NULL` (`V79`, immutable) — the
+  destination city a Load Sheet was created for. `CreateManifestCommand`/
+  `CreateManifestRequest`/`ManifestResponse` all carry it through; optional, since a
+  manifest created the old branch-first way (a crossing hub's own next leg) doesn't need
+  one.
+- `ShipmentServiceImpl.attachToManifest` gained a second matching path, chosen by
+  `nextLocationId == null && deliveryBranchId == null`: nothing has decided this
+  shipment's next stop yet, so it's matched by its own `toCity` against the manifest's
+  `destinationCity` instead of a branch pair, and — on match — `deliveryBranchId` and
+  `nextLocationId` are both set to the manifest's `deliveryBranchId` for the first time.
+  Every other shipment (a crossing hop still ahead, or any legacy row booked before this
+  change that still carries a real branch) goes through the exact same lane-check as
+  before, byte-for-byte — this is additive, not a rewrite of the existing rule.
+- New `ShipmentCriteria.toCity`/`unassignedDeliveryBranch` (+ `ShipmentSpecifications`,
+  `ShipmentSearchRequest`, `ShipmentMapper.toCriteria`) — Load Sheet's own shipment
+  checklist filter, reusing the existing generic `GET /shipments` search rather than a
+  dedicated endpoint (same pattern every other Manifest eligibility query in this module
+  already follows).
+- New `ShipmentService.findEligibleDestinationCities(branchId)` /
+  `ShipmentRepository.findDistinctToCityByCompanyIdAndCurrentLocationIdAndStatusIn` and
+  `GET /api/v1/manifests/eligible-destinations?bookingBranchId=` — distinct destination
+  cities among a branch's own BOOKED/READY_FOR_MANIFEST, branch-unresolved shipments;
+  Load Sheet's first picker, ahead of the shipment checklist.
+- RBAC unchanged — same role-gated `WRITERS`/`READERS` `@PreAuthorize` constants every
+  Manifest/Shipment Movement endpoint already used; no new permission codes (the
+  `MANIFEST`/`TRACKING_CREATE` catalogue codes already cover this, same as the rest of
+  the module — see `shipment-movement.md` §Permissions).
+- Freight/commission/wallet/booking calculation logic itself: **not touched** anywhere in
+  this change — `priceIt`, `PricingEngine`, `WalletService`, and every commission trigger
+  (in-scan, dispatch, delivery) read `deliveryBranchId` off the shipment exactly as
+  before; the only difference is *when* that field first becomes non-null (Load Sheet
+  instead of booking), and every one of those triggers already fires well after Load
+  Sheet in the shipment's lifecycle.
+
+**Database:** `V79__load_sheet_destination_city.sql` — one nullable column,
+`manifests.destination_city`. No change to `shipments.delivery_branch_id`'s own
+nullability (already nullable since `V69`).
+
+**Frontend:** `loading-sheet.ts` gained a mode toggle — **"By Destination City"** (new,
+default): a Destination City `app-select` (`ManifestService.eligibleDestinations`), then
+an "Assign Delivery Branch" `app-autocomplete` (any active branch — nothing has decided
+one for these shipments yet, unlike the old branch-derived options), then the same
+shipment checklist table, now loaded by `toCity` + `unassignedDeliveryBranch: true`.
+**"By Delivery Branch (crossing hub)"** (legacy): the exact pre-existing form, byte-for-
+byte unchanged, still needed for a crossing hub's own next-leg shipments (which already
+carry a real `nextLocationId`) and any shipment booked before this change. `Manifest`/
+`CreateManifestRequest` frontend models gained `destinationCity`; `ShipmentSearchRequest`
+gained `toCity`/`unassignedDeliveryBranch`.
+
+**Tests:** `ShipmentServiceImplTest` — `bookingSucceeds` updated to assert
+`deliveryBranchId`/`nextLocationId` are now null at booking (was asserting the old
+auto-resolved value). `ManifestServiceImplTest` — `createAttachesEveryShipment`/
+`createRefusesEmptyShipmentList` updated for the new `destinationCity` constructor arg.
+`ShipmentMovementServiceImplTest.attachToManifest` — 5 existing tests updated for the new
+`manifestDestinationCity` parameter (all still exercise the unchanged branch-lane path,
+since the shared test fixture always sets `deliveryBranchId`); 3 new tests added for the
+city-matching path (happy path assigns both fields; wrong city refused; missing manifest
+destination city refused). `mvn test`: **1037/1037** (was 1034; +3 new). `ng build`
+clean, `ng test`: **156/157** (the one failure, `navigation.config.spec.ts`'s
+`reports-dashboard` nav node, pre-existing and unrelated — see 0.55.0's own note).
+
+**Not yet verified live** — no throwaway stack booted this session; `V79` not yet applied
+to the real dev database. Whoever verifies next should: apply `V79`, book a shipment with
+no delivery branch resolvable yet, confirm `deliveryBranchId`/`nextLocationId` come back
+null in the response, create a Load Sheet by destination city, confirm the shipment
+appears in the checklist, finalize it, confirm the shipment's `deliveryBranchId` is now
+the assigned branch, then walk it through THC dispatch → in-scan → out-for-delivery →
+deliver exactly as any other shipment. Also confirm the legacy "By Delivery Branch"
+toggle still creates a crossing-hub manifest correctly (unchanged code path, but worth a
+real click-through).
+
+---
+
 ## Changed 2026-09-16 — POD verification no longer AI auto-decides PASS/FAIL; every delivery-app upload lands PENDING, human always approves/rejects
 
 Started as a bug report ("company login POD Review page im not able to see POD APROVED

@@ -32,6 +32,12 @@ import java.util.UUID;
  * @param deliveredDateTo   inclusive
  * @param paymentModeId    the shipment's payment mode (Paid / To-Pay / Credit)
  * @param search           free text over shipment number and tracking number
+ * @param toCity           Load Sheet's destination-city match — the resolved destination
+ *                         city text stored on the shipment (see {@code Shipment.toCity}),
+ *                         for a shipment that has no delivery branch yet
+ * @param unassignedDeliveryBranch when true, only shipments with no {@code deliveryBranchId}
+ *                         resolved yet — Load Sheet's own eligibility filter, paired with
+ *                         {@code toCity}
  */
 public record ShipmentCriteria(
         Set<ShipmentStatus> statuses,
@@ -45,10 +51,13 @@ public record ShipmentCriteria(
         LocalDate deliveredDateFrom,
         LocalDate deliveredDateTo,
         UUID paymentModeId,
-        String search
+        String search,
+        String toCity,
+        Boolean unassignedDeliveryBranch
 ) {
 
     public static ShipmentCriteria none() {
-        return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null, null);
+        return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null);
     }
 }

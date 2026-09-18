@@ -478,6 +478,12 @@ export interface ShipmentSearchRequest {
   deliveredDateTo?: string;
   paymentModeId?: string;
   search?: string;
+  /** Load Sheet's destination-city match, for a shipment with no delivery branch
+   *  resolved yet. */
+  toCity?: string;
+  /** Load Sheet's own eligibility filter — true for only shipments with no delivery
+   *  branch resolved yet. */
+  unassignedDeliveryBranch?: boolean;
 }
 
 /** Unpaged aggregates for GET /shipments/summary — the Booking/Delivery Report summary row.
@@ -554,7 +560,10 @@ export interface AddShipmentDocumentRequest {
  */
 export interface PricingRequest {
   bookingBranchId: string;
-  deliveryBranchId: string;
+  /** No longer resolved or sent by Shipment Booking — a destination pincode has no
+   *  delivery branch at booking any more (Load Sheet is where one gets assigned).
+   *  Optional purely because the backend DTO still accepts one from other callers. */
+  deliveryBranchId?: string | null;
   pickupPincode: string;
   deliveryPincode: string;
   serviceTypeId: string;
@@ -628,12 +637,26 @@ export interface PricingResponse {
 
 export type ManifestStatus = 'CREATED' | 'DISPATCHED' | 'COMPLETED';
 
+/** Who is responsible for delivery — decided at Load Sheet creation, never at booking.
+ *  `BRANCH_DELIVERY` (the original, only-ever-existing shape) has a real
+ *  `deliveryBranchId`; `DIRECT_COMPANY_DELIVERY` has none — the company's own
+ *  vehicle/driver, assigned at the same dispatch step, carries the shipment the rest of
+ *  the way itself. */
+export type DeliveryMode = 'BRANCH_DELIVERY' | 'DIRECT_COMPANY_DELIVERY';
+
 /** Mirrors backend `ManifestResponse` — GET/POST /manifests. */
 export interface Manifest {
   id: string;
   manifestNumber: string;
   bookingBranchId: string;
-  deliveryBranchId: string;
+  /** Null only for `DIRECT_COMPANY_DELIVERY` — see `deliveryMode`. */
+  deliveryBranchId: string | null;
+  deliveryMode: DeliveryMode;
+  /** The destination city this Load Sheet was created for — set only when it grouped
+   *  shipments with no delivery branch resolved yet, matched by their own `toCity`. Null
+   *  for a manifest created the old way (every shipment on it already had a real next-stop
+   *  branch — a crossing hop, or a legacy row). */
+  destinationCity?: string | null;
   vehicleId?: string | null;
   driverUserId?: string | null;
   status: ManifestStatus;
@@ -656,7 +679,14 @@ export interface Manifest {
 /** Body of POST /manifests — mirrors backend `CreateManifestRequest`. */
 export interface CreateManifestRequest {
   bookingBranchId: string;
-  deliveryBranchId: string;
+  /** Required for BRANCH_DELIVERY, must be omitted/null for DIRECT_COMPANY_DELIVERY. */
+  deliveryBranchId?: string | null;
+  /** Null defaults to BRANCH_DELIVERY, the only mode that existed before this field. */
+  deliveryMode?: DeliveryMode | null;
+  /** The destination city this Load Sheet is being created for — required to attach a
+   *  freshly BOOKED shipment with no delivery branch resolved yet; not needed when every
+   *  shipment being attached already carries a real next-stop branch. */
+  destinationCity?: string | null;
   shipmentIds: string[];
   remarks?: string | null;
 }

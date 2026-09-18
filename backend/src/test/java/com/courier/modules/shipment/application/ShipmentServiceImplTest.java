@@ -107,7 +107,6 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.support.application.TicketCategoryService ticketCategoryService;
     @Mock private com.courier.modules.ewaybill.application.EwayBillService ewayBillService;
     @Mock private FreightCalculationService freightCalculationService;
-    @Mock private com.courier.modules.company.application.BranchPincodeMappingService branchPincodeMappingService;
     @Mock private com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator applicableChargesCalculator;
     @Mock private ServiceTypeService serviceTypeService;
     @Mock private PackageTypeService packageTypeService;
@@ -137,7 +136,7 @@ class ShipmentServiceImplTest {
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
-                ewayBillService, freightCalculationService, branchPincodeMappingService,
+                ewayBillService, freightCalculationService,
                 applicableChargesCalculator, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository,
                 deliveryDispatchOtpRepository, passwordEncoder, companySettingsService, communicationSettingService,
                 smsProvider, objectMapper);
@@ -149,10 +148,6 @@ class ShipmentServiceImplTest {
         when(branchShipmentSequenceRepository.nextValue()).thenReturn(1L);
         when(companyShipmentSequenceRepository.nextValue()).thenReturn(1L);
         when(branchService.getById(any())).thenReturn(Branch.builder().branchCode("PUNE").build());
-        Branch deliveryBranch = Branch.builder().branchCode("MUMBAI").build();
-        deliveryBranch.setId(DELIVERY_BRANCH);
-        when(branchPincodeMappingService.findBranchForPincode(any()))
-                .thenReturn(java.util.Optional.of(deliveryBranch));
         when(itemRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(chargeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(historyRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -207,7 +202,10 @@ class ShipmentServiceImplTest {
         assertThat(created.getPickupPincode()).isEqualTo(PICKUP_PINCODE);
         assertThat(created.getDeliveryPincode()).isEqualTo(DELIVERY_PINCODE);
         assertThat(created.getCurrentLocationId()).isEqualTo(BOOKING_BRANCH);
-        assertThat(created.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
+        // Delivery Branch is resolved (see priceIt/freight calc, unchanged) purely to price
+        // this booking — never persisted any more. Load Sheet assigns it for real later.
+        assertThat(created.getDeliveryBranchId()).isNull();
+        assertThat(created.getNextLocationId()).isNull();
 
         verify(itemRepository).save(any());
         verify(chargeRepository).save(any());
@@ -594,6 +592,23 @@ class ShipmentServiceImplTest {
 
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
         verify(chargeRepository, never()).findByShipmentIdIn(any());
+    }
+
+    @Test
+    @DisplayName("markPickedUpForDirectDelivery moves a DISPATCHED shipment straight to IN_SCAN, "
+            + "publishing no wallet/commission event")
+    void markPickedUpForDirectDeliveryMovesToInScan() {
+        Shipment shipment = existingShipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findAllByCompanyIdAndIdIn(COMPANY, List.of(shipment.getId())))
+                .thenReturn(List.of(shipment));
+
+        List<Shipment> result = service.markPickedUpForDirectDelivery(List.of(shipment.getId()));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ToPayReceivedAtDeliveryBranch.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.InScanCommissionEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.ReceivedAtBranch.class));
     }
 
     @Test

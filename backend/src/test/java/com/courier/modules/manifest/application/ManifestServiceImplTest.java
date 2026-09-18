@@ -3,6 +3,7 @@ package com.courier.modules.manifest.application;
 import com.courier.modules.company.application.UserService;
 import com.courier.modules.company.domain.User;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
+import com.courier.modules.manifest.domain.DeliveryMode;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestRepository;
 import com.courier.modules.manifest.domain.ManifestStatus;
@@ -94,22 +95,69 @@ class ManifestServiceImplTest {
         when(manifestRepository.existsByCompanyIdAndManifestNumber(eq(COMPANY), any())).thenReturn(false);
 
         Manifest created = service.create(new CreateManifestCommand(
-                BOOKING_BRANCH, DELIVERY_BRANCH, List.of(s1, s2), "remarks"));
+                BOOKING_BRANCH, DELIVERY_BRANCH, DeliveryMode.BRANCH_DELIVERY, "Pune", List.of(s1, s2), "remarks"));
 
         assertThat(created.getStatus()).isEqualTo(ManifestStatus.CREATED);
         assertThat(created.getBookingBranchId()).isEqualTo(BOOKING_BRANCH);
-        verify(shipmentService).attachToManifest(s1, created.getId(), BOOKING_BRANCH, DELIVERY_BRANCH);
-        verify(shipmentService).attachToManifest(s2, created.getId(), BOOKING_BRANCH, DELIVERY_BRANCH);
+        assertThat(created.getDestinationCity()).isEqualTo("Pune");
+        verify(shipmentService).attachToManifest(s1, created.getId(), BOOKING_BRANCH, DELIVERY_BRANCH, "Pune");
+        verify(shipmentService).attachToManifest(s2, created.getId(), BOOKING_BRANCH, DELIVERY_BRANCH, "Pune");
     }
 
     @Test
     @DisplayName("create refuses an empty shipment list")
     void createRefusesEmptyShipmentList() {
         assertThatThrownBy(() -> service.create(
-                new CreateManifestCommand(BOOKING_BRANCH, DELIVERY_BRANCH, List.of(), null)))
+                new CreateManifestCommand(BOOKING_BRANCH, DELIVERY_BRANCH, DeliveryMode.BRANCH_DELIVERY, "Pune",
+                        List.of(), null)))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("at least one shipment");
         verify(manifestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create defaults to BRANCH_DELIVERY when deliveryMode is omitted")
+    void createDefaultsToBranchDelivery() {
+        UUID s1 = UUID.randomUUID();
+        when(manifestRepository.existsByCompanyIdAndManifestNumber(eq(COMPANY), any())).thenReturn(false);
+
+        Manifest created = service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, null, "Pune", List.of(s1), null));
+
+        assertThat(created.getDeliveryMode()).isEqualTo(DeliveryMode.BRANCH_DELIVERY);
+    }
+
+    @Test
+    @DisplayName("create refuses BRANCH_DELIVERY with no delivery branch")
+    void createRefusesBranchDeliveryWithoutBranch() {
+        assertThatThrownBy(() -> service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, null, DeliveryMode.BRANCH_DELIVERY, "Pune", List.of(UUID.randomUUID()), null)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("delivery branch");
+    }
+
+    @Test
+    @DisplayName("create refuses DIRECT_COMPANY_DELIVERY with a delivery branch")
+    void createRefusesDirectDeliveryWithBranch() {
+        assertThatThrownBy(() -> service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, DeliveryMode.DIRECT_COMPANY_DELIVERY, "Pune",
+                List.of(UUID.randomUUID()), null)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Direct Company Delivery");
+    }
+
+    @Test
+    @DisplayName("create allows DIRECT_COMPANY_DELIVERY with no delivery branch, attaching with a null one")
+    void createAllowsDirectDeliveryWithNoBranch() {
+        UUID s1 = UUID.randomUUID();
+        when(manifestRepository.existsByCompanyIdAndManifestNumber(eq(COMPANY), any())).thenReturn(false);
+
+        Manifest created = service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, null, DeliveryMode.DIRECT_COMPANY_DELIVERY, "Pune", List.of(s1), null));
+
+        assertThat(created.getDeliveryMode()).isEqualTo(DeliveryMode.DIRECT_COMPANY_DELIVERY);
+        assertThat(created.getDeliveryBranchId()).isNull();
+        verify(shipmentService).attachToManifest(s1, created.getId(), BOOKING_BRANCH, null, "Pune");
     }
 
     @Test
@@ -168,6 +216,29 @@ class ManifestServiceImplTest {
         assertThat(dispatched.getDriverUserId()).isEqualTo(driverId);
         verify(shipmentService).transitionToDispatched(
                 List.of(ready.getId()), manifest.getId(), vehicleId, manifest.getBookingBranchId());
+        verify(shipmentService, never()).markPickedUpForDirectDelivery(any());
+    }
+
+    @Test
+    @DisplayName("dispatch on a DIRECT_COMPANY_DELIVERY manifest also marks its shipments picked up directly")
+    void dispatchOnDirectDeliveryMarksPickedUp() {
+        Manifest manifest = existingManifest(ManifestStatus.CREATED, DeliveryMode.DIRECT_COMPANY_DELIVERY, null);
+        UUID vehicleId = UUID.randomUUID();
+        UUID driverId = UUID.randomUUID();
+        Shipment ready = mock(Shipment.class);
+        when(ready.getId()).thenReturn(UUID.randomUUID());
+        when(ready.getStatus()).thenReturn(ShipmentStatus.MANIFEST_CREATED);
+
+        when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
+                .thenReturn(Optional.of(manifest));
+        when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of(ready));
+        Vehicle active = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.AVAILABLE).build();
+        when(vehicleService.getById(vehicleId)).thenReturn(active);
+        when(userService.getById(driverId)).thenReturn(mock(User.class));
+
+        service.dispatch(manifest.getId(), vehicleId, driverId, null, null, null, null, null);
+
+        verify(shipmentService).markPickedUpForDirectDelivery(List.of(ready.getId()));
     }
 
     @Test
@@ -219,10 +290,15 @@ class ManifestServiceImplTest {
     }
 
     private Manifest existingManifest(ManifestStatus status) {
+        return existingManifest(status, DeliveryMode.BRANCH_DELIVERY, DELIVERY_BRANCH);
+    }
+
+    private Manifest existingManifest(ManifestStatus status, DeliveryMode deliveryMode, UUID deliveryBranchId) {
         Manifest manifest = Manifest.builder()
                 .manifestNumber("MFT-250101-1234")
                 .bookingBranchId(BOOKING_BRANCH)
-                .deliveryBranchId(DELIVERY_BRANCH)
+                .deliveryBranchId(deliveryBranchId)
+                .deliveryMode(deliveryMode)
                 .status(status)
                 .build();
         manifest.setCompanyId(COMPANY);

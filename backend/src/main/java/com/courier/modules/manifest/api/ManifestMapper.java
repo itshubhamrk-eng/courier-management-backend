@@ -10,6 +10,7 @@ import com.courier.modules.manifest.api.dto.VehicleResponse;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
 import com.courier.modules.manifest.application.command.CreateVehicleCommand;
 import com.courier.modules.manifest.application.command.UpdateVehicleCommand;
+import com.courier.modules.manifest.domain.DeliveryMode;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
 import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
@@ -21,7 +22,9 @@ import org.springframework.stereotype.Component;
 public class ManifestMapper {
 
     public CreateManifestCommand toCommand(CreateManifestRequest r) {
-        return new CreateManifestCommand(r.bookingBranchId(), r.deliveryBranchId(), r.shipmentIds(), r.remarks());
+        return new CreateManifestCommand(r.bookingBranchId(), r.deliveryBranchId(),
+                r.deliveryMode() == null ? DeliveryMode.BRANCH_DELIVERY : r.deliveryMode(),
+                r.destinationCity(), r.shipmentIds(), r.remarks());
     }
 
     public ManifestCriteria toCriteria(ManifestSearchRequest r) {
@@ -31,7 +34,8 @@ public class ManifestMapper {
 
     public ManifestResponse toResponse(Manifest m, ManifestShipmentAggregate aggregate) {
         return new ManifestResponse(m.getId(), m.getManifestNumber(), m.getBookingBranchId(),
-                m.getDeliveryBranchId(), m.getVehicleId(), m.getDriverUserId(), m.getStatus(),
+                m.getDeliveryBranchId(), m.getDeliveryMode(), m.getDestinationCity(),
+                m.getVehicleId(), m.getDriverUserId(), m.getStatus(),
                 m.getDispatchedAt(), m.getDepartureTime(), m.getCompletedAt(), m.getRemarks(),
                 m.getFuelCost(), m.getDriverAdvance(), m.getTollAmount(), m.getOtherAmount(),
                 m.getCreatedAt(), m.getUpdatedAt(), m.getVersion(),

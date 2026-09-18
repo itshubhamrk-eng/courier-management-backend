@@ -45,6 +45,15 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);
 
+    /** Load Sheet's destination-city picker: every distinct {@code toCity} among a
+     *  branch's own shipments still awaiting a delivery-branch assignment. */
+    @Query("select distinct s.toCity from Shipment s where s.companyId = :companyId "
+            + "and s.currentLocationId = :branchId and s.status in :statuses "
+            + "and s.deliveryBranchId is null and s.toCity is not null order by s.toCity")
+    List<String> findDistinctToCityByCompanyIdAndCurrentLocationIdAndStatusIn(
+            @Param("companyId") UUID companyId, @Param("branchId") UUID branchId,
+            @Param("statuses") Collection<ShipmentStatus> statuses);
+
     /** One booking branch's still-open shipments in a given set of statuses — the wallet
      *  dashboard's pending-commission figures walk this to find what hasn't crossed the
      *  dispatch/delivery trigger yet. */

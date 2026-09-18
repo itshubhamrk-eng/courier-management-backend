@@ -155,7 +155,8 @@ public class PodVerificationController {
         ShipmentCriteria criteria = new ShipmentCriteria(Set.of(ShipmentStatus.DELIVERED),
                 base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
                 base.manifestId(), base.bookingDateFrom(), base.bookingDateTo(),
-                base.deliveredDateFrom(), base.deliveredDateTo(), base.paymentModeId(), base.search());
+                base.deliveredDateFrom(), base.deliveredDateTo(), base.paymentModeId(), base.search(),
+                base.toCity(), base.unassignedDeliveryBranch());
 
         Page<Shipment> page = shipmentService.search(criteria, sanitise(pageable));
         List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();

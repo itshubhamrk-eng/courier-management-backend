@@ -414,6 +414,43 @@ console errors during the session.
   `inScan` POST, which only carries the checked trackingNumbers. Same
   checklist-before-bulk-action shape THC's own checklist (0.23.1/0.23.2) and Out For
   Delivery's (v0.17.7) already use. Full detail in `CHANGELOG.md` 0.23.3.
+- 2026-09-16 (v0.60.0): **Load Sheet workflow** — a shipment no longer gets
+  `deliveryBranchId` persisted at booking at all (0.55.0 already dropped the *picker*
+  but kept auto-resolving and persisting it server-side off `branch_pincode_mapping`;
+  that persistence is now gone too — the resolved value is used only to price the
+  booking, same freight/route/rate logic, never written to the entity). `Manifest`
+  gains `destinationCity` (`V79`, nullable) — Loading Sheet's new primary flow picks a
+  destination city first (`GET /manifests/eligible-destinations`, distinct `toCity`
+  among a branch's own unassigned BOOKED/READY_FOR_MANIFEST shipments), then an
+  operator-picked Delivery Branch, then a shipment checklist filtered by `toCity` +
+  `deliveryBranchId IS NULL` (new `ShipmentCriteria.toCity`/`unassignedDeliveryBranch`).
+  `ShipmentServiceImpl.attachToManifest` gained a second matching path, gated on
+  `nextLocationId == null`: a shipment with a real next stop already (a crossing hop,
+  or a legacy pre-0.60.0 row) still goes through the old lane-check unchanged; one with
+  neither `nextLocationId` nor `deliveryBranchId` set (the normal case now) is matched
+  by `toCity` instead and gets both fields assigned for the first time, right there.
+  Crossing/multi-hop routing itself untouched by design — see CHANGELOG 2026-09-16 for
+  the full write-up.
+- 2026-09-17 (v0.61.0): **Direct Company Delivery** — a Load Sheet can now skip the
+  delivery branch entirely. New `Manifest.deliveryMode` (`BRANCH_DELIVERY` |
+  `DIRECT_COMPANY_DELIVERY`, `V80`); `Manifest.deliveryBranchId`/
+  `delivery_assignment.delivery_branch_id` both now nullable. Two money decisions made
+  with the user first (no delivery branch means nothing to attribute delivery-side money
+  to): every delivery-branch-attributed event (TO_PAY debit, COD debit, DRS charge,
+  delivery-weight commission) is **skipped entirely** for this mode, not deferred;
+  collect-at-booking (PAID) commission, normally credited at in-scan, credits at
+  **Deliver** instead (the one moment these shipments do pass through) — still the
+  booking branch's own commission. `ManifestServiceImpl.dispatch()` calls new
+  `ShipmentService.markPickedUpForDirectDelivery` for this mode right after the existing
+  `transitionToDispatched`, moving shipments straight to `IN_SCAN` (the
+  `DISPATCHED -> IN_SCAN` edge already existed) with no wallet/commission event — no real
+  branch ever in-scans them. Dispatch (vehicle/driver assignment) stays the same
+  THC-style separate step for both modes. Frontend: `loading-sheet.ts`'s city-mode flow
+  gained a Branch Delivery/Direct Company Delivery toggle; `out-for-delivery.ts`/
+  `delivery.ts` both gained a "My Branch"/"Direct Company Delivery" toggle since both
+  were hard-gated on the caller's own branch (a branchless `COMPANY_ADMIN` couldn't have
+  used either page at all otherwise). See CHANGELOG 2026-09-17 for the full write-up and
+  the live wallet-ledger verification.
 
 ## Not exercised
 

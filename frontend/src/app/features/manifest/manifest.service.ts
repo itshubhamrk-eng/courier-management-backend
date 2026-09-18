@@ -23,6 +23,12 @@ export class ManifestService {
     return this.api.get<ManifestSummaryStats>(`${API.manifests}/summary`, filters as Record<string, unknown>);
   }
   shipments(id: string) { return this.api.get<Shipment[]>(`${API.manifests}/${id}/shipments`); }
+  /** Load Sheet's own "which city am I creating this for" picker — every distinct
+   *  destination city among this branch's own BOOKED/READY_FOR_MANIFEST shipments with no
+   *  delivery branch resolved yet. */
+  eligibleDestinations(bookingBranchId: string) {
+    return this.api.get<string[]>(`${API.manifests}/eligible-destinations`, { bookingBranchId });
+  }
   removeShipment(id: string, shipmentId: string) {
     return this.api.delete<void>(`${API.manifests}/${id}/shipments/${shipmentId}`);
   }

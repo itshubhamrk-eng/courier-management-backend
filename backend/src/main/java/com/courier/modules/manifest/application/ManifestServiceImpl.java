@@ -11,6 +11,7 @@ import com.courier.modules.company.application.UserService;
 import com.courier.modules.company.domain.User;
 import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
+import com.courier.modules.manifest.domain.DeliveryMode;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
 import com.courier.modules.manifest.domain.ManifestNumberGenerator;
@@ -89,8 +90,15 @@ public class ManifestServiceImpl implements ManifestService {
     public Manifest create(CreateManifestCommand command) {
         UUID companyId = requireCompany();
 
-        if (command.bookingBranchId() == null || command.deliveryBranchId() == null) {
+        DeliveryMode deliveryMode = command.deliveryMode() == null ? DeliveryMode.BRANCH_DELIVERY : command.deliveryMode();
+        if (command.bookingBranchId() == null) {
+            throw new BusinessRuleException("A manifest needs a booking branch.");
+        }
+        if (deliveryMode == DeliveryMode.BRANCH_DELIVERY && command.deliveryBranchId() == null) {
             throw new BusinessRuleException("A manifest needs both a booking branch and a delivery branch.");
+        }
+        if (deliveryMode == DeliveryMode.DIRECT_COMPANY_DELIVERY && command.deliveryBranchId() != null) {
+            throw new BusinessRuleException("Direct Company Delivery does not use a delivery branch.");
         }
         if (command.shipmentIds() == null || command.shipmentIds().isEmpty()) {
             throw new BusinessRuleException("A manifest needs at least one shipment.");
@@ -100,13 +108,15 @@ public class ManifestServiceImpl implements ManifestService {
                 .manifestNumber(nextManifestNumber(companyId))
                 .bookingBranchId(command.bookingBranchId())
                 .deliveryBranchId(command.deliveryBranchId())
+                .deliveryMode(deliveryMode)
+                .destinationCity(command.destinationCity())
                 .remarks(command.remarks())
                 .build();
         Manifest saved = manifestRepository.save(manifest);
 
         for (UUID shipmentId : command.shipmentIds()) {
             shipmentService.attachToManifest(shipmentId, saved.getId(),
-                    command.bookingBranchId(), command.deliveryBranchId());
+                    command.bookingBranchId(), command.deliveryBranchId(), command.destinationCity());
         }
 
         log.info("Manifest {} ({}) created in company {} with {} shipment(s) by {}",
@@ -192,6 +202,16 @@ public class ManifestServiceImpl implements ManifestService {
         List<UUID> dispatchedShipmentIds = readyShipments.stream().map(Shipment::getId).toList();
         shipmentService.transitionToDispatched(
                 dispatchedShipmentIds, saved.getId(), vehicleId, saved.getBookingBranchId());
+
+        // Direct Company Delivery has no delivery branch to receive the shipment — the
+        // company vehicle/driver just assigned above takes it the rest of the way itself,
+        // so it goes straight from DISPATCHED to IN_SCAN (ready for Out For Delivery) here
+        // rather than waiting for a real branch's own in-scan that will never happen. No
+        // wallet/commission event fires from this — see ShipmentServiceImpl.deliver for
+        // where a Direct Company Delivery shipment's own commission is credited instead.
+        if (saved.getDeliveryMode() == DeliveryMode.DIRECT_COMPANY_DELIVERY) {
+            shipmentService.markPickedUpForDirectDelivery(dispatchedShipmentIds);
+        }
 
         // Part-B: vehicle details are now available, so every shipment on this manifest
         // that already has a Part-A-generated E-Way Bill gets its transport details

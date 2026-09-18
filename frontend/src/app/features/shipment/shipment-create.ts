@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -572,7 +572,7 @@ export class ShipmentCreate implements OnInit {
    *  of their own (e.g. COMPANY_ADMIN), handled as a hard stop, not a silent fallback. */
   private readonly myBranchId = this.auth.user()?.branchId ?? null;
 
-  /** Delivery Branch picker options — excludes the caller's own branch, see `ngOnInit`. */
+  /** Crossing Branch picker options — excludes the caller's own branch, see `ngOnInit`. */
   protected readonly branchOptions = signal<SelectOption[]>([]);
   /** The caller's own branch label, read from the unfiltered list before it's excluded
    *  above — `myBranchLabel()` needs it even though `branchOptions()` no longer carries it. */
@@ -691,9 +691,6 @@ export class ShipmentCreate implements OnInit {
   protected readonly destinationAreaLoading = signal(false);
   protected readonly destinationAreaError = signal<string | null>(null);
   private readonly destinationPincodeQuery$ = new Subject<string>();
-  /** True for exactly the one `deliveryBranchId` change the pincode->branch auto-select
-   *  below causes — read and cleared by the `deliveryBranchId` listener above it. */
-  private deliveryBranchFromPincode = false;
 
   /** The booking branch's own GST% (V25) — Other Charges is a manual, booking-time amount
    *  the Pricing Engine never sees, so GST on it is computed here (mirroring
@@ -749,11 +746,6 @@ export class ShipmentCreate implements OnInit {
   protected readonly form: FormGroup = this.fb.group({
     bookingBranchId: [this.myBranchId, Validators.required],
     manualShipmentNumber: ['', Validators.maxLength(30)],
-    // No longer picked by the operator (see the From City/To City display fields) — still
-    // auto-resolved from the typed Destination Pincode below, driving the live pricing
-    // preview exactly as a picked Delivery Branch used to. Not required: an unmapped
-    // pincode no longer blocks booking, same as the backend's own relaxed invariant.
-    deliveryBranchId: [null as string | null],
     pickupPincode: ['', Validators.maxLength(10)],
     deliveryPincode: ['', Validators.maxLength(10)],
     destinationPincode: ['', Validators.maxLength(10)],
@@ -805,16 +797,10 @@ export class ShipmentCreate implements OnInit {
     this.crossingBranchArray.removeAt(index);
   }
 
-  private readonly deliveryBranchIdValue = toSignal(this.form.get('deliveryBranchId')!.valueChanges, {
-    initialValue: this.form.get('deliveryBranchId')!.value
-  });
-
   /** Crossing Branch picker options — excludes the caller's own branch (already out of
-   *  `branchOptions`) and whichever branch is currently picked as Delivery Branch, so a
-   *  crossing hop can't equal either endpoint of the shipment. */
-  protected readonly crossingBranchOptions = computed(() =>
-    this.branchOptions().filter((opt) => opt.value !== this.deliveryBranchIdValue())
-  );
+   *  `branchOptions`). There is no Delivery Branch to also exclude any more — that's
+   *  decided later, at Load Sheet, not at booking. */
+  protected readonly crossingBranchOptions = computed(() => this.branchOptions());
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
@@ -853,15 +839,12 @@ export class ShipmentCreate implements OnInit {
     this.c('invoiceValue').valueChanges.subscribe(() => {
       if (this.ewayBillMandatory()) this.ewayBillOpen.set(true);
     });
-    // Delivery Branch excludes the caller's own booking branch — a shipment cannot be
-    // booked and delivered from the same branch (no route covers that pair).
+    // Crossing Branch's own picker (branchOptions) excludes the caller's own booking
+    // branch — a shipment cannot be booked and crossed through the same branch.
     this.masters.options('branches').subscribe((o) => {
       this.myBranchName.set(o.find((opt) => opt.value === this.myBranchId)?.label ?? null);
       this.branchOptions.set(o.filter((opt) => opt.value !== this.myBranchId));
     });
-    // Pincodes default from the branches' own postal codes, so picking a delivery branch
-    // is enough to price — typing an exact pincode is only needed to check a more precise
-    // serviceability than "somewhere in this branch's area".
     this.masters.branchDirectory().subscribe((list) => {
       const mine = list.find((b) => b.id === this.myBranchId);
       if (mine?.postalCode && !this.form.get('pickupPincode')?.value) {
@@ -870,33 +853,13 @@ export class ShipmentCreate implements OnInit {
       if (mine?.gstPercentage != null) this.myBranchGstPercentage.set(mine.gstPercentage);
       if (mine?.city) this.myBranchCity.set(mine.city);
     });
-    this.form.get('deliveryBranchId')?.valueChanges.subscribe((id) => {
-      if (!id) return;
-      // Skip the postalCode-> pincode sync when this Delivery Branch change is itself the
-      // *result* of resolving a typed Destination Pincode below — that pincode is already
-      // the more precise one the operator typed; overwriting it with the branch's own
-      // postal code would silently discard it.
-      if (this.deliveryBranchFromPincode) { this.deliveryBranchFromPincode = false; return; }
-      this.masters.branchDirectory().subscribe((list) => {
-        const branch = list.find((b) => b.id === id);
-        if (branch?.postalCode) {
-          this.form.get('deliveryPincode')?.setValue(branch.postalCode);
-          // Feeds the same pincode into the new Destination Pincode -> Area flow below, so
-          // picking a Delivery Branch still auto-resolves freight the way it always did —
-          // the operator can still override it there before Delivery Branch, per the brief.
-          this.form.get('destinationPincode')?.setValue(branch.postalCode);
-        }
-      });
-    });
     // Destination Pincode -> its own Areas (master_pincode_areas, 0.32.2) -> picking one
     // resolves District Level Freight's District/ODA off that exact link rather than the
     // pincode's legacy single area — see MasterDistrictFreightCoverageDirectory
     // .findByPincodeAndArea. A 6-digit pincode is looked up (paged master search, exact
     // code match) for its id, then its area links (the primary one auto-selects as a
-    // convenience default, still overridable) and, in parallel, the branch
-    // `branch_pincode_mapping` maps it to — auto-selecting Delivery Branch is the reverse
-    // of the branchDirectory subscription above (branch -> pincode), so typing a pincode
-    // works as the entry point too, not just picking a branch first.
+    // convenience default, still overridable). No delivery branch is resolved from this
+    // any more — that's decided later, at Load Sheet, not at booking.
     this.c('destinationPincode').valueChanges.subscribe((v) =>
       this.destinationPincodeQuery$.next((v ?? '').trim()));
     this.destinationPincodeQuery$.pipe(
@@ -912,18 +875,14 @@ export class ShipmentCreate implements OnInit {
           switchMap((page) => {
             const match = page.content.find((r) => r.code === code);
             if (!match) return of(null);
-            return forkJoin({
-              areas: this.masters.pincodeAreas(match.id),
-              branch: this.masters.branchForPincode(match.id).pipe(catchError(() => of(undefined)))
-            });
+            return this.masters.pincodeAreas(match.id);
           }),
           catchError(() => of(null))
         );
       }),
       takeUntilDestroyed(this.destroyRef)
-    ).subscribe((result) => {
+    ).subscribe((rows) => {
       this.destinationAreaLoading.set(false);
-      const rows = result?.areas;
       if (!rows || !rows.length) {
         this.destinationAreaOptions.set([]);
         this.destinationAreaError.set(
@@ -937,16 +896,11 @@ export class ShipmentCreate implements OnInit {
         if (primary) this.c('destinationAreaId').setValue(primary.areaId);
       }
       // The Pricing Engine reads `deliveryPincode`, not `destinationPincode` — synced here
-      // (not only from the Area-select listener below) because a pincode can resolve a
-      // Delivery Branch with no `master_pincode_areas` row at all (data gap, not a reason
-      // to leave pricing permanently blank).
+      // (not only from the Area-select listener below) because a pincode can resolve with
+      // no `master_pincode_areas` row at all (data gap, not a reason to leave pricing
+      // permanently blank).
       const code = this.c('destinationPincode').value?.trim();
       if (code && /^\d{6}$/.test(code)) this.form.get('deliveryPincode')?.setValue(code);
-      const branch = result?.branch;
-      if (branch && branch.id !== this.c('deliveryBranchId').value) {
-        this.deliveryBranchFromPincode = true;
-        this.c('deliveryBranchId').setValue(branch.id);
-      }
     });
     // Picking an Area is the trigger the brief asks for ("after area select it should get
     // rate") — also syncs deliveryPincode so Pricing Engine and District Level Freight
@@ -1007,21 +961,20 @@ export class ShipmentCreate implements OnInit {
     });
 
     // Only the fields that actually feed PricingCommand reschedule a price call — typing
-    // in sender/receiver name, address, contact or pincode (or an item's own name, see
-    // onItems) does not move the price, so it must not restart the debounce or spam
-    // /pricing/calculate on every keystroke there.
-    const PRICE_AFFECTING_CONTROLS = ['deliveryBranchId', 'serviceTypeId', 'packageTypeId',
-      'paymentModeId', 'declaredValue', 'bookingDate'];
+    // in sender/receiver name, address or contact (or an item's own name, see onItems)
+    // does not move the price, so it must not restart the debounce or spam
+    // /pricing/calculate on every keystroke there. There is no delivery branch to price
+    // against any more — `deliveryPincode` is what actually signals a destination change.
+    const PRICE_AFFECTING_CONTROLS = ['deliveryPincode', 'serviceTypeId',
+      'packageTypeId', 'paymentModeId', 'declaredValue', 'bookingDate'];
     merge(...PRICE_AFFECTING_CONTROLS.map((name) => this.form.get(name)!.valueChanges))
       .subscribe(() => { this.resetFreightFactor(); this.schedulePricing(); });
 
     // District Level Freight's own calculation is keyed on From Station + destination
     // pincode + chargeable weight — a different, smaller set than PricingCommand's own
     // (it doesn't care about service type/package type/payment mode/declared value/
-    // booking date). Delivery Branch also reschedules it since picking one auto-fills
-    // deliveryPincode (see below); weight reschedules via {@link onWeight}.
-    merge(this.c('deliveryPincode').valueChanges, this.c('deliveryBranchId').valueChanges)
-      .subscribe(() => this.scheduleFreightCalc());
+    // booking date); weight reschedules via {@link onWeight}.
+    this.c('deliveryPincode').valueChanges.subscribe(() => this.scheduleFreightCalc());
 
     this.freightTrigger$.pipe(
       debounceTime(500),
@@ -1418,8 +1371,9 @@ export class ShipmentCreate implements OnInit {
     setIfPresent('declaredValue', fields.declaredValue, 'declared value');
     setIfPresent('remarks', fields.remarks, 'remarks');
 
-    const branchId = fields.deliveryBranchText && this.matchOption(this.branchOptions(), fields.deliveryBranchText);
-    setIfPresent('deliveryBranchId', branchId || null, 'delivery branch');
+    // No Delivery Branch to set from voice any more — Load Sheet is where one gets
+    // assigned, not booking (fields.deliveryBranchText, if a voice command names one, is
+    // simply not applied to anything here).
 
     const serviceTypeId = fields.serviceTypeText && this.matchOption(this.serviceTypeOptions(), fields.serviceTypeText);
     setIfPresent('serviceTypeId', serviceTypeId || null, 'service type');
@@ -1470,8 +1424,10 @@ export class ShipmentCreate implements OnInit {
     const v = this.form.getRawValue();
     // Only the fields the Pricing Engine actually reads — sender/receiver identity plays
     // no part in a price, so the preview shouldn't wait on it (booking itself still does,
-    // via the Book button's own `form.invalid` check).
-    return !!(v.bookingBranchId && v.deliveryBranchId && v.serviceTypeId && v.packageTypeId
+    // via the Book button's own `form.invalid` check). There is no Delivery Branch any
+    // more — Load Sheet is where one gets assigned, not booking — so `deliveryPincode` is
+    // what signals "a destination has been entered".
+    return !!(v.bookingBranchId && v.deliveryPincode && v.serviceTypeId && v.packageTypeId
       && v.paymentModeId && this.weight().chargeable > 0);
   }
 
@@ -1525,7 +1481,7 @@ export class ShipmentCreate implements OnInit {
     const v = this.form.getRawValue();
 
     return this.service.preview({
-      bookingBranchId: v.bookingBranchId, deliveryBranchId: v.deliveryBranchId,
+      bookingBranchId: v.bookingBranchId,
       pickupPincode: v.pickupPincode, deliveryPincode: v.deliveryPincode,
       serviceTypeId: v.serviceTypeId, packageTypeId: v.packageTypeId, paymentModeId: v.paymentModeId,
       // Fed as chargeableWeight, not actualWeight — matches the booking's own priceIt()

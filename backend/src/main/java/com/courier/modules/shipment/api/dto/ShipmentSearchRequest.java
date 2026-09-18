@@ -31,9 +31,17 @@ public record ShipmentSearchRequest(
         UUID paymentModeId,
         @Size(max = 100)
         @Schema(description = "Free text over shipment number and tracking number")
-        String search
+        String search,
+        @Size(max = 120)
+        @Schema(description = "Load Sheet's destination-city match, for a shipment with no "
+                + "delivery branch resolved yet")
+        String toCity,
+        @Schema(description = "Load Sheet's own eligibility filter — true for only shipments "
+                + "with no delivery branch resolved yet")
+        Boolean unassignedDeliveryBranch
 ) {
     public static ShipmentSearchRequest empty() {
-        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null, null);
+        return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null);
     }
 }

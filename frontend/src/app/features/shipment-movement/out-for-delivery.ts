@@ -55,13 +55,19 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
           <div><h1 class="text-h1">DRS</h1>
           <p class="text-caption">Assign received shipments to a delivery user.</p></div>
         </div>
-        <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
+        <div class="head-actions">
+          @if (myBranchId) {
+            <app-button [variant]="directMode() ? 'stroked' : 'primary'" (pressed)="setDirectMode(false)">My Branch</app-button>
+            <app-button [variant]="directMode() ? 'primary' : 'stroked'" (pressed)="setDirectMode(true)">Direct Company Delivery</app-button>
+          }
+          <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
+        </div>
       </header>
 
-      @if (!myBranchId) {
+      @if (!myBranchId && !directMode()) {
         <app-card><p class="empty">No branch assigned — ask an admin.</p></app-card>
       } @else {
-        <app-card title="Shipments" subtitle="IN_SCAN shipments waiting to go on DRS at your branch.">
+        <app-card title="Shipments" [subtitle]="directMode() ? 'Direct Company Delivery shipments waiting to go on DRS — no delivery branch involved.' : 'IN_SCAN shipments waiting to go on DRS at your branch.'">
           @if (loading()) {
             <app-loader [minHeight]="120" caption="Loading…" />
           } @else if (!shipments().length) {
@@ -89,7 +95,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
                       <td>{{ s.shipmentNumber }}</td>
                       <td>{{ s.receiverName }}</td>
                       <td>{{ s.receiverContact }}</td>
-                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ branchNames().get(s.deliveryBranchId ?? '') || '—' }}</td>
+                      <td>{{ branchNames().get(s.bookingBranchId) || '—' }} → {{ s.deliveryBranchId ? (branchNames().get(s.deliveryBranchId) || '—') : 'Direct Company Delivery' }}</td>
                       <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
                       <td class="tbl--right">{{ s.netAmount ?? 0 }}</td>
                     </tr>
@@ -158,6 +164,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
     </div>
   `,
   styles: [`
+    .head-actions { display:flex; align-items:center; gap:8px; }
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
@@ -189,6 +196,11 @@ export class OutForDelivery implements OnInit, OnDestroy {
   private readonly companyProfile = inject(CompanyProfileService);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  /** Direct Company Delivery shipments have no delivery branch at all, so they never show
+   *  up under "my branch" — this switches the worklist to every such IN_SCAN shipment
+   *  company-wide instead. Defaults on for a caller with no own branch (e.g. a pure
+   *  COMPANY_ADMIN), since "my branch" would otherwise have nothing to show them. */
+  readonly directMode = signal(!this.auth.user()?.branchId);
   /** Company letterhead for the DRS header — same `CompanyProfileService` the LR and THC
    *  prints use, so every printed document shares one masthead. */
   readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
@@ -268,13 +280,19 @@ export class OutForDelivery implements OnInit, OnDestroy {
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
 
+  protected setDirectMode(directMode: boolean): void {
+    this.directMode.set(directMode);
+    this.load();
+  }
+
   load(): void {
-    if (!this.myBranchId) return;
+    if (!this.myBranchId && !this.directMode()) return;
     this.loading.set(true);
     this.selectedIds.set(new Set());
-    this.shipmentService.list({
-      page: 0, size: 100, deliveryBranchId: this.myBranchId, status: 'IN_SCAN'
-    }).subscribe({
+    this.shipmentService.list(this.directMode()
+      ? { page: 0, size: 100, unassignedDeliveryBranch: true, status: 'IN_SCAN' }
+      : { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status: 'IN_SCAN' }
+    ).subscribe({
       next: (p) => { this.shipments.set(p.content); this.loading.set(false); },
       error: () => { this.shipments.set([]); this.loading.set(false); }
     });
