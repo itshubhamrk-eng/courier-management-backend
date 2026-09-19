@@ -183,11 +183,15 @@ export class UserView implements OnInit {
   readonly hubNames = computed(() => new Map(this.hubs().map((h) => [h.id, h.label])));
   private id = '';
 
+  // No `permission` for resetPassword: the catalogue has no password-reset action for
+  // USER (only CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/ASSIGN/ACTIVATE/DEACTIVATE) — ADMIN
+  // (the role check alone) is the whole gate, same as several roles-only leaves in
+  // navigation.config.ts.
   readonly can = computed(() => ({
     update: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_UPDATE'] }),
     delete: this.perms.canAccess({ roles: ADMIN, permissions: ['USER_DELETE'] }),
-    assignRole: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_ASSIGN_ROLE'] }),
-    resetPassword: this.perms.canAccess({ roles: ADMIN, permissions: ['USER_RESET_PASSWORD'] })
+    assignRole: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_ASSIGN'] }),
+    resetPassword: this.perms.canAccess({ roles: ADMIN })
   }));
   readonly hasMenu = computed(() => { const c = this.can(); return c.update || c.delete || c.assignRole || c.resetPassword; });
   readonly disabled = computed(() => { const s = this.user()?.status; return s === 'DISABLED' || s === 'PENDING'; });

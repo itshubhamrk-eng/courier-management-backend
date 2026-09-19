@@ -226,7 +226,7 @@ export class WalletRecharge implements OnInit {
   }
 
   ngOnInit(): void {
-    if (!this.perms.canAccess({ roles: RECHARGERS, permissions: ['BRANCH_WALLET_RECHARGE'] })) {
+    if (!this.perms.canAccess({ roles: RECHARGERS, permissions: ['WALLET_RECHARGE'] })) {
       this.router.navigate(['/unauthorized']); return;
     }
     this.breadcrumb.set([{ label: 'Finance' }, { label: 'Branch Wallet', route: '/finance/branch-wallet' },

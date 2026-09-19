@@ -77,7 +77,6 @@ export class RoleList implements OnInit {
   readonly activeFilters = computed(() =>
     Object.values(this.filters()).filter((v) => v != null && (!Array.isArray(v) || v.length)).length);
 
-  // Permission gates: role fallback until the backend authorises on codes (canAccess is OR).
   readonly can = computed(() => ({
     create: this.perms.canAccess({ roles: WRITERS, permissions: ['ROLE_CREATE'] }),
     update: this.perms.canAccess({ roles: WRITERS, permissions: ['ROLE_UPDATE'] }),

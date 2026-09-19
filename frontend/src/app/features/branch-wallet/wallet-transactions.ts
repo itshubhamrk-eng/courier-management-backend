@@ -109,7 +109,7 @@ export class WalletTransactions implements OnInit {
   }
 
   ngOnInit(): void {
-    if (!this.perms.canAccess({ roles: VIEWERS, permissions: ['BRANCH_WALLET_VIEW', 'BRANCH_WALLET_TRANSACTION_VIEW'] })) {
+    if (!this.perms.canAccess({ roles: VIEWERS, permissions: ['WALLET_READ', 'WALLET_SEARCH'] })) {
       this.router.navigate(['/unauthorized']); return;
     }
     this.breadcrumb.set([{ label: 'Finance' }, { label: 'Branch Wallet', route: '/finance/branch-wallet' },

@@ -169,11 +169,15 @@ export class WalletDashboard implements OnInit {
   );
 
   readonly cur = computed(() => this.summary()?.currency ?? 'INR');
+  // No `permission` for credit/debit: the catalogue's WALLET module offers only READ/
+  // UPDATE/SEARCH/EXPORT/RECHARGE — a manual admin credit/debit is a business action
+  // with no corresponding right to grant or revoke, so ADMINS (the role check alone)
+  // is the whole gate, same as several roles-only leaves in navigation.config.ts.
   readonly can = computed(() => ({
-    recharge: this.perms.canAccess({ roles: RECHARGERS, permissions: ['BRANCH_WALLET_RECHARGE'] }),
+    recharge: this.perms.canAccess({ roles: RECHARGERS, permissions: ['WALLET_RECHARGE'] }),
     requestTopup: this.perms.canAccess({ roles: REQUESTERS, permissions: [] }),
-    credit: this.perms.canAccess({ roles: ADMINS, permissions: ['BRANCH_WALLET_CREDIT'] }),
-    debit: this.perms.canAccess({ roles: ADMINS, permissions: ['BRANCH_WALLET_DEBIT'] })
+    credit: this.perms.canAccess({ roles: ADMINS }),
+    debit: this.perms.canAccess({ roles: ADMINS })
   }));
 
   constructor() {
@@ -192,7 +196,7 @@ export class WalletDashboard implements OnInit {
   }
 
   ngOnInit(): void {
-    if (!this.perms.canAccess({ roles: VIEWERS, permissions: ['BRANCH_WALLET_VIEW'] })) {
+    if (!this.perms.canAccess({ roles: VIEWERS, permissions: ['WALLET_READ'] })) {
       this.router.navigate(['/unauthorized']); return;
     }
     this.breadcrumb.set([{ label: 'Finance' }, { label: 'Branch Wallet' }]);

@@ -120,7 +120,7 @@ export class ShipmentDocuments implements OnInit {
   readonly uploading = signal(false);
   readonly formOpen = signal(false);
   readonly documents = signal<ShipmentDocument[]>([]);
-  readonly canUpload = computed(() => this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_DOCUMENT_UPLOAD'] }));
+  readonly canUpload = computed(() => this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_UPLOAD'] }));
   id = '';
 
   protected readonly form: FormGroup = this.fb.group({

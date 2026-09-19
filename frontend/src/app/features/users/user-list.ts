@@ -99,13 +99,14 @@ export class UserList implements OnInit {
   private filters = signal<UserSearchRequest>({});
   readonly activeFilters = computed(() => Object.values(this.filters()).filter((v) => v != null && (!Array.isArray(v) || v.length)).length);
 
-  // Permission gates: role fallback until the backend authorises on codes (canAccess is OR).
+  // No `permission` for resetPassword: the catalogue has no password-reset action for
+  // USER — ADMIN (the role check alone) is the whole gate.
   readonly can = computed(() => ({
     create: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_CREATE'] }),
     update: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_UPDATE'] }),
     delete: this.perms.canAccess({ roles: ADMIN, permissions: ['USER_DELETE'] }),
-    assignRole: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_ASSIGN_ROLE'] }),
-    resetPassword: this.perms.canAccess({ roles: ADMIN, permissions: ['USER_RESET_PASSWORD'] })
+    assignRole: this.perms.canAccess({ roles: BRANCH_STAFFING, permissions: ['USER_ASSIGN'] }),
+    resetPassword: this.perms.canAccess({ roles: ADMIN })
   }));
   readonly tablePerms = computed<UserPerms>(() => ({
     update: this.can().update, delete: this.can().delete,
