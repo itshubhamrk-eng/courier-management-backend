@@ -1,6 +1,7 @@
 package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
+import com.courier.modules.auth.application.port.UserCompanyRolesPort;
 import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
@@ -19,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -50,6 +53,7 @@ public class TokenIssuer {
     private final AuditService auditService;
     private final CompanyDirectoryPort companyDirectory;
     private final UserPermissionsPort userPermissionsPort;
+    private final UserCompanyRolesPort userCompanyRolesPort;
 
     /** A freshly minted pair plus the metadata the caller needs to respond. */
     public record TokenPair(String accessToken,
@@ -136,8 +140,12 @@ public class TokenIssuer {
                             String userAgent) {
 
         CompanyDirectoryPort.CompanyRef company = companyDirectory.findById(user.getCompanyId()).orElse(null);
+        // Union: the legacy JWT-authority Role enum (user_roles) plus any role granted
+        // through Role/Permission Management (user_company_roles) — see UserCompanyRolesPort.
+        Set<String> roles = new HashSet<>(user.roleNames());
+        roles.addAll(userCompanyRolesPort.resolveRoleCodes(user.getId()));
         String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(), user.getCompanyId(), user.getEmail(), user.roleNames(),
+                user.getId(), user.getCompanyId(), user.getEmail(), roles,
                 userPermissionsPort.resolveEffectivePermissions(user.getId()),
                 user.getBranchId(), user.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null);

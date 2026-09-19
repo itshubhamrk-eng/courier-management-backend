@@ -132,7 +132,7 @@ export class AuthService {
     const claims = decodeJwt(res.accessToken);
     this._user.set({
       userId: res.userId, companyId: res.companyId, email: res.email,
-      displayName: res.displayName, roles: res.roles,
+      displayName: res.displayName, roles: claims?.roles ?? res.roles,
       permissions: res.permissions ?? claims?.permissions ?? [],
       branchId: res.branchId ?? claims?.bid ?? null, hubId: res.hubId ?? claims?.hid ?? null,
       companyName: res.companyName ?? claims?.cnm ?? null,

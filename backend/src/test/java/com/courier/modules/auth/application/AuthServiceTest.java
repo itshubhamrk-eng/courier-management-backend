@@ -77,7 +77,6 @@ class AuthServiceTest {
     @Mock private SessionService sessionService;
     @Mock private TokenIssuer tokenIssuer;
     @Mock private LoginAttemptService loginAttemptService;
-    @Mock private EmailVerificationService emailVerificationService;
     @Mock private TokenRevocationService tokenRevocationService;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private AuditService auditService;
@@ -95,7 +94,7 @@ class AuthServiceTest {
         properties = new AuthProperties();
         authService = new AuthService(
                 authenticationManager, userRepository, refreshTokenRepository, companyDirectory, branchDirectory,
-                userPermissionsPort, sessionService, tokenIssuer, loginAttemptService, emailVerificationService,
+                userPermissionsPort, sessionService, tokenIssuer, loginAttemptService,
                 tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder);
         when(userPermissionsPort.resolveEffectivePermissions(any())).thenReturn(Set.of());
 
@@ -317,20 +316,14 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("an unverified email is rejected only after the password verifies")
-    void unverifiedEmailRejectedAfterPasswordCheck() {
+    @DisplayName("an unverified email is allowed to log in — verification is optional")
+    void unverifiedEmailStillLogsIn() {
         user.setEmailVerified(false);
         stubSuccessfulAuthentication();
 
-        assertThatThrownBy(() -> authService.login(command("correct-password", false)))
-                .isInstanceOf(ForbiddenException.class)
-                .extracting(e -> ((ForbiddenException) e).getErrorCode())
-                .isEqualTo(ErrorCode.EMAIL_NOT_VERIFIED);
+        authService.login(command("correct-password", false));
 
-        // A fresh link is sent, so a user who lost the first email can self-recover.
-        verify(emailVerificationService).reissueIfDue(user);
-        // No session is opened for an unverified account.
-        verify(tokenIssuer, never()).issueForNewSession(any(), any(), any(), any(), any());
+        verify(tokenIssuer).issueForNewSession(any(), any(), any(), any(), any());
     }
 
     @Test

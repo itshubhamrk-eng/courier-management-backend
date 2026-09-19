@@ -74,7 +74,6 @@ public class AuthService {
     private final SessionService sessionService;
     private final TokenIssuer tokenIssuer;
     private final LoginAttemptService loginAttemptService;
-    private final EmailVerificationService emailVerificationService;
     private final TokenRevocationService tokenRevocationService;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthProperties properties;
@@ -179,16 +178,6 @@ public class AuthService {
         }
 
         User user = ((AuthUserDetails) authentication.getPrincipal()).user();
-
-        // Checked only after the password verifies, so an unverified account is not
-        // disclosed to someone who does not already hold the credentials.
-        if (!user.isEmailVerified()) {
-            emailVerificationService.reissueIfDue(user);
-            loginAttemptService.recordFailure(companyId, user.getId(), email,
-                    LoginFailureReason.EMAIL_NOT_VERIFIED, command.ipAddress(), command.userAgent());
-            throw new ForbiddenException(ErrorCode.EMAIL_NOT_VERIFIED,
-                    "Verify your email address to sign in. We have sent you a new link.");
-        }
 
         Duration refreshTtl = command.rememberMe()
                 ? properties.getRememberMeDuration()
