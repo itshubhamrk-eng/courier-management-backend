@@ -4,6 +4,7 @@ import { API } from '@core/config/api-endpoints';
 import {
   Permission, RolePermissionResult, PermissionAssignmentRequest
 } from '@core/models/permission.model';
+import { MenuItemNode } from '@core/models/menu-permission.model';
 import { Page, PageQuery } from '@core/models/page.model';
 
 /**
@@ -24,6 +25,10 @@ export class PermissionService {
   get(id: string) { return this.api.get<Permission>(`${API.permissions}/${id}`); }
   /** Every ACTIVE permission in display order, unpaged — the source for a matrix screen. */
   grantable() { return this.api.get<Permission[]>(`${API.permissions}/grantable`); }
+  /** The plain menu hierarchy — combined client-side with {@link grantable} and a role's
+   *  own granted codes (via {@link buildRoleMenuTree}) to drive Assign Permissions' tree
+   *  view, the same checkbox tree User Permissions uses for a single user. */
+  menuTree() { return this.api.get<MenuItemNode[]>(`${API.menuItems}/tree`); }
 
   // ---- role grants ----------------------------------------------------------
   /** The catalogue rows a role currently holds. */

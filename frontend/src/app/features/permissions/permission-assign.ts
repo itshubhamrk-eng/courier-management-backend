@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -9,12 +10,19 @@ import { CompanyRole } from '@core/models/role.model';
 import {
   Permission, PermissionGroup, RolePermissionResult, groupByModule, prettyToken
 } from '@core/models/permission.model';
+import {
+  ActionState, CRUD_ACTIONS, CrudAction, MenuItemNode, MenuPermissionNode,
+  buildRoleMenuTree, flattenLeaves, hasAction
+} from '@core/models/menu-permission.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
-import { PermissionTree } from './components/permission-tree';
+import { MenuPermissionTree } from '@features/user-permissions/components/menu-permission-tree';
+import {
+  PermissionToggle as MenuToggle, PermissionToggleMany as MenuToggleMany
+} from '@features/user-permissions/components/menu-permission-node';
 import { PermissionMatrix } from './components/permission-matrix';
 import { PermissionToggle } from './components/module-permission-card';
 import { PermissionService } from './permission.service';
@@ -34,7 +42,7 @@ type ViewMode = 'tree' | 'matrix';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, MatIconModule, UiCard, UiLoader, UiButton, UiSelect, UiSearch,
-    PermissionTree, PermissionMatrix
+    MenuPermissionTree, PermissionMatrix
   ],
   template: `
     <div class="page">
@@ -65,7 +73,7 @@ type ViewMode = 'tree' | 'matrix';
         <app-card [title]="'Permissions for ' + currentRole()!.roleName"
                   [subtitle]="selected().size + ' of ' + grantable().length + ' granted' + (dirty() ? ' · unsaved changes' : '')">
           <div class="asg__toolbar">
-            <app-search placeholder="Filter permissions…" (changed)="onSearch($event)" />
+            @if (view() === 'matrix') { <app-search placeholder="Filter permissions…" (changed)="onSearch($event)" /> }
             <div class="asg__spacer"></div>
             <div class="asg__seg" role="tablist" aria-label="View">
               <button type="button" [class.on]="view()==='tree'" (click)="view.set('tree')" role="tab" [attr.aria-selected]="view()==='tree'">
@@ -75,10 +83,11 @@ type ViewMode = 'tree' | 'matrix';
             </div>
           </div>
 
-          @if (loadingGrants()) {
+          @if (loadingGrants() || loadingMenuTree()) {
             <app-loader [minHeight]="200" caption="Loading role permissions…" />
           } @else if (view() === 'tree') {
-            <app-permission-tree [groups]="filteredGroups()" [selectable]="true" [selected]="selected()" (toggle)="onToggle($event)" />
+            <app-menu-permission-tree [nodes]="permissionNodes()" [pending]="pending()"
+                                       (toggle)="onMenuToggle($event)" (toggleMany)="onMenuToggleMany($event)" />
           } @else {
             <div class="asg__matrix-bar">
               <span class="asg__count">{{ selected().size }} selected</span>
@@ -145,14 +154,22 @@ export class PermissionAssign implements OnInit {
 
   readonly loadingCatalogue = signal(true);
   readonly loadingGrants = signal(false);
+  readonly loadingMenuTree = signal(true);
   readonly saving = signal(false);
   readonly view = signal<ViewMode>('tree');
   private readonly term = signal('');
+  private readonly menuItems = signal<MenuItemNode[]>([]);
 
   readonly roleOptions = computed<SelectOption[]>(() =>
     this.roles().map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` })));
 
-  readonly currentRole = computed(() => this.roles().find((r) => r.id === this.roleCtrl.value) ?? null);
+  // A FormControl's `.value` is a plain property, not a signal — reading it inside a
+  // `computed()` would never mark that computed dirty when the control changes, so it
+  // would memoize whatever it saw on its first read and never update again (same gotcha
+  // documented in UserPermissions.currentUser). Bridging through `toSignal` on
+  // `valueChanges` is what makes `currentRole` actually reactive to picking a role.
+  private readonly roleId = toSignal(this.roleCtrl.valueChanges, { initialValue: this.roleCtrl.value });
+  readonly currentRole = computed(() => this.roles().find((r) => r.id === this.roleId()) ?? null);
 
   private readonly allGroups = computed<PermissionGroup[]>(() => groupByModule(this.grantable()));
 
@@ -179,6 +196,40 @@ export class PermissionAssign implements OnInit {
     return `${added} to add, ${removed} to remove`;
   });
 
+  // ── Tree view — reuses User Permissions' own checkbox tree over a role instead of a
+  // user (see buildRoleMenuTree). `selected`/`original` (flat codes) stay the single
+  // source of truth; the tree is just another read of the same state.
+  private readonly moduleActions = computed<Map<string, CrudAction[]>>(() => {
+    const map = new Map<string, CrudAction[]>();
+    for (const p of this.grantable()) {
+      if (!(CRUD_ACTIONS as readonly string[]).includes(p.action)) continue;
+      const list = map.get(p.module) ?? [];
+      list.push(p.action as CrudAction);
+      map.set(p.module, list);
+    }
+    return map;
+  });
+
+  /** `roleDefault` here is the role's *saved* grants, so the tree's built-in "differs
+   *  from default" dot reads as "differs from what was last saved". */
+  readonly permissionNodes = computed<MenuPermissionNode[]>(() =>
+    buildRoleMenuTree(this.menuItems(), this.moduleActions(), this.original()));
+
+  /** Live checkbox state, derived straight from `selected` — no separate signal to
+   *  keep in sync. */
+  readonly pending = computed<Map<string, ActionState>>(() => {
+    const map = new Map<string, ActionState>();
+    for (const [module, actions] of this.moduleActions()) {
+      const state: ActionState = { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+      for (const a of actions) state[a] = this.selected().has(`${module}_${a}`);
+      map.set(module, state);
+    }
+    return map;
+  });
+
+  private readonly leafById = computed(() =>
+    new Map(this.permissionNodes().flatMap((n) => flattenLeaves(n)).map((l) => [l.id, l])));
+
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Access Control' }, { label: 'Permissions', route: '/permissions' }, { label: 'Assign' }]);
 
@@ -193,6 +244,10 @@ export class PermissionAssign implements OnInit {
     this.service.grantable().subscribe({
       next: (ps) => { this.grantable.set(ps); this.loadingCatalogue.set(false); },
       error: () => this.loadingCatalogue.set(false)
+    });
+    this.service.menuTree().subscribe({
+      next: (items) => { this.menuItems.set(items); this.loadingMenuTree.set(false); },
+      error: () => this.loadingMenuTree.set(false)
     });
 
     this.roleCtrl.valueChanges.subscribe((id) => { if (id) this.loadGrants(id); else this.clearSelection(); });
@@ -214,6 +269,27 @@ export class PermissionAssign implements OnInit {
   private clearSelection(): void { this.selected.set(new Set()); this.original.set(new Set()); }
 
   onSearch(t: string): void { this.term.set(t ?? ''); }
+
+  /** Menu tree's per-leaf toggle — resolve leaf → module, then reuse the same flat-code
+   *  path as the matrix view. */
+  onMenuToggle({ menuItemId, action, checked }: MenuToggle): void {
+    const leaf = this.leafById().get(menuItemId);
+    if (!leaf?.module) return;
+    this.onToggle({ codes: [`${leaf.module}_${action}`], checked });
+  }
+
+  /** Menu tree's cascading "select all under this node" — every available action of
+   *  every leaf underneath. */
+  onMenuToggleMany({ menuItemIds, checked }: MenuToggleMany): void {
+    const byId = this.leafById();
+    const codes: string[] = [];
+    for (const id of menuItemIds) {
+      const leaf = byId.get(id);
+      if (!leaf?.module) continue;
+      for (const a of CRUD_ACTIONS) if (hasAction(leaf.roleDefault, a)) codes.push(`${leaf.module}_${a}`);
+    }
+    this.onToggle({ codes, checked });
+  }
 
   onToggle({ codes, checked }: PermissionToggle): void {
     const next = new Set(this.selected());

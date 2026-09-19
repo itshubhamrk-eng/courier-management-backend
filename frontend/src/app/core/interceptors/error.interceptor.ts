@@ -37,7 +37,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           }),
           catchError(() => {
             auth.clearSession();
-            router.navigate(['/session-expired']);
+            router.navigate(['/login']);
             return EMPTY;
           })
         );
@@ -48,14 +48,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       // An impersonation session carries no refresh token by design (it hard-expires,
       // see TokenService.beginImpersonation) — so its 401 never reaches the refresh
       // branch above. Falling back to the stashed real session beats dumping a
-      // SUPER_ADMIN on the generic /session-expired page mid-navigation.
+      // SUPER_ADMIN on the login page mid-navigation.
       if (err.status === 401 && !isAuthCall && tokens.isImpersonating) {
         auth.exitImpersonation();
         notify.error('Your impersonation session expired. Returned to your own session.');
         router.navigate(['/dashboard']);
       } else if (err.status === 401 && !isAuthCall) {
         auth.clearSession();
-        router.navigate(['/session-expired']);
+        router.navigate(['/login']);
       } else if (silent) {
         // Expected-to-sometimes-fail lookup (e.g. resolving a user id that may belong
         // to another tenant/platform tier) — the caller's own catchError handles it.

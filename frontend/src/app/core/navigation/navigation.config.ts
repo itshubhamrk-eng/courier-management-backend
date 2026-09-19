@@ -3,13 +3,14 @@ import { AppRole } from '../models/role.model';
 
 /**
  * The application navigation, authored as a nested tree. Every leaf declares the `permission`
- * code that governs its visibility once the backend authorises on permissions; today the JWT
- * still carries only roles, so each leaf also declares the `roles` bridge (declarative data,
- * resolved by PermissionService — not a role check in code). When permission codes start
- * arriving after login, they take over automatically and the `roles` lists can be removed.
- *
- * Permission codes follow the backend `MODULE_ACTION` convention (view-style gates here);
- * align them with the 174-row catalogue when the authorise-on-permissions step ships.
+ * code that governs its visibility (real `MODULE_ACTION` codes from the backend catalogue,
+ * required to actually exist there — see PermissionService.canAccess) plus a `roles` bridge.
+ * Both are checked: `roles` narrows to who could ever have the right, `permission` is the
+ * per-user grant (role default, overridable per user via Menu + Permission Management) that
+ * decides whether this user still does. A leaf whose module has no permission-catalogue rows
+ * yet (Freight Factor, Vehicles, POD, Settlement, the "(Soon)" Pricing section, ...) omits
+ * `permission` and is gated on `roles` alone — do not invent a code for one of these, it would
+ * never be grantable and would permanently hide the leaf once AND-checked.
  *
  * Aspirational sections (Masters, Pricing, Operations, Finance, Reports) point at routes whose
  * feature modules are not built yet — the pages render an empty state, never mock data.
@@ -84,18 +85,18 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'administration', title: 'Administration', icon: 'admin_panel_settings', order: 2,
     children: [
-      { id: 'users', title: 'Users', icon: 'group', route: '/users', permission: 'USER_VIEW', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
-      { id: 'departments', title: 'Departments', icon: 'apartment', route: '/departments', permission: 'DEPARTMENT_VIEW', roles: ADMINS },
-      { id: 'roles', title: 'Roles', icon: 'badge', route: '/roles', permission: 'ROLE_VIEW', roles: ADMINS },
-      { id: 'permissions', title: 'Permissions', icon: 'key', route: '/permissions', permission: 'PERMISSION_VIEW', roles: ADMINS },
+      { id: 'users', title: 'Users', icon: 'group', route: '/users', permission: 'USER_READ', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
+      { id: 'departments', title: 'Departments', icon: 'apartment', route: '/departments', permission: 'DEPARTMENT_READ', roles: ADMINS },
+      { id: 'roles', title: 'Roles', icon: 'badge', route: '/roles', permission: 'ROLE_READ', roles: ADMINS },
+      { id: 'permissions', title: 'Permissions', icon: 'key', route: '/permissions', permission: 'PERMISSION_READ', roles: ADMINS },
       { id: 'permission-assign', title: 'Assign Permissions', icon: 'rule', route: '/permissions/assign', permission: 'PERMISSION_ASSIGN', roles: [AppRole.COMPANY_ADMIN] },
       // Menu + Permission Management: one user's menu tree on top of their role's
       // defaults. MENU_ASSIGN, never PERMISSION_ASSIGN — see permission-assign's own
       // leaf above and DefaultRoleCatalog's BRANCH_MANAGER definition.
       { id: 'user-permissions', title: 'User Permissions', icon: 'checklist', route: '/permissions/users', permission: 'MENU_ASSIGN', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
-      { id: 'branches', title: 'Branches', icon: 'store', route: '/branches', permission: 'BRANCH_VIEW', roles: COMPANY_ONLY },
+      { id: 'branches', title: 'Branches', icon: 'store', route: '/branches', permission: 'BRANCH_READ', roles: COMPANY_ONLY },
       // { id: 'hubs', title: 'Hubs', icon: 'hub', route: '/hubs', permission: 'HUB_VIEW', roles: MANAGERS }, // hub module not built yet
-      { id: 'company-settings', title: 'Company Settings', icon: 'tune', route: '/settings', permission: 'SETTINGS_VIEW', roles: COMPANY_ONLY }
+      { id: 'company-settings', title: 'Company Settings', icon: 'tune', route: '/settings', permission: 'SETTINGS_READ', roles: COMPANY_ONLY }
     ]
   },
 
@@ -177,9 +178,11 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'pricing', title: 'Pricing (Soon)', icon: 'sell', order: 4,
     children: [
-      { id: 'rate-cards', title: 'Rate Cards (Soon)', icon: 'payments', route: '/pricing/rate-cards', permission: 'RATE_VIEW', roles: COMPANY_ONLY },
-      { id: 'zone-pricing', title: 'Zone Pricing (Soon)', icon: 'grid_on', route: '/pricing/zones', permission: 'RATE_VIEW', roles: COMPANY_ONLY },
-      { id: 'surcharges', title: 'Surcharges (Soon)', icon: 'local_gas_station', route: '/pricing/surcharges', permission: 'RATE_VIEW', roles: COMPANY_ONLY }
+      // No `permission` key: aspirational, unbuilt feature — no RATE module exists in
+      // the catalogue (Rate Master's own rights are RATE_MASTER_*, a different module).
+      { id: 'rate-cards', title: 'Rate Cards (Soon)', icon: 'payments', route: '/pricing/rate-cards', roles: COMPANY_ONLY },
+      { id: 'zone-pricing', title: 'Zone Pricing (Soon)', icon: 'grid_on', route: '/pricing/zones', roles: COMPANY_ONLY },
+      { id: 'surcharges', title: 'Surcharges (Soon)', icon: 'local_gas_station', route: '/pricing/surcharges', roles: COMPANY_ONLY }
     ]
   },
 
@@ -194,8 +197,8 @@ export const NAVIGATION: NavNode[] = [
       // branch (OPS_DELIVERY_DESK) — see MEMORY/modules/shipment-movement.md.
       // 'sorting' has no module behind it yet and stays aspirational.
       { id: 'booking', title: 'Shipment Booking', icon: 'add_box', route: '/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
-      { id: 'shipment-search', title: 'Shipment Search', icon: 'search', route: '/shipments', permission: 'SHIPMENT_VIEW', roles: OPS_SHIPMENT_READERS },
-      { id: 'track', title: 'Track Shipment', icon: 'my_location', route: '/track', permission: 'SHIPMENT_VIEW', roles: OPS_SHIPMENT_READERS },
+      { id: 'shipment-search', title: 'Shipment Search', icon: 'search', route: '/shipments', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
+      { id: 'track', title: 'Track Shipment', icon: 'my_location', route: '/track', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
       { id: 'manifest', title: 'Loading Sheet', icon: 'qr_code_scanner', route: '/movement/loading-sheet', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },
       { id: 'dispatch', title: 'Trip Hire Challan (THC)', icon: 'outbound', route: '/movement/trip-hire-challan', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
       { id: 'receive', title: 'In Scan', icon: 'move_to_inbox', route: '/movement/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK },
@@ -205,11 +208,14 @@ export const NAVIGATION: NavNode[] = [
       // POD Auto Verification's Manual Review screen — reviewer tier only, narrower than
       // OPS_DELIVERY_DESK (which also admits the delivery operator who captures a POD but
       // must not decide their own submission). See MEMORY/modules/pod-verification.md.
-      { id: 'pod-review', title: 'POD Review', icon: 'fact_check', route: '/movement/pod-review', permission: 'POD_REVIEW', roles: COMPANY_AND_BRANCH },
+      // No `permission` key on either POD leaf below: no POD module exists in the
+      // catalogue (POD Review/Upload predate Menu + Permission Management and were never
+      // added to it).
+      { id: 'pod-review', title: 'POD Review', icon: 'fact_check', route: '/movement/pod-review', roles: COMPANY_AND_BRANCH },
       // Company-level upload, no branch login required — always auto-approved. Narrower
       // than pod-review's own COMPANY_AND_BRANCH: mirrors uploadByCompany's
       // hasRole('COMPANY_ADMIN') gate exactly.
-      { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', permission: 'POD_UPLOAD', roles: COMPANY_ONLY }
+      { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', roles: COMPANY_ONLY }
     ]
   },
 
@@ -218,13 +224,15 @@ export const NAVIGATION: NavNode[] = [
     children: [
       // Recharging its own wallet is a branch responsibility; ACCOUNTS is the branch's
       // money desk and holds WALLET_RECHARGE alongside BRANCH_MANAGER.
-      { id: 'branch-wallet', title: 'Branch Wallet', icon: 'account_balance_wallet', route: '/finance/branch-wallet', permission: 'BRANCH_WALLET_VIEW', roles: ACCOUNTS_DESK },
-      { id: 'hub-wallet', title: 'Hub Wallet (Soon)', icon: 'savings', route: '/finance/hub-wallet', permission: 'WALLET_VIEW', roles: FINANCE },
-      { id: 'wallet-transactions', title: 'Wallet Transactions', icon: 'receipt', route: '/finance/branch-wallet/transactions', permission: 'WALLET_VIEW', roles: ACCOUNTS_DESK },
-      { id: 'topup-requests', title: 'Top-up Requests', icon: 'fact_check', route: '/finance/branch-wallet/topup-requests', permission: 'WALLET_VIEW', roles: ACCOUNTS_DESK },
-      { id: 'settlement', title: 'Settlement (Soon)', icon: 'paid', route: '/finance/settlement', permission: 'SETTLEMENT_VIEW', roles: FINANCE },
-      { id: 'payment', title: 'Payment (Soon)', icon: 'credit_card', route: '/finance/payment', permission: 'PAYMENT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
-      { id: 'invoice', title: 'Invoice (Soon)', icon: 'description', route: '/finance/invoice', permission: 'INVOICE_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] }
+      { id: 'branch-wallet', title: 'Branch Wallet', icon: 'account_balance_wallet', route: '/finance/branch-wallet', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
+      { id: 'hub-wallet', title: 'Hub Wallet (Soon)', icon: 'savings', route: '/finance/hub-wallet', permission: 'WALLET_READ', roles: FINANCE },
+      { id: 'wallet-transactions', title: 'Wallet Transactions', icon: 'receipt', route: '/finance/branch-wallet/transactions', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
+      { id: 'topup-requests', title: 'Top-up Requests', icon: 'fact_check', route: '/finance/branch-wallet/topup-requests', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
+      // No `permission` key: aspirational, unbuilt feature — no SETTLEMENT module
+      // exists in the catalogue.
+      { id: 'settlement', title: 'Settlement (Soon)', icon: 'paid', route: '/finance/settlement', roles: FINANCE },
+      { id: 'payment', title: 'Payment (Soon)', icon: 'credit_card', route: '/finance/payment', permission: 'PAYMENT_READ', roles: [...FINANCE, AppRole.ACCOUNTS] },
+      { id: 'invoice', title: 'Invoice (Soon)', icon: 'description', route: '/finance/invoice', permission: 'INVOICE_READ', roles: [...FINANCE, AppRole.ACCOUNTS] }
     ]
   },
 
@@ -263,21 +271,21 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'reports', title: 'Reports', icon: 'insights', order: 7,
     children: [
-      { id: 'booking-report', title: 'Booking Report', icon: 'summarize', route: '/reports/bookings', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'delivery-report', title: 'Delivery Report', icon: 'local_shipping', route: '/reports/deliveries', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'branch-reports', title: 'Branch Reports', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_VIEW', roles: BRANCH_REPORT_READERS },
+      { id: 'booking-report', title: 'Booking Report', icon: 'summarize', route: '/reports/bookings', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'delivery-report', title: 'Delivery Report', icon: 'local_shipping', route: '/reports/deliveries', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'branch-reports', title: 'Branch Reports', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_READ', roles: BRANCH_REPORT_READERS },
       // Branch responsibility #11 — every branch staff role reads reports on the work it did.
-      { id: 'finance-reports', title: 'Finance Reports', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
+      { id: 'finance-reports', title: 'Finance Reports', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_READ', roles: [...FINANCE, AppRole.ACCOUNTS] },
       // Company-level audit — every branch side by side, so gated same as Finance Reports, not per-branch reports.
-      { id: 'vendor-audit-report', title: 'Vendor Audit Report', icon: 'fact_check', route: '/reports/vendor-audit', permission: 'REPORT_VIEW', roles: [...FINANCE, AppRole.ACCOUNTS] },
-      { id: 'customer-report', title: 'Customer Report', icon: 'groups', route: '/reports/customers', permission: 'REPORT_VIEW', roles: COMPANY_ROLES.filter((r) => r !== AppRole.BRANCH_MANAGER) },
-      { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS },
-      { id: 'bulk-tracking-report', title: 'Bulk Shipment Tracking', icon: 'checklist', route: '/reports/bulk-tracking', permission: 'REPORT_VIEW', roles: SHIPMENT_READERS }
+      { id: 'vendor-audit-report', title: 'Vendor Audit Report', icon: 'fact_check', route: '/reports/vendor-audit', permission: 'REPORT_READ', roles: [...FINANCE, AppRole.ACCOUNTS] },
+      { id: 'customer-report', title: 'Customer Report', icon: 'groups', route: '/reports/customers', permission: 'REPORT_READ', roles: COMPANY_ROLES.filter((r) => r !== AppRole.BRANCH_MANAGER) },
+      { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'bulk-tracking-report', title: 'Bulk Shipment Tracking', icon: 'checklist', route: '/reports/bulk-tracking', permission: 'REPORT_READ', roles: SHIPMENT_READERS }
     ]
   },
 
-  { id: 'settings', title: 'Settings', icon: 'settings', route: '/settings', permission: 'SETTINGS_VIEW', roles: COMPANY_ONLY, order: 8 }
+  { id: 'settings', title: 'Settings', icon: 'settings', route: '/settings', permission: 'SETTINGS_READ', roles: COMPANY_ONLY, order: 8 }
 ];

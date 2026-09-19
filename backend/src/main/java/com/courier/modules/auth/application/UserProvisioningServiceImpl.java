@@ -1,5 +1,6 @@
 package com.courier.modules.auth.application;
 
+import com.courier.modules.auth.application.port.CompanyRoleProvisioningPort;
 import com.courier.modules.auth.domain.Role;
 import com.courier.modules.auth.domain.User;
 import com.courier.modules.auth.domain.UserRepository;
@@ -63,6 +64,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     private final EmailVerificationService emailVerificationService;
     private final PasswordPolicy passwordPolicy;
     private final AuditService auditService;
+    private final CompanyRoleProvisioningPort companyRoleProvisioningPort;
 
     @Override
     @Transactional
@@ -98,6 +100,14 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
                     .roles(roles)
                     .emailVerified(false)
                     .build());
+
+            // The auth Role above is only the JWT authority. Without also writing the
+            // company-owned user_company_roles grant, this account's `permissions` JWT
+            // claim (and every hasAuthority(...) check, and every permission-gated nav
+            // item) resolves to nothing, forever — see CompanyRoleProvisioningPort.
+            if (roles.contains(Role.COMPANY_ADMIN)) {
+                companyRoleProvisioningPort.ensureCompanyAdminRole(companyId, user.getId());
+            }
 
             boolean emailSent = sendActivation(user, command.companyName());
 

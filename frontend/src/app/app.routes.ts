@@ -125,13 +125,6 @@ export const routes: Routes = [
     ]
   },
   {
-    path: 'session-expired',
-    loadComponent: () => import('@layouts/auth-layout/auth-layout').then((m) => m.AuthLayout),
-    children: [
-      { path: '', loadComponent: () => import('@features/auth/session-expired').then((m) => m.SessionExpired) }
-    ]
-  },
-  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('@layouts/admin-layout/admin-layout').then((m) => m.AdminLayout),

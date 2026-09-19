@@ -42,10 +42,10 @@ export class IdleTimeoutService {
   private expire(): void {
     this.stop();
     // Best-effort server-side revoke; navigate regardless of whether it lands.
-    this.auth.logout().subscribe({ complete: () => this.toSessionExpired(), error: () => this.toSessionExpired() });
+    this.auth.logout().subscribe({ complete: () => this.toLogin(), error: () => this.toLogin() });
   }
 
-  private toSessionExpired(): void {
-    this.router.navigateByUrl('/session-expired');
+  private toLogin(): void {
+    this.router.navigateByUrl('/login');
   }
 }

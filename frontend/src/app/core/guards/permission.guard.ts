@@ -5,9 +5,9 @@ import { PermissionService } from '../auth/permission.service';
 
 /**
  * Fine-grained route gate. A route declares `data.permissions` and/or `data.roles`;
- * the guard admits when the user satisfies any of them ({@link PermissionService.canAccess}).
- * An unauthenticated user is sent to login (preserving the target); an authenticated but
- * unauthorised one lands on /unauthorized rather than being bounced silently.
+ * see {@link PermissionService.canAccess} for how the two combine. An unauthenticated
+ * user is sent to login (preserving the target); an authenticated but unauthorised one
+ * lands on /unauthorized rather than being bounced silently.
  */
 export const permissionGuard: CanActivateFn = (route, state) => {
   const auth = inject(AuthService);

@@ -81,6 +81,44 @@ export function hasAction(map: Partial<Record<CrudAction, boolean>>, action: Cru
   return action in map;
 }
 
+/**
+ * Builds the same `MenuPermissionNode` shape `GET /users/{id}/menu-permissions` returns,
+ * but for a **role** instead of a user — there is no backend endpoint for this because
+ * none is needed: the plain hierarchy (`GET /menu-items/tree`) plus the grantable
+ * catalogue (already fetched for the flat Assign Permissions view) plus the role's own
+ * granted codes is everything `MenuPermissionNodeComponent` needs. Lets Assign
+ * Permissions (role) reuse the exact same checkbox tree as User Permissions (user),
+ * instead of a second, divergent implementation.
+ *
+ * `roleDefault`/`effective` both carry the role's *saved* grants (there is no separate
+ * "default" above a role — the role's own grant set is the ground truth), so the tree's
+ * built-in "differs from default" dot doubles as "differs from what was last saved".
+ */
+export function buildRoleMenuTree(
+  items: MenuItemNode[],
+  moduleActions: ReadonlyMap<string, CrudAction[]>,
+  grantedCodes: ReadonlySet<string>
+): MenuPermissionNode[] {
+  return items.map((item) => toRoleMenuNode(item, moduleActions, grantedCodes));
+}
+
+function toRoleMenuNode(
+  item: MenuItemNode,
+  moduleActions: ReadonlyMap<string, CrudAction[]>,
+  grantedCodes: ReadonlySet<string>
+): MenuPermissionNode {
+  const module = item.permissionModule;
+  const actions = module ? (moduleActions.get(module) ?? []) : [];
+  const state: Partial<Record<CrudAction, boolean>> = {};
+  for (const action of actions) state[action] = grantedCodes.has(`${module}_${action}`);
+  return {
+    id: item.id, code: item.code, title: item.title, icon: item.icon, route: item.route,
+    module, displayOrder: item.displayOrder,
+    roleDefault: state, effective: state, overridden: {},
+    children: item.children.map((child) => toRoleMenuNode(child, moduleActions, grantedCodes))
+  };
+}
+
 /** Every grantable leaf (a node naming a module) under this node, depth-first —
  *  a group node contributes nothing of its own, only its descendants. */
 export function flattenLeaves(node: MenuPermissionNode): MenuPermissionNode[] {

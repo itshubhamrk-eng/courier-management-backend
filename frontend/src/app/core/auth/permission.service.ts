@@ -34,16 +34,19 @@ export class PermissionService {
   }
 
   /**
-   * Admits when there are no requirements, or the user satisfies *any* required role or
-   * permission. OR across the two so a role-only route keeps working before permissions
-   * are wired, and a permission-only route works once they are.
+   * Admits when there are no requirements. When only one of roles/permissions is given,
+   * that one alone decides — keeps role-only routes (nothing granular to check) and
+   * permission-only checks both working standalone. When both are given, both must pass:
+   * role narrows to who could ever have this, permission is the per-user grant (role
+   * default, overridable per user) that decides whether *this* user still does — a role
+   * match alone must not resurrect a menu/action a user's permission was revoked from.
    */
   canAccess(req: AccessRequirement): boolean {
     const roles = req.roles ?? [];
     const perms = req.permissions ?? [];
     if (roles.length === 0 && perms.length === 0) return true;
-    const roleOk = roles.length > 0 && this.hasAnyRole(roles);
-    const permOk = perms.length > 0 && this.hasAnyPermission(perms);
-    return roleOk || permOk;
+    const roleOk = roles.length === 0 || this.hasAnyRole(roles);
+    const permOk = perms.length === 0 || this.hasAnyPermission(perms);
+    return roleOk && permOk;
   }
 }

@@ -2,6 +2,7 @@ package com.courier.modules.auth.application;
 
 import com.courier.modules.auth.application.UserProvisioningService.NewBranchUserCommand;
 import com.courier.modules.auth.application.UserProvisioningService.ProvisionedBranchUser;
+import com.courier.modules.auth.application.port.CompanyRoleProvisioningPort;
 import com.courier.modules.auth.domain.Role;
 import com.courier.modules.auth.domain.User;
 import com.courier.modules.auth.domain.UserRepository;
@@ -49,6 +50,7 @@ class UserProvisioningServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private EmailVerificationService emailVerificationService;
     @Mock private AuditService auditService;
+    @Mock private CompanyRoleProvisioningPort companyRoleProvisioningPort;
 
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private UserProvisioningServiceImpl service;
@@ -58,7 +60,8 @@ class UserProvisioningServiceImplTest {
         PasswordPolicy policy = new PasswordPolicy(new AuthProperties());
         policy.loadCommonPasswords();
         service = new UserProvisioningServiceImpl(
-                userRepository, encoder, emailVerificationService, policy, auditService);
+                userRepository, encoder, emailVerificationService, policy, auditService,
+                companyRoleProvisioningPort);
 
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.save(any(User.class))).thenAnswer(i -> {
