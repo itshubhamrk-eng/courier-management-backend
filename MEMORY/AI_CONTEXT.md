@@ -7,6 +7,25 @@
 
 ## Current Version
 
+`0.65.3` — **Three fixes on top of 0.65.0's Menu + Permission Management, found in the
+same follow-up session:** (1) Cancel Shipment's button was gated on permission code
+`SHIPMENT_CANCEL`, which doesn't exist in the catalogue (renamed to `SHIPMENT_DELETE`
+back in V6) — the button could never render for anyone; fixed the gate, made the
+cancellation reason a real server-side requirement too (was already enforced
+client-side). (2) The JWT `roles` claim only read the legacy `Role` enum, never
+Menu/Permission Management's `user_company_roles` — a user with only a company role
+(e.g. Booking Operator) got permissions but an empty `roles` claim and a bare nav; new
+`UserCompanyRolesPort` unions both into `TokenIssuer`, and `auth.service.ts`'s
+`applySession()` now reads the claim like `hydrate()`/`permissions` already did instead
+of the stale response-body field. (3) Accounts provisioned *before* 2026-09-18's
+`CompanyRoleProvisioningPort` fix landed have no `user_company_roles` grant at all —
+empty `permissions`, bare menu despite a correct role; backfilled the two prod accounts
+found in that state. Also, separately: email verification is no longer required to log
+in (`AuthService.login`'s `EMAIL_NOT_VERIFIED` gate removed — direct request). Full
+detail in `CHANGELOG.md` 2026-09-19.
+
+Previously current:
+
 `0.65.0` — **Menu + Permission Management: menu hierarchy, JWT-carried effective
 permissions, per-user overrides on top of role defaults.** Direct request. Completed
 scaffolding that was already half-built and waiting (`PermissionModule.MENU`,

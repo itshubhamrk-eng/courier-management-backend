@@ -406,7 +406,7 @@ export class ShipmentView implements OnInit {
 
   readonly can = computed(() => ({
     update: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_UPDATE'] }),
-    cancel: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_CANCEL'] })
+    cancel: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_DELETE'] })
   }));
   readonly cancellable = computed(() => !!this.shipment() && CANCELLABLE_STATUSES.includes(this.shipment()!.status));
   /** Commission is a company-level figure — hidden for branch-level roles tracking
@@ -628,10 +628,10 @@ export class ShipmentView implements OnInit {
     this.confirmDialog.prompt({
       title: 'Cancel shipment',
       message: `"${this.shipment()!.shipmentNumber}" will be cancelled. This cannot be undone once it has left the branch.`,
-      label: 'Reason (optional)', placeholder: 'Booked in error, customer request…',
+      label: 'Reason', placeholder: 'Booked in error, customer request…',
       confirmLabel: 'Cancel Shipment', danger: true
     }).subscribe((reason) => {
-      if (reason === undefined) return;
+      if (!reason) return;
       this.service.cancel(this.id, reason).subscribe({
         next: () => { this.notify.success('Shipment cancelled.'); this.load(); },
         error: (e) => this.notify.error(e?.error?.message ?? 'Could not cancel the shipment.')

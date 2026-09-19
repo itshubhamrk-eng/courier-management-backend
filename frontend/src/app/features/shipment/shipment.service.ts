@@ -62,9 +62,9 @@ export class ShipmentService {
   update(id: string, body: UpdateShipmentRequest) {
     return this.api.put<ShipmentResponse>(`${API.shipments}/${id}`, body);
   }
-  cancel(id: string, remarks?: string) {
-    const query = remarks ? `?remarks=${encodeURIComponent(remarks)}` : '';
-    return this.api.post<ShipmentResponse>(`${API.shipments}/${id}/cancel${query}`, {});
+  cancel(id: string, remarks: string) {
+    return this.api.post<ShipmentResponse>(
+      `${API.shipments}/${id}/cancel?remarks=${encodeURIComponent(remarks)}`, {});
   }
   addDocument(id: string, body: AddShipmentDocumentRequest) {
     return this.api.post<ShipmentDocument>(`${API.shipments}/${id}/documents`, body);

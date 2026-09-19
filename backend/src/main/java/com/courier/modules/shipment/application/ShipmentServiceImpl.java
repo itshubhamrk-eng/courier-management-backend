@@ -845,12 +845,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                     "Shipment %s is %s and can no longer be cancelled — it has left the branch."
                             .formatted(shipment.getShipmentNumber(), shipment.getStatus()));
         }
+        if (remarks == null || remarks.isBlank()) {
+            throw new BusinessRuleException("A reason is required to cancel a shipment.");
+        }
 
         ShipmentStatus previous = shipment.getStatus();
         shipment.transitionTo(ShipmentStatus.CANCELLED);
         Shipment saved = shipmentRepository.save(shipment);
-        appendHistory(saved, companyId, previous, ShipmentStatus.CANCELLED,
-                remarks == null || remarks.isBlank() ? "Shipment cancelled" : remarks.trim());
+        appendHistory(saved, companyId, previous, ShipmentStatus.CANCELLED, remarks.trim());
 
         log.info("Shipment {} ({}) cancelled in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());

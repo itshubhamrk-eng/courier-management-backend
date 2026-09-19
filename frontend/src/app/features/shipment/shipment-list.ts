@@ -96,7 +96,7 @@ export class ShipmentList implements OnInit {
   readonly can = computed(() => ({
     create: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_CREATE'] }),
     update: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_UPDATE'] }),
-    cancel: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_CANCEL'] })
+    cancel: this.perms.canAccess({ roles: WRITERS, permissions: ['SHIPMENT_DELETE'] })
   }));
   readonly tablePerms = computed<ShipmentPerms>(() => ({ update: this.can().update, cancel: this.can().cancel }));
 

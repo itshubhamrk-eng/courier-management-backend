@@ -8,6 +8,78 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-19 — Cancel Shipment was invisible to every role; reason now mandatory
+
+Direct request: "booking branch should have option cancel shipment order" on the Track/
+View page, followed by "should ask reason for cancellation and store cancel date and
+time also and cancel should be applicable before THC creation." Investigation found the
+cancel button, endpoint, and business rule (`ShipmentStatus.isCancellable()` — refused
+from `DISPATCHED` onward, which is exactly the Manifest `dispatch()`/THC action) all
+already existed and were already correct. The actual bug: `shipment-view.ts`/
+`shipment-list.ts` gated the Cancel button on permission code `SHIPMENT_CANCEL`, which
+does not exist in the `permissions` catalogue at all — V6's migration renamed it to
+`SHIPMENT_DELETE` when the catalogue was built, and nothing updated the frontend gate.
+The check could never pass for any role, so the button never rendered for anyone.
+Fixed to check `SHIPMENT_DELETE` (the code `WRITERS` roles — COMPANY_ADMIN,
+BRANCH_MANAGER, BOOKING_OPERATOR — already hold by default). Cancel date/time and
+changed-by were already captured per cancellation in `ShipmentStatusHistory.changedAt`
+(shown on the shipment's History page) — no schema change needed. Reason was already
+enforced client-side by the shared `ReasonDialog` (`Validators.required`) despite a
+stale "(optional)" label; made it a real server-side requirement too —
+`ShipmentServiceImpl.cancel` now throws `BusinessRuleException` for a blank `remarks`,
+`ShipmentController`'s `@RequestParam` is no longer optional. `mvn test` 35/35 in
+`ShipmentServiceImplTest` (+1 new). **Verified live**: booking-branch `BRANCH_MANAGER`
+now sees Cancel on a `BOOKED` shipment; the dialog's Cancel Shipment button stays
+disabled until a reason is typed; cancelling landed both the reason text and the exact
+timestamp on the shipment's History page.
+
+## Fixed 2026-09-19 — Pre-existing admin accounts had an empty JWT `permissions` claim
+
+Found while investigating "all menu not visible to company admin" on prod
+(`vendor.amazinglpl.com`, `ashwin@amazinglpl.com`). Same root class of gap
+`CompanyRoleProvisioningPort` (2026-09-18 follow-up) already fixed for *future*
+provisioning: an account whose legacy `Role.COMPANY_ADMIN` was set before that fix
+landed has no `user_company_roles` grant, so `UserPermissionService
+.resolveEffectivePermissionCodes` has no company role to read and returns nothing —
+JWT `roles` correct, `permissions` empty, every permission-gated nav leaf hidden.
+Audited every `COMPANY_ADMIN`/`BRANCH_MANAGER` account on prod for the same gap (query:
+legacy `user_roles` row with zero matching `user_company_roles` grants) — found exactly
+two (`ashwin@amazinglpl.com`, and a `loadtest.admin@example.com` perf fixture), no
+`BRANCH_MANAGER`s affected. Backfilled both with the missing grant row directly (same
+shape `UserRole.assign()`/`ensureCompanyAdminRole` would write). **Verified live**:
+decoded ashwin's JWT from the real browser session before/after — `permissions: []` ->
+74 real codes; full menu (Administration, Customers, Rate Master, Masters, Operations,
+Finance, Reports, Settings) appeared on next login.
+
+## Changed 2026-09-19 — Email verification no longer required to log in; JWT roles claim
+## now carries Menu/Permission Management's company roles too
+
+Direct request: "remove email verification after user create it should be optional."
+`AuthService.login`'s `EMAIL_NOT_VERIFIED` gate (checked after password verification)
+deleted outright — an unverified account signs in like any other now. Verification/
+resend endpoints (`EmailVerificationService`) are untouched, just no longer enforced at
+login.
+
+Separately, found while chasing "no menu for rahul" (a user assigned roles purely
+through the new Role/Permission Management screen, never a legacy `Role`): the JWT
+`roles` claim was built only from `user.roleNames()` (the legacy `Role` enum /
+`user_roles` table), never from `user_company_roles` — a user with only a company role
+(Booking Operator, Delivery Operator, ...) got a correct `permissions` claim but an
+empty `roles` claim, and every nav leaf gated on `roles` (see `navigation.config.ts`'s
+own comment: both are AND-checked) stayed hidden. New `UserCompanyRolesPort`/
+`UserCompanyRolesDirectory` (mirrors `UserPermissionsPort`'s shape) reads
+`user_company_roles`; `TokenIssuer` now unions its codes with the legacy roles for the
+claim. Also fixed `auth.service.ts`'s `applySession()` (the just-logged-in path), which
+read the login response body's `roles` field instead of the JWT it had just decoded —
+`permissions` already preferred the claim, and `hydrate()` (the page-reload path)
+always had, but `applySession()` didn't, so the menu was empty until a manual refresh.
+`mvn test` unit suite green (pre-existing `SessionServiceConcurrencyIT` DB-credential
+failure unrelated). **Verified live** in both dev and prod (`vendor.amazinglpl.com`):
+decoded a real login's JWT before/after for a user holding only company roles
+(`roles: []` -> `['BOOKING_OPERATOR','DELIVERY_OPERATOR','CUSTOMER_SERVICE']`), replayed
+the app's own `canAccess` nav-filter logic against it (11 visible nodes -> 31), then
+confirmed the same in a real browser session (Chrome extension) end to end.
+
 ## Added 2026-09-18 — Menu + Permission Management: menu hierarchy, JWT-carried effective
 ## permissions, per-user overrides on top of role defaults
 

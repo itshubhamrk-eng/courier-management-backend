@@ -704,6 +704,20 @@ class ShipmentServiceImplTest {
         verify(shipmentRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("a cancel with no reason is refused")
+    void cancelRefusedWithoutReason() {
+        Shipment existing = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findByIdWithinCompany(existing.getId(), COMPANY))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.cancel(existing.getId(), "   "))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("reason is required");
+
+        verify(shipmentRepository, never()).save(any());
+    }
+
     // ------------------------------------------------------------------- update
 
     @Test

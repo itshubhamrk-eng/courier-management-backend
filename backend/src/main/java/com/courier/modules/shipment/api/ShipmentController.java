@@ -257,10 +257,10 @@ public class ShipmentController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a shipment",
-            description = "Refused once the shipment has left the branch (DISPATCHED "
-                    + "onward). Does not reverse a PREPAID debit already posted at booking.")
-    public ApiResponse<ShipmentResponse> cancel(@PathVariable UUID id,
-                                                @RequestParam(required = false) String remarks) {
+            description = "A reason is mandatory. Refused once the shipment has left the "
+                    + "branch (DISPATCHED onward — i.e. once its Trip Hire Challan has been "
+                    + "created). Does not reverse a PREPAID debit already posted at booking.")
+    public ApiResponse<ShipmentResponse> cancel(@PathVariable UUID id, @RequestParam String remarks) {
         Shipment cancelled = shipmentService.cancel(id, remarks);
         return ApiResponse.success(
                 mapper.toResponse(cancelled, shipmentService.getItems(id),
