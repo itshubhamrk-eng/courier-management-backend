@@ -96,7 +96,7 @@ class AuthServiceTest {
                 authenticationManager, userRepository, refreshTokenRepository, companyDirectory, branchDirectory,
                 userPermissionsPort, sessionService, tokenIssuer, loginAttemptService,
                 tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder);
-        when(userPermissionsPort.resolveEffectivePermissions(any())).thenReturn(Set.of());
+        when(userPermissionsPort.resolveEffectivePermissions(any(), any())).thenReturn(Set.of());
 
         companyId = UUID.randomUUID();
         userId = UUID.randomUUID();

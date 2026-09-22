@@ -15,6 +15,15 @@ import java.util.UUID;
  */
 public interface UserPermissionsPort {
 
-    /** Role codes unioned with granted overrides, minus revoked overrides. Never null. */
-    Set<String> resolveEffectivePermissions(UUID userId);
+    /**
+     * Role codes unioned with granted overrides, minus revoked overrides. Never null.
+     *
+     * @param roleNames the JWT-authority role names already resolved for this user
+     *                  ({@code User.roleNames()}) — a platform account ({@code
+     *                  SUPER_ADMIN}) holds no {@code user_company_roles} row (it is not a
+     *                  company's own role), so the company-role lookup this normally runs
+     *                  resolves to nothing for it; the implementation uses this set to
+     *                  recognise that case and grant the platform's own rights instead.
+     */
+    Set<String> resolveEffectivePermissions(UUID userId, Set<String> roleNames);
 }

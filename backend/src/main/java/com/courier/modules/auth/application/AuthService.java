@@ -222,7 +222,7 @@ public class AuthService {
                 user.getId(), companyId, session.getId(), command.rememberMe());
 
         return new AuthResult(user, tokens, session, companyBrand(companyId),
-                userPermissionsPort.resolveEffectivePermissions(user.getId()));
+                userPermissionsPort.resolveEffectivePermissions(user.getId(), user.roleNames()));
     }
 
     /**
@@ -378,7 +378,7 @@ public class AuthService {
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
                 target.getId(), targetCompanyId, target.getEmail(), target.roleNames(),
-                userPermissionsPort.resolveEffectivePermissions(target.getId()),
+                userPermissionsPort.resolveEffectivePermissions(target.getId(), target.roleNames()),
                 target.getBranchId(), target.getHubId(), company.name(), company.logo(),
                 superAdmin.getId(), superAdmin.getEmail(), IMPERSONATION_TTL);
 
@@ -442,7 +442,7 @@ public class AuthService {
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
                 target.getId(), principal.companyId(), target.getEmail(), target.roleNames(),
-                userPermissionsPort.resolveEffectivePermissions(target.getId()),
+                userPermissionsPort.resolveEffectivePermissions(target.getId(), target.roleNames()),
                 target.getBranchId(), target.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null,
                 companyAdmin.getId(), companyAdmin.getEmail(), IMPERSONATION_TTL);
@@ -512,7 +512,7 @@ public class AuthService {
                 user, session, presented, refreshTtl, ipAddress, userAgent);
 
         return new AuthResult(user, tokens, session, companyBrand(companyId),
-                userPermissionsPort.resolveEffectivePermissions(user.getId()));
+                userPermissionsPort.resolveEffectivePermissions(user.getId(), user.roleNames()));
     }
 
     /** Display name and logo for the session's brand — best-effort, null when unresolvable. */

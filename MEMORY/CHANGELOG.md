@@ -8,6 +8,34 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-22 — SUPER_ADMIN saw an almost-empty nav menu
+
+Root cause: `SuperAdminAccountService`/`UserProvisioningServiceImpl.provisionSuperAdmin`
+only ever set the JWT-authority `Role.SUPER_ADMIN` on the account — unlike
+`provisionAdmin` (COMPANY_ADMIN), it never called the `ensureXRole`-style seam to write a
+`user_company_roles` row. `UserPermissionServiceImpl.resolveEffectivePermissionCodes`
+(the function that also produces the JWT `permissions` claim) resolves permissions purely
+from that table, so every SUPER_ADMIN account has always resolved to an empty permission
+set — the frontend nav's `permission`-gated leaves (essentially all of Platform: Companies,
+Subscription Plans, Platform Operators, Platform Dashboard, plus Masters geography) never
+passed `permOk` and stayed hidden. Only `roles`-only leaves with no `permission` key
+(Dashboard, some of Ticket Support) ever showed.
+
+Fixed at the token-issuance seam instead of by creating a company-scoped role: giving
+SUPER_ADMIN a real `company_roles` row would have made it visible/assignable to any
+COMPANY_ADMIN through the normal Roles/assign-role screens — a privilege-escalation risk.
+Instead: `UserPermissionsPort.resolveEffectivePermissions` now takes the caller's resolved
+`roleNames` alongside `userId`; `UserPermissionsDirectory` (its only implementation)
+returns the new `DefaultRoleCatalog.PLATFORM_PERMISSION_CODES` (every code in
+`DefaultPermissionCatalog`, no exclusions) directly when `"SUPER_ADMIN"` is in that set,
+bypassing the company-role lookup entirely. All 5 call sites in `AuthService`/`TokenIssuer`
+updated to pass `user.roleNames()`/`target.roleNames()`. `roles` (from nav config) still
+gates what SUPER_ADMIN can *see* — this only fixes `permOk`, the AND partner.
+
+Needs a backend redeploy to prod (35.154.220.116) before the affected SUPER_ADMIN account
+sees the fix — existing JWTs were minted with the empty `permissions` claim baked in, so a
+fresh login (new token) is also required after deploy.
+
 ## Fixed 2026-09-22 — Hub Operations Out Scan: Scan button silently reloaded the page
 
 Second live-verification pass (full receive → sort → out-scan → dispatch walkthrough in

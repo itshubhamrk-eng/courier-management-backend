@@ -2,6 +2,7 @@ package com.courier.modules.company.infrastructure;
 
 import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.company.application.UserPermissionService;
+import com.courier.modules.company.domain.DefaultRoleCatalog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +14,9 @@ import java.util.UUID;
  * The only implementation of {@link UserPermissionsPort} — delegates straight to
  * {@link UserPermissionService#resolveEffectivePermissionCodes}, the one function that
  * also backs the User Permissions screen, so token issuance and the admin UI can never
- * compute a user's rights differently.
+ * compute a user's rights differently. {@code SUPER_ADMIN} is the one exception: it holds
+ * no {@code user_company_roles} row, so that lookup resolves to nothing for it — see
+ * {@link DefaultRoleCatalog#PLATFORM_PERMISSION_CODES}.
  */
 @Component
 @RequiredArgsConstructor
@@ -23,9 +26,12 @@ public class UserPermissionsDirectory implements UserPermissionsPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Set<String> resolveEffectivePermissions(UUID userId) {
+    public Set<String> resolveEffectivePermissions(UUID userId, Set<String> roleNames) {
         if (userId == null) {
             return Set.of();
+        }
+        if (roleNames != null && roleNames.contains("SUPER_ADMIN")) {
+            return DefaultRoleCatalog.PLATFORM_PERMISSION_CODES;
         }
         return Set.copyOf(userPermissionService.resolveEffectivePermissionCodes(userId));
     }

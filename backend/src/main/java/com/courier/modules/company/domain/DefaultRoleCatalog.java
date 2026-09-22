@@ -122,6 +122,22 @@ public final class DefaultRoleCatalog {
                     .map(action -> Permission.codeFor(entry.getKey(), action)))
             .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
+    /**
+     * Every code {@link DefaultPermissionCatalog} defines, no exclusions — the platform
+     * operator's own rights, {@link #ALL_PERMISSION_CODES}'s ceiling and then some.
+     *
+     * <p>{@code SUPER_ADMIN} is not a company role: the account holds no
+     * {@code user_company_roles} row, so it never goes through {@link #DEFINITIONS} or
+     * plan gating the way a company's roles do. This is what {@code UserPermissionsPort}
+     * grants a platform account directly, in place of a company-role lookup that would
+     * otherwise resolve to nothing for it — see that interface's own javadoc.
+     */
+    public static final Set<String> PLATFORM_PERMISSION_CODES = DefaultPermissionCatalog.matrix()
+            .entrySet().stream()
+            .flatMap(entry -> entry.getValue().stream()
+                    .map(action -> Permission.codeFor(entry.getKey(), action)))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
     private static final List<RoleDefinition> DEFINITIONS = List.of(
 
             new RoleDefinition(COMPANY_ADMIN, "Company Admin",

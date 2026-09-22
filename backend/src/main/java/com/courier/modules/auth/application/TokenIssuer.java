@@ -146,7 +146,7 @@ public class TokenIssuer {
         roles.addAll(userCompanyRolesPort.resolveRoleCodes(user.getId()));
         String accessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getCompanyId(), user.getEmail(), roles,
-                userPermissionsPort.resolveEffectivePermissions(user.getId()),
+                userPermissionsPort.resolveEffectivePermissions(user.getId(), roles),
                 user.getBranchId(), user.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getCompanyId());
