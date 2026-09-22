@@ -151,6 +151,29 @@ public class ActivityLogService {
         return repository.findDistinctModulesFor(companyId, userId);
     }
 
+    /** Distinct module/action/entity-type values logged so far, for the Module/Action/
+     *  Entity Type filter dropdowns. Scoped the same way {@link #search} is: the caller's
+     *  own company, or every company for a platform-tier caller. */
+    @PreAuthorize(SEARCHERS)
+    public List<String> distinctModules() {
+        return repository.findDistinctModules(filterOptionsCompanyId());
+    }
+
+    @PreAuthorize(SEARCHERS)
+    public List<String> distinctActions() {
+        return repository.findDistinctActions(filterOptionsCompanyId());
+    }
+
+    @PreAuthorize(SEARCHERS)
+    public List<String> distinctEntityTypes() {
+        return repository.findDistinctEntityTypes(filterOptionsCompanyId());
+    }
+
+    private UUID filterOptionsCompanyId() {
+        var caller = SecurityUtils.requireCurrentUser();
+        return caller.isSuperAdmin() ? null : caller.companyId();
+    }
+
     private UUID requireCallerCompanyOrExplicit(UUID userId) {
         // Platform tier has no company of its own to pin to; every other caller is
         // confined to their own company regardless of whose activity they are viewing.

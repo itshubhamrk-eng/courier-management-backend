@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
-import { ActivityLog, ActivityLogSearchQuery, UserActivitySummary } from '@core/models/activity-log.model';
+import { ActivityLog, ActivityLogFilterOptions, ActivityLogSearchQuery, UserActivitySummary } from '@core/models/activity-log.model';
 import { Page, PageQuery } from '@core/models/page.model';
 
 /** Activity Log API — `/api/v1/activity-logs/**` and `/api/v1/users/{id}/activity`. */
@@ -16,6 +16,10 @@ export class ActivityLogService {
 
   get(id: string): Observable<ActivityLog> {
     return this.api.get<ActivityLog>(`${API.activityLogs}/${id}`);
+  }
+
+  filterOptions(): Observable<ActivityLogFilterOptions> {
+    return this.api.get<ActivityLogFilterOptions>(API.activityLogFilterOptions);
   }
 
   export(query: Omit<ActivityLogSearchQuery, 'page' | 'size' | 'sort'>): Observable<Blob> {

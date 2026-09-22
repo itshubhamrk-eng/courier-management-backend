@@ -33,4 +33,32 @@ public interface ActivityLogRepository
 
     /** Supports the retention job noted alongside {@code AuditLogRepository}'s own. */
     long deleteByOccurredAtBefore(Instant cutoff);
+
+    /** Distinct values the Activity Log screen's Module/Action/Entity Type filters offer as
+     *  a dropdown, rather than free text — sourced from what has actually been logged
+     *  rather than a hardcoded list that would drift from {@code ActivityLoggingFilter}'s
+     *  own inference (module is the URL's first segment, action is verb-or-keyword-derived,
+     *  both effectively open-ended). {@code companyId} null means every company — the
+     *  platform-tier caller's own case, guarded the same way {@code ActivityLogService}
+     *  guards every other read here. */
+    @Query("""
+           select distinct a.module from ActivityLog a
+            where (:companyId is null or a.companyId = :companyId) and a.module is not null
+            order by a.module
+           """)
+    List<String> findDistinctModules(@Param("companyId") UUID companyId);
+
+    @Query("""
+           select distinct a.action from ActivityLog a
+            where (:companyId is null or a.companyId = :companyId) and a.action is not null
+            order by a.action
+           """)
+    List<String> findDistinctActions(@Param("companyId") UUID companyId);
+
+    @Query("""
+           select distinct a.entityType from ActivityLog a
+            where (:companyId is null or a.companyId = :companyId) and a.entityType is not null
+            order by a.entityType
+           """)
+    List<String> findDistinctEntityTypes(@Param("companyId") UUID companyId);
 }

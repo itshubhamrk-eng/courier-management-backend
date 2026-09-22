@@ -1,5 +1,6 @@
 package com.courier.shared.activity.api;
 
+import com.courier.shared.activity.api.dto.ActivityLogFilterOptionsResponse;
 import com.courier.shared.activity.api.dto.ActivityLogResponse;
 import com.courier.shared.activity.api.dto.ActivityLogSearchRequest;
 import com.courier.shared.activity.application.ActivityLogService;
@@ -64,6 +65,15 @@ public class ActivityLogController {
             Pageable pageable) {
         Page<ActivityLog> page = service.search(mapper.toCriteria(search), pageable);
         return ApiResponse.success(PageResponse.from(page, mapper::toResponse));
+    }
+
+    @GetMapping("/filter-options")
+    @Operation(summary = "Distinct Module/Action/Entity Type values logged so far",
+            description = "Backs the Module/Action/Entity Type filter dropdowns with what has "
+                    + "actually been logged, company-scoped the same way search() is.")
+    public ApiResponse<ActivityLogFilterOptionsResponse> filterOptions() {
+        return ApiResponse.success(new ActivityLogFilterOptionsResponse(
+                service.distinctModules(), service.distinctActions(), service.distinctEntityTypes()));
     }
 
     @GetMapping("/{id}")

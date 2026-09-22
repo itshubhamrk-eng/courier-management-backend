@@ -44,6 +44,14 @@ export interface ActivityLogSearchQuery {
   search?: string;
 }
 
+/** Backs the Module/Action/Entity Type filter dropdowns with what has actually been
+ *  logged, rather than a hardcoded list that would drift from the backend's inference. */
+export interface ActivityLogFilterOptions {
+  modules: string[];
+  actions: string[];
+  entityTypes: string[];
+}
+
 export type LoginEventType = 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT' | 'SESSION_EXPIRED';
 
 export interface LoginHistoryEntry {

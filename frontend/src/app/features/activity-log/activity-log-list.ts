@@ -46,10 +46,10 @@ const STATUS_OPTIONS: SelectOption[] = [
         <div class="filters">
           <app-search label="Search" placeholder="Description / username / entity id…" (changed)="onSearch($event)" />
           <app-autocomplete [control]="userControl" label="User" [options]="userOptions()" placeholder="All users" />
-          <app-input [control]="moduleControl" label="Module" placeholder="e.g. Shipments" />
-          <app-input [control]="actionControl" label="Action" placeholder="e.g. CREATE" />
+          <app-select [control]="moduleControl" label="Module" [options]="moduleOptions()" [allowEmpty]="true" />
+          <app-select [control]="actionControl" label="Action" [options]="actionOptions()" [allowEmpty]="true" />
           <app-select [control]="statusControl" label="Status" [options]="statusOptions" [allowEmpty]="true" />
-          <app-input [control]="entityTypeControl" label="Entity Type" placeholder="e.g. Manifest" />
+          <app-select [control]="entityTypeControl" label="Entity Type" [options]="entityTypeOptions()" [allowEmpty]="true" />
           <app-input [control]="entityIdControl" label="Entity Id" placeholder="Record id" />
         </div>
         <div class="filters filters--dates">
@@ -134,12 +134,15 @@ export class ActivityLogList implements OnInit {
   readonly page = signal(emptyPage<ActivityLog>());
   readonly selected = signal<ActivityLog | null>(null);
   readonly userOptions = signal<SelectOption[]>([]);
+  readonly moduleOptions = signal<SelectOption[]>([]);
+  readonly actionOptions = signal<SelectOption[]>([]);
+  readonly entityTypeOptions = signal<SelectOption[]>([]);
 
   readonly statusOptions = STATUS_OPTIONS;
   readonly userControl = new FormControl<string | null>(null);
-  readonly moduleControl = new FormControl<string>('');
-  readonly actionControl = new FormControl<string>('');
-  readonly entityTypeControl = new FormControl<string>('');
+  readonly moduleControl = new FormControl<string | null>(null);
+  readonly actionControl = new FormControl<string | null>(null);
+  readonly entityTypeControl = new FormControl<string | null>(null);
   readonly entityIdControl = new FormControl<string>('');
   readonly statusControl = new FormControl<ActivityStatus | null>(null);
   readonly dateFromControl = new FormControl<string>('');
@@ -165,6 +168,11 @@ export class ActivityLogList implements OnInit {
     this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) => {
       this.userOptions.set(p.content.map((u) => ({ value: u.id, label: u.displayName })));
     });
+    this.service.filterOptions().subscribe((o) => {
+      this.moduleOptions.set(o.modules.map((m) => ({ value: m, label: m })));
+      this.actionOptions.set(o.actions.map((a) => ({ value: a, label: a })));
+      this.entityTypeOptions.set(o.entityTypes.map((e) => ({ value: e, label: e })));
+    });
 
     for (const control of [this.userControl, this.moduleControl, this.actionControl,
       this.entityTypeControl, this.entityIdControl, this.statusControl]) {
@@ -185,9 +193,9 @@ export class ActivityLogList implements OnInit {
   clearFilters(): void {
     this.search = '';
     this.userControl.setValue(null);
-    this.moduleControl.setValue('');
-    this.actionControl.setValue('');
-    this.entityTypeControl.setValue('');
+    this.moduleControl.setValue(null);
+    this.actionControl.setValue(null);
+    this.entityTypeControl.setValue(null);
     this.entityIdControl.setValue('');
     this.statusControl.setValue(null);
     this.dateFromControl.setValue('');
