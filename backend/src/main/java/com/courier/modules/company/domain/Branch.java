@@ -27,10 +27,11 @@ import java.util.regex.Pattern;
 /**
  * A physical booking / delivery office of a company.
  *
- * <p>Company-owned. {@code branchCode} and {@code branchName} are unique within the
- * company (never globally — two couriers may both have a "MAIN" branch). The code is
- * uppercased and editable; shipments, manifests and reports reference the branch by id,
- * not by code, so renumbering it does not orphan historical data.
+ * <p>Company-owned. {@code branchCode} is unique within the company (never globally —
+ * two couriers may both have a "MAIN" branch). {@code branchName} is not — two branches
+ * in the same company may share a display name. The code is uppercased and editable;
+ * shipments, manifests and reports reference the branch by id, not by code, so
+ * renumbering it does not orphan historical data.
  *
  * <p>{@code managerId} is a user of the same company — validated in the service, not by a
  * database FK. The FK to {@code users} is deferred for the same reason the
@@ -51,9 +52,7 @@ import java.util.regex.Pattern;
         name = "branches",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_branches_company_code",
-                        columnNames = {"company_id", "branch_code"}),
-                @UniqueConstraint(name = "uk_branches_company_name",
-                        columnNames = {"company_id", "branch_name"})
+                        columnNames = {"company_id", "branch_code"})
         },
         indexes = {
                 @Index(name = "idx_branches_company_status", columnList = "company_id, status"),

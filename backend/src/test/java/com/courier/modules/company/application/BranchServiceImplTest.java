@@ -48,6 +48,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -90,7 +91,6 @@ class BranchServiceImplTest {
         when(geocodingPort.geocode(any())).thenReturn(Optional.empty());
         when(repository.save(any(Branch.class))).thenAnswer(i -> i.getArgument(0));
         when(repository.isCodeTaken(any(), any(), any())).thenReturn(false);
-        when(repository.isNameTaken(any(), any(), any())).thenReturn(false);
 
         when(companyRepository.findByCompanyId(TENANT))
                 .thenReturn(Optional.of(Company.builder().companyCode("LEGACY_CO").build()));
@@ -272,16 +272,19 @@ class BranchServiceImplTest {
     }
 
     @Test
-    @DisplayName("create rejects a duplicate code or name")
+    @DisplayName("create rejects a duplicate code")
     void createDuplicates() {
         when(repository.isCodeTaken(eq(TENANT), eq("PUNE_MAIN"), isNull())).thenReturn(true);
         assertThatThrownBy(() -> service.create(createCommand("pune_main", "X", null)))
                 .isInstanceOf(DuplicateResourceException.class).hasMessageContaining("branchCode");
+    }
 
+    @Test
+    @DisplayName("create allows a duplicate name")
+    void createAllowsDuplicateName() {
         when(repository.isCodeTaken(any(), any(), any())).thenReturn(false);
-        when(repository.isNameTaken(eq(TENANT), eq("Pune Main"), isNull())).thenReturn(true);
-        assertThatThrownBy(() -> service.create(createCommand("other", "Pune Main", null)))
-                .isInstanceOf(DuplicateResourceException.class).hasMessageContaining("branchName");
+        assertThatCode(() -> service.create(createCommand("other", "Pune Main", null)))
+                .doesNotThrowAnyException();
     }
 
     @Test

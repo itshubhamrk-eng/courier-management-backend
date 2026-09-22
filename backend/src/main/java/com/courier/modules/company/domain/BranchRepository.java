@@ -59,11 +59,6 @@ public interface BranchRepository extends JpaRepository<Branch, UUID>,
                 TimeOrderedUuid.toBytes(excludeId)) > 0;
     }
 
-    default boolean isNameTaken(UUID companyId, String branchName, UUID excludeId) {
-        return countByNameIncludingDeleted(TimeOrderedUuid.toBytes(companyId), branchName,
-                TimeOrderedUuid.toBytes(excludeId)) > 0;
-    }
-
     @Query(value = """
             SELECT COUNT(*) FROM branches
             WHERE company_id = :companyId AND branch_code = :branchCode
@@ -71,14 +66,5 @@ public interface BranchRepository extends JpaRepository<Branch, UUID>,
             """, nativeQuery = true)
     long countByCodeIncludingDeleted(@Param("companyId") byte[] companyId,
                                      @Param("branchCode") String branchCode,
-                                     @Param("excludeId") byte[] excludeId);
-
-    @Query(value = """
-            SELECT COUNT(*) FROM branches
-            WHERE company_id = :companyId AND LOWER(branch_name) = LOWER(:branchName)
-              AND (:excludeId IS NULL OR id <> :excludeId)
-            """, nativeQuery = true)
-    long countByNameIncludingDeleted(@Param("companyId") byte[] companyId,
-                                     @Param("branchName") String branchName,
                                      @Param("excludeId") byte[] excludeId);
 }

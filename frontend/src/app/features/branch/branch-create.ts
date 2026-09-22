@@ -71,7 +71,7 @@ export class BranchCreate implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
-        if (err.status === 409) this.notify.error(err.error?.message ?? 'Branch code or name already in use.');
+        if (err.status === 409) this.notify.error(err.error?.message ?? 'Branch code already in use.');
         else if (err.status === 400 || err.status === 422) this.notify.error(err.error?.message ?? 'Please correct the highlighted fields.');
         else this.notify.error('Could not create the branch.');
       }

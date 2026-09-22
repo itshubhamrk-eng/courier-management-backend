@@ -94,7 +94,6 @@ public class BranchServiceImpl implements BranchService {
         String name = command.branchName() == null ? null : command.branchName().trim();
 
         requireCodeAvailable(companyId, code, null);
-        requireNameAvailable(companyId, name, null);
         if (command.managerId() != null) {
             requireCompanyUser(companyId, command.managerId());
         }
@@ -297,7 +296,6 @@ public class BranchServiceImpl implements BranchService {
         String code = Branch.normaliseCode(command.branchCode());
         String name = command.branchName() == null ? null : command.branchName().trim();
         requireCodeAvailable(companyId, code, id);
-        requireNameAvailable(companyId, name, id);
 
         Map<String, Object> before = snapshot(branch);
 
@@ -616,12 +614,6 @@ public class BranchServiceImpl implements BranchService {
     private void requireCodeAvailable(UUID companyId, String code, UUID excludeId) {
         if (repository.isCodeTaken(companyId, code, excludeId)) {
             throw new DuplicateResourceException(ENTITY, "branchCode", code);
-        }
-    }
-
-    private void requireNameAvailable(UUID companyId, String name, UUID excludeId) {
-        if (repository.isNameTaken(companyId, name, excludeId)) {
-            throw new DuplicateResourceException(ENTITY, "branchName", name);
         }
     }
 
