@@ -31,4 +31,8 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, UUID
                              @Param("since") Instant since);
 
     Page<LoginHistory> findByUserIdOrderByOccurredAtDesc(UUID userId, Pageable pageable);
+
+    /** Finds the LOGIN_SUCCESS row a LOGOUT/SESSION_EXPIRED event should close out. */
+    java.util.Optional<LoginHistory> findFirstByUserIdAndSessionIdAndEventTypeOrderByOccurredAtDesc(
+            UUID userId, UUID sessionId, LoginEventType eventType);
 }

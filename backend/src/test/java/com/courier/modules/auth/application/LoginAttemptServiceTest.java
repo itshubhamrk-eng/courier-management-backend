@@ -180,4 +180,63 @@ class LoginAttemptServiceTest {
                 .doesNotThrowAnyException();
         verify(loginHistoryRepository, never()).countRecentFailures(anyString(), anyString(), any());
     }
+
+    @Test
+    @DisplayName("a success is tagged LOGIN_SUCCESS with the parsed device/browser/os")
+    void successRecordsEventTypeAndDevice() {
+        service.recordSuccess(user.getId(), UUID.randomUUID(), "10.0.0.1",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0 Safari/537.36");
+
+        ArgumentCaptor<LoginHistory> saved = ArgumentCaptor.forClass(LoginHistory.class);
+        verify(loginHistoryRepository).save(saved.capture());
+        assertThat(saved.getValue().getEventType()).isEqualTo(com.courier.modules.auth.domain.LoginEventType.LOGIN_SUCCESS);
+        assertThat(saved.getValue().getDevice()).isEqualTo("DESKTOP");
+        assertThat(saved.getValue().getBrowser()).isEqualTo("Chrome");
+        assertThat(saved.getValue().getOs()).isEqualTo("Windows");
+    }
+
+    @Test
+    @DisplayName("a failure is tagged LOGIN_FAILED")
+    void failureRecordsEventType() {
+        service.recordFailure(companyId, user.getId(), "ops@acme.test",
+                LoginFailureReason.BAD_PASSWORD, "10.0.0.1", "JUnit");
+
+        ArgumentCaptor<LoginHistory> saved = ArgumentCaptor.forClass(LoginHistory.class);
+        verify(loginHistoryRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues()).anySatisfy(h ->
+                assertThat(h.getEventType()).isEqualTo(com.courier.modules.auth.domain.LoginEventType.LOGIN_FAILED));
+    }
+
+    @Test
+    @DisplayName("logout records a LOGOUT event and closes out the session's own login row")
+    void logoutRecordsEventAndClosesSession() {
+        UUID sessionId = UUID.randomUUID();
+        LoginHistory original = LoginHistory.builder()
+                .userId(user.getId()).attemptedEmail(user.getEmail()).success(true)
+                .eventType(com.courier.modules.auth.domain.LoginEventType.LOGIN_SUCCESS)
+                .sessionId(sessionId).occurredAt(Instant.now().minusSeconds(60)).build();
+        when(loginHistoryRepository.findFirstByUserIdAndSessionIdAndEventTypeOrderByOccurredAtDesc(
+                user.getId(), sessionId, com.courier.modules.auth.domain.LoginEventType.LOGIN_SUCCESS))
+                .thenReturn(java.util.Optional.of(original));
+
+        service.recordLogout(user.getId(), user.getEmail(), sessionId, "10.0.0.1", "JUnit");
+
+        assertThat(original.getLogoutAt()).isNotNull();
+        verify(loginHistoryRepository).save(original);
+        verify(auditService).record(eq(AuditAction.LOGOUT), eq("User"), eq(user.getId()), anyMap());
+    }
+
+    @Test
+    @DisplayName("a refresh against a dead session is recorded as SESSION_EXPIRED")
+    void sessionExpiredRecordsEventAndAudits() {
+        UUID sessionId = UUID.randomUUID();
+
+        service.recordSessionExpired(user.getId(), user.getEmail(), sessionId, "10.0.0.1", "JUnit");
+
+        ArgumentCaptor<LoginHistory> saved = ArgumentCaptor.forClass(LoginHistory.class);
+        verify(loginHistoryRepository).save(saved.capture());
+        assertThat(saved.getValue().getEventType())
+                .isEqualTo(com.courier.modules.auth.domain.LoginEventType.SESSION_EXPIRED);
+        verify(auditService).record(eq(AuditAction.SESSION_EXPIRED), eq("User"), eq(user.getId()), anyMap());
+    }
 }

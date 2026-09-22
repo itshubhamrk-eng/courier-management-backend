@@ -6,6 +6,7 @@ import com.courier.modules.auth.domain.UserSession;
 import com.courier.modules.auth.domain.UserSessionRepository;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
+import com.courier.shared.useragent.UserAgentParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -161,11 +162,14 @@ public class SessionService {
         enforceSessionCap(userId);
 
         Instant now = Instant.now();
+        UserAgentParser.Parsed agent = UserAgentParser.parse(device.userAgent());
         UserSession session = UserSession.builder()
                 .userId(userId)
                 .deviceId(device.deviceId())
                 .deviceName(device.deviceName())
                 .deviceType(device.deviceType())
+                .browser(agent.browser())
+                .os(agent.os())
                 .ipAddress(device.ipAddress())
                 .userAgent(device.userAgent())
                 .lastSeenAt(now)

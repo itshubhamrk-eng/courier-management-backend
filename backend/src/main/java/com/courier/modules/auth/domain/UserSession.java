@@ -57,6 +57,13 @@ public class UserSession extends CompanyOwnedEntity {
     @Column(name = "device_type", length = 30)
     private String deviceType;
 
+    /** V87, parsed from {@code userAgent} at creation — see {@code UserAgentParser}. */
+    @Column(name = "browser", length = 60)
+    private String browser;
+
+    @Column(name = "os", length = 60)
+    private String os;
+
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 

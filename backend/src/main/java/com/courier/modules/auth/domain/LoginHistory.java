@@ -58,6 +58,13 @@ public class LoginHistory extends CompanyOwnedEntity {
     @Column(name = "failure_reason", length = 40)
     private LoginFailureReason failureReason;
 
+    /** V86. Classifies this row beyond the {@code success} boolean — the same table now
+     *  carries LOGOUT and SESSION_EXPIRED rows too. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", length = 20, nullable = false)
+    @Builder.Default
+    private LoginEventType eventType = LoginEventType.LOGIN_SUCCESS;
+
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "session_id", columnDefinition = "BINARY(16)")
     private UUID sessionId;
@@ -68,6 +75,21 @@ public class LoginHistory extends CompanyOwnedEntity {
     @Column(name = "user_agent", length = 512)
     private String userAgent;
 
+    /** V86, parsed from {@code userAgent} at write time — see {@code UserAgentParser}. */
+    @Column(name = "device", length = 30)
+    private String device;
+
+    @Column(name = "browser", length = 60)
+    private String browser;
+
+    @Column(name = "os", length = 60)
+    private String os;
+
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
+
+    /** V86. Set when a later LOGOUT/SESSION_EXPIRED row for the same session finds this
+     *  one — best-effort, see the migration's own note. Null while the session is live. */
+    @Column(name = "logout_at")
+    private Instant logoutAt;
 }

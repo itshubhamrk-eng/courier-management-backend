@@ -1,5 +1,6 @@
 package com.courier.modules.auth.application;
 
+import com.courier.modules.auth.domain.LoginEventType;
 import com.courier.modules.auth.domain.LoginFailureReason;
 import com.courier.modules.auth.domain.LoginHistory;
 import com.courier.modules.auth.domain.LoginHistoryRepository;
@@ -9,6 +10,7 @@ import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ErrorCode;
+import com.courier.shared.useragent.UserAgentParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -89,13 +91,18 @@ public class LoginAttemptService {
                               String ipAddress,
                               String userAgent) {
 
+        UserAgentParser.Parsed agent = UserAgentParser.parse(userAgent);
         loginHistoryRepository.save(LoginHistory.builder()
                 .userId(userId)
                 .attemptedEmail(attemptedEmail)
                 .success(false)
                 .failureReason(reason)
+                .eventType(LoginEventType.LOGIN_FAILED)
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
+                .device(agent.device())
+                .browser(agent.browser())
+                .os(agent.os())
                 .occurredAt(Instant.now())
                 .build());
 
@@ -144,13 +151,18 @@ public class LoginAttemptService {
         user.registerSuccessfulLogin(ipAddress);
         userRepository.save(user);
 
+        UserAgentParser.Parsed agent = UserAgentParser.parse(userAgent);
         loginHistoryRepository.save(LoginHistory.builder()
                 .userId(user.getId())
                 .attemptedEmail(user.getEmail())
                 .success(true)
+                .eventType(LoginEventType.LOGIN_SUCCESS)
                 .sessionId(sessionId)
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
+                .device(agent.device())
+                .browser(agent.browser())
+                .os(agent.os())
                 .occurredAt(Instant.now())
                 .build());
 
@@ -163,5 +175,57 @@ public class LoginAttemptService {
 
         auditService.record(AuditAction.LOGIN_SUCCESS, "User", user.getId(),
                 Map.of("sessionId", String.valueOf(sessionId), "ipAddress", String.valueOf(ipAddress)));
+    }
+
+    /**
+     * Records a LOGOUT event and, best-effort, closes out the session's own
+     * LOGIN_SUCCESS row's {@code logoutAt}. {@code REQUIRES_NEW} for the same reason
+     * {@link #recordSuccess} is: this must not be lost if the caller's own logout
+     * transaction rolls back for an unrelated reason downstream.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordLogout(UUID userId, String email, UUID sessionId, String ipAddress, String userAgent) {
+        recordSessionEnd(LoginEventType.LOGOUT, userId, email, sessionId, ipAddress, userAgent);
+        auditService.record(AuditAction.LOGOUT, "User", userId, Map.of("sessionId", String.valueOf(sessionId)));
+    }
+
+    /**
+     * Records a SESSION_EXPIRED event — a refresh was attempted against a session that
+     * is no longer active (past its TTL, or revoked). See {@code AuthService#refresh}
+     * for the one call site: the natural point this is discovered.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSessionExpired(UUID userId, String email, UUID sessionId, String ipAddress, String userAgent) {
+        recordSessionEnd(LoginEventType.SESSION_EXPIRED, userId, email, sessionId, ipAddress, userAgent);
+        auditService.record(AuditAction.SESSION_EXPIRED, "User", userId, Map.of("sessionId", String.valueOf(sessionId)));
+    }
+
+    private void recordSessionEnd(LoginEventType eventType, UUID userId, String email, UUID sessionId,
+                                  String ipAddress, String userAgent) {
+        UserAgentParser.Parsed agent = UserAgentParser.parse(userAgent);
+        Instant now = Instant.now();
+
+        loginHistoryRepository.save(LoginHistory.builder()
+                .userId(userId)
+                .attemptedEmail(email)
+                .success(eventType == LoginEventType.LOGOUT)
+                .eventType(eventType)
+                .sessionId(sessionId)
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .device(agent.device())
+                .browser(agent.browser())
+                .os(agent.os())
+                .occurredAt(now)
+                .build());
+
+        if (sessionId != null) {
+            loginHistoryRepository.findFirstByUserIdAndSessionIdAndEventTypeOrderByOccurredAtDesc(
+                            userId, sessionId, LoginEventType.LOGIN_SUCCESS)
+                    .ifPresent(original -> {
+                        original.setLogoutAt(now);
+                        loginHistoryRepository.save(original);
+                    });
+        }
     }
 }

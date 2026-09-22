@@ -495,8 +495,12 @@ public class AuthService {
         }
 
         UserSession session = sessionService.findActive(presented.getSessionId(), user.getId())
-                .orElseThrow(() -> new UnauthorizedException(
-                        ErrorCode.SESSION_EXPIRED, "Session has expired. Sign in again."));
+                .orElseGet(() -> {
+                    loginAttemptService.recordSessionExpired(user.getId(), user.getEmail(),
+                            presented.getSessionId(), ipAddress, userAgent);
+                    throw new UnauthorizedException(
+                            ErrorCode.SESSION_EXPIRED, "Session has expired. Sign in again.");
+                });
 
         sessionService.touch(session);
 
@@ -540,17 +544,45 @@ public class AuthService {
 
         // Without the refresh token we can still kill the access token, but the
         // session itself can only be identified via the refresh token it issued.
+        UUID sessionId = null;
         if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
-            refreshTokenRepository.findByTokenHash(TokenHasher.hash(rawRefreshToken))
+            sessionId = refreshTokenRepository.findByTokenHash(TokenHasher.hash(rawRefreshToken))
                     .filter(token -> token.getUserId().equals(principal.userId()))
-                    .ifPresent(token -> sessionService
-                            .findActive(token.getSessionId(), principal.userId())
-                            .ifPresent(session -> sessionService.revokeSession(
-                                    session.getId(), "UserSession", RefreshToken.RevokeReason.LOGOUT)));
+                    .flatMap(token -> sessionService.findActive(token.getSessionId(), principal.userId())
+                            .map(session -> {
+                                sessionService.revokeSession(
+                                        session.getId(), "UserSession", RefreshToken.RevokeReason.LOGOUT);
+                                return session.getId();
+                            }))
+                    .orElse(null);
         }
+
+        loginAttemptService.recordLogout(principal.userId(), principal.email(), sessionId,
+                clientIp(), userAgent());
 
         auditService.record(AuditAction.LOGOUT, "User", principal.userId(),
                 Map.of("allDevices", false));
+    }
+
+    /** Best-effort request metadata for the login-history event log — see the two
+     *  {@code loginAttemptService.record*} calls in this class. Null outside an HTTP
+     *  request (there is none in practice; logout/refresh are always request-bound). */
+    private String clientIp() {
+        return currentRequest().map(req -> {
+            String forwarded = req.getHeader("X-Forwarded-For");
+            return forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : req.getRemoteAddr();
+        }).orElse(null);
+    }
+
+    private String userAgent() {
+        return currentRequest().map(req -> req.getHeader("User-Agent")).orElse(null);
+    }
+
+    private java.util.Optional<jakarta.servlet.http.HttpServletRequest> currentRequest() {
+        return org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+                instanceof org.springframework.web.context.request.ServletRequestAttributes attrs
+                ? java.util.Optional.of(attrs.getRequest())
+                : java.util.Optional.empty();
     }
 
     // ---------------------------------------------------------------------- me
