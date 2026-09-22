@@ -1,5 +1,35 @@
 # Hub Operations
 
+**v1.1 update (read this first — a second live-verification pass, full hub-to-hub
+walkthrough, found a second real bug):** on request to "test it live" again, ran the
+actual receive → sort/Load Sheet → out-scan → dispatch loop through the real browser UI
+(not just curl) against a real fixture shipment moved through a real hub. Confirmed live:
+In Scan correctly lists a DISPATCHED manifest bound for the hub and receiving it flips
+the shipment to `READY_FOR_MANIFEST` with `nextLocationId` falling back to its real
+delivery branch; Shipments At Hub shows it correctly; Loading Sheet's "By Delivery Branch
+(crossing hub)" mode picks it up and creates the second-leg manifest; Out Scan's worklist
+shows it. **Found a real bug in `HubOutScan`'s Angular component**: the Scan button used
+`<form (ngSubmit)="scanOne()">` with a bare `FormControl` not wrapped in a `[formGroup]`
+— without `FormGroupDirective` (or `NgForm`) attached to the `<form>` element, Angular's
+`(ngSubmit)` binding falls back to a raw native `submit` DOM event listener that does
+**not** call `preventDefault()`, so clicking Scan silently reloaded the whole page (wiping
+`activeManifest` and any typed value) instead of calling the handler within the SPA.
+Confirmed via a `submit` event listener + repeated "Angular is running in development
+mode" console bootstraps, one per click. Fixed by dropping the `<form>`/`ngSubmit`
+entirely in favor of `(pressed)="scanOne()"` on the button plus `(keydown.enter)` on the
+row, matching the button-driven style the rest of the component already uses — the same
+class of gap `exceptions.ts`'s form doesn't have, because that form *does* carry
+`[formGroup]="raiseForm"`. Re-verified live end to end after the fix: a real out-scan
+succeeded, a real duplicate scan was rejected in the Scan Log with no page reload, and
+dispatching that same hub-originated manifest (with the out-scan satisfied) succeeded
+through the real Dispatch/THC screen. Also noted, not fixed (cosmetic, backend-documented
+behavior, out of scope): Shipments At Hub's "Received" column always shows "—" because
+`Shipment.receivedAt` is populated only by the Bulk Shipment Tracking report's own query,
+never by the general `GET /shipments` list this screen calls — pre-existing backend
+behavior, not something this module changed.
+
+---
+
 v1.0, 2026-09-21. Direct request: a complete hub operations workflow — receive/in-scan,
 shipment list at hub, sorting, Load Sheet creation, vehicle/driver assignment, out-scan,
 dispatch, exceptions, a hub dashboard, movement history, and flexible routing (`Branch →

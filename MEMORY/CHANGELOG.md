@@ -8,6 +8,21 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-09-22 — Hub Operations Out Scan: Scan button silently reloaded the page
+
+Second live-verification pass (full receive → sort → out-scan → dispatch walkthrough in
+a real browser, not just curl) found a real bug: `HubOutScan`'s Scan button lived inside
+`<form (ngSubmit)="scanOne()">` where the tracking-number `FormControl` was never wrapped
+in a `[formGroup]`. Without `FormGroupDirective`/`NgForm` attached, Angular's `(ngSubmit)`
+falls back to a raw native `submit` listener that does not call `preventDefault()` — every
+click silently reloaded the whole page instead of scanning, wiping in-progress state with
+no visible error. Fixed by replacing the `<form>`/`ngSubmit` pair with `(pressed)` on the
+button and `(keydown.enter)` on the row, matching the rest of the component's own
+button-driven style. Re-verified live: a real shipment moved hub-in-scan → Load Sheet
+(crossing-hub mode) → out-scan (success, then a real duplicate correctly rejected with no
+reload) → dispatch (hub out-scan gate satisfied, succeeded) end to end through the actual
+UI. Full detail in `MEMORY/modules/hub-operations.md` v1.1.
+
 ## Added 2026-09-21 — Hub Operations module
 
 Direct request: a complete hub operations workflow — in-scan/receive, shipment list at

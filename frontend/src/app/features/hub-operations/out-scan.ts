@@ -62,10 +62,10 @@ import { HubOperationsService } from './hub-operations.service';
         </app-card>
 
         <app-card title="Scan">
-          <form class="row" (ngSubmit)="scanOne()">
+          <div class="row" (keydown.enter)="scanOne()">
             <app-input [control]="scanControl" label="AWB / Tracking Number" placeholder="Scan or type…" />
-            <app-button type="submit" icon="qr_code_scanner" [loading]="scanning()">Scan</app-button>
-          </form>
+            <app-button icon="qr_code_scanner" [loading]="scanning()" (pressed)="scanOne()">Scan</app-button>
+          </div>
         </app-card>
 
         @if (outcomes().length) {
