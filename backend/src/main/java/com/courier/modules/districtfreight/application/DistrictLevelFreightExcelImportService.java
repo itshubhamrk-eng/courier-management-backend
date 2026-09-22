@@ -53,6 +53,11 @@ import java.util.regex.Pattern;
  * the same file</i> is a real error: which of the two rows should win is ambiguous, so
  * neither is applied.
  *
+ * <p><b>Ambiguous From Station.</b> Branch name is not unique (only branch code is), so a
+ * From Station cell naming a branch by name rather than code can resolve to more than one
+ * branch. Rather than reject the row, it is applied to every branch that carries that
+ * name — the sheet has no other way to say "all the Karad branches".
+ *
  * <p><b>Per-row transactions.</b> {@link #commit} calls {@link DistrictLevelFreightService}
  * (a cross-bean call) per row rather than wrapping the whole file in one transaction — one
  * bad row fails on its own and every other row still commits, the same reasoning
@@ -114,11 +119,13 @@ public class DistrictLevelFreightExcelImportService {
 
         for (ParsedRow row : parsed) {
             try {
-                BranchLookupPort.BranchRef branch = branchLookup.findBranchByLabel(row.branchLabel, companyId)
-                        .orElseThrow(() -> new BusinessRuleException(
-                                "No branch matches From Station \"" + row.branchLabel + "\"."));
-                if (!branch.active()) {
-                    throw new BusinessRuleException("Branch \"" + branch.branchName() + "\" is inactive.");
+                // Branch name is not unique — a From Station label matching it by name (not
+                // code) can resolve to more than one branch. The row applies to every one of
+                // them, since the sheet has no other way to tell them apart.
+                List<BranchLookupPort.BranchRef> branches = branchLookup.findBranchesByLabel(row.branchLabel, companyId);
+                if (branches.isEmpty()) {
+                    throw new BusinessRuleException(
+                            "No branch matches From Station \"" + row.branchLabel + "\".");
                 }
                 DistrictLookupPort.DistrictRef district = districtLookup.findDistrictByName(row.districtLabel)
                         .orElseThrow(() -> new BusinessRuleException(
@@ -127,18 +134,28 @@ public class DistrictLevelFreightExcelImportService {
                     throw new BusinessRuleException("District \"" + district.name() + "\" is inactive.");
                 }
 
-                String comboKey = branch.branchId() + "|" + district.districtId();
-                if (!seenInFile.add(comboKey)) {
-                    throw new BusinessRuleException(
-                            "Duplicate From Station + District in this file: " + branch.branchName()
-                                    + " + " + district.name() + ".");
-                }
+                for (BranchLookupPort.BranchRef branch : branches) {
+                    try {
+                        if (!branch.active()) {
+                            throw new BusinessRuleException("Branch \"" + branch.branchName() + "\" is inactive.");
+                        }
+                        String comboKey = branch.branchId() + "|" + district.districtId();
+                        if (!seenInFile.add(comboKey)) {
+                            throw new BusinessRuleException(
+                                    "Duplicate From Station + District in this file: " + branch.branchName()
+                                            + " + " + district.name() + ".");
+                        }
 
-                var existing = repository.findByCompanyIdAndBranchIdAndDistrictId(
-                        companyId, branch.branchId(), district.districtId());
-                String outcome = applyRow(row, branch.branchId(), district.districtId(), existing.orElse(null), dryRun);
-                results.add(new ImportRowResult(row.rowNumber, row.branchLabel, row.districtLabel, outcome, null));
-                succeeded++;
+                        var existing = repository.findByCompanyIdAndBranchIdAndDistrictId(
+                                companyId, branch.branchId(), district.districtId());
+                        String outcome = applyRow(row, branch.branchId(), district.districtId(), existing.orElse(null), dryRun);
+                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel, outcome, null));
+                        succeeded++;
+                    } catch (BusinessRuleException e) {
+                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel, "ERROR", e.getMessage()));
+                        failed++;
+                    }
+                }
             } catch (BusinessRuleException e) {
                 results.add(new ImportRowResult(row.rowNumber, row.branchLabel, row.districtLabel, "ERROR", e.getMessage()));
                 failed++;

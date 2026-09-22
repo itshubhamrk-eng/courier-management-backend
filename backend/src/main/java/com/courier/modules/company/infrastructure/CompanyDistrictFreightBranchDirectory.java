@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -62,16 +63,24 @@ public class CompanyDistrictFreightBranchDirectory implements BranchLookupPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<BranchRef> findBranchByLabel(String label, UUID companyId) {
+    public List<BranchRef> findBranchesByLabel(String label, UUID companyId) {
         if (label == null || label.isBlank() || companyId == null) {
-            return Optional.empty();
+            return List.of();
         }
         String trimmed = label.trim();
-        // findByBranchCode/NameIgnoreCase carry no explicit company predicate — they rely
-        // on the Hibernate filter, so bind it explicitly rather than trust the ambient one.
-        return CompanyContext.runAs(companyId, () -> branchRepository.findByBranchCodeIgnoreCase(trimmed)
-                .or(() -> branchRepository.findByBranchNameIgnoreCase(trimmed))
-                .map(this::toRef));
+        // findByBranchCodeIgnoreCase/findAllByBranchNameIgnoreCase carry no explicit company
+        // predicate — they rely on the Hibernate filter, so bind it explicitly rather than
+        // trust the ambient one.
+        return CompanyContext.runAs(companyId, () -> {
+            Optional<Branch> byCode = branchRepository.findByBranchCodeIgnoreCase(trimmed);
+            if (byCode.isPresent()) {
+                return byCode.map(this::toRef).stream().toList();
+            }
+            // Branch name is not unique (only branch code is) — a label naming a branch by
+            // name applies to every branch that carries it.
+            return branchRepository.findAllByBranchNameIgnoreCase(trimmed).stream()
+                    .map(this::toRef).toList();
+        });
     }
 
     @Override

@@ -31,7 +31,10 @@ public interface BranchRepository extends JpaRepository<Branch, UUID>,
      *  against either the branch code or the branch name, case-insensitively. */
     Optional<Branch> findByBranchCodeIgnoreCase(String branchCode);
 
-    Optional<Branch> findByBranchNameIgnoreCase(String branchName);
+    /** Branch name is not unique (only branch code is) — a label lookup by name can
+     *  legitimately match more than one row, so this returns a list rather than an
+     *  {@code Optional} that would throw on a second match. */
+    List<Branch> findAllByBranchNameIgnoreCase(String branchName);
 
     @Query("select b from Branch b where b.id = :id and b.companyId = :companyId")
     Optional<Branch> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);

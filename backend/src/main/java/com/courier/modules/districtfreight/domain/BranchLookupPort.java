@@ -1,6 +1,7 @@
 package com.courier.modules.districtfreight.domain;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,9 +29,11 @@ public interface BranchLookupPort {
     /**
      * Resolves a "From Station" cell from an Excel import against either the branch code
      * or the branch name, case-insensitively — the sheet names a station by its familiar
-     * label, not its id. Code is tried first since it's the stabler identifier.
+     * label, not its id. Code is tried first since it's the stabler identifier; branch name
+     * is not unique, so a name match can legitimately return more than one branch — the
+     * caller applies the row to each.
      */
-    Optional<BranchRef> findBranchByLabel(String label, UUID companyId);
+    List<BranchRef> findBranchesByLabel(String label, UUID companyId);
 
     /**
      * The branch a caller is placed at, i.e. the account's own {@code branchId} — not a

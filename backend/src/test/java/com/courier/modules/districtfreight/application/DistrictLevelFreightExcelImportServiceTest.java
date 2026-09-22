@@ -66,7 +66,7 @@ class DistrictLevelFreightExcelImportServiceTest {
     void setUp() {
         importService = new DistrictLevelFreightExcelImportService(repository, service, branchLookup, districtLookup);
         CompanyContext.setCompanyId(COMPANY);
-        when(branchLookup.findBranchByLabel(eq("KARAD"), eq(COMPANY))).thenReturn(Optional.of(KARAD));
+        when(branchLookup.findBranchesByLabel(eq("KARAD"), eq(COMPANY))).thenReturn(List.of(KARAD));
         when(districtLookup.findDistrictByName("PUNE")).thenReturn(Optional.of(PUNE));
         when(districtLookup.findDistrictByName("SATARA")).thenReturn(Optional.of(SATARA));
         when(repository.findByCompanyIdAndBranchIdAndDistrictId(any(), any(), any())).thenReturn(Optional.empty());
@@ -92,6 +92,26 @@ class DistrictLevelFreightExcelImportServiceTest {
         assertThat(result.failed()).isZero();
         assertThat(result.rows()).extracting("outcome").containsExactly("WOULD_CREATE", "WOULD_CREATE");
         assertThat(result.rows()).extracting("district").containsExactly("PUNE", "SATARA");
+    }
+
+    @Test
+    @DisplayName("a From Station label matching several branches by name applies the row to each")
+    void appliesRowToEveryBranchSharingTheLabelledName() throws IOException {
+        UUID otherBranch = UUID.randomUUID();
+        BranchLookupPort.BranchRef karadToo = new BranchLookupPort.BranchRef(otherBranch, "KRD2", "Karad", true);
+        when(branchLookup.findBranchesByLabel(eq("KARAD"), eq(COMPANY))).thenReturn(List.of(KARAD, karadToo));
+
+        MockMultipartFile file = new MockMultipartFile("file", "KARAD RATE.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                buildRealWorldSheet());
+
+        ImportSummaryResponse result = importService.preview(file);
+
+        assertThat(result.totalDataRows()).isEqualTo(2);
+        assertThat(result.succeeded()).isEqualTo(4); // 2 sheet rows x 2 branches named "Karad"
+        assertThat(result.failed()).isZero();
+        assertThat(result.rows()).extracting("fromStation")
+                .containsExactly("Karad", "Karad", "Karad", "Karad");
     }
 
     @Test
