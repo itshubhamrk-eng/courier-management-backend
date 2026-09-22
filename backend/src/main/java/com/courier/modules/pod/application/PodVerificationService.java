@@ -60,10 +60,34 @@ public interface PodVerificationService {
      */
     PodVerification uploadByCompany(UUID shipmentId, CompanyUploadPodCommand command);
 
+    /**
+     * Bulk POD Upload — a batch of scanned/collected POD photos with no shipment picked in
+     * advance. For each photo: runs the AI provider once to actually read the shipment/AWB
+     * number off the image content (real OCR/vision, the same {@link
+     * com.courier.modules.pod.application.provider.PodVerificationProvider} used by {@link
+     * #verify}, never a structural-only check), matches it against this company's own
+     * shipments via {@code ShipmentService.bulkTrack} (same lookup the Bulk Shipment
+     * Tracking report uses), and — on exactly one match — persists a {@code PENDING} {@code
+     * pod_verification} row exactly like {@link #verify} does, scored for real, a human
+     * still makes the PASS/FAIL call via {@link #review}. A photo whose number can't be read,
+     * matches no shipment, or matches more than one is reported back unmatched rather than
+     * guessed at or silently dropped.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException the batch is empty or over
+     *         the per-call limit
+     */
+    java.util.List<BulkUploadPodOutcome> bulkUpload(java.util.List<BulkUploadPodItem> items);
+
     record CompanyUploadPodCommand(
             byte[] photoContent, String photoFilename, String photoContentType,
             byte[] signatureContent, String signatureFilename, String signatureContentType,
-            String receiverName) {
+            String receiverName,
+            /** Paper-register fields — see {@link com.courier.modules.pod.domain.PodEntryStatus}.
+             *  All optional; a caller that doesn't collect them (e.g. a future non-register
+             *  upload path) simply passes nulls. */
+            java.time.LocalDate deliveryDate, String deliveredBy,
+            java.time.LocalDate podDate, java.time.LocalTime podTime,
+            com.courier.modules.pod.domain.PodEntryStatus entryStatus, String remark) {
     }
 
     record VerifyPodCommand(
@@ -80,5 +104,37 @@ public interface PodVerificationService {
     }
 
     record ReviewPodCommand(boolean approve, String remarks) {
+    }
+
+    record BulkUploadPodItem(byte[] photoContent, String photoFilename, String photoContentType) {
+    }
+
+    enum BulkUploadPodMatchStatus {
+        /** Matched exactly one shipment and a new PENDING pod_verification row was created. */
+        MATCHED,
+        /** Nothing legible/known in the image resolved to any of this company's shipments. */
+        NO_MATCH,
+        /** The image's own candidate identifiers (detected number/AWB, QR) resolved to more
+         *  than one distinct shipment — refused rather than guessed. */
+        AMBIGUOUS,
+        /** Matched a shipment, but it is not OUT_FOR_DELIVERY/DELIVERED — same status gate
+         *  {@link #uploadByCompany} applies. */
+        INVALID_STATUS,
+        /** The file itself was empty/unreadable. */
+        ERROR
+    }
+
+    /** One outcome row per uploaded file, in submission order — {@code verification} is only
+     *  non-null when {@code matchStatus} is {@code MATCHED}. */
+    record BulkUploadPodOutcome(
+            String filename,
+            BulkUploadPodMatchStatus matchStatus,
+            String message,
+            String detectedShipmentNumber,
+            String detectedAwb,
+            UUID shipmentId,
+            String shipmentNumber,
+            String trackingNumber,
+            PodVerification verification) {
     }
 }

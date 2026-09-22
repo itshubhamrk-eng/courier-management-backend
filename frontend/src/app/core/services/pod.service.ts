@@ -2,7 +2,7 @@ import { HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { ApiService, SILENT_ERRORS } from './api.service';
 import { API } from '@core/config/api-endpoints';
-import { PodVerification, PodReviewRequest, DeliveredShipmentPod } from '@core/models/pod.model';
+import { PodVerification, PodReviewRequest, DeliveredShipmentPod, BulkPodUploadRow, PodEntryStatus } from '@core/models/pod.model';
 import { PageQuery } from '@core/models/page.model';
 
 /** POD Auto Verification — talks to /api/v1/shipments/{id}/pod/**, mirroring
@@ -61,11 +61,33 @@ export class PodService {
   /** Company-level upload — no branch login required. Works against any of the company's
    *  own OUT_FOR_DELIVERY/DELIVERED shipments and is always auto-approved (no AI call, no
    *  PENDING step). COMPANY_ADMIN only. */
-  uploadByCompany(shipmentId: string, params: { photo: File; signature?: File | null; receiverName: string }) {
+  uploadByCompany(shipmentId: string, params: {
+    photo: File; signature?: File | null; receiverName: string;
+    /** Paper-register fields — all optional. */
+    deliveryDate?: string | null; deliveredBy?: string | null;
+    podDate?: string | null; podTime?: string | null;
+    status?: PodEntryStatus | null; remark?: string | null;
+  }) {
     const body = new FormData();
     body.append('photo', params.photo);
     if (params.signature) body.append('signature', params.signature);
     body.append('receiverName', params.receiverName);
+    if (params.deliveryDate) body.append('deliveryDate', params.deliveryDate);
+    if (params.deliveredBy) body.append('deliveredBy', params.deliveredBy);
+    if (params.podDate) body.append('podDate', params.podDate);
+    if (params.podTime) body.append('podTime', params.podTime);
+    if (params.status) body.append('status', params.status);
+    if (params.remark) body.append('remark', params.remark);
     return this.api.post<PodVerification>(API.podCompanyUpload(shipmentId), body);
+  }
+
+  /** Bulk POD Upload — up to 50 scanned/collected POD photos in one call, no shipment
+   *  picked in advance. Each photo is auto-matched by reading its own content (real AI, not
+   *  structural-only) and, on exactly one match against an OUT_FOR_DELIVERY/DELIVERED
+   *  shipment, scored and stored PENDING for review. COMPANY_ADMIN only. */
+  bulkUpload(photos: File[]) {
+    const body = new FormData();
+    photos.forEach((f) => body.append('photos', f));
+    return this.api.post<BulkPodUploadRow[]>(API.podBulkUpload, body);
   }
 }

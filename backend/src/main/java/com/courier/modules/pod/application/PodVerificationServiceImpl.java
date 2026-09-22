@@ -110,7 +110,8 @@ public class PodVerificationServiceImpl implements PodVerificationService {
             result = new PodAnalysisResult(properties.getManualReviewThreshold(),
                     List.of("AI provider unavailable — routed to manual review."),
                     command.signatureContent() != null && command.signatureContent().length > 0,
-                    null, command.receiverName(), command.awbNumber(), null, false, true);
+                    null, command.receiverName(), command.awbNumber(), null, false, true,
+                    false, command.shipmentNumberClaim());
         }
 
         // Uploaded to the existing object-store seam (ShipmentService.uploadPodFile ->
@@ -261,6 +262,12 @@ public class PodVerificationServiceImpl implements PodVerificationService {
                 .verificationScore(100)
                 .signatureDetected(command.signatureContent() != null && command.signatureContent().length > 0)
                 .detectedReceiverName(command.receiverName())
+                .deliveryDate(command.deliveryDate())
+                .deliveredBy(command.deliveredBy())
+                .podDate(command.podDate())
+                .podTime(command.podTime())
+                .entryStatus(command.entryStatus())
+                .remark(command.remark())
                 .podHash(podHash)
                 .aiProvider("company-direct")
                 .aiModel("n/a")
@@ -278,6 +285,148 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         shipmentService.markPodApproved(shipmentId);
 
         return saved;
+    }
+
+    private static final int MAX_BULK_ITEMS = 50;
+
+    @Override
+    @Transactional
+    @PreAuthorize(REVIEWERS)
+    public List<PodVerificationService.BulkUploadPodOutcome> bulkUpload(
+            List<PodVerificationService.BulkUploadPodItem> items) {
+        if (items.isEmpty()) {
+            throw new BusinessRuleException("Upload at least one POD photo.");
+        }
+        if (items.size() > MAX_BULK_ITEMS) {
+            throw new BusinessRuleException(
+                    "At most %d files per bulk upload — split this into smaller batches."
+                            .formatted(MAX_BULK_ITEMS));
+        }
+        UUID companyId = requireCompany();
+
+        return items.stream().map(item -> bulkUploadOne(companyId, item)).toList();
+    }
+
+    /** One file of {@link #bulkUpload}: reads the shipment number off the photo itself (real
+     *  AI content analysis, no shipment context yet), matches it against this company's own
+     *  shipments, and on exactly one match, persists a fresh PENDING verification exactly like
+     *  {@link #verify} — same downstream review flow, only the shipment was found automatically
+     *  instead of picked by a human first. */
+    private PodVerificationService.BulkUploadPodOutcome bulkUploadOne(
+            UUID companyId, PodVerificationService.BulkUploadPodItem item) {
+        if (item.photoContent() == null || item.photoContent().length == 0) {
+            return errorOutcome(item.photoFilename(), "File is empty or could not be read.");
+        }
+
+        String podHash = sha256Hex(item.photoContent());
+        boolean duplicateSuspected = !podVerificationRepository.findByHashWithinCompany(companyId, podHash).isEmpty();
+        String qrScanValue = PodQrDecoder.decode(item.photoContent());
+
+        PodAnalysisResult result;
+        boolean providerAvailable = true;
+        try {
+            // No shipment picked yet — claimed/actual AWB+number are both unknown at this
+            // point, so PodGroundTruthRules' mismatch check is a no-op here; matching happens
+            // below, off what the provider actually read out of the pixels.
+            result = provider.analyze(new PodAnalysisRequest(
+                    item.photoContent(), item.photoContentType(), null, null,
+                    null, null, null, null,
+                    Instant.now(), duplicateSuspected, qrScanValue));
+        } catch (PodProviderUnavailableException e) {
+            providerAvailable = false;
+            result = null;
+        }
+        if (!providerAvailable) {
+            return errorOutcome(item.photoFilename(),
+                    "AI provider unavailable — cannot auto-detect a shipment number for bulk upload.");
+        }
+
+        List<String> candidates = new java.util.LinkedHashSet<>(List.of(
+                nonBlankOrEmpty(result.detectedShipmentNumber()),
+                nonBlankOrEmpty(result.detectedAwb()),
+                nonBlankOrEmpty(qrScanValue)))
+                .stream().filter(s -> !s.isEmpty()).toList();
+
+        if (candidates.isEmpty()) {
+            return new PodVerificationService.BulkUploadPodOutcome(item.photoFilename(),
+                    PodVerificationService.BulkUploadPodMatchStatus.NO_MATCH,
+                    "Could not read a shipment/AWB number off this image, and no QR code was decodable.",
+                    null, null, null, null, null, null);
+        }
+
+        List<Shipment> matches = shipmentService.bulkTrack(candidates).stream()
+                .collect(java.util.stream.Collectors.toMap(Shipment::getId, s -> s, (a, b) -> a, java.util.LinkedHashMap::new))
+                .values().stream().toList();
+
+        if (matches.isEmpty()) {
+            return new PodVerificationService.BulkUploadPodOutcome(item.photoFilename(),
+                    PodVerificationService.BulkUploadPodMatchStatus.NO_MATCH,
+                    "No shipment in this company matches \"%s\".".formatted(String.join("\", \"", candidates)),
+                    result.detectedShipmentNumber(), result.detectedAwb(), null, null, null, null);
+        }
+        if (matches.size() > 1) {
+            return new PodVerificationService.BulkUploadPodOutcome(item.photoFilename(),
+                    PodVerificationService.BulkUploadPodMatchStatus.AMBIGUOUS,
+                    "Matches more than one shipment (%s) — resolve manually."
+                            .formatted(matches.stream().map(Shipment::getShipmentNumber)
+                                    .collect(java.util.stream.Collectors.joining(", "))),
+                    result.detectedShipmentNumber(), result.detectedAwb(), null, null, null, null);
+        }
+
+        Shipment shipment = matches.get(0);
+        if (shipment.getStatus() != ShipmentStatus.OUT_FOR_DELIVERY && shipment.getStatus() != ShipmentStatus.DELIVERED) {
+            return new PodVerificationService.BulkUploadPodOutcome(item.photoFilename(),
+                    PodVerificationService.BulkUploadPodMatchStatus.INVALID_STATUS,
+                    "Matched %s, but it is %s — bulk upload only applies to an OUT_FOR_DELIVERY or DELIVERED shipment."
+                            .formatted(shipment.getShipmentNumber(), shipment.getStatus()),
+                    result.detectedShipmentNumber(), result.detectedAwb(),
+                    shipment.getId(), shipment.getShipmentNumber(), shipment.getTrackingNumber(), null);
+        }
+
+        String photoUrl = shipmentService.uploadPodFile(shipment.getId(), new ShipmentService.UploadPodFileCommand(
+                item.photoContent(), item.photoFilename(), item.photoContentType(), "PHOTO"));
+        ShipmentAsset photoAsset = shipmentService.attachPodAsset(shipment.getId(), "PHOTO", photoUrl);
+
+        PodVerification verification = PodVerification.builder()
+                .shipmentId(shipment.getId())
+                .podDocumentId(photoAsset.getId())
+                .verificationStatus(PodVerificationStatus.PENDING)
+                .verificationScore(result.score())
+                .detectedReceiverName(result.detectedReceiverName())
+                .detectedAwb(result.detectedAwb())
+                .detectedShipmentNumber(result.detectedShipmentNumber())
+                .detectedDate(result.detectedDate())
+                .signatureDetected(result.signatureDetected())
+                .stampDetected(result.stampDetected())
+                .imageQuality(result.imageQuality())
+                .podHash(podHash)
+                .aiProvider(provider.providerName())
+                .aiModel(provider.modelName())
+                .verifiedAt(Instant.now())
+                .build();
+        verification.reasons(result.reasons());
+        PodVerification saved = podVerificationRepository.save(verification);
+
+        auditService.record(AuditAction.POD_VERIFICATION_RUN, ENTITY, saved.getId(),
+                Map.of("shipmentNumber", shipment.getShipmentNumber(), "status", PodVerificationStatus.PENDING.name(),
+                        "score", result.score(), "source", "bulk-upload", "filename",
+                        item.photoFilename() == null ? "" : item.photoFilename()));
+
+        return new PodVerificationService.BulkUploadPodOutcome(item.photoFilename(),
+                PodVerificationService.BulkUploadPodMatchStatus.MATCHED,
+                "Matched %s — PENDING, awaiting review.".formatted(shipment.getShipmentNumber()),
+                result.detectedShipmentNumber(), result.detectedAwb(),
+                shipment.getId(), shipment.getShipmentNumber(), shipment.getTrackingNumber(), saved);
+    }
+
+    private static PodVerificationService.BulkUploadPodOutcome errorOutcome(String filename, String message) {
+        return new PodVerificationService.BulkUploadPodOutcome(filename,
+                PodVerificationService.BulkUploadPodMatchStatus.ERROR, message,
+                null, null, null, null, null, null);
+    }
+
+    private static String nonBlankOrEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     private UUID requireCompany() {

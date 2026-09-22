@@ -1,9 +1,11 @@
 package com.courier.modules.pod.api;
 
+import com.courier.modules.pod.api.dto.BulkPodUploadRowResponse;
 import com.courier.modules.pod.api.dto.DeliveredShipmentPodResponse;
 import com.courier.modules.pod.api.dto.PodReviewRequest;
 import com.courier.modules.pod.api.dto.PodVerificationResponse;
 import com.courier.modules.pod.application.PodVerificationService;
+import com.courier.modules.pod.domain.PodEntryStatus;
 import com.courier.modules.pod.domain.PodVerification;
 import com.courier.modules.shipment.api.ShipmentMapper;
 import com.courier.modules.shipment.api.dto.ShipmentSearchRequest;
@@ -39,6 +41,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -122,14 +126,49 @@ public class PodVerificationController {
             @PathVariable UUID shipmentId,
             @RequestParam("photo") MultipartFile photo,
             @RequestParam(value = "signature", required = false) MultipartFile signature,
-            @RequestParam("receiverName") String receiverName) {
+            @RequestParam("receiverName") String receiverName,
+            @RequestParam(value = "deliveryDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deliveryDate,
+            @RequestParam(value = "deliveredBy", required = false) String deliveredBy,
+            @RequestParam(value = "podDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate podDate,
+            @RequestParam(value = "podTime", required = false)
+            @DateTimeFormat(pattern = "HH:mm") LocalTime podTime,
+            @RequestParam(value = "status", required = false) PodEntryStatus status,
+            @RequestParam(value = "remark", required = false) String remark) {
 
         var verification = podVerificationService.uploadByCompany(shipmentId,
                 new PodVerificationService.CompanyUploadPodCommand(
                         readBytes(photo), originalFilename(photo), contentType(photo),
                         readBytes(signature), originalFilename(signature), contentType(signature),
-                        receiverName));
+                        receiverName, deliveryDate, deliveredBy, podDate, podTime, status, remark));
         return ApiResponse.success(toResponse(verification), "POD uploaded and approved");
+    }
+
+    @PostMapping(value = "/api/v1/pod/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Bulk POD Upload — auto-detect, match and score many PODs at once",
+            description = "COMPANY_ADMIN only. Up to 50 scanned/collected POD photos in one "
+                    + "call, no shipment picked in advance: each photo is read by the AI "
+                    + "provider for real (the shipment/AWB number actually printed or "
+                    + "written on it, not a structural-only check), matched against this "
+                    + "company's own shipments, and — on exactly one match against an "
+                    + "OUT_FOR_DELIVERY/DELIVERED shipment — scored and stored PENDING, same "
+                    + "as the single-shipment verify endpoint. A human still approves/rejects "
+                    + "via the review endpoint; a photo that can't be read or matches none/"
+                    + "more than one shipment is reported back unmatched, never guessed at.")
+    public ApiResponse<List<BulkPodUploadRowResponse>> bulkUpload(
+            @RequestParam("photos") List<MultipartFile> photos) {
+        var items = photos.stream()
+                .map(f -> new PodVerificationService.BulkUploadPodItem(
+                        readBytes(f), originalFilename(f), contentType(f)))
+                .toList();
+        var outcomes = podVerificationService.bulkUpload(items);
+        List<BulkPodUploadRowResponse> rows = outcomes.stream()
+                .map(outcome -> mapper.toBulkRow(outcome,
+                        outcome.verification() == null ? null : toResponse(outcome.verification())))
+                .toList();
+        long matched = rows.stream().filter(r -> "MATCHED".equals(r.matchStatus())).count();
+        return ApiResponse.success(rows, "%d of %d matched and queued for review".formatted(matched, rows.size()));
     }
 
     @GetMapping("/api/v1/pod/pending-review")

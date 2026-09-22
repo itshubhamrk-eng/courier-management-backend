@@ -8,6 +8,78 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-22 — Bulk POD Upload, real content-based AI verification
+
+Direct request: a batch-upload module that auto-detects the shipment a scanned POD photo
+belongs to, reads receiver name/signature/stamp off it, and scores it — with the AI
+actually looking at pixel *content* (an OCR/vision read), not the structural-only
+brightness/blur/resolution heuristic `HeuristicPodVerificationProvider` runs when no vision
+vendor is configured.
+
+New `POST /api/v1/pod/bulk-upload` (`PodVerificationServiceImpl.bulkUpload`,
+`COMPANY_ADMIN` only, same `REVIEWERS` tier as `uploadByCompany`) — up to 50 photos per
+call, no shipment picked in advance. Per photo: runs the existing
+`PodVerificationProvider.analyze()` once with no shipment context (so
+`PodGroundTruthRules`' claimed-vs-actual mismatch check is a no-op at this point — nothing
+is known yet), collects whatever the provider actually read off the image
+(`detectedShipmentNumber`, `detectedAwb`) plus a QR decode (`PodQrDecoder`, same
+already-uploaded-photo fallback `verify()` uses), and matches those candidates against this
+company's shipments via the existing `ShipmentService.bulkTrack` (the Bulk Shipment
+Tracking report's own lookup, reused as-is — matches by tracking OR shipment number). Zero
+matches -> `NO_MATCH`; more than one distinct shipment matched by different candidates ->
+`AMBIGUOUS`, refused rather than guessed; exactly one match not
+`OUT_FOR_DELIVERY`/`DELIVERED` -> `INVALID_STATUS`; otherwise the photo is stored via the
+existing `ShipmentService.uploadPodFile`/`attachPodAsset` seam and a fresh `pod_verification`
+row is written `PENDING` — identical downstream shape to a single `verify()` call, a human
+still approves/rejects it on the existing POD Review screen. An unavailable AI provider
+fails the whole item as `ERROR` (bulk matching has nothing to go on without a content read,
+unlike single-shipment `verify()` which can still fall back to manual review against a
+human-picked shipment).
+
+**Real content check, not structural-only, on `VisionPodVerificationProvider`.** Extended
+its Messages-API prompt to also return `stampDetected` (company/receiver stamp or seal,
+distinct from a signature) and `detectedShipmentNumber` (the actual characters read off any
+label/sticker/handwriting in the image) — both genuine vision reads, not passthroughs.
+`HeuristicPodVerificationProvider` (the no-vendor-configured default) honestly reports
+`stampDetected=false` always and `detectedShipmentNumber` as a passthrough of the
+claimed/known value, same discipline its existing `detectedAwb` already documents — it has
+no OCR capability at all, never fabricates one. `PodAnalysisResult` gained both fields
+(trailing, to minimise call-site churn); `pod_verification` gained matching columns
+`stamp_detected`/`detected_shipment_number` (`V90`, same table as `V48`, not a new one) and
+`PodVerificationResponse` surfaces both for the existing single-shipment endpoints too.
+
+New frontend screen `features/shipment-movement/pod-bulk-upload.ts` — drag-and-drop or
+multi-select up to 50 images, uploads in one multipart call (`photos[]`), renders a results
+table (file, match status chip, detected number, matched shipment, score, signature/stamp
+Yes-No, message) per `BulkPodUploadRowResponse`. New nav leaf "Bulk POD Upload" under
+Operations (`COMPANY_ONLY`, mirrors "Upload POD (Company)"'s own gate) and route
+`/movement/pod-bulk-upload`.
+
+`mvn test`: full suite green (`mvn -o test` exit 0), fixed the two existing
+`PodAnalysisResult` constructions in `PodVerificationServiceImplTest` for the two new
+trailing fields. `tsc --noEmit`/`ng build --configuration development` clean.
+
+**Verified live same day, throwaway `:8082`/real `courier_db`/real S3, real `:8100`/`:4200`
+untouched throughout.** No vision vendor key configured, so the heuristic provider's own
+QR-decode path (`PodQrDecoder`, the same fallback `verify()` already uses) stood in for the
+"read a number off the image" step — a genuine, non-fabricated content read, just off a QR
+code rather than OCR text. Generated 3 test images with the zxing `javase` encoder (already
+a backend dependency): one QR-encoding a real `LOADTEST01` shipment's tracking number
+(hand-flipped one `BOOKED` fixture to `OUT_FOR_DELIVERY` for this — `LT_BR01-000002` /
+`26090000002`), one QR-encoding a nonexistent number, one plain image with no QR at all.
+`POST /pod/bulk-upload` (as `loadtest.admin@example.com`, `LOADTEST01`'s `COMPANY_ADMIN` —
+see `dev-login-credential.md` update) returned all three outcomes correctly in one call:
+`MATCHED` (real S3 upload, `PENDING` row, score 55, `aiProvider: heuristic-local`),
+`NO_MATCH` ("No shipment in this company matches..."), `NO_MATCH` ("Could not read a
+shipment/AWB number... no QR code was decodable"). Confirmed the matched row on `GET
+/pod/pending-review` and directly in `pod_verification` (real DB row, real S3
+`photoUrl`), then approved it via the existing `POST .../pod/review` — flipped
+`PENDING` -> `PASS`, `reviewedBy`/`reviewedAt`/`reviewRemarks` stamped — proving the full
+bulk-match-to-human-decision pipeline end to end, not just that the endpoint returns 200.
+`V90` applied cleanly against the real dev DB on boot (89 -> 90). **Not yet verified**: the
+real vision-AI path (`pod.ai.provider=vision`, no vendor key in this environment — same gap
+the rest of this module already carries) and the `AMBIGUOUS`/batch-size-limit branches.
+
 ## Fixed 2026-09-22 — SUPER_ADMIN saw an almost-empty nav menu
 
 Root cause: `SuperAdminAccountService`/`UserProvisioningServiceImpl.provisionSuperAdmin`

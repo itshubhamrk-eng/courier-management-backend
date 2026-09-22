@@ -4,6 +4,21 @@
 `V48`/`V49`. Integrated into Shipment Movement's own delivery flow
 (`com.courier.modules.shipment`) rather than replacing it — see "Integration point" below.
 
+**2026-09-22 update — Bulk POD Upload, `V90`.** New `POST /api/v1/pod/bulk-upload`
+(`COMPANY_ADMIN` only): up to 50 photos, no shipment picked in advance — each is read by
+the AI provider for real (content, not structural-only), matched to a shipment via the
+existing `ShipmentService.bulkTrack`, and stored `PENDING` on exactly one match, same as
+`verify()`. `PodAnalysisResult`/`pod_verification` gained `stampDetected`/
+`detectedShipmentNumber` — `VisionPodVerificationProvider` now genuinely reads both off the
+image; `HeuristicPodVerificationProvider` honestly reports `false`/passthrough (no OCR
+capability). New screen `pod-bulk-upload.ts`, nav leaf "Bulk POD Upload"
+(`COMPANY_ONLY`). Full detail in `CHANGELOG.md`'s own 2026-09-22 entry.
+**Verified live same day** (throwaway `:8082`, real DB, real S3, QR-encoded test images
+standing in for OCR since no vision vendor is configured): MATCHED/NO_MATCH both correct,
+matched row reached `pending-review` and was approved end to end. Vision-AI path itself
+still not verified live — no vendor credential configured, same gap noted throughout this
+document.
+
 **2026-09-16 update — AI no longer auto-decides PASS/FAIL; every delivery-app upload
 lands `PENDING`, human always approves/rejects.** Direct request ("when upload POD
 status should be PENDING then we view POD then APPROVED or REJECT it"), surfaced while

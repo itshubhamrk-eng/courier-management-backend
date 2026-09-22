@@ -121,7 +121,7 @@ class PodVerificationServiceImplTest {
     void missingSignatureRecorded() {
         when(provider.analyze(any())).thenReturn(new PodAnalysisResult(75,
                 List.of("No signature detected on this delivery capture."), false, "GOOD",
-                "Ramesh", "AWB1", null, false, false));
+                "Ramesh", "AWB1", null, false, false, false, null));
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
@@ -137,7 +137,7 @@ class PodVerificationServiceImplTest {
         when(provider.analyze(any())).thenReturn(new PodAnalysisResult(95,
                 List.of("This POD photo matches one already used on a different shipment — "
                         + "possible duplicate submission."),
-                true, "GOOD", "Ramesh", "AWB1", null, false, true));
+                true, "GOOD", "Ramesh", "AWB1", null, false, true, false, null));
 
         PodVerification saved = service.verify(SHIPMENT_ID, command("Ramesh"));
 
@@ -311,7 +311,8 @@ class PodVerificationServiceImplTest {
     void companyUploadRefusedWithoutPhoto() {
         assertThatThrownBy(() -> service.uploadByCompany(SHIPMENT_ID,
                 new PodVerificationService.CompanyUploadPodCommand(
-                        null, null, null, null, null, null, "Ramesh")))
+                        null, null, null, null, null, null, "Ramesh",
+                        null, null, null, null, null, null)))
                 .isInstanceOf(BusinessRuleException.class);
         verify(shipmentService, never()).uploadPodFile(any(), any());
     }
@@ -347,7 +348,8 @@ class PodVerificationServiceImplTest {
 
     private static PodVerificationService.CompanyUploadPodCommand companyUploadCommand() {
         return new PodVerificationService.CompanyUploadPodCommand(
-                photoBytes(), "photo.jpg", "image/jpeg", null, null, null, "Ramesh");
+                photoBytes(), "photo.jpg", "image/jpeg", null, null, null, "Ramesh",
+                null, null, null, null, null, null);
     }
 
     private static PodVerificationService.VerifyPodCommand command(String receiverName) {
@@ -358,7 +360,7 @@ class PodVerificationServiceImplTest {
 
     private static PodAnalysisResult result(int score, boolean signature, boolean mustReview) {
         return new PodAnalysisResult(score, List.of("scored"), signature, "GOOD",
-                "Ramesh", "TRK-000001", null, false, mustReview);
+                "Ramesh", "TRK-000001", null, false, mustReview, false, null);
     }
 
     private static PodVerification mockExisting() {

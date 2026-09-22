@@ -53,7 +53,7 @@ import { MatIconModule } from '@angular/material/icon';
 export class UiInput {
   readonly control = input.required<FormControl>();
   readonly label = input('');
-  readonly type = input<'text' | 'password' | 'email' | 'tel' | 'number' | 'date'>('text');
+  readonly type = input<'text' | 'password' | 'email' | 'tel' | 'number' | 'date' | 'time'>('text');
   readonly placeholder = input('');
   readonly icon = input<string | null>(null);
   readonly required = input(false);

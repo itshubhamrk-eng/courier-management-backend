@@ -1,7 +1,9 @@
 package com.courier.modules.pod.api;
 
+import com.courier.modules.pod.api.dto.BulkPodUploadRowResponse;
 import com.courier.modules.pod.api.dto.DeliveredShipmentPodResponse;
 import com.courier.modules.pod.api.dto.PodVerificationResponse;
+import com.courier.modules.pod.application.PodVerificationService;
 import com.courier.modules.pod.domain.PodVerification;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
@@ -21,10 +23,23 @@ public class PodVerificationMapper {
                 shipment == null ? null : shipment.getTrackingNumber(),
                 v.getPodDocumentId(), photoUrl, signatureUrl,
                 v.getVerificationStatus().name(), v.getVerificationScore(), v.reasons(),
-                v.getDetectedReceiverName(), v.getDetectedAwb(), v.getDetectedDate(),
-                v.isSignatureDetected(), v.getImageQuality(),
+                v.getDetectedReceiverName(), v.getDetectedAwb(), v.getDetectedShipmentNumber(), v.getDetectedDate(),
+                v.getDeliveryDate(), v.getDeliveredBy(), v.getPodDate(), v.getPodTime(),
+                v.getEntryStatus() == null ? null : v.getEntryStatus().name(), v.getRemark(),
+                v.isSignatureDetected(), v.isStampDetected(), v.getImageQuality(),
                 v.getAiProvider(), v.getAiModel(), v.getVerifiedAt(),
                 v.getReviewedBy(), v.getReviewedAt(), v.getReviewRemarks());
+    }
+
+    /** One Bulk POD Upload result row — {@code verificationResponse} is only passed for a
+     *  {@code MATCHED} outcome. */
+    public BulkPodUploadRowResponse toBulkRow(PodVerificationService.BulkUploadPodOutcome outcome,
+                                               PodVerificationResponse verificationResponse) {
+        return new BulkPodUploadRowResponse(
+                outcome.filename(), outcome.matchStatus().name(), outcome.message(),
+                outcome.detectedShipmentNumber(), outcome.detectedAwb(),
+                outcome.shipmentId(), outcome.shipmentNumber(), outcome.trackingNumber(),
+                verificationResponse);
     }
 
     /** One POD Review table row — {@code v} and {@code deliveredAt} are null for a delivered

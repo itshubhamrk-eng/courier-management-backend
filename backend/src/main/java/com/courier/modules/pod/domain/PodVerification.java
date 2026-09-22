@@ -18,6 +18,8 @@ import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -74,11 +76,42 @@ public class PodVerification extends CompanyOwnedEntity {
     @Column(name = "detected_awb", length = 100)
     private String detectedAwb;
 
+    /** Shipment/AWB/LR number actually read off the photo's own content by the AI provider —
+     *  distinct from {@link #detectedAwb} (which may simply echo a claimed/known value for a
+     *  non-OCR provider). Drives Bulk POD Upload's auto-match to a shipment. */
+    @Column(name = "detected_shipment_number", length = 100)
+    private String detectedShipmentNumber;
+
     @Column(name = "detected_date", length = 50)
     private String detectedDate;
 
+    /** Paper-register-style fields, set only by a company-level upload (never by {@link
+     *  #verify}'s AI path) — see {@link PodEntryStatus}. */
+    @Column(name = "delivery_date")
+    private LocalDate deliveryDate;
+
+    @Column(name = "delivered_by", length = 150)
+    private String deliveredBy;
+
+    @Column(name = "pod_date")
+    private LocalDate podDate;
+
+    @Column(name = "pod_time")
+    private LocalTime podTime;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entry_status", length = 20)
+    private PodEntryStatus entryStatus;
+
+    @Column(name = "remark", length = 1000)
+    private String remark;
+
     @Column(name = "signature_detected", nullable = false)
     private boolean signatureDetected;
+
+    /** Company/receiver stamp or seal visible on the capture — distinct from a signature. */
+    @Column(name = "stamp_detected", nullable = false)
+    private boolean stampDetected;
 
     @Column(name = "image_quality", length = 20)
     private String imageQuality;

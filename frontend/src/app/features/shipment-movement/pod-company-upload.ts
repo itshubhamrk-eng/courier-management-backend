@@ -12,6 +12,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
+import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { PinIllustration } from '@shared/components/illustrations/pin-illustration';
 
 /**
@@ -26,7 +27,7 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
   selector: 'app-pod-company-upload',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatIconModule, UiCard, UiButton, UiInput, UiLoader, PinIllustration],
+  imports: [ReactiveFormsModule, MatIconModule, UiCard, UiButton, UiInput, UiLoader, UiSelect, PinIllustration],
   template: `
     <div class="page">
       <header class="page__head">
@@ -64,12 +65,30 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
               <mat-icon>check_circle</mat-icon>
               <p>POD uploaded and auto-approved — status <strong>{{ r.verificationStatus }}</strong>.</p>
             </div>
+            @if (r.deliveryDate || r.deliveredBy || r.podDate || r.podTime || r.entryStatus || r.remark) {
+              <dl class="reg">
+                @if (r.deliveryDate) { <div><dt>Delivery Date</dt><dd>{{ r.deliveryDate }}</dd></div> }
+                @if (r.deliveredBy) { <div><dt>Delivered By</dt><dd>{{ r.deliveredBy }}</dd></div> }
+                @if (r.podDate) { <div><dt>POD Date</dt><dd>{{ r.podDate }}</dd></div> }
+                @if (r.podTime) { <div><dt>POD Time</dt><dd>{{ r.podTime }}</dd></div> }
+                @if (r.entryStatus) { <div><dt>Status</dt><dd>{{ r.entryStatus }}</dd></div> }
+                @if (r.remark) { <div><dt>Remark</dt><dd>{{ r.remark }}</dd></div> }
+              </dl>
+            }
             <app-button variant="stroked" icon="upload_file" (pressed)="reset()">Upload Another</app-button>
           </app-card>
         } @else {
           <app-card title="Upload POD">
             <form [formGroup]="form" class="df">
               <app-input [control]="c('receiverName')" label="Receiver Name" [required]="true" [maxLength]="150" />
+              <div class="grid2">
+                <app-input [control]="c('deliveryDate')" type="date" label="Delivery Date" />
+                <app-input [control]="c('deliveredBy')" label="Delivered By" [maxLength]="150" />
+                <app-input [control]="c('podDate')" type="date" label="POD Date" />
+                <app-input [control]="c('podTime')" type="time" label="POD Time" />
+                <app-select [control]="c('status')" label="Status" [options]="statusOptions" [allowEmpty]="true" emptyLabel="—" />
+              </div>
+              <app-input [control]="c('remark')" label="Remark" [maxLength]="1000" />
               <div class="pod-row">
                 <div class="pod">
                   <span class="pod__label">Photo <em>required</em></span>
@@ -100,6 +119,8 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
     .page__head-row { display:flex; align-items:center; gap:14px; }
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+    @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
     .sh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .sh strong { display:block; font:600 15px var(--font-sans); }
     .pod-row { display:flex; gap:16px; flex-wrap:wrap; }
@@ -111,6 +132,9 @@ import { PinIllustration } from '@shared/components/illustrations/pin-illustrati
       font:600 13px var(--font-sans); color:var(--content-fg); }
     .ok { display:flex; align-items:center; gap:12px; padding:8px 0 16px; }
     .ok mat-icon { font-size:32px; width:32px; height:32px; color:var(--success); }
+    .reg { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px 16px; margin:0 0 16px; }
+    .reg dt { font:600 11px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.03em; }
+    .reg dd { margin:2px 0 0; font:500 13px var(--font-sans); }
   `]
 })
 export class PodCompanyUpload {
@@ -127,8 +151,21 @@ export class PodCompanyUpload {
   readonly shipment = signal<ShipmentResponse | null>(null);
 
   readonly form: FormGroup = this.fb.group({
-    receiverName: ['', [Validators.required, Validators.maxLength(150)]]
+    receiverName: ['', [Validators.required, Validators.maxLength(150)]],
+    deliveryDate: [''],
+    deliveredBy: ['', Validators.maxLength(150)],
+    podDate: [''],
+    podTime: [''],
+    status: [null],
+    remark: ['', Validators.maxLength(1000)]
   });
+
+  readonly statusOptions: SelectOption[] = [
+    { value: 'DELIVERED', label: 'Delivered' },
+    { value: 'NOT_DELIVERED', label: 'Not Delivered' },
+    { value: 'RETURNED', label: 'Returned' },
+    { value: 'RTO', label: 'RTO' }
+  ];
 
   readonly photo = signal<File | null>(null);
   readonly signature = signal<File | null>(null);
@@ -174,8 +211,12 @@ export class PodCompanyUpload {
     const photo = this.photo();
     if (!s || !photo || this.form.invalid) return;
     this.uploading.set(true);
+    const v = this.form.getRawValue();
     this.podService.uploadByCompany(s.id, {
-      photo, signature: this.signature(), receiverName: this.c('receiverName').value.trim()
+      photo, signature: this.signature(), receiverName: v.receiverName.trim(),
+      deliveryDate: v.deliveryDate || null, deliveredBy: v.deliveredBy?.trim() || null,
+      podDate: v.podDate || null, podTime: v.podTime || null,
+      status: v.status || null, remark: v.remark?.trim() || null
     }).subscribe({
       next: (r) => {
         this.uploading.set(false);
