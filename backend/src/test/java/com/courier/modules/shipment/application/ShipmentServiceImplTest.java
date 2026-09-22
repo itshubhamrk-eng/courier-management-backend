@@ -688,6 +688,15 @@ class ShipmentServiceImplTest {
                 org.mockito.ArgumentCaptor.forClass(ShipmentEvent.Cancelled.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().shipmentNumber()).isEqualTo(existing.getShipmentNumber());
+
+        // The old/new status pair the Activity Log's automatic filter attaches to this
+        // request — see ActivityContext's own doc for why this is set here rather than
+        // requiring the filter to know Shipment's domain.
+        var activity = com.courier.shared.activity.application.ActivityContext.get();
+        assertThat(activity).isNotNull();
+        assertThat(activity.oldValue()).containsEntry("status", "BOOKED");
+        assertThat(activity.newValue()).containsEntry("status", "CANCELLED");
+        com.courier.shared.activity.application.ActivityContext.clear();
     }
 
     @Test

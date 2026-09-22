@@ -85,8 +85,10 @@ const QA = {
   track:    { id: 'track', label: 'Track Shipment', icon: 'my_location', tone: 'success', route: '/track' },
   print:    { id: 'print', label: 'Print Label', icon: 'print', tone: 'warning' },
   loadingSheet: { id: 'loadingSheet', label: 'Loading Sheet', icon: 'qr_code_scanner', tone: 'danger', route: '/movement/loading-sheet' },
-  dispatch: { id: 'dispatch', label: 'THC', icon: 'send', tone: 'info' },
-  receive:  { id: 'receive', label: 'Receive', icon: 'call_received', tone: 'success' },
+  // Hub Operations (2026-09-21): these two were the last un-routed quick actions,
+  // waiting on a Hub Operations screen to point at — see MEMORY/modules/hub-operations.md.
+  dispatch: { id: 'dispatch', label: 'THC', icon: 'send', tone: 'info', route: '/hub-operations/dispatch' },
+  receive:  { id: 'receive', label: 'Receive', icon: 'call_received', tone: 'success', route: '/hub-operations/in-scan' },
   branches: { id: 'branches', label: 'Branches', icon: 'store', tone: 'brand', route: '/branches' },
   // hubs: { id: 'hubs', label: 'Hubs', icon: 'hub', route: '/hubs' }, // hub module not built yet
   users:    { id: 'users', label: 'Users', icon: 'group', tone: 'warning', route: '/users' },

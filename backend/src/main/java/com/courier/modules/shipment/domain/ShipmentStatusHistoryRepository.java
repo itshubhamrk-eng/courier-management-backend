@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -48,4 +49,9 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
      *  ever called from {@code PublicTrackingService} for a shipment id already resolved via
      *  the public track lookup. */
     List<ShipmentStatusHistory> findAllByShipmentIdOrderByChangedAtAsc(UUID shipmentId);
+
+    /** Hub Dashboard's "Today's Inbound Shipments" — every arrival (final in-scan or a
+     *  crossing hop) recorded at this branch within the window. */
+    long countByCompanyIdAndBranchIdAndStatusInAndChangedAtBetween(
+            UUID companyId, UUID branchId, Collection<ShipmentStatus> statuses, Instant from, Instant to);
 }

@@ -1,14 +1,21 @@
-// Hub module not built yet — backend has no /api/v1/hubs controller. Disabled, not routed.
-/*
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
-import { Page, PageQuery } from '@core/models/page.model';
+import { Branch } from '@core/models/branch.model';
+import { PageQuery } from '@core/models/page.model';
 
-/** Hub endpoints follow Branch's shape; the module lands next on the backend. * /
+/**
+ * Hubs — a Hub is a `Branch` row with `branchType: 'HUB'` (V61), not a separate entity.
+ * This service is a thin, filtered view over `BranchService`'s own endpoint
+ * (`GET /branches?branchType=HUB`) — see MEMORY/modules/hub-operations.md decision 1.
+ * Create/edit/activate/deactivate reuse the Branch screens directly; there is no
+ * separate Hub write endpoint.
+ */
 @Injectable({ providedIn: 'root' })
 export class HubService {
   private readonly api = inject(ApiService);
-  list(query: PageQuery) { return this.api.page<Record<string, unknown>>(API.hubs, query); }
+
+  list(query: PageQuery) {
+    return this.api.page<Branch>(API.branches, { ...query, branchType: 'HUB' });
+  }
 }
-*/

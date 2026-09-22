@@ -73,6 +73,7 @@ import com.courier.modules.support.application.command.CreateTicketCommand;
 import com.courier.modules.support.domain.Ticket;
 import com.courier.modules.support.domain.TicketCategory;
 import com.courier.modules.support.domain.TicketPriority;
+import com.courier.shared.activity.application.ActivityContext;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.company.CompanyContext;
@@ -858,6 +859,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.SHIPMENT_CANCELLED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "previousStatus", previous.name()));
+        ActivityContext.recordChange("Shipments", "Cancel",
+                "Cancelled shipment %s: %s".formatted(saved.getShipmentNumber(), remarks.trim()),
+                "Shipment", saved.getId().toString(),
+                Map.of("status", previous.name()),
+                Map.of("status", saved.getStatus().name(), "reason", remarks.trim()));
         eventPublisher.publishEvent(new ShipmentEvent.Cancelled(
                 saved.getId(), companyId, saved.getShipmentNumber(), Instant.now()));
 
@@ -1013,6 +1019,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         return shipmentRepository.findDistinctToCityByCompanyIdAndCurrentLocationIdAndStatusIn(
                 companyId, currentLocationId,
                 java.util.Set.of(ShipmentStatus.BOOKED, ShipmentStatus.READY_FOR_MANIFEST));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public long countArrivalsAt(UUID branchId, Instant from, Instant to) {
+        UUID companyId = requireCompany();
+        return historyRepository.countByCompanyIdAndBranchIdAndStatusInAndChangedAtBetween(
+                companyId, branchId, java.util.Set.of(ShipmentStatus.IN_SCAN, ShipmentStatus.READY_FOR_MANIFEST),
+                from, to);
     }
 
     @Override

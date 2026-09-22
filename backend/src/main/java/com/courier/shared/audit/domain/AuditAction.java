@@ -25,6 +25,9 @@ public enum AuditAction {
     EMAIL_VERIFICATION_SENT,
     EMAIL_VERIFIED,
     SESSION_REVOKED,
+    /** A refresh was attempted against a session past its TTL or already revoked — see
+     *  {@code AuthService#refresh} and {@code LoginAttemptService#recordSessionExpired}. */
+    SESSION_EXPIRED,
     /** SUPER_ADMIN opened a "login as company" session. See {@code AuthService#impersonateCompany}. */
     COMPANY_IMPERSONATED,
     /** COMPANY_ADMIN opened a "login as branch" session. See {@code AuthService#impersonateBranch}. */
@@ -282,6 +285,13 @@ public enum AuditAction {
     MENU_ITEM_UPDATED,
     MENU_ITEM_DELETED,
     USER_PERMISSIONS_UPDATED,
+
+    // --- Hub Operations: out-scan (duplicate-scan-before-dispatch ledger) and
+    // exceptions (Missing/Damaged/Short/Wrong Destination/Misrouted/On Hold) —
+    // neither ever changes Shipment.status itself.
+    HUB_OUT_SCANNED,
+    HUB_EXCEPTION_RAISED,
+    HUB_EXCEPTION_RESOLVED,
 
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,

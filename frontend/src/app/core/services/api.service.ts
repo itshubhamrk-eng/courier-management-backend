@@ -51,6 +51,11 @@ export class ApiService {
   delete<T>(path: string): Observable<T> {
     return this.http.delete<ApiResponse<T>>(this.base + path).pipe(map((r) => r.data));
   }
+
+  /** Raw file download (CSV export, ...) — no ApiResponse envelope to unwrap. */
+  getBlob(path: string, query?: Record<string, unknown>): Observable<Blob> {
+    return this.http.get(this.base + path, { params: toParams(query), responseType: 'blob' });
+  }
 }
 
 function toParams(query?: Record<string, unknown>): HttpParams {

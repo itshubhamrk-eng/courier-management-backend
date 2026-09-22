@@ -2,6 +2,7 @@ package com.courier.shared.config;
 
 import com.courier.shared.api.ApiResponse;
 import com.courier.shared.exception.ErrorCode;
+import com.courier.shared.activity.infrastructure.ActivityLoggingFilter;
 import com.courier.shared.security.JwtAuthenticationFilter;
 import com.courier.shared.security.Roles;
 import com.courier.shared.company.CompanyResolutionFilter;
@@ -47,6 +48,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CompanyResolutionFilter companyResolutionFilter;
+    private final ActivityLoggingFilter activityLoggingFilter;
     private final CorsProperties corsProperties;
     private final ObjectMapper objectMapper;
 
@@ -144,7 +146,10 @@ public class SecurityConfig {
                 // Authenticate first, then bind the company from the verified principal.
                 // The order is load-bearing: CompanyResolutionFilter reads the SecurityContext.
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(companyResolutionFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(companyResolutionFilter, JwtAuthenticationFilter.class)
+                // Last in the chain: by the time it runs, the principal and company are
+                // both bound, so it can log "who, from where" without any lookup of its own.
+                .addFilterAfter(activityLoggingFilter, CompanyResolutionFilter.class);
 
         return http.build();
     }

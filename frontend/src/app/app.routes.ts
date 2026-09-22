@@ -33,7 +33,18 @@ const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.DELIVERY_OPERATOR, AppRol
 // For Delivery/Deliver the
 // delivery branch. Mirrors ShipmentServiceImpl's movement WRITERS (COMPANY_ADMIN,
 // BRANCH_MANAGER, OPERATOR) the same way SHIPMENT_WRITERS does for booking.
-const MOVEMENT_WRITERS = [...UPDATERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR];
+// Hub Operations (2026-09-21): a hub-staffed user's own branch_id IS the hub — every
+// screen below already defaults to "my own branch", so HUB_MANAGER only needed adding
+// to the role gate, not a new component. Was missing before this change even though the
+// backend role already held the underlying permissions (TRACKING_CREATE/READ etc).
+const MOVEMENT_WRITERS = [...UPDATERS, AppRole.HUB_MANAGER, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR];
+// Hub Operations' own screens (dashboard, shipments-at-hub, out-scan, exceptions) —
+// COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's own desk.
+const HUB_WRITERS = [AppRole.COMPANY_ADMIN, AppRole.HUB_MANAGER];
+// Hubs list — a filtered Branch list; BRANCH_MANAGER included too since a crossing hub
+// is visible to any manager coordinating a lane through it, the same reach Branches'
+// own nav entry intentionally does NOT have (COMPANY_ADMIN-only) but hubs benefits from.
+const HUB_READERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB_MANAGER];
 // Rate Master: company and branch price their own shipments; a platform operator prices
 // nothing.
 const RATE_READERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
@@ -493,11 +504,54 @@ export const routes: Routes = [
         data: { roles: MASTERS_READERS },
         loadComponent: () => import('@features/masters/master-form-page').then((m) => m.MasterFormPage)
       },
-      // hub module not built yet
-      // {
-      //   path: 'hubs', title: 'Hubs', canActivate: [roleGuard], data: { roles: MANAGERS },
-      //   loadComponent: () => import('@features/hub/hub-list').then((m) => m.HubList)
-      // },
+      // Hubs — a filtered Branch list (branchType: 'HUB'), not a separate module. See
+      // MEMORY/modules/hub-operations.md decision 1.
+      {
+        path: 'hubs', title: 'Hubs', canActivate: [roleGuard], data: { roles: HUB_READERS },
+        loadComponent: () => import('@features/hub/hub-list').then((m) => m.HubList)
+      },
+      // Hub Operations — In Scan/Load Sheet/Sorting/Dispatch reuse the existing Shipment
+      // Movement/Manifest screens wholesale (routed again here under their own path, same
+      // component); Dashboard/Shipments At Hub/Out Scan/Exceptions are the genuinely new
+      // screens. See MEMORY/modules/hub-operations.md.
+      {
+        path: 'hub-operations/dashboard', title: 'Hub Dashboard', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/hub-operations/hub-dashboard').then((m) => m.HubDashboard)
+      },
+      {
+        path: 'hub-operations/in-scan', title: 'Hub In Scan', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/in-scan').then((m) => m.InScan)
+      },
+      {
+        path: 'hub-operations/shipments', title: 'Shipments At Hub', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/hub-operations/shipments-at-hub').then((m) => m.ShipmentsAtHub)
+      },
+      {
+        path: 'hub-operations/sorting', title: 'Sorting', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
+      },
+      {
+        path: 'hub-operations/load-sheet', title: 'Hub Load Sheet', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
+      },
+      {
+        path: 'hub-operations/out-scan', title: 'Out Scan', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/hub-operations/out-scan').then((m) => m.HubOutScan)
+      },
+      {
+        path: 'hub-operations/dispatch', title: 'Hub Dispatch', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/shipment-movement/trip-hire-challan').then((m) => m.TripHireChallan)
+      },
+      {
+        path: 'hub-operations/exceptions', title: 'Hub Exceptions', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/hub-operations/exceptions').then((m) => m.HubExceptions)
+      },
+      // Reports: reuses the Booking Report as-is (it already scopes to the caller's own
+      // branch, and a hub is a branch) rather than building a parallel report screen.
+      {
+        path: 'hub-operations/reports', title: 'Hub Reports', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        loadComponent: () => import('@features/reports/booking-report').then((m) => m.BookingReport)
+      },
       {
         path: 'finance/branch-wallet', title: 'Branch Wallet', canActivate: [roleGuard], data: { roles: WALLET_VIEWERS },
         loadComponent: () => import('@features/branch-wallet/wallet-dashboard').then((m) => m.WalletDashboard)
@@ -640,6 +694,17 @@ export const routes: Routes = [
       {
         path: 'settings', title: 'Settings', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/settings/settings-page').then((m) => m.SettingsPage)
+      },
+      {
+        // Gated on AUDIT_READ/SEARCH/EXPORT (seeded since V6, unused until this module —
+        // see MEMORY/modules/activity-log.md), so ADMINS is the role bridge same as every
+        // other permission-gated leaf.
+        path: 'activity-logs', title: 'Activity Log', canActivate: [roleGuard], data: { roles: ADMINS },
+        loadComponent: () => import('@features/activity-log/activity-log-list').then((m) => m.ActivityLogList)
+      },
+      {
+        path: 'activity-logs/users', title: 'User Activity', canActivate: [roleGuard], data: { roles: ADMINS },
+        loadComponent: () => import('@features/activity-log/user-activity').then((m) => m.UserActivity)
       }
     ]
   },

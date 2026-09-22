@@ -48,7 +48,11 @@ export const API = {
   /** Loading Sheet, Trip Hire Challan (THC), In Scan, Out For Delivery, Deliver. */
   shipmentMovement: '/shipment-movement',
   branchWallet: '/branch-wallet',
-  hubs: '/hubs',
+  /** Hub Operations — out-scan and exceptions (the genuinely new surface). A hub itself
+   *  is a `Branch` row with `branchType: 'HUB'`, so Hub listing reuses `API.branches`
+   *  with that filter, not its own endpoint; in-scan/Load Sheet/dispatch reuse
+   *  `shipmentMovement`/`manifests`/`vehicles`. See MEMORY/modules/hub-operations.md. */
+  hubOperations: '/hub-operations',
   companySettings: '/company-settings',
   /** Own-company letterhead (name/address/GST/contact/website) for printed documents —
    *  any authenticated company user reads, unlike `/companies/**` (SUPER_ADMIN only). */
@@ -85,5 +89,10 @@ export const API = {
   communicationTemplates: '/communication/templates',
   communicationSettings: '/communication/settings',
   communicationLogs: '/communication/logs',
-  communicationDashboard: '/communication/dashboard'
+  communicationDashboard: '/communication/dashboard',
+  /** User Activity & Audit Logging — the automatic activity trail plus per-user
+   *  login/session history. See MEMORY/modules/activity-log.md. */
+  activityLogs: '/activity-logs',
+  activityLogExport: '/activity-logs/export',
+  userActivity: (userId: string) => `/users/${userId}/activity`
 } as const;

@@ -63,6 +63,11 @@ const OPS_BOOKING = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR];
 const OPS_DELIVERY_DESK = [...OPS_MANAGERS, AppRole.DELIVERY_OPERATOR];
 const OPS_SHIPMENT_READERS = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 
+// Hub Operations' own screens — COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's
+// own desk. In Scan/Load Sheet/Dispatch under this section reuse the Shipment Movement
+// screens above wholesale (same component, a second route); see app.routes.ts.
+const HUB_OPS = [AppRole.COMPANY_ADMIN, AppRole.HUB_MANAGER];
+
 export const NAVIGATION: NavNode[] = [
   { id: 'dashboard', title: 'Dashboard', icon: 'dashboard', route: '/dashboard', order: 1 },
 
@@ -95,8 +100,17 @@ export const NAVIGATION: NavNode[] = [
       // leaf above and DefaultRoleCatalog's BRANCH_MANAGER definition.
       { id: 'user-permissions', title: 'User Permissions', icon: 'checklist', route: '/permissions/users', permission: 'MENU_ASSIGN', roles: [...ADMINS, AppRole.BRANCH_MANAGER] },
       { id: 'branches', title: 'Branches', icon: 'store', route: '/branches', permission: 'BRANCH_READ', roles: COMPANY_ONLY },
-      // { id: 'hubs', title: 'Hubs', icon: 'hub', route: '/hubs', permission: 'HUB_VIEW', roles: MANAGERS }, // hub module not built yet
-      { id: 'company-settings', title: 'Company Settings', icon: 'tune', route: '/settings', permission: 'SETTINGS_READ', roles: COMPANY_ONLY }
+      // A Hub is a Branch with branchType HUB (V61), not a separate module — see
+      // MEMORY/modules/hub-operations.md decision 1. HUB_VIEW is the catalogue's own
+      // legacy alias for HUB_READ (never a "_VIEW" suffix code otherwise).
+      { id: 'hubs', title: 'Hubs', icon: 'hub', route: '/hubs', permission: 'HUB_VIEW', roles: MANAGERS },
+      { id: 'company-settings', title: 'Company Settings', icon: 'tune', route: '/settings', permission: 'SETTINGS_READ', roles: COMPANY_ONLY },
+      // User Activity & Audit Logging: reuses AUDIT_READ/SEARCH/EXPORT, seeded since V6
+      // and unused until this module (MEMORY/modules/activity-log.md) — no new
+      // ACTIVITY_LOG_VIEW/EXPORT codes, same reasoning RATE_MASTER_CALCULATE's neighbours
+      // avoid inventing a parallel right for something the catalogue already names.
+      { id: 'activity-log', title: 'Activity Log', icon: 'history', route: '/activity-logs', permission: 'AUDIT_SEARCH', roles: ADMINS },
+      { id: 'user-activity', title: 'User Activity', icon: 'person_search', route: '/activity-logs/users', permission: 'AUDIT_READ', roles: ADMINS }
     ]
   },
 
@@ -216,6 +230,25 @@ export const NAVIGATION: NavNode[] = [
       // than pod-review's own COMPANY_AND_BRANCH: mirrors uploadByCompany's
       // hasRole('COMPANY_ADMIN') gate exactly.
       { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', roles: COMPANY_ONLY }
+    ]
+  },
+
+  // Hub Operations (2026-09-21) — receive/sort/load-sheet/out-scan/dispatch/exceptions
+  // at a hub. In Scan, Load Sheet and Dispatch reuse the Shipment Movement screens above
+  // wholesale, routed again under their own path; Dashboard, Shipments At Hub, Out Scan
+  // and Exceptions are the genuinely new screens. See MEMORY/modules/hub-operations.md.
+  {
+    id: 'hub-operations', title: 'Hub Operations', icon: 'hub', order: 5.5, roles: HUB_OPS,
+    children: [
+      { id: 'hub-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/hub-operations/dashboard', permission: 'HUB_READ', roles: HUB_OPS },
+      { id: 'hub-in-scan', title: 'In Scan', icon: 'move_to_inbox', route: '/hub-operations/in-scan', permission: 'HUB_IN_SCAN', roles: HUB_OPS },
+      { id: 'hub-shipments', title: 'Shipments At Hub', icon: 'inventory_2', route: '/hub-operations/shipments', permission: 'HUB_READ', roles: HUB_OPS },
+      { id: 'hub-sorting', title: 'Sorting', icon: 'sort', route: '/hub-operations/sorting', permission: 'HUB_SORT', roles: HUB_OPS },
+      { id: 'hub-load-sheet', title: 'Load Sheets', icon: 'qr_code_scanner', route: '/hub-operations/load-sheet', permission: 'MANIFEST_CREATE', roles: HUB_OPS },
+      { id: 'hub-out-scan', title: 'Out Scan', icon: 'outbox', route: '/hub-operations/out-scan', permission: 'HUB_OUT_SCAN', roles: HUB_OPS },
+      { id: 'hub-dispatch', title: 'Dispatch', icon: 'outbound', route: '/hub-operations/dispatch', permission: 'HUB_DISPATCH', roles: HUB_OPS },
+      { id: 'hub-exceptions', title: 'Exceptions', icon: 'report_problem', route: '/hub-operations/exceptions', permission: 'HUB_EXCEPTION_MANAGE', roles: HUB_OPS },
+      { id: 'hub-reports', title: 'Reports', icon: 'summarize', route: '/hub-operations/reports', permission: 'REPORT_READ', roles: HUB_OPS }
     ]
   },
 

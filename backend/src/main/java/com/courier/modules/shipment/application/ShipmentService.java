@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -303,6 +304,10 @@ public interface ShipmentService {
      *  path). A shipment already carrying a real next stop (crossing hop, or a legacy row)
      *  never appears here — it is attached the old, branch-matching way instead. */
     List<String> findEligibleDestinationCities(UUID currentLocationId);
+
+    /** Hub Dashboard's "Today's Inbound Shipments" — count of arrivals (final in-scan or
+     *  a crossing hop) recorded at {@code branchId} within {@code [from, to)}. */
+    long countArrivalsAt(UUID branchId, Instant from, Instant to);
 
     /**
      * Called only by {@code ManifestServiceImpl.dispatch}, after the manifest itself has

@@ -11,7 +11,9 @@ import com.courier.modules.company.application.UserService;
 import com.courier.modules.company.domain.User;
 import com.courier.modules.ewaybill.application.EwayBillService;
 import com.courier.modules.manifest.application.command.CreateManifestCommand;
+import com.courier.modules.manifest.domain.BranchDirectoryPort;
 import com.courier.modules.manifest.domain.DeliveryMode;
+import com.courier.modules.manifest.domain.HubOutScanCheckPort;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
 import com.courier.modules.manifest.domain.ManifestNumberGenerator;
@@ -20,6 +22,7 @@ import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
 import com.courier.modules.manifest.domain.ManifestSpecifications;
 import com.courier.modules.manifest.domain.ManifestSummaryStats;
 import com.courier.modules.manifest.domain.Vehicle;
+import com.courier.shared.activity.application.ActivityContext;
 import com.courier.modules.shipment.application.ShipmentService;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.shared.audit.application.AuditService;
@@ -83,6 +86,8 @@ public class ManifestServiceImpl implements ManifestService {
     private final SmsProvider smsProvider;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
+    private final BranchDirectoryPort branchDirectory;
+    private final HubOutScanCheckPort hubOutScanCheck;
 
     @Override
     @Transactional
@@ -191,6 +196,21 @@ public class ManifestServiceImpl implements ManifestService {
                     "Manifest %s has no shipment to dispatch.".formatted(manifest.getManifestNumber()));
         }
 
+        // Hub Operations (2026-09-21): a Load Sheet booked from a hub (branch_type HUB)
+        // may not dispatch until every shipment on it has been out-scanned — Branch
+        // Delivery's own dispatch is untouched, this check never runs for it.
+        boolean fromHub = branchDirectory.findBranch(manifest.getBookingBranchId(), companyId)
+                .map(branch -> "HUB".equals(branch.branchType()))
+                .orElse(false);
+        if (fromHub) {
+            List<UUID> readyShipmentIds = readyShipments.stream().map(Shipment::getId).toList();
+            if (!hubOutScanCheck.allScanned(companyId, manifest.getId(), readyShipmentIds)) {
+                throw new BusinessRuleException(
+                        "Manifest %s has shipments that have not been out-scanned yet."
+                                .formatted(manifest.getManifestNumber()));
+            }
+        }
+
         Vehicle vehicle = vehicleService.getById(vehicleId);
         if (!vehicle.isActive()) {
             throw new BusinessRuleException(
@@ -200,8 +220,16 @@ public class ManifestServiceImpl implements ManifestService {
         // company role currently models "driver" cleanly enough to restrict further.
         userService.getById(driverUserId);
 
+        String statusBefore = manifest.getStatus().name();
         manifest.dispatch(vehicleId, driverUserId, departureTime, fuelCost, driverAdvance, tollAmount, otherAmount);
         Manifest saved = manifestRepository.save(manifest);
+
+        ActivityContext.recordChange("Manifest", "Dispatch",
+                "Dispatched manifest %s with vehicle %s".formatted(saved.getManifestNumber(), vehicleId),
+                "Manifest", saved.getId().toString(),
+                Map.of("status", statusBefore),
+                Map.of("status", saved.getStatus().name(), "vehicleId", String.valueOf(vehicleId),
+                        "driverUserId", String.valueOf(driverUserId)));
 
         List<UUID> dispatchedShipmentIds = readyShipments.stream().map(Shipment::getId).toList();
         shipmentService.transitionToDispatched(

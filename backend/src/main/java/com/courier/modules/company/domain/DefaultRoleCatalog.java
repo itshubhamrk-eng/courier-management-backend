@@ -171,11 +171,21 @@ public final class DefaultRoleCatalog {
                             "REPORT_PRINT", "DASHBOARD_READ",
                             "MASTER_DATA_READ", "RATE_MASTER_READ", "RATE_MASTER_CALCULATE")),
 
+            // Hub Operations (2026-09-21) added the MANIFEST_* grants (a Hub Load Sheet
+            // is a Manifest booked from a hub branch — no separate hub load-sheet
+            // permission) and the five hub-operational verbs seeded onto PermissionModule
+            // .HUB alongside its pre-existing CRUD.
             new RoleDefinition(HUB_MANAGER, "Hub Manager",
                     "Runs a sorting hub: inbound and outbound movement, scans and vehicles.",
                     RoleType.OPERATIONS, false,
                     Set.of(
-                            "COMPANY_READ", "BRANCH_READ", "HUB_READ", "HUB_CREATE","HUB_UPDATE","HUB_DELETE", "DRIVER_READ", "VEHICLE_READ", "VEHICLE_CREATE","VEHICLE_UPDATE","VEHICLE_DELETE", "SHIPMENT_READ","SHIPMENT_SEARCH", "SHIPMENT_UPDATE", "SHIPMENT_ASSIGN", "TRACKING_CREATE","TRACKING_READ", "REPORT_READ","DASHBOARD_READ")),
+                            "COMPANY_READ", "BRANCH_READ", "HUB_READ", "HUB_CREATE","HUB_UPDATE","HUB_DELETE",
+                            "HUB_IN_SCAN", "HUB_OUT_SCAN", "HUB_SORT", "HUB_DISPATCH", "HUB_EXCEPTION_MANAGE",
+                            "DRIVER_READ", "VEHICLE_READ", "VEHICLE_CREATE","VEHICLE_UPDATE","VEHICLE_DELETE",
+                            "SHIPMENT_READ","SHIPMENT_SEARCH", "SHIPMENT_UPDATE", "SHIPMENT_ASSIGN",
+                            "TRACKING_CREATE","TRACKING_READ",
+                            "MANIFEST_CREATE","MANIFEST_READ","MANIFEST_UPDATE","MANIFEST_DISPATCH",
+                            "REPORT_READ","DASHBOARD_READ")),
 
             // The counter desk, and the whole of the booking flow: search a customer by
             // mobile, reuse or create, then book. CUSTOMER_DELETE is deliberately absent —

@@ -16,14 +16,18 @@ import static com.courier.modules.company.domain.PermissionAction.DELETE;
 import static com.courier.modules.company.domain.PermissionAction.DELIVER;
 import static com.courier.modules.company.domain.PermissionAction.DISPATCH;
 import static com.courier.modules.company.domain.PermissionAction.DOWNLOAD;
+import static com.courier.modules.company.domain.PermissionAction.EXCEPTION_MANAGE;
 import static com.courier.modules.company.domain.PermissionAction.EXPORT;
 import static com.courier.modules.company.domain.PermissionAction.IMPORT;
+import static com.courier.modules.company.domain.PermissionAction.IN_SCAN;
+import static com.courier.modules.company.domain.PermissionAction.OUT_SCAN;
 import static com.courier.modules.company.domain.PermissionAction.PRINT;
 import static com.courier.modules.company.domain.PermissionAction.READ;
 import static com.courier.modules.company.domain.PermissionAction.RECEIVE;
 import static com.courier.modules.company.domain.PermissionAction.RECHARGE;
 import static com.courier.modules.company.domain.PermissionAction.REJECT;
 import static com.courier.modules.company.domain.PermissionAction.RENEW;
+import static com.courier.modules.company.domain.PermissionAction.SORT;
 import static com.courier.modules.company.domain.PermissionAction.SUSPEND;
 import static com.courier.modules.company.domain.PermissionAction.SEARCH;
 import static com.courier.modules.company.domain.PermissionAction.UPDATE;
@@ -94,8 +98,15 @@ public final class DefaultPermissionCatalog {
         // Network and master data.
         MATRIX.put(PermissionModule.BRANCH,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE));
+        // Hub Operations (2026-09-21) added five operational rights on top of the CRUD
+        // this module was seeded with while it was still just a branch-shaped master —
+        // a hub's screens are receiving, sorting, out-scanning and raising exceptions,
+        // not just editing the hub record itself. Load Sheet/vehicle/dispatch reuse
+        // MANIFEST_* and dispatch reuses the existing DISPATCH action; only the four
+        // hub-specific verbs (IN_SCAN/OUT_SCAN/SORT/EXCEPTION_MANAGE) are new.
         MATRIX.put(PermissionModule.HUB,
-                EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE));
+                EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE,
+                        IN_SCAN, OUT_SCAN, SORT, DISPATCH, EXCEPTION_MANAGE));
         MATRIX.put(PermissionModule.CUSTOMER,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, IMPORT, EXPORT, ACTIVATE, DEACTIVATE));
         MATRIX.put(PermissionModule.ADDRESS, CRUD);

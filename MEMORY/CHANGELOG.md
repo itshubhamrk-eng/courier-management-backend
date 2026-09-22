@@ -8,6 +8,125 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-21 — Hub Operations module
+
+Direct request: a complete hub operations workflow — in-scan/receive, shipment list at
+hub, sorting, Load Sheet creation, vehicle/driver assignment, out-scan, dispatch,
+exceptions (Missing/Damaged/Short/Wrong Destination/Misrouted/On Hold), a hub dashboard,
+movement history, and flexible routing (`Branch → Delivery Branch`, `Branch → Hub →
+Delivery Branch`, `Branch → Hub → Hub → Delivery Branch`, `Branch → Company Vehicle →
+Direct Delivery`). Investigation found almost the whole brief already existed: `BranchType
+.HUB` (`V61`) — **a hub is a `Branch` row, not a new entity**; `com.courier.modules
+.crossing`'s `CrossingDetail`/`CrossingService.arriveAt` already **is** the hub in-scan
+mechanism, already distinguishing final-destination in-scan from an intermediate-hub
+arrival (`READY_FOR_MANIFEST`), and multi-hop routing was already covered by existing
+tests; `Manifest` already links branch→branch with no notion of "branch vs hub", so a Hub
+Load Sheet is just `POST /manifests` with a hub's branch id as `bookingBranchId`; `GET
+/shipments?currentLocationId=&nextLocationId=` plus the existing `GET /manifests
+/eligible-destinations` already give Sorting's "group shipments by destination" view — no
+new mutation needed for sorting at all. `PermissionModule.HUB`'s 8 CRUD codes, the
+`HUB_MANAGER` company role, and frontend `AppRole.HUB_MANAGER`/dashboard-profile
+scaffolding all pre-existed too, seeded ahead of a backend that didn't exist yet.
+
+Built what was genuinely missing, in `com.courier.modules.crossing` (extended in place,
+per direct instruction, rather than a new `modules.hub` package): `HubOutScan` (`V88`,
+unique `(company_id, manifest_id, shipment_id)` — the duplicate-scan guard is this
+constraint, not a status check) and `ShipmentException` (its own append-only-per-raise
+incident table; **never mutates `Shipment.status`** — there is no exception state in the
+enum and none was added). `ManifestServiceImpl.dispatch()` gained one additive check: a
+manifest booked from a `branch_type = HUB` branch must have every shipment out-scanned
+first; a manifest booked from an ordinary branch is completely unaffected (confirmed live
+— dispatched a non-hub manifest with zero out-scan rows, no change in behaviour). New
+`PermissionAction`s `IN_SCAN`/`OUT_SCAN`/`SORT`/`EXCEPTION_MANAGE` seeded onto
+`PermissionModule.HUB` alongside the pre-existing `DISPATCH`, giving `HUB_IN_SCAN`/
+`HUB_OUT_SCAN`/`HUB_SORT`/`HUB_DISPATCH`/`HUB_EXCEPTION_MANAGE`; Load Sheet/dispatch
+reuse `MANIFEST_CREATE`/`MANIFEST_READ`/`MANIFEST_DISPATCH` instead of inventing parallel
+codes. **Existing companies' `HUB_MANAGER` role is not backfilled** — same rule `V13`
+established (widening a role silently is not this project's call to make); a
+`COMPANY_ADMIN` re-grants the new codes through the existing Permission Management screen.
+Two new cross-module ports, `manifest.domain.BranchDirectoryPort` and
+`manifest.domain.HubOutScanCheckPort` (Manifest owns both, `crossing`/`company` supply the
+adapters) — the same consumer-owns-the-interface seam `CrossingBranchDirectoryPort`
+already used. Hub staffing reuses `users.branch_id` (a hub-assigned user's branch **is**
+the hub), not the separate, still-unused `users.hub_id` — this is what makes Loading
+Sheet/Trip Hire Challan/In Scan's existing "my own branch" screens work for a hub with
+zero code changes; they are reused wholesale, routed again under `/hub-operations/*`.
+Hub Dashboard is its own new endpoint/screen (`GET /hub-operations/dashboard`), not an
+extension of the shared company-wide `DashboardServiceImpl` — kept the two modules fully
+decoupled. New frontend `features/hub-operations/` (dashboard, shipments-at-hub, out-scan,
+exceptions) plus a re-enabled `features/hub/` (`GET /branches?branchType=HUB`, dropping
+the dead `API.hubs` constant that pointed at an endpoint that was never going to exist).
+`app.routes.ts`'s `MOVEMENT_WRITERS` gained `HUB_MANAGER` — a real pre-existing gap: the
+role already held the underlying permissions but the route guard excluded it.
+
+**Live verification against real MySQL found and fixed a real bug the mocked unit tests
+could not catch**: out-scan's original duplicate-scan handling caught the unique-
+constraint violation from a `save()` that only flushes at end-of-transaction — by the
+time a real duplicate scan threw, the `catch` had long since returned, and worse, the
+failed flush left the Hibernate session unusable for the *rest* of that bulk call's other
+tracking numbers (an unrelated second item 500'd too). Fixed by pre-checking existence
+before insert instead of catching a flush failure, confirmed live with the exact batch
+that broke it (duplicate + wrong-manifest together, one call) now returning two clean
+per-item outcomes. `mvn test` 1096/1096, `ng build`/`ng test` clean (one pre-existing,
+unrelated `navigation.config.spec.ts` failure — `reports-dashboard` node, not touched by
+this change, fails identically on `main`). **Verified live** on a throwaway `:8082`
+backend against real `courier_db`: `V88` applied clean; created a real `Branch{branchType:
+HUB}` and staffed it; granted `HUB_MANAGER` the new codes through the real Permission
+Management endpoint and confirmed the JWT carried them; raised and resolved a real
+exception against a real `BOOKED` shipment (status unchanged throughout, a real
+best-effort ticket auto-raised); out-scanned a real shipment, rejected a wrong-manifest
+scan and a duplicate scan (after the fix above); dispatched a real non-hub manifest with
+no out-scan rows to confirm the gate truly is hub-only. Full detail, decisions and API
+table in `MEMORY/modules/hub-operations.md`.
+
+## Added 2026-09-21 — User Activity & Audit Logging module
+
+Direct request: a complete activity/audit trail — login/logout tracking with device/
+browser/OS/session, automatic action logging across every module with no per-controller
+code, old/new value tracking, an Admin Activity Log screen and a per-user Activity screen,
+company-isolated, immutable, masked of secrets. Investigation found most of the brief
+already existed: `shared.audit` (`AuditLog`/`AuditService`, 184 existing call sites across
+60 files), `LoginHistory` and `UserSession` (both company-owned, already tracking most of
+requirement 1's fields), and `AUDIT_READ`/`AUDIT_SEARCH`/`AUDIT_EXPORT` (seeded since `V6`,
+granted to `COMPANY_ADMIN`, never consumed by any controller — another instance of the
+"responsibility list ahead of the code" gap). Built what was actually missing: new
+`activity_logs` table (`V85`) and `ActivityLoggingFilter`, an `OncePerRequestFilter`
+registered after company resolution that writes one row per meaningful authenticated
+request automatically — module/submodule/action inferred from the route and HTTP verb,
+zero controller changes required anywhere, requirement 4 in full. `ActivityContext` (a
+`ThreadLocal`, mirrors `CompanyContext`) lets three call sites (`ManifestServiceImpl
+.dispatch`, `RolePermissionServiceImpl.assign`, `ShipmentServiceImpl.cancel`) attach a
+real old/new value the filter can't infer on its own. `login_history` gained `event_type`
+(`LOGIN_SUCCESS`/`LOGIN_FAILED`/`LOGOUT`/`SESSION_EXPIRED`), parsed `device`/`browser`/`os`
+and `logout_at` (`V86`) instead of a duplicate table; `user_sessions` gained `browser`/`os`
+(`V87`). New `UserAgentParser` (dependency-free, deliberately not shared with
+`SessionService.DeviceInfo`'s own device inference — see the module doc). No new
+permission codes — reused `AUDIT_READ`/`AUDIT_SEARCH`/`AUDIT_EXPORT` rather than adding a
+parallel `ACTIVITY_LOG_*` set for the same right. `SensitiveDataMasker` redacts password/
+token/secret/otp/pin/card-number-shaped keys, recursively, from every old/new value and
+captured request body. New endpoints: `GET /activity-logs` (search), `GET /activity-logs/
+{id}` (detail), `GET /activity-logs/export` (CSV, capped 10k rows), `GET /users/{id}
+/activity` (the User Activity screen's one call — lives in `modules.auth`, not
+`shared.activity`, since it composes `LoginHistory`/`UserSession` and `shared` must never
+import from `modules`). New Angular pages `activity-log-list.ts` and `user-activity.ts`
+under Administration, gated `AUDIT_SEARCH`/`AUDIT_READ`. Full detail, including the real
+bug found along the way (`findDistinctModuleBy...` looked like a valid Spring Data
+projection but is not one, throwing `QueryTypeMismatchException` against a real database —
+invisible to any mocked unit test) in `MEMORY/modules/activity-log.md`. New tests:
+`UserAgentParserTest`,
+`SensitiveDataMaskerTest`, `ActivityContextTest`, `ActivityLogServiceTest` (company
+isolation), `LoginAttemptServiceTest` extended (event types, logout/session-expired), plus
+one new assertion each in `ManifestServiceImplTest`, `RolePermissionServiceImplTest` and
+`ShipmentServiceImplTest` proving the three enrichment call sites actually fire. Full
+`mvn test` green (one pre-existing, unrelated `SessionServiceConcurrencyIT` failure —
+a local datasource-credentials mismatch in this environment, not caused by this change).
+**Verified live**: a throwaway backend against the real dev database applied `V85`–`V87`
+clean; exercised over curl (company isolation, 403 for a role without `AUDIT_SEARCH`,
+login/logout event rows, `logout_at` backfill) and then through the actual Angular dev
+server as a real `COMPANY_ADMIN` fixture — Activity Log list, filters, detail drawer,
+and User Activity's overview/active-sessions/login-history/recent-activity all rendering
+real data, screenshotted.
+
 ## Fixed 2026-09-19 — Cancel Shipment was invisible to every role; reason now mandatory
 
 Direct request: "booking branch should have option cancel shipment order" on the Track/

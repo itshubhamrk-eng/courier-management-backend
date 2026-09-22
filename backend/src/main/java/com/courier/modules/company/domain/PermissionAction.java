@@ -90,7 +90,37 @@ public enum PermissionAction {
      * never physically removed, only cancelled, the same append-only spirit financial
      * records in this project already follow.
      */
-    CANCEL(24);
+    CANCEL(24),
+
+    /**
+     * Receive a shipment physically arriving at a hub. Its own right, distinct from
+     * {@code RECEIVE} (a manifest's own inbound accounting): a hub in-scan is a
+     * per-shipment crossing-hop event, not a manifest closing — see Hub Operations.
+     */
+    IN_SCAN(25),
+
+    /**
+     * Confirm a shipment already on a Load Sheet is physically present before that
+     * Load Sheet may be dispatched from a hub. Its own right, distinct from
+     * {@code DISPATCH}: a desk that may scan shipments onto the outbound pile is not
+     * thereby the desk that may declare the vehicle gone.
+     */
+    OUT_SCAN(26),
+
+    /**
+     * Group shipments at a hub by their next stop ahead of Load Sheet creation. Its own
+     * right, distinct from {@code READ}/{@code UPDATE}: sorting decides where a shipment
+     * goes next, which is a bigger decision than merely viewing or editing its record.
+     */
+    SORT(27),
+
+    /**
+     * Raise or resolve an operational exception (missing/damaged/short/misrouted/on
+     * hold) against a shipment. Its own right, distinct from {@code UPDATE}: an
+     * exception is an incident record, not a routine edit, and never itself moves a
+     * shipment to {@code DELIVERED}.
+     */
+    EXCEPTION_MANAGE(28);
 
     private final int offset;
 

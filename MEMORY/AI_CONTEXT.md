@@ -7,6 +7,44 @@
 
 ## Current Version
 
+`0.66.0` — **Hub Operations: receive/in-scan, sorting, Load Sheet, out-scan, dispatch,
+exceptions, a hub dashboard, movement history.** Direct request. Investigation found a
+hub is already `Branch{branchType: HUB}` (`V61`) — no new entity — and that most of the
+brief already existed: `com.courier.modules.crossing`'s `CrossingService.arriveAt` is
+already the hub in-scan mechanism (multi-hop already tested), `Manifest` already links
+branch→branch with no "branch vs hub" notion so a Hub Load Sheet is just `POST
+/manifests` from a hub's branch id, and `GET /manifests/eligible-destinations` +
+`GET /shipments?currentLocationId=` already give Sorting's grouping — no new mutation
+needed there at all. Built what was genuinely missing, extended in place inside
+`com.courier.modules.crossing` per direct instruction rather than a new package:
+`HubOutScan` (`V88`, the duplicate-scan guard is a unique constraint, not a status
+check) and `ShipmentException` (its own incident table; **never** mutates
+`Shipment.status`). `ManifestServiceImpl.dispatch()` gained one additive, hub-only
+out-scan-required gate — a non-hub manifest's dispatch is provably unaffected (verified
+live). 4 new `PermissionAction`s (`IN_SCAN`/`OUT_SCAN`/`SORT`/`EXCEPTION_MANAGE`) seeded
+onto `PermissionModule.HUB`; Load Sheet/dispatch reuse the existing `MANIFEST_*` codes.
+Existing companies' `HUB_MANAGER` role is **not** backfilled (same rule `V13`
+established) — a `COMPANY_ADMIN` re-grants through Permission Management, exercised
+live. Hub staffing reuses `users.branch_id` (not the separate, still-unused
+`users.hub_id`) — the reason Loading Sheet/Trip Hire Challan/In Scan needed **zero**
+frontend changes to work for a hub; they're reused wholesale under new
+`/hub-operations/*` routes. New frontend `features/hub-operations/` (dashboard,
+shipments-at-hub, out-scan, exceptions) plus a re-enabled `features/hub/`. `mvn test`
+1096/1096, `ng build`/`ng test` clean. **Verified live** on a throwaway `:8082` backend
+against real `courier_db` (a disposable `LOADTEST01` fixture company, no real account
+touched): `V88` applied clean, a real hub created and staffed, permissions re-granted
+and confirmed in a fresh JWT, a real exception raised/resolved (status unchanged, a
+real ticket auto-raised), out-scan's negative paths and a real non-hub dispatch all
+exercised. **Live verification found and fixed a real bug no mocked test could catch**:
+out-scan's original duplicate-scan handling caught a constraint violation from a
+`save()` that only flushes at end-of-transaction, and the failed flush left the
+Hibernate session unusable for the rest of that bulk call's other tracking numbers —
+fixed with a pre-check instead of catch-after-flush. Full detail in
+`MEMORY/modules/hub-operations.md` and `CHANGELOG.md` 2026-09-21 "Hub Operations
+module".
+
+Previously current:
+
 `0.65.3` — **Three fixes on top of 0.65.0's Menu + Permission Management, found in the
 same follow-up session:** (1) Cancel Shipment's button was gated on permission code
 `SHIPMENT_CANCEL`, which doesn't exist in the catalogue (renamed to `SHIPMENT_DELETE`
@@ -4286,6 +4324,27 @@ and `ravi@legacy.test` (SUPER_ADMIN), both `Password@123`; CORS allows `http://l
 
 ## Current Module
 
+**User Activity & Audit Logging — COMPLETE**, verified live over HTTP and through the
+Angular console (`V85`–`V87`, 2026-09-21). New package `com.courier.shared.activity`
+(cross-cutting, sibling of the existing `shared.audit`); extends `modules.auth`'s existing
+`LoginHistory`/`UserSession` rather than duplicating them. `ActivityLoggingFilter` writes
+one `activity_logs` row per authenticated API call automatically, with no controller
+changes required anywhere. No new permission codes — reuses `AUDIT_READ`/`AUDIT_SEARCH`/
+`AUDIT_EXPORT`, seeded since `V6` and unused until now (see "the responsibility list is
+ahead of the code" note below). Full detail in `MEMORY/modules/activity-log.md`.
+
+**Everything below this point, through "Next Task," is a historical snapshot frozen at
+Shipment Movement (v0.17.0, 2026-08-03) and has not tracked the many modules shipped
+since** (Freight Factor, Charges, Ticket Support, Follow-up Management, POD Verification,
+Communication Center, District Level Freight, Menu + Permission Management, and others —
+see `MEMORY/modules/*.md` and `MEMORY/CHANGELOG.md` for what actually shipped). This gap
+predates this entry and was not something this task took on reconciling; treat
+`MEMORY/CHANGELOG.md` and the individual `MEMORY/modules/*.md` files as authoritative for
+anything after 2026-08-03, and this section's "Next Task"/decision list as authoritative
+only up to that date.
+
+Previously current:
+
 **Shipment Movement — COMPLETE**, verified live over HTTP and through the Angular
 console (v0.17.0, 2026-08-03). New package `com.courier.modules.manifest` (the
 minimal Manifest prerequisite this module needed but nothing had built), migration
@@ -4500,8 +4559,9 @@ See `MEMORY/modules/company.md`.
 | `modules/rate` — Rate Master | **DONE** | 7 endpoints, `rate_master` (`V16`), Phase 4, new package |
 | `modules/pricing` — Pricing Engine | **DONE** | 1 endpoint, no migration, no persistence, new package; Strategy+Factory, reusable by Shipment/Quotation/API |
 | `modules/shipment` — Shipment Booking | **DONE** | 8 endpoints, 5 tables (`V17`), new package; the core transaction, orchestrates Customer/Pricing/Wallet |
-| `modules/company` — hubs | NOT STARTED | Later phase of the same module |
-| Manifest Management | NOT STARTED | — |
+| `shared/activity` — User Activity & Audit Logging | **DONE** | 4 endpoints, `activity_logs` (`V85`) + `login_history`/`user_sessions` extensions (`V86`/`V87`); automatic per-request capture, no new permission codes |
+| Manifest Management | **DONE** | Shipped as part of Shipment Movement (`V19`, `modules/manifest`) — this row was stale |
+| `modules/crossing` — Hub Operations | **DONE** | 6 endpoints, `shipment_exceptions` + `hub_out_scans` (`V88`); a hub is `Branch{branchType: HUB}`, not a new entity — see `MEMORY/modules/hub-operations.md` |
 
 ---
 

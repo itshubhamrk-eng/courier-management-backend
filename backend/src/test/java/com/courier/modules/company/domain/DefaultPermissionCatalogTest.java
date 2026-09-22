@@ -45,7 +45,7 @@ class DefaultPermissionCatalogTest {
         // DEACTIVATE, the same shape BRANCH already has). All generated from this matrix.
         // If someone adds a module or action here without a follow-up migration, this is
         // the tripwire.
-        assertThat(DefaultPermissionCatalog.size()).isEqualTo(248);
+        assertThat(DefaultPermissionCatalog.size()).isEqualTo(253);
     }
 
     @Test

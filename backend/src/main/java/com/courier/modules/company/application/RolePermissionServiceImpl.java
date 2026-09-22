@@ -8,6 +8,7 @@ import com.courier.modules.company.domain.Permission;
 import com.courier.modules.company.domain.PermissionRepository;
 import com.courier.modules.company.domain.RolePermission;
 import com.courier.modules.company.domain.RolePermissionRepository;
+import com.courier.shared.activity.application.ActivityContext;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
@@ -146,6 +147,16 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                             "granted", granted,
                             "revoked", revoked,
                             "rejected", rejected));
+
+            Set<String> after = new LinkedHashSet<>(held);
+            after.removeAll(revoked);
+            after.addAll(granted);
+            ActivityContext.recordChange("Roles", "Permissions",
+                    "Changed permissions for role %s: +%d -%d".formatted(
+                            role.getRoleCode(), granted.size(), revoked.size()),
+                    "Role", roleId.toString(),
+                    Map.of("permissions", held),
+                    Map.of("permissions", after));
         }
 
         if (!rejected.isEmpty()) {

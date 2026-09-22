@@ -65,6 +65,8 @@ class ManifestServiceImplTest {
     @Mock private com.courier.modules.communication.application.provider.SmsProvider smsProvider;
     @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock private com.courier.modules.manifest.domain.BranchDirectoryPort branchDirectory;
+    @Mock private com.courier.modules.manifest.domain.HubOutScanCheckPort hubOutScanCheck;
 
     private ManifestServiceImpl service;
 
@@ -72,7 +74,8 @@ class ManifestServiceImplTest {
     void setUp() {
         service = new ManifestServiceImpl(manifestRepository, shipmentService, vehicleService,
                 userService, auditService, ewayBillService, companySettingsService,
-                communicationSettingService, smsProvider, passwordEncoder, objectMapper);
+                communicationSettingService, smsProvider, passwordEncoder, objectMapper,
+                branchDirectory, hubOutScanCheck);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
@@ -217,6 +220,12 @@ class ManifestServiceImplTest {
         verify(shipmentService).transitionToDispatched(
                 List.of(ready.getId()), manifest.getId(), vehicleId, manifest.getBookingBranchId());
         verify(shipmentService, never()).markPickedUpForDirectDelivery(any());
+
+        var activity = com.courier.shared.activity.application.ActivityContext.get();
+        assertThat(activity).isNotNull();
+        assertThat(activity.oldValue()).containsEntry("status", "CREATED");
+        assertThat(activity.newValue()).containsEntry("status", "DISPATCHED");
+        com.courier.shared.activity.application.ActivityContext.clear();
     }
 
     @Test
@@ -287,6 +296,52 @@ class ManifestServiceImplTest {
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("already been dispatched");
         verify(shipmentService, never()).findManifestCreatedShipments(any());
+    }
+
+    @Test
+    @DisplayName("dispatch refuses a hub-originated manifest when a shipment has not been out-scanned")
+    void dispatchRefusesHubManifestWithoutOutScan() {
+        Manifest manifest = existingManifest(ManifestStatus.CREATED);
+        Shipment ready = mock(Shipment.class);
+        when(ready.getId()).thenReturn(UUID.randomUUID());
+        when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
+                .thenReturn(Optional.of(manifest));
+        when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of(ready));
+        when(branchDirectory.findBranch(BOOKING_BRANCH, COMPANY)).thenReturn(Optional.of(
+                new com.courier.modules.manifest.domain.BranchDirectoryPort.BranchRef(
+                        BOOKING_BRANCH, COMPANY, "HUB", true)));
+        when(hubOutScanCheck.allScanned(COMPANY, manifest.getId(), List.of(ready.getId()))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.dispatch(manifest.getId(), UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("out-scanned");
+        verify(vehicleService, never()).getById(any());
+    }
+
+    @Test
+    @DisplayName("dispatch succeeds on a hub-originated manifest once every shipment has been out-scanned")
+    void dispatchSucceedsHubManifestWhenFullyOutScanned() {
+        Manifest manifest = existingManifest(ManifestStatus.CREATED);
+        UUID vehicleId = UUID.randomUUID();
+        UUID driverId = UUID.randomUUID();
+        Shipment ready = mock(Shipment.class);
+        when(ready.getId()).thenReturn(UUID.randomUUID());
+        when(ready.getStatus()).thenReturn(ShipmentStatus.MANIFEST_CREATED);
+        when(manifestRepository.findByIdWithinCompany(manifest.getId(), COMPANY))
+                .thenReturn(Optional.of(manifest));
+        when(shipmentService.findManifestCreatedShipments(manifest.getId())).thenReturn(List.of(ready));
+        when(branchDirectory.findBranch(BOOKING_BRANCH, COMPANY)).thenReturn(Optional.of(
+                new com.courier.modules.manifest.domain.BranchDirectoryPort.BranchRef(
+                        BOOKING_BRANCH, COMPANY, "HUB", true)));
+        when(hubOutScanCheck.allScanned(COMPANY, manifest.getId(), List.of(ready.getId()))).thenReturn(true);
+        Vehicle active = Vehicle.builder().vehicleNumber("MH12AB1234").status(VehicleStatus.AVAILABLE).build();
+        when(vehicleService.getById(vehicleId)).thenReturn(active);
+        when(userService.getById(driverId)).thenReturn(mock(User.class));
+
+        Manifest dispatched = service.dispatch(manifest.getId(), vehicleId, driverId, null, null, null, null, null);
+
+        assertThat(dispatched.getStatus()).isEqualTo(ManifestStatus.DISPATCHED);
+        com.courier.shared.activity.application.ActivityContext.clear();
     }
 
     private Manifest existingManifest(ManifestStatus status) {

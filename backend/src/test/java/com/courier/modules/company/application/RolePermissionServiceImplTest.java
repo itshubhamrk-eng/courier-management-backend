@@ -134,6 +134,13 @@ class RolePermissionServiceImplTest {
         assertThat(result.rejected()).isEmpty();
         verify(auditService).record(eq(AuditAction.ROLE_PERMISSIONS_ASSIGNED), eq("RolePermission"),
                 eq(role.getId()), any());
+
+        var activity = com.courier.shared.activity.application.ActivityContext.get();
+        assertThat(activity).isNotNull();
+        @SuppressWarnings("unchecked")
+        var grantedPermissions = (java.util.Set<String>) activity.newValue().get("permissions");
+        assertThat(grantedPermissions).contains("SHIPMENT_CREATE");
+        com.courier.shared.activity.application.ActivityContext.clear();
     }
 
     @Test
