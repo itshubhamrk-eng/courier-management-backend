@@ -42,4 +42,12 @@ public interface PodVerificationRepository extends JpaRepository<PodVerification
     java.util.List<PodVerification> findDuplicatesWithinCompany(
             @Param("companyId") UUID companyId, @Param("podHash") String podHash,
             @Param("shipmentId") UUID shipmentId);
+
+    /** Same duplicate-hash check as {@link #findDuplicatesWithinCompany}, but with no
+     *  shipment yet to exclude — Bulk POD Upload runs this before the photo has been matched
+     *  to any shipment at all. */
+    @Query("select v from PodVerification v where v.companyId = :companyId and v.podHash = :podHash "
+            + "order by v.createdAt asc")
+    java.util.List<PodVerification> findByHashWithinCompany(
+            @Param("companyId") UUID companyId, @Param("podHash") String podHash);
 }

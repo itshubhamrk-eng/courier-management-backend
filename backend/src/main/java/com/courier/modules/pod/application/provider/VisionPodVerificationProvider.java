@@ -50,13 +50,21 @@ public class VisionPodVerificationProvider implements PodVerificationProvider {
               "looksLikeGenuineDelivery": <boolean, does this plausibly show a real parcel/\
             delivery/signature capture, as opposed to an unrelated photo, screenshot, or \
             document>,
+              "stampDetected": <boolean, is a company/courier stamp, seal or rubber-stamp \
+            impression visible, distinct from a signature>,
               "detectedReceiverName": <string or null, a name visible in the image, if any>,
-              "detectedAwb": <string or null, an AWB/tracking number visible in the image, if any>
+              "detectedAwb": <string or null, an AWB/tracking number visible in the image, if any>,
+              "detectedShipmentNumber": <string or null, a shipment/reference/LR number printed, \
+            stickered, stamped or handwritten anywhere in the image (label, waybill, sticker, \
+            or a number written by hand) — read the actual characters, do not guess or invent \
+            one if none is legible>
             }
             Score low (below 40) if the image does not plausibly show a real delivery capture \
             at all — an unrelated photo, a random document, a screenshot, a blank/mostly-empty \
             image. Score high only when the image genuinely looks like a delivery photo with \
-            clear evidence of a handoff (parcel, doorstep, signature, or receiver).""";
+            clear evidence of a handoff (parcel, doorstep, signature, or receiver). Read every \
+            number, name and mark you actually see in the image rather than inferring them —
+            this is a genuine content read, not a structural/quality check.""";
 
     private final PodAiVisionProperties properties;
     private final ObjectMapper objectMapper;
@@ -97,10 +105,12 @@ public class VisionPodVerificationProvider implements PodVerificationProvider {
         List<String> reasons = new ArrayList<>();
         vendorResult.path("reasons").forEach(node -> reasons.add(node.asText()));
         boolean signatureDetected = vendorResult.path("signatureDetected").asBoolean(false);
+        boolean stampDetected = vendorResult.path("stampDetected").asBoolean(false);
         String imageQuality = vendorResult.path("imageQuality").asText("FAIR");
         boolean looksGenuine = vendorResult.path("looksLikeGenuineDelivery").asBoolean(true);
         String detectedReceiverName = textOrNull(vendorResult, "detectedReceiverName");
         String detectedAwb = textOrNull(vendorResult, "detectedAwb");
+        String detectedShipmentNumber = textOrNull(vendorResult, "detectedShipmentNumber");
 
         if (!looksGenuine && reasons.isEmpty()) {
             reasons.add("The image does not plausibly show a genuine delivery/POD capture.");
@@ -111,7 +121,8 @@ public class VisionPodVerificationProvider implements PodVerificationProvider {
         String detectedDate = request.deliveryDateTime() == null ? null : request.deliveryDateTime().toString();
 
         return new PodAnalysisResult(groundTruth.score(), List.copyOf(reasons), signatureDetected, imageQuality,
-                detectedReceiverName, detectedAwb, detectedDate, false, groundTruth.mustReview());
+                detectedReceiverName, detectedAwb, detectedDate, false, groundTruth.mustReview(),
+                stampDetected, detectedShipmentNumber);
     }
 
     private JsonNode callVendor(PodAnalysisRequest request) {

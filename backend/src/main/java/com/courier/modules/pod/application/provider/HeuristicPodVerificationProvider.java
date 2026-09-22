@@ -111,11 +111,15 @@ public class HeuristicPodVerificationProvider implements PodVerificationProvider
         score = Math.max(0, Math.min(100, score));
 
         String detectedAwb = firstNonBlank(request.claimedAwb(), request.shipmentActualAwb());
+        String detectedShipmentNumber = firstNonBlank(request.claimedShipmentNumber(), request.shipmentActualNumber());
         String detectedDate = request.deliveryDateTime() == null ? null : request.deliveryDateTime().toString();
 
         return new PodAnalysisResult(score, List.copyOf(reasons), signatureDetected, imageQuality,
                 receiverName.isBlank() ? null : receiverName, detectedAwb, detectedDate,
-                tamperingSuspected, mustReview);
+                tamperingSuspected, mustReview,
+                // No stamp/OCR capability at all — honestly false/null rather than a fabricated
+                // read, same discipline detectedAwb/detectedShipmentNumber already document.
+                false, detectedShipmentNumber);
     }
 
     private static String firstNonBlank(String a, String b) {

@@ -22,6 +22,15 @@ import java.util.List;
  * @param mustReviewRegardlessOfScore a duplicate/tampering safety signal — surfaced to the
  *                              reviewer alongside {@code reasons}; every result is PENDING
  *                              regardless, so this no longer changes the resulting status
+ * @param stampDetected         was a company/receiver stamp or seal visible — distinct from
+ *                              {@code signatureDetected}; a non-OCR provider honestly reports
+ *                              {@code false} rather than fabricating a read on pixel content
+ *                              it never inspected
+ * @param detectedShipmentNumber best-effort shipment/AWB/tracking number actually read off
+ *                              the image itself (label, sticker or handwritten) — used by
+ *                              Bulk POD Upload to auto-match a scanned photo to its shipment
+ *                              before any human types a number in; {@code null} when nothing
+ *                              was legible or the provider does no OCR at all
  */
 public record PodAnalysisResult(
         int score,
@@ -32,5 +41,7 @@ public record PodAnalysisResult(
         String detectedAwb,
         String detectedDate,
         boolean tamperingSuspected,
-        boolean mustReviewRegardlessOfScore) {
+        boolean mustReviewRegardlessOfScore,
+        boolean stampDetected,
+        String detectedShipmentNumber) {
 }

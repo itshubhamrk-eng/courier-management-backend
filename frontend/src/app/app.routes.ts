@@ -475,6 +475,14 @@ export const routes: Routes = [
         data: { roles: [AppRole.COMPANY_ADMIN] },
         loadComponent: () => import('@features/shipment-movement/pod-company-upload').then((m) => m.PodCompanyUpload)
       },
+      // Bulk POD Upload — auto-detect/match/score many PODs at once. Mirrors
+      // PodVerificationServiceImpl.bulkUpload's own hasRole('COMPANY_ADMIN') gate (same
+      // REVIEWERS tier uploadByCompany/pod-review's decision form use).
+      {
+        path: 'movement/pod-bulk-upload', title: 'Bulk POD Upload', canActivate: [roleGuard],
+        data: { roles: [AppRole.COMPANY_ADMIN] },
+        loadComponent: () => import('@features/shipment-movement/pod-bulk-upload').then((m) => m.PodBulkUpload)
+      },
       // Master data — one set of screens for all twelve lists, selected by :master.
       // 'new' is declared before ':id' so the literal segment is not swallowed by the
       // parameter, the same ordering the permissions module needed for 'assign'.

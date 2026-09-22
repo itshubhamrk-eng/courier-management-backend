@@ -229,7 +229,10 @@ export const NAVIGATION: NavNode[] = [
       // Company-level upload, no branch login required — always auto-approved. Narrower
       // than pod-review's own COMPANY_AND_BRANCH: mirrors uploadByCompany's
       // hasRole('COMPANY_ADMIN') gate exactly.
-      { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', roles: COMPANY_ONLY }
+      { id: 'pod-company-upload', title: 'Upload POD (Company)', icon: 'cloud_upload', route: '/movement/pod-company-upload', roles: COMPANY_ONLY },
+      // Bulk POD Upload — auto-detect/match/score many PODs at once. Same COMPANY_ONLY
+      // tier as pod-company-upload: mirrors bulkUpload's hasRole('COMPANY_ADMIN') gate.
+      { id: 'pod-bulk-upload', title: 'Bulk POD Upload', icon: 'upload_file', route: '/movement/pod-bulk-upload', roles: COMPANY_ONLY }
     ]
   },
 

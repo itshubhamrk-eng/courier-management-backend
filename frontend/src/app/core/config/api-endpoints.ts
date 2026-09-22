@@ -38,6 +38,8 @@ export const API = {
   pod: (shipmentId: string) => `/shipments/${shipmentId}/pod`,
   /** Company-level POD upload — no branch/delivery-assignment context, COMPANY_ADMIN only. */
   podCompanyUpload: (shipmentId: string) => `/pod/company-upload/${shipmentId}`,
+  /** Bulk POD Upload — auto-detect/match/score many PODs at once, COMPANY_ADMIN only. */
+  podBulkUpload: '/pod/bulk-upload',
   /** The Pricing Engine's one endpoint — no frontend module of its own, called here for
    *  the booking wizard's live preview. See core/models/shipment.model.ts. */
   pricing: '/pricing',
@@ -94,5 +96,6 @@ export const API = {
    *  login/session history. See MEMORY/modules/activity-log.md. */
   activityLogs: '/activity-logs',
   activityLogExport: '/activity-logs/export',
+  activityLogFilterOptions: '/activity-logs/filter-options',
   userActivity: (userId: string) => `/users/${userId}/activity`
 } as const;
