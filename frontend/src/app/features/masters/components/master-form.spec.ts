@@ -9,6 +9,12 @@ import { MASTER_DEFINITIONS } from '../master.config';
 
 const countries = MASTER_DEFINITIONS.countries;
 const weightSlabs = MASTER_DEFINITIONS['weight-slabs'];
+const cities = MASTER_DEFINITIONS.cities;
+
+const pagePayload = (content: unknown[]) => ({
+  success: true,
+  data: { content, page: 0, size: 200, totalElements: content.length, totalPages: 1, first: true, last: true, hasNext: false }
+});
 
 const record = (over: Partial<MasterRecord> = {}): MasterRecord => ({
   id: 'id-1', companyId: 't-1', code: 'INDIA', name: 'India', description: 'Domestic',
@@ -153,5 +159,63 @@ describe('MasterForm', () => {
     build(weightSlabs);
     expect(component.controlFor('minWeight').hasError('required')).toBe(true);
     expect(component.controlFor('maxWeight').hasError('required')).toBe(true);
+  });
+
+  describe('City create form: Country/State/District cascade', () => {
+    it('defaults Country to India, cascades scoped State/District fetches, and defaults State to Maharashtra', () => {
+      build(cities);
+
+      // District starts disabled: it depends on State, which has no value yet.
+      expect(component.controlFor('districtId').disabled).toBe(true);
+
+      http.expectOne((r) => r.url.includes('/global-masters/countries')).flush(pagePayload([
+        { id: 'c-other', code: 'US', name: 'United States' },
+        { id: 'c-india', code: 'IN', name: 'India' }
+      ]));
+
+      // The India default selects itself, which enables and scopes the State fetch.
+      expect(component.controlFor('countryId').value).toBe('c-india');
+      const stateReq = http.expectOne((r) => r.url.includes('/global-masters/states'));
+      expect(stateReq.request.params.get('countryId')).toBe('c-india');
+      expect(component.controlFor('stateId').disabled).toBe(false);
+
+      stateReq.flush(pagePayload([
+        { id: 's-other', code: 'KA', name: 'Karnataka' },
+        { id: 's-mh', code: 'MH', name: 'Maharashtra' }
+      ]));
+
+      // The Maharashtra default selects itself, which enables and scopes the District fetch.
+      expect(component.controlFor('stateId').value).toBe('s-mh');
+      const districtReq = http.expectOne((r) => r.url.includes('/global-masters/districts'));
+      expect(districtReq.request.params.get('stateId')).toBe('s-mh');
+      expect(component.controlFor('districtId').disabled).toBe(false);
+
+      districtReq.flush(pagePayload([{ id: 'd-pune', code: 'PUNE', name: 'Pune' }]));
+      expect(component.optionsFor(component.def().fields.find((f) => f.key === 'districtId')!))
+        .toEqual([{ value: 'd-pune', label: 'Pune (PUNE)' }]);
+    });
+
+    it('excludes the transient Country/State fields from the create payload', () => {
+      build(cities);
+      http.expectOne((r) => r.url.includes('/global-masters/countries'))
+        .flush(pagePayload([{ id: 'c-india', code: 'IN', name: 'India' }]));
+      http.expectOne((r) => r.url.includes('/global-masters/states'))
+        .flush(pagePayload([{ id: 's-mh', code: 'MH', name: 'Maharashtra' }]));
+      http.expectOne((r) => r.url.includes('/global-masters/districts'))
+        .flush(pagePayload([{ id: 'd-pune', code: 'PUNE', name: 'Pune' }]));
+
+      component.controlFor('code').setValue('pune');
+      component.controlFor('name').setValue('Pune');
+      component.controlFor('districtId').setValue('d-pune');
+
+      let payload: Record<string, unknown> | undefined;
+      component.saved.subscribe((p) => (payload = p));
+      component.submit();
+
+      expect(payload).toBeDefined();
+      expect(payload!['districtId']).toBe('d-pune');
+      expect('countryId' in payload!).toBe(false);
+      expect('stateId' in payload!).toBe(false);
+    });
   });
 });

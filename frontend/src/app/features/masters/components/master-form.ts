@@ -6,7 +6,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { MasterOption, MasterRecord, PincodeAreaLookup, PincodeAreaPreview } from '@core/models/master.model';
 import { MasterDataService } from '../master-data.service';
-import { LookupSource, MasterDefinition, MasterField } from '../master.config';
+import { MasterDefinition, MasterField, MasterKey } from '../master.config';
 import { MasterFieldControl } from './master-field-control';
 
 type PincodeLookupState =
@@ -131,6 +131,10 @@ export class MasterForm implements OnInit {
   form!: FormGroup;
 
   private readonly lookupOptions = signal<Record<string, MasterOption[]>>({});
+  /** Options for a create-form `dependsOn` field, keyed by its own field key (not its
+   *  lookup source — unlike {@link lookupOptions}, these are scoped to one specific
+   *  parent value and must not be shared across fields that happen to share a source). */
+  private readonly dependentOptions = signal<Record<string, MasterOption[]>>({});
 
   /**
    * Fields laid out by their `group`, in declaration order. Pincode's `areaId` is
@@ -152,7 +156,12 @@ export class MasterForm implements OnInit {
   });
 
   private isHiddenField(field: MasterField): boolean {
-    return this.def().key === 'pincodes' && field.key === 'areaId';
+    if (this.def().key === 'pincodes' && field.key === 'areaId') return true;
+    // A transient field (Country/State narrowing City's District) only helps a create
+    // form find the right option — an edit form has nothing to re-derive it from and
+    // falls back to the plain unscoped list on the field it's actually persisted on.
+    if (field.transient && !!this.record()) return true;
+    return false;
   }
 
   constructor() {
@@ -171,13 +180,24 @@ export class MasterForm implements OnInit {
     const record = this.record();
     if (record) this.patch(record);
 
-    const sources = this.def().fields
-      .filter((f) => f.kind === 'lookup' && f.lookup)
-      .map((f) => f.lookup as LookupSource);
+    const editing = !!record;
+    for (const field of this.def().fields) {
+      if (field.kind !== 'lookup' || !field.lookup) continue;
 
-    for (const [source, request] of this.service.optionsFor(sources)) {
-      request.subscribe({
-        next: (options) => this.lookupOptions.update((c) => ({ ...c, [source]: options })),
+      // A create form's dependsOn field starts empty and disabled — see buildControl —
+      // and loads its own scoped options once its parent is picked. An edit form ignores
+      // dependsOn (see isHiddenField's note) and falls through to the plain load below.
+      if (field.dependsOn && !editing) {
+        this.watchDependent(field);
+        continue;
+      }
+
+      const source = field.lookup;
+      this.service.options(source).subscribe({
+        next: (options) => {
+          this.lookupOptions.update((c) => ({ ...c, [source]: options }));
+          if (!editing) this.maybeApplyDefault(field, options);
+        },
         // An empty picker with an explanation beats a form that will not open.
         error: () => this.lookupOptions.update((c) => ({ ...c, [source]: [] }))
       });
@@ -251,7 +271,52 @@ export class MasterForm implements OnInit {
   }
 
   optionsFor(field: MasterField): MasterOption[] {
-    return field.lookup ? this.lookupOptions()[field.lookup] ?? [] : [];
+    if (!field.lookup) return [];
+    if (field.dependsOn && !this.record()) return this.dependentOptions()[field.key] ?? [];
+    return this.lookupOptions()[field.lookup] ?? [];
+  }
+
+  /** Wires one create-form `dependsOn` field to reload (and its own value to reset)
+   *  whenever the parent field it depends on changes — mirrors the filter drawer's own
+   *  cascade, minus the three-state boolean handling that drawer doesn't need here. */
+  private watchDependent(field: MasterField): void {
+    const parentKey = field.dependsOn!;
+    const paramName = field.dependsOnParam ?? parentKey;
+    const parent = this.form.get(parentKey);
+    const child = this.controlFor(field.key);
+    if (!parent) return;
+
+    parent.valueChanges.subscribe((parentValue: string | null) => {
+      child.reset(null);
+      if (!parentValue) {
+        child.disable({ emitEvent: false });
+        this.dependentOptions.update((c) => ({ ...c, [field.key]: [] }));
+        return;
+      }
+      child.enable({ emitEvent: false });
+      this.service.masterOptionsScoped(field.lookup as MasterKey, { [paramName]: parentValue }).subscribe({
+        next: (options) => {
+          this.dependentOptions.update((c) => ({ ...c, [field.key]: options }));
+          this.maybeApplyDefault(field, options);
+        },
+        error: () => this.dependentOptions.update((c) => ({ ...c, [field.key]: [] }))
+      });
+    });
+  }
+
+  /** Create-mode only: once a `defaultOptionMatch` field's options load, preselect the
+   *  first one whose label starts with that text — e.g. Country defaulting to India,
+   *  which in turn fires {@link watchDependent} for State, defaulting that to Maharashtra,
+   *  which fires it again for District. Only while the control is still untouched and
+   *  empty, so a real pick (including one this same default already made) is never
+   *  overwritten. */
+  private maybeApplyDefault(field: MasterField, options: MasterOption[]): void {
+    if (!field.defaultOptionMatch) return;
+    const control = this.controlFor(field.key);
+    if (control.dirty || control.value) return;
+    const needle = field.defaultOptionMatch.toLowerCase();
+    const match = options.find((o) => o.label.toLowerCase().startsWith(needle));
+    if (match) control.setValue(match.value);
   }
 
   submit(): void {
@@ -272,6 +337,7 @@ export class MasterForm implements OnInit {
     const body: Record<string, unknown> = {};
 
     for (const field of this.def().fields) {
+      if (field.transient) continue;
       if (editing && field.createOnly) continue;
       const value = this.form.get(field.key)?.value;
       if (field.kind === 'boolean') {
@@ -297,7 +363,12 @@ export class MasterForm implements OnInit {
     // A toggle has no "unset" state to show, so its create-form default is declared in the
     // definition; everything else starts empty.
     const initial = field.kind === 'boolean' ? field.initial === true : null;
-    return this.fb.control(initial, validators);
+    // A create-form dependsOn field has nothing to pick from until its parent has a value
+    // — disabled rather than merely empty, so it reads as "pick that first" (see
+    // watchDependent) and its value never leaks into payload() while it's still moot. An
+    // edit form ignores dependsOn entirely (isHiddenField's note) and always starts enabled.
+    const disabled = !!field.dependsOn && !this.record();
+    return this.fb.control({ value: initial, disabled }, validators);
   }
 
   private patch(record: MasterRecord): void {

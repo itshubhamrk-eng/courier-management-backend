@@ -63,14 +63,31 @@ export interface MasterField {
   /** Section heading in the form; fields with the same group are laid out together. */
   group?: string;
   /**
-   * Filter-drawer only: this `lookup` picker's options narrow to whatever `dependsOn`
-   * (another filter's key in the same drawer) is currently set to — e.g. District narrows
-   * to the selected State. `dependsOnParam` is the query param the parent's value is sent
-   * as (defaults to `dependsOn` itself). Empty/cleared parent empties this field's options
-   * and resets its own value, since a stale child selection could belong to the old parent.
+   * This `lookup` picker's options narrow to whatever `dependsOn` (another lookup field's
+   * key in the same filter drawer, or — create mode only, see `transient` — the same form)
+   * is currently set to, e.g. District narrows to the selected State. `dependsOnParam` is
+   * the query param the parent's value is sent as (defaults to `dependsOn` itself).
+   * Empty/cleared parent empties this field's options and resets its own value, since a
+   * stale child selection could belong to the old parent. In a create form the field starts
+   * disabled until its parent has a value; an edit form ignores `dependsOn` entirely and
+   * loads the plain unscoped list, since only the deepest level is ever persisted on the
+   * record and re-deriving its ancestors isn't worth the extra round trips.
    */
   dependsOn?: string;
   dependsOnParam?: string;
+  /**
+   * Marks a `lookup` field that exists only to narrow another field's options in a create
+   * form (e.g. Country narrowing State, State narrowing District) — never sent in the
+   * create/update payload, and hidden once editing (see `dependsOn`'s note on why an edit
+   * form doesn't re-derive it).
+   */
+  transient?: boolean;
+  /**
+   * `lookup` field, create mode only: once this field's options load, preselect whichever
+   * one's label starts with this text (case-insensitive) — e.g. Country defaulting to
+   * India. Only applied while the control is still empty.
+   */
+  defaultOptionMatch?: string;
 }
 
 /** A column on the shared table. `value` renders the cell; `badge` styles it as a chip. */
@@ -257,7 +274,13 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
     ],
     fields: [
       ...HEAD_FIELDS,
-      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts', required: true, group: 'Placement' },
+      { key: 'countryId', label: 'Country', kind: 'lookup', lookup: 'countries', required: true,
+        group: 'Placement', transient: true, defaultOptionMatch: 'India',
+        hint: 'Narrows State and District below — not stored on the city itself.' },
+      { key: 'stateId', label: 'State', kind: 'lookup', lookup: 'states', required: true,
+        group: 'Placement', transient: true, dependsOn: 'countryId', defaultOptionMatch: 'Maharashtra' },
+      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts', required: true,
+        group: 'Placement', dependsOn: 'stateId' },
       { key: 'metro', label: 'Metro city', kind: 'boolean', group: 'Commercial' },
       { key: 'cityTier', label: 'Tier', kind: 'select', group: 'Commercial',
         options: CITY_TIERS.map(option), hint: 'Used by the rate master later.' }
