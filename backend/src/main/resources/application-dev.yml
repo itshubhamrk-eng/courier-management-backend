@@ -14,6 +14,7 @@ app:
       - https://admin.skra.in
       - https://amazing.skra.in
       - https://vendor.amazinglpl.com
+      - https://courier.skra.in
 
 logging:
   level:
