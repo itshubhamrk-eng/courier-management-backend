@@ -48,6 +48,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
         @if (canFilterByBranch()) {
           <app-select [control]="branchFilter" label="From Station" [options]="branchOptions()" [allowEmpty]="true" placeholder="All stations" />
         }
+        <app-select [control]="stateFilter" label="State" [options]="stateOptions()" [allowEmpty]="true" placeholder="All states" />
         <app-select [control]="districtFilter" label="District" [options]="districtOptions()" [allowEmpty]="true" placeholder="All districts" />
         <app-select [control]="statusFilter" label="Status" [options]="statusOptions" [allowEmpty]="true" placeholder="All statuses" />
       </div>
@@ -60,7 +61,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
     </div>
   `,
   styles: [`
-    .filters { display:grid; grid-template-columns:repeat(3,minmax(0,220px)); gap:12px; margin-bottom:14px; }
+    .filters { display:grid; grid-template-columns:repeat(4,minmax(0,220px)); gap:12px; margin-bottom:14px; }
     @media (max-width:760px){ .filters { grid-template-columns:1fr; } }
   `]
 })
@@ -80,10 +81,12 @@ export class DistrictFreightList implements OnInit {
   readonly sort = signal<SortState | null>({ active: 'createdDate', direction: 'desc' });
 
   readonly branchOptions = signal<SelectOption[]>([]);
+  readonly stateOptions = signal<SelectOption[]>([]);
   readonly districtOptions = signal<SelectOption[]>([]);
   readonly statusOptions: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }];
 
   readonly branchFilter = new FormControl<string | null>(null);
+  readonly stateFilter = new FormControl<string | null>(null);
   readonly districtFilter = new FormControl<string | null>(null);
   readonly statusFilter = new FormControl<string | null>(null);
 
@@ -106,8 +109,19 @@ export class DistrictFreightList implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'District Level Freight' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
-    this.masters.options('districts').subscribe((o) => this.districtOptions.set(o));
+    this.masters.options('states').subscribe((o) => this.stateOptions.set(o));
     this.branchFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
+    // District is a plain list of 637 nationally — larger than the 100-row page cap every
+    // master endpoint shares — so it only ever loads scoped to a chosen State, never in
+    // full. Clearing State clears whatever District was picked too, the same reset a stale
+    // child selection needs anywhere else in the app.
+    this.stateFilter.valueChanges.subscribe((stateId) => {
+      this.districtFilter.setValue(null, { emitEvent: false });
+      this.districtOptions.set([]);
+      if (stateId) this.masters.masterOptionsScoped('districts', { stateId }).subscribe((o) => this.districtOptions.set(o));
+      this.query = { ...this.query, page: 0 };
+      this.load();
+    });
     this.districtFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
     this.statusFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
     this.load();

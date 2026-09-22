@@ -12,8 +12,17 @@ import {
  * Reactive create/edit editor for a District Level Freight rate row. Validators mirror
  * CreateDistrictLevelFreightRequest / UpdateDistrictLevelFreightRequest. From Station and
  * District options are passed in by the page, already loaded from the existing Branch/
- * District masters (`MasterDataService.options('branches' | 'districts')`) — this
- * component never talks to those masters directly, the same separation RateForm keeps.
+ * District masters (`MasterDataService.options('branches')` /
+ * `masterOptionsScoped('districts', {stateId})`) — this component never talks to those
+ * masters directly, the same separation RateForm keeps.
+ *
+ * State is this form's own field, not persisted on the rate (the DTO only ever carried
+ * `districtId`) — it exists purely to narrow District, the same reason as Cities' own
+ * transient Country/State in the master framework: nationally there are 637 active
+ * districts against a 100-row page cap, so an unscoped District picker can silently miss
+ * the one a company operates in. `stateChanged` tells the page which state to scope by;
+ * `initialStateId` lets an edit form re-open already scoped to the row's real state
+ * (resolved by the page, since `DistrictLevelFreight` itself only carries `districtId`).
  */
 @Component({
   selector: 'app-district-freight-form',
@@ -25,7 +34,10 @@ import {
       <app-card title="Route" subtitle="From Station (booking branch) and the destination district this rate applies to.">
         <div class="grid">
           <app-select [control]="c('branchId')" label="From Station" [options]="branchOptions()" placeholder="Select a branch" />
-          <app-select [control]="c('districtId')" label="District" [options]="districtOptions()" placeholder="Select a district" />
+          <app-select [control]="c('stateId')" label="State" [options]="stateOptions()"
+                      [allowEmpty]="true" emptyLabel="Not set" placeholder="Select a state" />
+          <app-select [control]="c('districtId')" label="District" [options]="districtOptions()"
+                      placeholder="Select a state first" />
         </div>
       </app-card>
 
@@ -81,10 +93,17 @@ export class DistrictFreightForm {
   readonly row = input<DistrictLevelFreight | null>(null);
   readonly saving = input(false);
   readonly branchOptions = input<SelectOption[]>([]);
+  readonly stateOptions = input<SelectOption[]>([]);
   readonly districtOptions = input<SelectOption[]>([]);
+  /** Edit mode only: the row's real state, resolved by the page before this input arrives
+   *  — see the class doc. Ignored on create, where State starts empty. */
+  readonly initialStateId = input<string | null>(null);
 
   readonly saved = output<CreateDistrictLevelFreightRequest | UpdateDistrictLevelFreightRequest>();
   readonly cancelled = output<void>();
+  /** Fires whenever State changes (including the programmatic edit-mode initial set) —
+   *  the page owns the scoped District fetch, this form only owns the field. */
+  readonly stateChanged = output<string | null>();
 
   protected readonly slabs = WEIGHT_SLABS;
   protected readonly isCreate = computed(() => this.mode() === 'create');
@@ -94,6 +113,7 @@ export class DistrictFreightForm {
 
   constructor() {
     effect(() => { const r = this.row(); if (r && this.mode() === 'edit') this.hydrate(r); });
+    this.c('stateId').valueChanges.subscribe((v: string | null) => this.stateChanged.emit(v));
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -101,11 +121,15 @@ export class DistrictFreightForm {
   private hydrate(row: DistrictLevelFreight): void {
     if (this.hydrated()) return;
     this.form.patchValue({
+      // The page has already resolved and scoped districtOptions to this state before
+      // handing it here (see the class doc) — emitEvent:false so this doesn't fire a
+      // redundant second fetch of the very options it was just given.
+      stateId: this.initialStateId(),
       branchId: row.branchId, districtId: row.districtId,
       rate1To15: row.rate1To15, rate16To50: row.rate16To50, rate51To100: row.rate51To100,
       rate101To1000: row.rate101To1000, rate1001To1500: row.rate1001To1500, rate1501To2000: row.rate1501To2000,
       odaApplicable: row.odaApplicable, odaCharge: row.odaCharge
-    }, { emitEvent: true });
+    }, { emitEvent: false });
     this.form.markAsPristine();
     this.hydrated.set(true);
   }
@@ -113,6 +137,7 @@ export class DistrictFreightForm {
   private build(): FormGroup {
     return this.fb.group({
       branchId: [null as string | null, Validators.required],
+      stateId: [null as string | null],
       districtId: [null as string | null, Validators.required],
       rate1To15: [null as number | null, [Validators.required, Validators.min(0)]],
       rate16To50: [null as number | null, [Validators.required, Validators.min(0)]],

@@ -149,9 +149,17 @@ export class MasterDataService {
 
   /**
    * Same shape as {@link options}, narrowed by extra query params (e.g. `stateId` for a
-   * District picker cascading off a selected State) — used by the filter drawer's
-   * `dependsOn` fields. Not cached: the parent value changes often enough, and each scoped
-   * list is small, that a per-combination cache would cost more than it saves.
+   * District picker cascading off a selected State) — used by the filter drawer's and the
+   * create form's `dependsOn` fields. Not cached: the parent value changes often enough,
+   * and each scoped list is small, that a per-combination cache would cost more than it
+   * saves.
+   *
+   * The 200 requested here is aspirational, not authoritative — every master-list endpoint
+   * hard-caps at 100 server-side (`MasterSortSupport.MAX_PAGE_SIZE`, deliberate, shared by
+   * all twelve lists), so an unscoped call to a list bigger than that (districts: 637 and
+   * climbing) silently truncates. A `dependsOn`-scoped call never hits this — one state's
+   * districts are always well under 100 — so an unscoped picker over a list that size needs
+   * its own narrowing field (see Cities' Country/State cascade), not a bigger page here.
    */
   masterOptionsScoped(key: MasterKey, params: Record<string, string>): Observable<MasterOption[]> {
     const def = MASTER_DEFINITIONS[key];

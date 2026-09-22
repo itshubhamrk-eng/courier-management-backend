@@ -7,6 +7,7 @@ import { DistrictLevelFreight, CreateDistrictLevelFreightRequest, UpdateDistrict
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
+import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { DistrictFreightForm } from './components/district-freight-form';
 import { DistrictLevelFreightService } from './district-level-freight.service';
@@ -28,8 +29,9 @@ import { DistrictLevelFreightService } from './district-level-freight.service';
         <app-card><p class="empty">Rate not found or outside your scope.</p></app-card>
       } @else {
         <app-district-freight-form mode="edit" [row]="row()" [saving]="saving()"
-          [branchOptions]="branchOptions()" [districtOptions]="districtOptions()"
-          (saved)="save($event)" (cancelled)="cancel()" />
+          [branchOptions]="branchOptions()" [stateOptions]="stateOptions()" [districtOptions]="districtOptions()"
+          [initialStateId]="initialStateId()"
+          (stateChanged)="onStateChanged($event)" (saved)="save($event)" (cancelled)="cancel()" />
       }
     </div>
   `,
@@ -47,27 +49,54 @@ export class DistrictFreightEdit implements OnInit {
   readonly saving = signal(false);
   readonly row = signal<DistrictLevelFreight | null>(null);
   readonly branchOptions = signal<SelectOption[]>([]);
+  readonly stateOptions = signal<SelectOption[]>([]);
   readonly districtOptions = signal<SelectOption[]>([]);
+  readonly initialStateId = signal<string | null>(null);
   private id = '';
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
-    this.masters.options('districts').subscribe((o) => this.districtOptions.set(o));
+    this.masters.options('states').subscribe((o) => this.stateOptions.set(o));
     this.load();
+  }
+
+  /** District is a plain list of 637 nationally — larger than the 100-row page cap every
+   *  master endpoint shares — so it only ever loads scoped to a chosen State, never in full. */
+  onStateChanged(stateId: string | null): void {
+    if (!stateId) { this.districtOptions.set([]); return; }
+    this.masters.masterOptionsScoped('districts', { stateId }).subscribe((o) => this.districtOptions.set(o));
   }
 
   private load(): void {
     this.loading.set(true);
     this.service.get(this.id).subscribe({
       next: (r) => {
-        this.row.set(r);
         this.breadcrumb.set([
           { label: 'District Level Freight', route: '/district-level-freight' },
           { label: `${r.branchName ?? r.branchCode} → ${r.districtName ?? r.districtCode}`, route: `/district-level-freight/${this.id}` },
           { label: 'Edit' }
         ]);
-        this.loading.set(false);
+        // The row only carries districtId — the district's own record has the stateId
+        // needed to scope District's options before the form ever shows, so the form
+        // doesn't briefly render the existing district as an unmatched blank selection.
+        this.masters.get(MASTER_DEFINITIONS.districts, r.districtId).subscribe({
+          next: (district) => {
+            const stateId = (district['stateId'] as string | null) ?? null;
+            this.initialStateId.set(stateId);
+            if (stateId) {
+              this.masters.masterOptionsScoped('districts', { stateId }).subscribe((o) => {
+                this.districtOptions.set(o);
+                this.row.set(r);
+                this.loading.set(false);
+              });
+            } else {
+              this.row.set(r);
+              this.loading.set(false);
+            }
+          },
+          error: () => { this.row.set(r); this.loading.set(false); }
+        });
       },
       error: () => { this.row.set(null); this.loading.set(false); }
     });

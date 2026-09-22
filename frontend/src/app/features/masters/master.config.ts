@@ -286,7 +286,8 @@ export const MASTER_DEFINITIONS: Record<MasterKey, MasterDefinition> = {
         options: CITY_TIERS.map(option), hint: 'Used by the rate master later.' }
     ],
     filters: [
-      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts' },
+      { key: 'stateId', label: 'State', kind: 'lookup', lookup: 'states' },
+      { key: 'districtId', label: 'District', kind: 'lookup', lookup: 'districts', dependsOn: 'stateId' },
       { key: 'metro', label: 'Metro only', kind: 'boolean' }
     ],
     exportColumns: ['code', 'name', 'districtName', 'metro', 'cityTier', 'status']

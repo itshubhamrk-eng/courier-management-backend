@@ -21,8 +21,8 @@ import { DistrictLevelFreightService } from './district-level-freight.service';
         <div><h1 class="text-h1">New District Level Freight Rate</h1><p class="text-caption">Set the six weight-slab rates and ODA for one From Station + District.</p></div>
       </header>
       <app-district-freight-form mode="create" [saving]="saving()"
-        [branchOptions]="branchOptions()" [districtOptions]="districtOptions()"
-        (saved)="save($event)" (cancelled)="cancel()" />
+        [branchOptions]="branchOptions()" [stateOptions]="stateOptions()" [districtOptions]="districtOptions()"
+        (stateChanged)="onStateChanged($event)" (saved)="save($event)" (cancelled)="cancel()" />
     </div>
   `
 })
@@ -35,12 +35,20 @@ export class DistrictFreightCreate {
 
   readonly saving = signal(false);
   readonly branchOptions = signal<SelectOption[]>([]);
+  readonly stateOptions = signal<SelectOption[]>([]);
   readonly districtOptions = signal<SelectOption[]>([]);
 
   constructor() {
     this.breadcrumb.set([{ label: 'District Level Freight', route: '/district-level-freight' }, { label: 'New' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
-    this.masters.options('districts').subscribe((o) => this.districtOptions.set(o));
+    this.masters.options('states').subscribe((o) => this.stateOptions.set(o));
+  }
+
+  /** District is a plain list of 637 nationally — larger than the 100-row page cap every
+   *  master endpoint shares — so it only ever loads scoped to a chosen State, never in full. */
+  onStateChanged(stateId: string | null): void {
+    if (!stateId) { this.districtOptions.set([]); return; }
+    this.masters.masterOptionsScoped('districts', { stateId }).subscribe((o) => this.districtOptions.set(o));
   }
 
   save(body: CreateDistrictLevelFreightRequest | UpdateDistrictLevelFreightRequest): void {
