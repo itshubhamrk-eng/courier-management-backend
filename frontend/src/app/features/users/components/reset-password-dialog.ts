@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { HttpErrorResponse } from '@angular/common/http';
 import { NotificationService } from '@core/services/notification.service';
 import { UserService } from '../user.service';
 
@@ -59,7 +60,10 @@ export class ResetPasswordDialog {
     this.busy.set(true);
     this.service.resetPassword(this.data.userId, this.pwd.value, this.mustChange.value).subscribe({
       next: () => { this.busy.set(false); this.notify.success('Password reset.'); this.ref.close(true); },
-      error: () => { this.busy.set(false); this.notify.error('Could not reset the password.'); }
+      error: (err: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.notify.error(err.error?.message ?? 'Could not reset the password.');
+      }
     });
   }
 }
