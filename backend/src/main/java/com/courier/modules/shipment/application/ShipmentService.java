@@ -12,6 +12,7 @@ import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentCriteria;
 import com.courier.modules.shipment.domain.ShipmentDocument;
 import com.courier.modules.shipment.domain.ShipmentItem;
+import com.courier.modules.shipment.domain.ShipmentStatus;
 import com.courier.modules.shipment.domain.ShipmentStatusHistory;
 import com.courier.modules.shipment.domain.ShipmentSummaryStats;
 import org.springframework.data.domain.Page;
@@ -415,6 +416,58 @@ public interface ShipmentService {
      *         {@code OUT_FOR_DELIVERY}
      */
     Shipment deliver(UUID shipmentId, DeliverCommand command);
+
+    /**
+     * Opt-in per company ({@code CompanySettings.manualStatusOverrideEnabled}) manual
+     * correction: pushes one shipment to {@code command.targetStatus()} by hand, for a
+     * {@code COMPANY_ADMIN}/{@code BRANCH_MANAGER}, from any current status — including one
+     * a normal screen (THC/DRS/Deliver) would never let this shipment reach next.
+     *
+     * <p>When the jump <em>is</em> a legal {@link ShipmentStatus#canTransitionTo} edge that a
+     * real service method already covers ({@code IN_SCAN->OUT_FOR_DELIVERY} via
+     * {@link #assignOutForDelivery}, {@code OUT_FOR_DELIVERY->DELIVERED} via {@link #deliver},
+     * {@code ->CANCELLED} via {@link #cancel}) and that method's own precondition is met, this
+     * delegates to it — money/wallet/POD side effects fire exactly as they would from that
+     * screen. {@code command} carries whichever of that method's own required fields apply
+     * (e.g. {@code deliveryUserId} for an OUT_FOR_DELIVERY jump, {@code receiverName} for a
+     * DELIVERED jump).
+     *
+     * <p>Otherwise — an arbitrary jump (e.g. straight from {@code BOOKED} to {@code DELIVERED}),
+     * or a legal edge whose real method's precondition isn't met (no {@code DeliveryAssignment}
+     * row yet, say) — this falls back to a raw status write with <b>no side effect at all</b>:
+     * no commission credit, no wallet debit, no POD gate. {@link OverrideStatusResult#warning()}
+     * is non-null exactly when this fallback ran, so the caller can surface it.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException the company has not enabled
+     *         {@code manualStatusOverrideEnabled}, the shipment is already in a terminal status
+     *         (DELIVERED/RETURNED/CANCELLED), or {@code reason} is blank
+     */
+    OverrideStatusResult overrideStatus(UUID shipmentId, OverrideStatusCommand command);
+
+    /**
+     * @param targetStatus    required
+     * @param reason          required, kept on {@code shipment_status_history.remarks}
+     * @param deliveryUserId  used only when {@code targetStatus == OUT_FOR_DELIVERY}
+     * @param vehicleId       optional, forwarded to {@link #assignOutForDelivery} only
+     * @param fuelCost        optional, forwarded to {@link #assignOutForDelivery} only
+     * @param deliveryCharge  optional, forwarded to {@link #assignOutForDelivery} only
+     * @param receiverName    used only when {@code targetStatus == DELIVERED}
+     * @param otp             optional, forwarded to {@link #deliver} only
+     * @param signatureUrl    optional, forwarded to {@link #deliver} only
+     * @param photoUrl        optional, forwarded to {@link #deliver} only
+     */
+    record OverrideStatusCommand(ShipmentStatus targetStatus, String reason, UUID deliveryUserId,
+                                 UUID vehicleId, BigDecimal fuelCost, BigDecimal deliveryCharge,
+                                 String receiverName, String otp, String signatureUrl, String photoUrl) {
+    }
+
+    /**
+     * @param viaRealMethod true when a real service method ran (side effects applied)
+     * @param warning       non-null only for the raw fallback path — explains that no side
+     *                      effect fired, for the caller to surface to the user
+     */
+    record OverrideStatusResult(Shipment shipment, boolean viaRealMethod, String warning) {
+    }
 
     /**
      * Stores one POD file (photo or signature capture) in the configured object store

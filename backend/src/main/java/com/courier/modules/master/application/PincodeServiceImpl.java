@@ -163,10 +163,17 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
     @Transactional(readOnly = true)
     @PreAuthorize(READ)
     public Optional<PincodeGeography> geography(String code) {
+        return geography(code, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READ)
+    public Optional<PincodeGeography> geography(String code, UUID areaId) {
         return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () -> repository
                 .findByCodeWithinCompany(code, GlobalMasters.PLATFORM_COMPANY_ID)
                 .map(pincode -> {
-                    Area area = areas.findById(pincode.getAreaId()).orElse(null);
+                    Area area = areas.findById(areaId != null ? areaId : pincode.getAreaId()).orElse(null);
                     City city = area != null ? cities.findById(area.getCityId()).orElse(null) : null;
                     District district = city != null ? districts.findById(city.getDistrictId()).orElse(null) : null;
                     return new PincodeGeography(pincode.getName(),

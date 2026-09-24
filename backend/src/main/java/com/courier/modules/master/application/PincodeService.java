@@ -32,4 +32,15 @@ public interface PincodeService extends MasterDataService<Pincode, PincodeComman
      * @return empty when no pincode with this code is on file
      */
     java.util.Optional<PincodeGeography> geography(String code);
+
+    /**
+     * Same as {@link #geography(String)}, but when {@code areaId} is given, resolves the
+     * Area/City/District off that specific Area link instead of the pincode's single fixed
+     * "primary" one — for a pincode with several Areas, so a caller that knows which Area
+     * was actually selected (e.g. a booked shipment's {@code destinationAreaId}) gets that
+     * one back, not always the primary.
+     *
+     * @return empty when no pincode with this code is on file
+     */
+    java.util.Optional<PincodeGeography> geography(String code, java.util.UUID areaId);
 }

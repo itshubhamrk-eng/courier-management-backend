@@ -247,6 +247,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.dimensionUnit(), s::setDimensionUnit);
         set(c.autoGenerateBarcode(), s::setAutoGenerateBarcode);
         set(c.allowDuplicateReferenceNumber(), s::setAllowDuplicateReferenceNumber);
+        set(c.manualStatusOverrideEnabled(), s::setManualStatusOverrideEnabled);
         set(c.autoAssignTrackingNumber(), s::setAutoAssignTrackingNumber);
         set(c.defaultChargeableWeightKg(), s::setDefaultChargeableWeightKg);
         set(c.defaultAppointmentDeliveryCharge(), s::setDefaultAppointmentDeliveryCharge);

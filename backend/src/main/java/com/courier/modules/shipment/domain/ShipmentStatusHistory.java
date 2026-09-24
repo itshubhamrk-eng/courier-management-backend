@@ -75,4 +75,13 @@ public class ShipmentStatusHistory extends CompanyOwnedEntity {
 
     @Column(name = "changed_at", nullable = false, updatable = false)
     private Instant changedAt;
+
+    /** True when this row came from {@code ShipmentServiceImpl.overrideStatus}'s raw fallback
+     *  path — an arbitrary jump with no matching real service method, so no money/wallet side
+     *  effect ran for it. False (including for every pre-existing row) means a normal
+     *  transition, or an override that still went through the real method (deliver/
+     *  assignOutForDelivery/cancel) and so has its side effects applied as usual. */
+    @Column(name = "manual_override", nullable = false)
+    @Builder.Default
+    private boolean manualOverride = false;
 }

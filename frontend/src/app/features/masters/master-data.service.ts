@@ -91,9 +91,12 @@ export class MasterDataService {
   /** Area/City/District already on file for a pincode — read-only (no postal-directory
    *  call, nothing created), unlike {@link lookupPincodeArea}. What the consignment
    *  receipt uses so a BRANCH_MANAGER printing it doesn't need the COMPANY_ADMIN-only
-   *  write audience `lookup/{code}` carries. */
-  pincodeGeo(code: string): Observable<PincodeGeo> {
-    return this.api.get<PincodeGeo>(`/global-masters/pincodes/${code}/geo`);
+   *  write audience `lookup/{code}` carries. Pass `areaId` (a shipment's own
+   *  `destinationAreaId`) to resolve off that specific Area instead of the pincode's
+   *  single fixed "primary" one — otherwise a pincode with several Areas always
+   *  resolves to the same one regardless of which was actually selected. */
+  pincodeGeo(code: string, areaId?: string | null): Observable<PincodeGeo> {
+    return this.api.get<PincodeGeo>(`/global-masters/pincodes/${code}/geo`, areaId ? { areaId } : undefined);
   }
 
   /** Every Area a pincode's postal record names, primary row first — the detail page's

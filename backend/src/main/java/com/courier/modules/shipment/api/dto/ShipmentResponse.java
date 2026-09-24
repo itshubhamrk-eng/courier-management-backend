@@ -26,6 +26,9 @@ public record ShipmentResponse(
                 + "booking instead of a Delivery Branch picker") String toCity,
         UUID currentLocationId, UUID nextLocationId,
         String pickupPincode, String deliveryPincode,
+        @Schema(description = "The specific Area of deliveryPincode the operator picked at "
+                + "booking, when that pincode has more than one; null for shipments booked "
+                + "before this field existed") UUID destinationAreaId,
         String senderName, String senderAddress, String senderContact,
         String receiverName, String receiverAddress, String receiverContact,
         UUID serviceTypeId, UUID packageTypeId, UUID paymentModeId,

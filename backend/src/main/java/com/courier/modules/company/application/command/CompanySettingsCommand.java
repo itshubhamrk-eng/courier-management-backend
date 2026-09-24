@@ -19,7 +19,8 @@ public record CompanySettingsCommand(
         String awbPrefix, Long awbRunningNumber, String bookingPrefix, String manifestPrefix,
         String defaultServiceType, String defaultPackageType, WeightUnit weightUnit,
         DimensionUnit dimensionUnit, Boolean autoGenerateBarcode,
-        Boolean allowDuplicateReferenceNumber, Boolean autoAssignTrackingNumber,
+        Boolean allowDuplicateReferenceNumber, Boolean manualStatusOverrideEnabled,
+        Boolean autoAssignTrackingNumber,
         BigDecimal defaultChargeableWeightKg, BigDecimal defaultAppointmentDeliveryCharge,
 
         BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,

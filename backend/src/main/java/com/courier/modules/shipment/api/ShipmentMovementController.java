@@ -16,6 +16,8 @@ import com.courier.modules.shipment.api.dto.DispatchOtpRequestResponse;
 import com.courier.modules.shipment.api.dto.DispatchOtpVerifyRequest;
 import com.courier.modules.shipment.api.dto.InScanRequest;
 import com.courier.modules.shipment.api.dto.OutForDeliveryRequest;
+import com.courier.modules.shipment.api.dto.OverrideStatusRequest;
+import com.courier.modules.shipment.api.dto.OverrideStatusResponse;
 import com.courier.modules.shipment.api.dto.PodUploadResponse;
 import com.courier.modules.shipment.api.dto.ShipmentResponse;
 import com.courier.modules.shipment.application.ShipmentService;
@@ -199,6 +201,33 @@ public class ShipmentMovementController {
                         shipmentService.getAssets(delivered.getId()),
                         shipmentService.getEwayBill(delivered.getId()).orElse(null)),
                 "Shipment delivered");
+    }
+
+    @PostMapping("/{shipmentId}/override-status")
+    @Operation(summary = "Manually override a shipment's status (COMPANY_ADMIN/BRANCH_MANAGER)",
+            description = "Opt-in per company (Company Settings > Shipment > Manual Status Override). "
+                    + "Pushes the shipment to targetStatus from any current status, bypassing the normal "
+                    + "THC/DRS/Deliver flow. When the jump is a legal edge a real service method already "
+                    + "covers (->OUT_FOR_DELIVERY, ->DELIVERED, ->CANCELLED) and its own precondition is "
+                    + "met, that method runs and its money/wallet/POD side effects apply as usual — supply "
+                    + "its required fields (deliveryUserId, receiverName) on this request. Otherwise this "
+                    + "is a raw status write with no side effect at all; response.warning explains when "
+                    + "that happened.")
+    public ApiResponse<OverrideStatusResponse> overrideStatus(@PathVariable UUID shipmentId,
+                                                                @Valid @RequestBody OverrideStatusRequest request) {
+        var result = shipmentService.overrideStatus(shipmentId, new ShipmentService.OverrideStatusCommand(
+                request.targetStatus(), request.reason(), request.deliveryUserId(), request.vehicleId(),
+                request.fuelCost(), request.deliveryCharge(), request.receiverName(), request.otp(),
+                request.signatureUrl(), request.photoUrl()));
+        Shipment shipment = result.shipment();
+        var response = new OverrideStatusResponse(
+                shipmentMapper.toResponse(shipment, shipmentService.getItems(shipment.getId()),
+                        shipmentService.getDeliveryAssignment(shipment.getId()),
+                        shipmentService.getAssets(shipment.getId()),
+                        shipmentService.getEwayBill(shipment.getId()).orElse(null)),
+                result.viaRealMethod(), result.warning());
+        return ApiResponse.success(response,
+                result.warning() == null ? "Status overridden" : result.warning());
     }
 
     @GetMapping("/drs")

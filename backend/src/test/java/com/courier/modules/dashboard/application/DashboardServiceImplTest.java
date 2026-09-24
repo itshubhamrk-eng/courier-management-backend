@@ -106,14 +106,15 @@ class DashboardServiceImplTest {
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
 
-        when(shipmentRepository.countByCompanyIdAndBookingDateBetween(
-                eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(shipmentRepository.countByCompanyIdAndStatusNotAndBookingDateBetween(
+                eq(COMPANY), eq(ShipmentStatus.CANCELLED), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(1L);
         when(shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
                 eq(COMPANY), eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(2L);
         when(shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
                 eq(COMPANY), any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(3L);
-        when(shipmentRepository.countByCompanyId(COMPANY)).thenReturn(4L);
+        when(shipmentRepository.countByCompanyIdAndStatusNot(COMPANY, ShipmentStatus.CANCELLED)).thenReturn(4L);
         when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(BigDecimal.ONE);
@@ -183,7 +184,7 @@ class DashboardServiceImplTest {
         assertThat(response.charts().deliveryPerformance()).hasSize(3);
         assertThat(response.charts().revenueTrend().get(0).points().get(13).value()).isEqualByComparingTo("42");
 
-        verify(shipmentRepository).countByCompanyId(COMPANY);
+        verify(shipmentRepository).countByCompanyIdAndStatusNot(COMPANY, ShipmentStatus.CANCELLED);
         // Called twice: once for the "Delivered This Month" stat tile, once more as the
         // pipeline's own DELIVERED stage (companyOverview()).
         verify(shipmentRepository, org.mockito.Mockito.times(2)).countByCompanyIdAndStatusAndBookingDateBetween(
@@ -218,13 +219,13 @@ class DashboardServiceImplTest {
         // "is CompanyContext empty".
         signedIn(Roles.SUPER_ADMIN);
 
-        when(shipmentRepository.countByBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(10L);
+        when(shipmentRepository.countByStatusNotAndBookingDateBetween(
+                eq(ShipmentStatus.CANCELLED), any(LocalDate.class), any(LocalDate.class))).thenReturn(10L);
         when(shipmentRepository.countByStatusAndBookingDateBetween(
                 eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class))).thenReturn(20L);
         when(shipmentRepository.countByStatusInAndBookingDateBetween(
                 any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(30L);
-        when(shipmentRepository.count()).thenReturn(40L);
+        when(shipmentRepository.countByStatusNot(ShipmentStatus.CANCELLED)).thenReturn(40L);
         when(shipmentChargeRepository.sumNetAmount()).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountForBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(BigDecimal.ONE);
@@ -256,7 +257,7 @@ class DashboardServiceImplTest {
         verify(shipmentRepository, never())
                 .countByCompanyIdAndStatusNotInAndBookingDateBefore(any(), any(), any());
 
-        verify(shipmentRepository).count();
+        verify(shipmentRepository).countByStatusNot(ShipmentStatus.CANCELLED);
         verify(shipmentRepository).countByStatusAndBookingDateBetween(
                 eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class));
         verify(shipmentRepository).findTop5ByOrderByCreatedAtDesc();
@@ -290,15 +291,16 @@ class DashboardServiceImplTest {
         org.mockito.Mockito.reset(walletService);
         when(walletService.getForBranch(null)).thenReturn(ownWallet);
 
-        when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
-                eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusNotAndBookingDateBetween(
+                eq(COMPANY), eq(branch), eq(ShipmentStatus.CANCELLED), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(1L);
         when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
                 eq(COMPANY), eq(branch), any(ShipmentStatus.class), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(2L);
         when(shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
                 eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(3L);
-        when(shipmentRepository.countByCompanyId(COMPANY)).thenReturn(4L);
+        when(shipmentRepository.countByCompanyIdAndStatusNot(COMPANY, ShipmentStatus.CANCELLED)).thenReturn(4L);
         when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
                 eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class))).thenReturn(new BigDecimal("77"));

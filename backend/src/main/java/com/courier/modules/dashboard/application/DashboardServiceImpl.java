@@ -192,15 +192,16 @@ public class DashboardServiceImpl implements DashboardService {
             // runAs(null, ...) is this platform's own sanctioned way to disable the
             // Hibernate companyFilter for a deliberately cross-company read — the same
             // pattern TicketServiceImpl.dashboard uses for the identical SUPER_ADMIN case.
-            todayShipments = CompanyContext.runAs(null,
-                    () -> shipmentRepository.countByBookingDateBetween(monthStart, today));
+            todayShipments = CompanyContext.runAs(null, () -> shipmentRepository
+                    .countByStatusNotAndBookingDateBetween(ShipmentStatus.CANCELLED, monthStart, today));
             delivered = CompanyContext.runAs(null, () -> shipmentRepository.countByStatusAndBookingDateBetween(
                     ShipmentStatus.DELIVERED, monthStart, today));
             inTransit = CompanyContext.runAs(null,
                     () -> shipmentRepository.countByStatusInAndBookingDateBetween(IN_TRANSIT, monthStart, today));
             pending = CompanyContext.runAs(null,
                     () -> shipmentRepository.countByStatusInAndBookingDateBetween(PENDING, monthStart, today));
-            totalShipments = CompanyContext.<Long>runAs(null, () -> shipmentRepository.count());
+            totalShipments = CompanyContext.<Long>runAs(null,
+                    () -> shipmentRepository.countByStatusNot(ShipmentStatus.CANCELLED));
             totalActualWeight = CompanyContext.<BigDecimal>runAs(null,
                     () -> shipmentRepository.sumActualWeightByBookingDateBetween(monthStart, today));
             totalRevenue = CompanyContext.<BigDecimal>runAs(null, () -> shipmentChargeRepository.sumNetAmount());
@@ -217,8 +218,8 @@ public class DashboardServiceImpl implements DashboardService {
             // branch wallet): every figure below is this branch's own bookings, not the
             // whole company's — the company-wide branch below was the real bug report
             // ("dashboard count wrong for branch, showing all branches data").
-            todayShipments = shipmentRepository.countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
-                    scope, ownBranchId, monthStart, today);
+            todayShipments = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusNotAndBookingDateBetween(
+                    scope, ownBranchId, ShipmentStatus.CANCELLED, monthStart, today);
             delivered = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusAndBookingDateBetween(
                     scope, ownBranchId, ShipmentStatus.DELIVERED, monthStart, today);
             inTransit = shipmentRepository.countByCompanyIdAndBookingBranchIdAndStatusInAndBookingDateBetween(
@@ -227,7 +228,7 @@ public class DashboardServiceImpl implements DashboardService {
                     scope, ownBranchId, PENDING, monthStart, today);
             // Not shown on any branch-scoped profile's tile set (dashboard.roles.ts) —
             // left company-wide, same as the cross-tenant/company branches' own values.
-            totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalShipments = shipmentRepository.countByCompanyIdAndStatusNot(scope, ShipmentStatus.CANCELLED);
             totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingBranchIdAndBookingDateBetween(
                     scope, ownBranchId, monthStart, today);
             totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
@@ -242,14 +243,15 @@ public class DashboardServiceImpl implements DashboardService {
             recentWalletTransactions = walletTransactionRepository.findRecent(
                     ownWallet.getId(), scope, PageRequest.of(0, 5));
         } else {
-            todayShipments = shipmentRepository.countByCompanyIdAndBookingDateBetween(scope, monthStart, today);
+            todayShipments = shipmentRepository.countByCompanyIdAndStatusNotAndBookingDateBetween(
+                    scope, ShipmentStatus.CANCELLED, monthStart, today);
             delivered = shipmentRepository.countByCompanyIdAndStatusAndBookingDateBetween(
                     scope, ShipmentStatus.DELIVERED, monthStart, today);
             inTransit = shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
                     scope, IN_TRANSIT, monthStart, today);
             pending = shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
                     scope, PENDING, monthStart, today);
-            totalShipments = shipmentRepository.countByCompanyId(scope);
+            totalShipments = shipmentRepository.countByCompanyIdAndStatusNot(scope, ShipmentStatus.CANCELLED);
             totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingDateBetween(
                     scope, monthStart, today);
             totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);

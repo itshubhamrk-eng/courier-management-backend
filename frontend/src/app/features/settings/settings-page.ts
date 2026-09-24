@@ -111,6 +111,14 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                             (click)="saveDefaultAppointmentCharge()">{{ savingAppointmentCharge() ? 'Saving…' : 'Save' }}</button>
                   </div>
                 </div>
+                <div class="dcw">
+                  <label class="rzp__check">
+                    <input type="checkbox" [checked]="manualStatusOverrideInput()" [disabled]="savingManualOverride()"
+                           (change)="onManualStatusOverrideToggle($event)" />
+                    <span>Allow manual shipment status override on Trip Hire Challan (COMPANY_ADMIN / BRANCH_MANAGER)</span>
+                  </label>
+                  <span class="text-caption">Lets a company admin or branch manager force a shipment straight to In Scan, Out For Delivery, Delivered or any other status from the THC tracking screen, bypassing the normal flow. Off by default.</span>
+                </div>
               }
               @if (s.key === 'finance') {
                 <div class="dcw">
@@ -271,6 +279,13 @@ export class SettingsPage implements OnInit {
   readonly defaultAppointmentChargeInput = signal<number | null>(null);
   readonly savingAppointmentCharge = signal(false);
 
+  /** Shipment's third inline field — a plain toggle, saved immediately on change (no
+   *  separate Save button, unlike the two numeric fields above). Gates whether a
+   *  COMPANY_ADMIN/BRANCH_MANAGER can use Trip Hire Challan's "Change Status" action —
+   *  see `TripHireChallan`/`ShipmentMovementService.overrideStatus`. */
+  readonly manualStatusOverrideInput = signal(false);
+  readonly savingManualOverride = signal(false);
+
   /** A company's own Razorpay account, loaded separately from the rest of settings —
    *  it's its own COMPANY_ADMIN-only backend resource, not part of /company-settings. */
   readonly razorpay = signal<RazorpayConfigResponse | null>(null);
@@ -314,13 +329,17 @@ export class SettingsPage implements OnInit {
     this.service.get().subscribe({
       next: (d) => {
         this.data.set(d ?? {});
-        const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number } })?.shipment;
+        const shipment = (d as { shipment?: {
+          defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number;
+          manualStatusOverrideEnabled?: boolean;
+        } })?.shipment;
         if (shipment?.defaultChargeableWeightKg != null) {
           this.defaultWeightInput.set(Number(shipment.defaultChargeableWeightKg));
         }
         if (shipment?.defaultAppointmentDeliveryCharge != null) {
           this.defaultAppointmentChargeInput.set(Number(shipment.defaultAppointmentDeliveryCharge));
         }
+        this.manualStatusOverrideInput.set(shipment?.manualStatusOverrideEnabled === true);
         const finance = (d as { finance?: {
           gstPercentage?: number; roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
         } })?.finance;
@@ -392,6 +411,21 @@ export class SettingsPage implements OnInit {
         this.notify.success('Default appointment delivery charge updated');
       },
       error: () => this.savingAppointmentCharge.set(false)
+    });
+  }
+
+  onManualStatusOverrideToggle(e: Event): void {
+    const checked = (e.target as HTMLInputElement).checked;
+    this.manualStatusOverrideInput.set(checked);
+    this.savingManualOverride.set(true);
+    this.service.patchSection('shipment', { manualStatusOverrideEnabled: checked }).subscribe({
+      next: (d) => {
+        const shipment = (d as { shipment?: unknown })?.shipment;
+        if (shipment) this.data.update((prev) => ({ ...prev, shipment }));
+        this.savingManualOverride.set(false);
+        this.notify.success(checked ? 'Manual status override enabled' : 'Manual status override disabled');
+      },
+      error: () => { this.manualStatusOverrideInput.set(!checked); this.savingManualOverride.set(false); }
     });
   }
 

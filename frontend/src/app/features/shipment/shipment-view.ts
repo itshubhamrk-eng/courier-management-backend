@@ -510,7 +510,7 @@ export class ShipmentView implements OnInit {
         ? this.masters.pincodeGeo(s.pickupPincode).pipe(catchError(() => of(null)))
         : of(null),
       deliveryGeo: s.deliveryPincode
-        ? this.masters.pincodeGeo(s.deliveryPincode).pipe(catchError(() => of(null)))
+        ? this.masters.pincodeGeo(s.deliveryPincode, s.destinationAreaId).pipe(catchError(() => of(null)))
         : of(null)
     }).pipe(map(({ company, bookingGeo, deliveryGeo }): ConsignmentPrintData => ({
       companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
@@ -521,7 +521,10 @@ export class ShipmentView implements OnInit {
       companyWebsite: company?.website ?? null,
       shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
       expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-      bookingBranchLabel: this.branchLabel(s.bookingBranchId), deliveryBranchLabel: this.branchLabel(s.deliveryBranchId),
+      bookingBranchLabel: this.branchLabel(s.bookingBranchId),
+      deliveryBranchLabel: s.deliveryBranchId
+        ? this.branchLabel(s.deliveryBranchId)
+        : s.toCity || '—',
       bookingPincode: s.pickupPincode || null,
       bookingDistrict: bookingGeo?.districtName ?? null,
       bookingArea: bookingGeo?.areaName ?? null,

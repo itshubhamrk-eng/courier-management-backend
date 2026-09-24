@@ -22,6 +22,7 @@ import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { ShipmentMovementService } from './shipment-movement.service';
 import { ManifestCard } from './components/manifest-card';
 import { TruckIllustration } from '@shared/components/illustrations/truck-illustration';
+import { SettingsService } from '@features/settings/settings.service';
 
 /** Trip Hire Challan (THC) — renamed from "Dispatch" on direct request; the dispatch
  *  action itself is unchanged. A worklist of every open ("loading sheet created")
@@ -180,7 +181,59 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
             </form>
           </app-card>
         } @else {
-          <app-card><p class="empty">This manifest has already been dispatched.</p></app-card>
+          <app-card title="Shipments on this THC" subtitle="Tracking — this manifest has already been dispatched.">
+            @if (loadingShipments()) {
+              <app-loader [minHeight]="80" caption="Loading…" />
+            } @else if (!manifestShipments().length) {
+              <p class="empty">No shipments on this manifest.</p>
+            } @else {
+              <div class="tbl__wrap">
+                <table class="tbl">
+                  <thead>
+                    <tr><th>#</th><th>Shipment No.</th><th>Sender → Receiver</th><th>From City → To City</th><th>Status</th>
+                      @if (canOverrideStatus()) { <th></th> }</tr>
+                  </thead>
+                  <tbody>
+                    @for (s of manifestShipments(); track s.id; let i = $index) {
+                      <tr>
+                        <td>{{ i + 1 }}</td>
+                        <td>{{ s.shipmentNumber }}</td>
+                        <td>{{ s.senderName }} → {{ s.receiverName }}</td>
+                        <td>{{ s.fromCity || '—' }} → {{ s.toCity || '—' }}</td>
+                        <td>{{ s.status }}</td>
+                        @if (canOverrideStatus()) {
+                          <td><app-button variant="stroked" icon="edit" (pressed)="openOverride(s)">Change Status</app-button></td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </app-card>
+
+          @if (overridingShipment(); as os) {
+            <app-card title="Change status — {{ os.shipmentNumber }}" subtitle="Manual override — bypasses the normal THC/DRS/Deliver flow.">
+              <form [formGroup]="overrideForm" (ngSubmit)="submitOverride()" class="df">
+                <div class="grid2">
+                  <app-select [control]="oc('targetStatus')" label="New Status" [options]="statusOptions" placeholder="Select status" />
+                  @if (oc('targetStatus').value === 'OUT_FOR_DELIVERY') {
+                    <app-select [control]="oc('deliveryUserId')" label="Delivery User" [options]="driverOptions()" placeholder="Select delivery user" />
+                  }
+                  @if (oc('targetStatus').value === 'DELIVERED') {
+                    <app-input [control]="oc('receiverName')" label="Receiver Name" placeholder="Who received it" />
+                  }
+                </div>
+                <label class="fld"><span class="fld__l">Reason</span>
+                  <textarea class="fld__i fld__i--area" rows="2" [formControl]="oc('reason')" placeholder="Why this override is needed"></textarea>
+                </label>
+                <div class="df__bar">
+                  <app-button type="button" variant="stroked" icon="close" (pressed)="overridingShipment.set(null)">Cancel</app-button>
+                  <app-button type="submit" icon="check" [loading]="overrideSaving()">Update Status</app-button>
+                </div>
+              </form>
+            </app-card>
+          }
         }
 
         @if (result(); as r) {
@@ -216,6 +269,7 @@ import { TruckIllustration } from '@shared/components/illustrations/truck-illust
     .fld__i { height:44px; padding:0 14px; background:var(--surface-muted); border:1px solid transparent;
       border-radius:var(--r-field); box-shadow:var(--shadow-clay-inset); font:400 14px var(--font-sans); color:var(--content-fg); }
     .fld__i:focus { outline:0; border-color:var(--brand-400); box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
+    .fld__i--area { height:auto; padding:10px 14px; resize:vertical; font-family:var(--font-sans); }
     .fld__hint { font:400 12px var(--font-sans); color:var(--content-muted); }
     @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
   `]
@@ -231,6 +285,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
   private readonly masterData = inject(MasterDataService);
   private readonly movementService = inject(ShipmentMovementService);
   private readonly companyProfile = inject(CompanyProfileService);
+  private readonly settingsService = inject(SettingsService);
 
   readonly manifest = signal<Manifest | null>(null);
   readonly result = signal<DispatchManifestResponse | null>(null);
@@ -275,6 +330,30 @@ export class TripHireChallan implements OnInit, OnDestroy {
    *  fires, so unchecking causes no server-side change on its own. */
   readonly pendingRemovals = signal<string[]>([]);
 
+  /** Company Settings > Shipment > Manual Status Override — read once at page load. */
+  readonly manualOverrideEnabled = signal(false);
+  /** Which row's "Change Status" form is open, if any — one at a time, same treatment
+   *  the dispatch form itself gets. */
+  readonly overridingShipment = signal<Shipment | null>(null);
+  readonly overrideSaving = signal(false);
+  readonly statusOptions: SelectOption[] = [
+    { value: 'BOOKED', label: 'Booked' },
+    { value: 'READY_FOR_MANIFEST', label: 'Ready For Manifest' },
+    { value: 'MANIFEST_CREATED', label: 'Manifest Created (Loading Sheet)' },
+    { value: 'DISPATCHED', label: 'Dispatched' },
+    { value: 'IN_SCAN', label: 'In Scan / Received' },
+    { value: 'OUT_FOR_DELIVERY', label: 'Out For Delivery' },
+    { value: 'DELIVERED', label: 'Delivered' },
+    { value: 'RETURNED', label: 'Returned' },
+    { value: 'CANCELLED', label: 'Cancelled' }
+  ];
+  readonly overrideForm: FormGroup = this.fb.group({
+    targetStatus: [null as string | null, Validators.required],
+    reason: ['', Validators.required],
+    deliveryUserId: [null as string | null],
+    receiverName: ['']
+  });
+
   readonly searchControl = new FormControl('');
   readonly form: FormGroup = this.fb.group({
     vehicleId: [null as string | null, Validators.required],
@@ -309,6 +388,13 @@ export class TripHireChallan implements OnInit, OnDestroy {
     this.otpControl.valueChanges.subscribe((v) => {
       const digits = (v ?? '').replace(/\D/g, '').slice(0, 4);
       if (digits !== v) this.otpControl.setValue(digits, { emitEvent: false });
+    });
+    this.settingsService.get().subscribe({
+      next: (d) => {
+        const shipment = (d as { shipment?: { manualStatusOverrideEnabled?: boolean } })?.shipment;
+        this.manualOverrideEnabled.set(shipment?.manualStatusOverrideEnabled === true);
+      },
+      error: () => this.manualOverrideEnabled.set(false)
     });
     this.loadOpenManifests();
     const manifestNumber = this.route.snapshot.queryParamMap.get('manifestNumber');
@@ -437,7 +523,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
 
   private loadManifestShipments(m: Manifest): void {
     this.pendingRemovals.set([]);
-    if (m.status !== 'CREATED') { this.manifestShipments.set([]); return; }
+    this.overridingShipment.set(null);
     this.loadingShipments.set(true);
     this.manifestService.shipments(m.id).subscribe({
       next: (s) => { this.manifestShipments.set(s); this.loadingShipments.set(false); },
@@ -450,6 +536,42 @@ export class TripHireChallan implements OnInit, OnDestroy {
   protected unselectShipment(shipment: Shipment): void {
     this.manifestShipments.update((list) => list.filter((s) => s.id !== shipment.id));
     this.pendingRemovals.update((ids) => [...ids, shipment.id]);
+  }
+
+  protected oc(name: string): FormControl { return this.overrideForm.get(name) as FormControl; }
+
+  /** Company-level opt-in plus COMPANY_ADMIN/BRANCH_MANAGER — see
+   *  ShipmentService.overrideStatus's own doc for what this bypasses. */
+  protected canOverrideStatus(): boolean {
+    return this.manualOverrideEnabled() && this.auth.hasAnyRole(['COMPANY_ADMIN', 'BRANCH_MANAGER']);
+  }
+
+  protected openOverride(shipment: Shipment): void {
+    this.overrideForm.reset({ targetStatus: null, reason: '', deliveryUserId: null, receiverName: '' });
+    this.overridingShipment.set(shipment);
+  }
+
+  protected submitOverride(): void {
+    const shipment = this.overridingShipment();
+    if (!shipment || this.overrideForm.invalid) { this.overrideForm.markAllAsTouched(); return; }
+    const v = this.overrideForm.getRawValue();
+    this.overrideSaving.set(true);
+    this.movementService.overrideStatus(shipment.id, {
+      targetStatus: v.targetStatus, reason: v.reason,
+      deliveryUserId: v.deliveryUserId || null, receiverName: v.receiverName || null
+    }).subscribe({
+      next: (r) => {
+        this.overrideSaving.set(false);
+        this.overridingShipment.set(null);
+        this.manifestShipments.update((list) =>
+          list.map((s) => s.id === shipment.id ? { ...s, status: r.shipment.status } : s));
+        if (r.warning) this.notify.error(r.warning); else this.notify.success('Shipment status updated.');
+      },
+      error: (e: HttpErrorResponse) => {
+        this.overrideSaving.set(false);
+        this.notify.error(e.error?.message ?? 'Could not override status.');
+      }
+    });
   }
 
   dispatch(): void {
@@ -485,6 +607,9 @@ export class TripHireChallan implements OnInit, OnDestroy {
         this.notify.success(`Manifest ${r.manifestNumber} dispatched.`);
         this.loadOpenManifests();
         this.openThcTab(dispatched, this.manifestShipments());
+        // Refresh so the tracking table (rendered once status !== 'CREATED') shows each
+        // shipment's real post-dispatch status instead of the stale pre-dispatch snapshot.
+        this.loadManifestShipments(dispatched);
       },
       error: (e: HttpErrorResponse) => { this.dispatching.set(false); this.notify.error(e.error?.message ?? 'Could not dispatch the manifest.'); }
     });

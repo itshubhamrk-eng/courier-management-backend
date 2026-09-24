@@ -86,10 +86,14 @@ public class PincodeController {
                     Read-only — no postal-directory call, nothing created, same read
                     audience as every other GET here. `matched=false` when no pincode
                     with this code is on file yet; use `/lookup/{code}` (COMPANY_ADMIN)
-                    to resolve one from the postal directory first.
+                    to resolve one from the postal directory first. Pass `areaId` when
+                    the caller already knows which of this pincode's Areas it wants
+                    (e.g. a booked shipment's own selection) — otherwise resolves off
+                    the pincode's single fixed "primary" Area.
                     """)
-    public ApiResponse<PincodeGeoResponse> geo(@PathVariable String code) {
-        return ApiResponse.success(service.geography(code)
+    public ApiResponse<PincodeGeoResponse> geo(@PathVariable String code,
+                                                @RequestParam(required = false) UUID areaId) {
+        return ApiResponse.success(service.geography(code, areaId)
                 .map(g -> new PincodeGeoResponse(true, g.areaName(), g.cityName(), g.districtName()))
                 .orElseGet(PincodeGeoResponse::notFound));
     }

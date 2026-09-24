@@ -5,7 +5,7 @@ import { API } from '@core/config/api-endpoints';
 import {
   BulkMovementResult, DispatchManifestRequest, DispatchManifestResponse,
   InScanRequest, OutForDeliveryRequest, DeliverRequest, ShipmentResponse,
-  DrsSummary, DrsDetail
+  DrsSummary, DrsDetail, OverrideStatusRequest, OverrideStatusResponse
 } from '@core/models/shipment.model';
 import { UserService, Lookup } from '@features/users/user.service';
 
@@ -56,6 +56,14 @@ export class ShipmentMovementService {
   }
   deliver(body: DeliverRequest) {
     return this.api.post<ShipmentResponse>(`${API.shipmentMovement}/deliver`, body);
+  }
+
+  /** Opt-in per company (Company Settings > Shipment > Manual Status Override).
+   *  COMPANY_ADMIN/BRANCH_MANAGER only — see backend `ShipmentService.overrideStatus`'s
+   *  own doc for when a real side-effecting method runs vs. a raw status write. */
+  overrideStatus(shipmentId: string, body: OverrideStatusRequest) {
+    return this.api.post<OverrideStatusResponse>(
+      `${API.shipmentMovement}/${shipmentId}/override-status`, body);
   }
 
   /** Uploads one POD file (photo or signature capture) to the configured object store and

@@ -26,8 +26,6 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
   const statusTag = isPaid ? 'Paid' : isToPay ? 'To Pay' : d.paymentModeLabel;
   const goodsValue = d.declaredValue ?? d.invoiceValue;
-  const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
-  const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const deliveryTypeLabel = d.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery';
 
   // Same amount-display logic as `consignment-print.util.ts`'s `copy()` — Print 1's
@@ -115,8 +113,8 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
 
     <!-- FROM / TO / KM / DATE -->
     <div class="row fields">
-      <div class="cell f1"><span class="k">From :</span> ${esc(d.bookingBranchLabel)}</div>
-      <div class="cell f2"><span class="k">To :</span> ${esc(d.deliveryBranchLabel)}</div>
+      <div class="cell f1"><span class="k">From :</span> ${esc(d.bookingBranchLabel)}${d.bookingPincode ? ` - ${esc(d.bookingPincode)}` : ''}</div>
+      <div class="cell f2"><span class="k">To :</span> ${esc(d.deliveryBranchLabel)}${d.deliveryPincode ? ` - ${esc(d.deliveryPincode)}` : ''}</div>
       <div class="cell f3"><span class="k">Km :</span> —</div>
       <div class="cell f4"><span class="k">Date :</span> ${esc(d.bookingDate)}</div>
       <div class="cell f5 doctype">Performa Invoice - Consignment Note<div class="copytag">(${label})</div></div>
@@ -149,12 +147,6 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
       </div>
     </div>`
       : ''}
-
-    <!-- BOOKING / DELIVERY GEOGRAPHY -->
-    <div class="row fields">
-      <div class="cell h4"><span class="k">Booking Pincode / Area / District :</span> ${esc(bookingGeo)}</div>
-      <div class="cell h4"><span class="k">Delivery Pincode / Area / District :</span> ${esc(deliveryGeo)}</div>
-    </div>
 
     <!-- SPECIAL INSTRUCTION -->
     <div class="row fields">

@@ -67,6 +67,10 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByBookingDateBetween(LocalDate start, LocalDate end);
 
+    /** Dashboard's "This Month's Shipments"/"This Month's Bookings" tiles, cross-tenant —
+     *  cancelled orders excluded, same rule as {@link #countByCompanyIdAndStatusNot}. */
+    long countByStatusNotAndBookingDateBetween(ShipmentStatus status, LocalDate start, LocalDate end);
+
     long countByStatus(ShipmentStatus status);
 
     long countByStatusIn(Collection<ShipmentStatus> statuses);
@@ -109,6 +113,11 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByCompanyIdAndBookingDateBetween(UUID companyId, LocalDate start, LocalDate end);
 
+    /** Company-scoped sibling of {@link #countByStatusNotAndBookingDateBetween} — cancelled
+     *  orders excluded from the "This Month's Shipments"/"This Month's Bookings" tiles. */
+    long countByCompanyIdAndStatusNotAndBookingDateBetween(UUID companyId, ShipmentStatus status,
+                                                             LocalDate start, LocalDate end);
+
     @Query("select coalesce(sum(s.actualWeight), 0) from Shipment s "
             + "where s.companyId = :companyId and s.bookingDate between :start and :end")
     BigDecimal sumActualWeightByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
@@ -133,6 +142,14 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
                                                            LocalDate start, LocalDate end);
 
     long countByCompanyId(UUID companyId);
+
+    /** Dashboard's "Total Shipments" figure — cancelled orders don't count as real
+     *  shipment volume, so excluded here rather than in the caller. */
+    long countByCompanyIdAndStatusNot(UUID companyId, ShipmentStatus status);
+
+    /** Cross-tenant ({@code SUPER_ADMIN}) sibling of {@link #countByCompanyIdAndStatusNot} —
+     *  same "exclude CANCELLED from the total" rule, whole-platform. */
+    long countByStatusNot(ShipmentStatus status);
 
     /** Row-returning, not a count — the dashboard's Pending Delivery tile needs the total
      *  ({@code .size()}) and the Delivery Pending aging breakdown needs each shipment's own
@@ -245,6 +262,11 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     long countByCompanyIdAndBookingBranchIdAndBookingDateBetween(
             UUID companyId, UUID bookingBranchId, LocalDate start, LocalDate end);
+
+    /** Booking-branch-scoped sibling of {@link #countByCompanyIdAndStatusNotAndBookingDateBetween}
+     *  — cancelled orders excluded from the branch-scoped "This Month's Shipments" tile. */
+    long countByCompanyIdAndBookingBranchIdAndStatusNotAndBookingDateBetween(
+            UUID companyId, UUID bookingBranchId, ShipmentStatus status, LocalDate start, LocalDate end);
 
     @Query("select coalesce(sum(s.actualWeight), 0) from Shipment s "
             + "where s.companyId = :companyId and s.bookingBranchId = :bookingBranchId "

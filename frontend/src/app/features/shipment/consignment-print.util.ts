@@ -228,13 +228,9 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
   const total = d.charges.netAmount + d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0);
   const taxableAmount = total - d.charges.gstAmount;
-  const bookingGeo = [d.bookingPincode, d.bookingArea, d.bookingDistrict].filter(Boolean).join(', ') || '—';
-  const deliveryGeo = [d.deliveryPincode, d.deliveryArea, d.deliveryDistrict].filter(Boolean).join(', ') || '—';
   const detailRows: Array<[string, string]> = [
-    ['From', d.bookingBranchLabel],
-    ['To', d.deliveryBranchLabel],
-    ['Booking Pincode / Area / District', bookingGeo],
-    ['Delivery Pincode / Area / District', deliveryGeo],
+    ['From', d.bookingPincode ? `${d.bookingBranchLabel} - ${d.bookingPincode}` : d.bookingBranchLabel],
+    ['To', d.deliveryPincode ? `${d.deliveryBranchLabel} - ${d.deliveryPincode}` : d.deliveryBranchLabel],
     ['No Of Parcel / Weight', `${d.numberOfPackages} / ${weight}`],
     ['Booking Date', d.bookingDate],
     ['Delivery Date', d.expectedDeliveryDate ?? '—'],

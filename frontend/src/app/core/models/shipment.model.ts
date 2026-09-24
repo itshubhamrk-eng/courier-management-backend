@@ -135,6 +135,9 @@ export interface ShipmentResponse {
   nextLocationId?: string | null;
   pickupPincode: string;
   deliveryPincode: string;
+  /** The specific Area of deliveryPincode the operator picked at booking, when that
+   *  pincode has more than one; null for shipments booked before this field existed. */
+  destinationAreaId?: string | null;
   senderName: string;
   senderAddress: string;
   senderContact: string;
@@ -865,6 +868,32 @@ export interface DeliverRequest {
   otp?: string | null;
   signatureUrl?: string | null;
   photoUrl?: string | null;
+}
+
+/** Body of POST /shipment-movement/{shipmentId}/override-status. Only the fields the
+ *  chosen targetStatus actually needs matter — deliveryUserId for OUT_FOR_DELIVERY,
+ *  receiverName for DELIVERED; everything else is ignored server-side for other targets.
+ *  See `ShipmentService.overrideStatus`'s own doc for when a real side-effecting method
+ *  runs vs. a raw no-side-effect status write. */
+export interface OverrideStatusRequest {
+  targetStatus: ShipmentStatus;
+  reason: string;
+  deliveryUserId?: string | null;
+  vehicleId?: string | null;
+  fuelCost?: number | null;
+  deliveryCharge?: number | null;
+  receiverName?: string | null;
+  otp?: string | null;
+  signatureUrl?: string | null;
+  photoUrl?: string | null;
+}
+
+/** Mirrors backend `OverrideStatusResponse` — `warning` is non-null only when no real
+ *  service method covered the jump, so no money/wallet/POD side effect ran for it. */
+export interface OverrideStatusResponse {
+  shipment: ShipmentResponse;
+  viaRealMethod: boolean;
+  warning: string | null;
 }
 
 /** One step of GET /shipments/{id}/timeline — mirrors backend `TimelineStepResponse`. */

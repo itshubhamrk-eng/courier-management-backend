@@ -145,6 +145,11 @@ public class ShipmentServiceImpl implements ShipmentService {
             + Roles.BRANCH_MANAGER + "', '" + Roles.OPERATOR + "')";
     private static final String READERS = "isAuthenticated()";
 
+    /** Narrower than {@link #WRITERS} on purpose — {@link #overrideStatus} bypasses the
+     *  normal per-screen flow entirely, so it stays out of an {@code OPERATOR}'s reach. */
+    private static final String OVERRIDE_WRITERS =
+            "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '" + Roles.BRANCH_MANAGER + "')";
+
     private static final int DEFAULT_OTP_EXPIRY_MINUTES = 5;
     private static final SecureRandom OTP_RANDOM = new SecureRandom();
 
@@ -293,6 +298,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .nextLocationId(crossing ? firstCrossingBranch : null)
                 .pickupPincode(command.pickupPincode())
                 .deliveryPincode(command.deliveryPincode())
+                .destinationAreaId(command.destinationAreaId())
                 .senderName(command.senderName())
                 .senderAddress(command.senderAddress())
                 .senderContact(command.senderContact())
@@ -413,6 +419,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setToCity(freightCalc.destinationCityName());
         shipment.setPickupPincode(command.pickupPincode());
         shipment.setDeliveryPincode(command.deliveryPincode());
+        shipment.setDestinationAreaId(command.destinationAreaId());
         shipment.setSenderName(command.senderName());
         shipment.setSenderAddress(command.senderAddress());
         shipment.setSenderContact(command.senderContact());
@@ -1459,6 +1466,109 @@ public class ShipmentServiceImpl implements ShipmentService {
         creditDeliveryCommissionsIfEligible(saved, companyId);
 
         return saved;
+    }
+
+    // ------------------------------------------------------------- manual override
+
+    @Override
+    @Transactional
+    @PreAuthorize(OVERRIDE_WRITERS)
+    public OverrideStatusResult overrideStatus(UUID shipmentId, OverrideStatusCommand command) {
+        UUID companyId = requireCompany();
+        if (!companySettingsService.get().isManualStatusOverrideEnabled()) {
+            throw new BusinessRuleException("Manual status override is not enabled for this company "
+                    + "— turn it on in Company Settings > Shipment first.");
+        }
+        if (command.reason() == null || command.reason().isBlank()) {
+            throw new BusinessRuleException("A reason is required to override a shipment's status.");
+        }
+        if (command.targetStatus() == null) {
+            throw new BusinessRuleException("A target status is required.");
+        }
+
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        ShipmentStatus previous = shipment.getStatus();
+        ShipmentStatus target = command.targetStatus();
+        if (previous.isTerminal()) {
+            throw new BusinessRuleException("Shipment %s is %s, a final status — it cannot be "
+                    .formatted(shipment.getShipmentNumber(), previous) + "overridden any further.");
+        }
+        if (previous == target) {
+            throw new BusinessRuleException(
+                    "Shipment %s is already %s.".formatted(shipment.getShipmentNumber(), target));
+        }
+        String reason = command.reason().trim();
+
+        // Prefer the real service method when it covers this target — money/wallet/POD side
+        // effects fire exactly as they would from the normal screen. Any precondition it
+        // refuses (wrong current status, missing DeliveryAssignment, ...) falls through to the
+        // raw write below instead of failing the whole call — an override must never block.
+        try {
+            switch (target) {
+                case OUT_FOR_DELIVERY -> {
+                    if (command.deliveryUserId() == null) {
+                        throw new BusinessRuleException(
+                                "A delivery user is required to override to OUT_FOR_DELIVERY.");
+                    }
+                    BulkMovementResult result = assignOutForDelivery(List.of(shipmentId), command.deliveryUserId(),
+                            command.vehicleId(), command.fuelCost(), command.deliveryCharge());
+                    MovementOutcome outcome = result.results().get(0);
+                    if (!outcome.success()) {
+                        throw new BusinessRuleException(outcome.message());
+                    }
+                    return new OverrideStatusResult(loadOrThrow(shipmentId, companyId), true, null);
+                }
+                case DELIVERED -> {
+                    if (command.receiverName() == null || command.receiverName().isBlank()) {
+                        throw new BusinessRuleException(
+                                "A receiver name is required to override to DELIVERED.");
+                    }
+                    Shipment delivered = deliver(shipmentId, new DeliverCommand(command.receiverName(),
+                            reason, command.otp(), command.signatureUrl(), command.photoUrl()));
+                    return new OverrideStatusResult(delivered, true, null);
+                }
+                case CANCELLED -> {
+                    return new OverrideStatusResult(cancel(shipmentId, reason), true, null);
+                }
+                default -> {
+                    // No single-shipment real method covers this edge: DISPATCHED/IN_SCAN only
+                    // ever happen as part of a manifest-wide THC dispatch (vehicle/driver, every
+                    // shipment on that manifest together); BOOKED/READY_FOR_MANIFEST/
+                    // MANIFEST_CREATED/RETURNED have no dedicated writer at all. Falls through.
+                }
+            }
+        } catch (BusinessRuleException | ResourceNotFoundException preconditionNotMet) {
+            // Real method exists but refused this shipment's current state — fall through.
+        }
+
+        shipment.forceStatus(target);
+        Shipment saved = shipmentRepository.save(shipment);
+        appendManualOverrideHistory(saved, companyId, previous, target, reason);
+        auditService.record(AuditAction.SHIPMENT_STATUS_OVERRIDDEN, ENTITY, saved.getId(),
+                Map.of("shipmentNumber", saved.getShipmentNumber(), "from", previous.name(),
+                        "to", target.name(), "reason", reason));
+        log.info("Shipment {} ({}) status manually force-overridden {} -> {} in company {} by {}: {}",
+                saved.getShipmentNumber(), saved.getId(), previous, target, companyId, currentActor(), reason);
+
+        String warning = previous + " -> " + target + " has no matching normal step, so no automatic "
+                + "money/wallet/POD processing ran for this jump — check manually if needed.";
+        return new OverrideStatusResult(saved, false, warning);
+    }
+
+    private void appendManualOverrideHistory(Shipment shipment, UUID companyId, ShipmentStatus previous,
+                                              ShipmentStatus status, String reason) {
+        ShipmentStatusHistory entry = ShipmentStatusHistory.builder()
+                .shipmentId(shipment.getId())
+                .manifestId(shipment.getManifestId())
+                .status(status)
+                .previousStatus(previous)
+                .remarks("Manual override: " + reason)
+                .changedBy(SecurityUtils.getCurrentUserId().orElse(null))
+                .changedAt(Instant.now())
+                .manualOverride(true)
+                .build();
+        entry.setCompanyId(companyId);
+        historyRepository.save(entry);
     }
 
     /**

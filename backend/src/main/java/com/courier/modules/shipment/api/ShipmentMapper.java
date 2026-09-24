@@ -129,7 +129,7 @@ public class ShipmentMapper {
                 s.getBookingDate(), s.getBookingBranchId(), s.getDeliveryBranchId(), s.getManifestId(),
                 s.getFromCity(), s.getToCity(),
                 s.getCurrentLocationId(), s.getNextLocationId(),
-                s.getPickupPincode(), s.getDeliveryPincode(),
+                s.getPickupPincode(), s.getDeliveryPincode(), s.getDestinationAreaId(),
                 s.getSenderName(), s.getSenderAddress(), s.getSenderContact(),
                 s.getReceiverName(), s.getReceiverAddress(), s.getReceiverContact(),
                 s.getServiceTypeId(), s.getPackageTypeId(), s.getPaymentModeId(),

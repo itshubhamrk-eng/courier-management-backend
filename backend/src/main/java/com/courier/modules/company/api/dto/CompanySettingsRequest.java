@@ -58,6 +58,9 @@ public record CompanySettingsRequest(
         DimensionUnit dimensionUnit,
         Boolean autoGenerateBarcode,
         Boolean allowDuplicateReferenceNumber,
+        @Schema(description = "Opt-in: lets a COMPANY_ADMIN/BRANCH_MANAGER manually override a "
+                + "shipment's status, bypassing the normal THC/DRS/Deliver flow")
+        Boolean manualStatusOverrideEnabled,
         Boolean autoAssignTrackingNumber,
         @DecimalMin(value = "0.001", message = "must be greater than zero")
         @Digits(integer = 7, fraction = 3) BigDecimal defaultChargeableWeightKg,

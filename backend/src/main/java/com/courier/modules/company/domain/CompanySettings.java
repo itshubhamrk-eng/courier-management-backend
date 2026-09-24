@@ -135,6 +135,17 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private boolean allowDuplicateReferenceNumber = false;
 
+    /** Opt-in per company. When true, a {@code COMPANY_ADMIN}/{@code BRANCH_MANAGER} can push
+     *  a shipment straight to any status via {@code ShipmentService.overrideStatus}, bypassing
+     *  the normal per-screen flow (THC dispatch / DRS / Deliver) — for correcting a shipment
+     *  stuck in the wrong state, or force-tracking a THC's shipments by hand. Off by default:
+     *  an arbitrary jump that isn't a legal {@code ShipmentStatus} edge skips the real service
+     *  method (and its money/wallet side effects) entirely, so this is a deliberate trade-off
+     *  a company opts into, not a safe-by-default correction tool. */
+    @Column(name = "manual_status_override_enabled", nullable = false)
+    @Builder.Default
+    private boolean manualStatusOverrideEnabled = false;
+
     @Column(name = "auto_assign_tracking_number", nullable = false)
     @Builder.Default
     private boolean autoAssignTrackingNumber = true;

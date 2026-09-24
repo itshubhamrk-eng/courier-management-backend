@@ -198,6 +198,7 @@ public enum AuditAction {
     SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED,
     SHIPMENT_DELIVERED,
     SHIPMENT_POD_UPLOADED,
+    SHIPMENT_STATUS_OVERRIDDEN,
 
     // --- crossing (V37): a shipment's transit through an intermediate branch/hub
     CROSSING_CREATED,

@@ -135,6 +135,14 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "delivery_pincode", nullable = false, length = 10)
     private String deliveryPincode;
 
+    /** The specific Area of {@code deliveryPincode} the operator picked at booking, when
+     *  that pincode has more than one — null for older shipments booked before this
+     *  column existed. Lets the printed receipt show the area actually chosen instead of
+     *  the pincode's single fixed "primary" area. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "destination_area_id", columnDefinition = "BINARY(16)")
+    private UUID destinationAreaId;
+
     @Column(name = "sender_name", nullable = false, length = 150)
     private String senderName;
 
@@ -271,6 +279,25 @@ public class Shipment extends CompanyOwnedEntity {
         if (!status.canTransitionTo(next)) {
             throw new BusinessRuleException(
                     "Shipment %s cannot move from %s to %s.".formatted(shipmentNumber, status, next));
+        }
+        this.status = next;
+    }
+
+    /**
+     * Writes {@code next} with no adjacency check at all — {@code ShipmentServiceImpl
+     * .overrideStatus}'s raw fallback for a manual-override jump that isn't a legal
+     * {@link ShipmentStatus#canTransitionTo} edge (or has no real service method covering it).
+     * Refuses only a terminal current status (DELIVERED/RETURNED/CANCELLED) — those are
+     * final by design, not a state a company setting should be able to reopen.
+     */
+    public void forceStatus(ShipmentStatus next) {
+        if (status.isTerminal()) {
+            throw new BusinessRuleException(
+                    "Shipment %s is %s, a final status — it cannot be overridden any further."
+                            .formatted(shipmentNumber, status));
+        }
+        if (next == null) {
+            throw new BusinessRuleException("A target status is required.");
         }
         this.status = next;
     }
