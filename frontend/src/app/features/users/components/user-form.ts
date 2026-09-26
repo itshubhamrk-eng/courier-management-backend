@@ -14,6 +14,12 @@ import { Lookup } from '../user.service';
 const PHONE = /^[+]?[0-9 \-]{7,20}$/;
 const USERNAME = /^[A-Za-z0-9._-]{3,100}$/;
 
+// Mirrors backend DefaultRoleCatalog.BRANCH_ROLE_CODES / HUB_MANAGER — the system roles
+// that presuppose a placement. A custom (non-system) role carries no such assumption and
+// stays offered everywhere, same as the backend's own isBranchAssignable.
+const BRANCH_ROLE_CODES = new Set(['BRANCH_MANAGER', 'BOOKING_OPERATOR', 'DELIVERY_OPERATOR', 'ACCOUNTS']);
+const HUB_ROLE_CODES = new Set(['HUB_MANAGER']);
+
 const GENDERS: SelectOption[] = [
   { value: 'MALE', label: 'Male' }, { value: 'FEMALE', label: 'Female' },
   { value: 'OTHER', label: 'Other' }, { value: 'UNSPECIFIED', label: 'Unspecified' }
@@ -37,12 +43,12 @@ const GENDERS: SelectOption[] = [
         <div class="grid">
           @if (isCreate()) {
             <app-input [control]="c('employeeCode')" label="Employee Code"
-                       [placeholder]="branchSelected() ? 'Auto-generated from branch' : 'EMP001'" [maxLength]="50" />
+                       [placeholder]="branchSelected() ? 'Auto-generated from branch' : 'Auto-generated if left blank'" [maxLength]="50" />
           } @else {
             <div class="stat"><span class="stat__l">Employee Code</span>
               <span class="stat__v">{{ user()?.employeeCode || '—' }}</span><span class="stat__h">Immutable</span></div>
           }
-          <app-input [control]="c('employeeId')" label="Employee ID" placeholder="Payroll / HR id" [maxLength]="50" />
+          <app-input [control]="c('employeeId')" label="Employee ID" placeholder="Payroll / HR id — auto-generated if left blank" [maxLength]="50" />
           <app-input [control]="c('firstName')" label="First Name" [required]="true" placeholder="Asha" [maxLength]="100" />
           <app-input [control]="c('middleName')" label="Middle Name" placeholder="—" [maxLength]="100" />
           <app-input [control]="c('lastName')" label="Last Name" placeholder="Nair" [maxLength]="100" />
@@ -169,15 +175,28 @@ export class UserForm {
 
   protected readonly departmentOptions = computed<SelectOption[]>(() =>
     this.departments().map((d) => ({ value: d.id, label: d.departmentName })));
-  /** All active roles, unless a department is picked — then just the roles it offers, so
-   *  a user can only be given one of the roles its own department grants. */
+  /** Active roles a user with this placement may hold. A department, if picked, is the
+   *  final word — its own curated list, unfiltered further. Otherwise a system role that
+   *  presupposes a branch or a hub (BRANCH_MANAGER, BOOKING_OPERATOR, ... / HUB_MANAGER)
+   *  is only offered when the placement matches; a custom (non-system) role carries no
+   *  such assumption and stays offered everywhere. No branch selected at all means a
+   *  company-level user — restricted to company-operation roles only. */
   protected readonly roleOptions = computed<SelectOption[]>(() => {
     const departmentId = this.departmentSelected();
     const department = departmentId ? this.departments().find((d) => d.id === departmentId) : null;
     if (department) {
       return department.roles.map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` }));
     }
-    return this.roles().filter((r) => r.status === 'ACTIVE').map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` }));
+    const branchId = this.branchSelected();
+    const branchType = branchId ? this.branches().find((b) => b.id === branchId)?.branchType : null;
+    return this.roles()
+      .filter((r) => r.status === 'ACTIVE')
+      .filter((r) => {
+        if (!r.isSystemRole) return true;
+        if (!branchId) return !BRANCH_ROLE_CODES.has(r.roleCode) && !HUB_ROLE_CODES.has(r.roleCode);
+        return branchType === 'HUB' ? HUB_ROLE_CODES.has(r.roleCode) : BRANCH_ROLE_CODES.has(r.roleCode);
+      })
+      .map((r) => ({ value: r.id, label: `${r.roleName} (${r.roleCode})` }));
   });
   protected readonly branchOptions = computed<SelectOption[]>(() =>
     this.branches().map((b) => ({ value: b.id, label: b.hint ? `${b.label} · ${b.hint}` : b.label })));

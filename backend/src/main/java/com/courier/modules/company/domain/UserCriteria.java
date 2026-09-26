@@ -22,6 +22,8 @@ import java.util.UUID;
  * @param joinedFrom   joining date on or after
  * @param joinedTo     joining date on or before
  * @param search       free text over name, email, username, employee code and mobile
+ * @param placement    which of the Users screen's tabs to scope to — COMPANY (no branch,
+ *                     no hub), BRANCH (has a branch) or HUB (has a hub); null: all
  */
 public record UserCriteria(
         UUID companyId,
@@ -34,28 +36,29 @@ public record UserCriteria(
         String roleCode,
         LocalDate joinedFrom,
         LocalDate joinedTo,
-        String search
+        String search,
+        UserPlacement placement
 ) {
 
     public static UserCriteria none() {
-        return new UserCriteria(null, null, null, null, null, null, null, null, null, null, null);
+        return new UserCriteria(null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** The same criteria pinned to one company. */
     public UserCriteria withCompanyId(UUID enforced) {
         return new UserCriteria(enforced, statuses, locked, branchId, hubId, department,
-                designation, roleCode, joinedFrom, joinedTo, search);
+                designation, roleCode, joinedFrom, joinedTo, search, placement);
     }
 
     /** The same criteria pinned to one branch — for a branch manager's scoped view. */
     public UserCriteria withBranchId(UUID enforced) {
         return new UserCriteria(companyId, statuses, locked, enforced, hubId, department,
-                designation, roleCode, joinedFrom, joinedTo, search);
+                designation, roleCode, joinedFrom, joinedTo, search, placement);
     }
 
     /** The same criteria pinned to one hub — for a hub manager's scoped view. */
     public UserCriteria withHubId(UUID enforced) {
         return new UserCriteria(companyId, statuses, locked, branchId, enforced, department,
-                designation, roleCode, joinedFrom, joinedTo, search);
+                designation, roleCode, joinedFrom, joinedTo, search, placement);
     }
 }

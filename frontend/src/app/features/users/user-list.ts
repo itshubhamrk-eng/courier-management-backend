@@ -56,6 +56,25 @@ const BRANCH_STAFFING = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
         </div>
       </header>
 
+      <div class="tabs" role="tablist">
+        <button type="button" class="tabs__item" [class.tabs__item--active]="tab() === 'company'"
+                role="tab" [attr.aria-selected]="tab() === 'company'" (click)="setTab('company')">
+          Company Users
+        </button>
+        <button type="button" class="tabs__item" [class.tabs__item--active]="tab() === 'cp'"
+                role="tab" [attr.aria-selected]="tab() === 'cp'" (click)="setTab('cp')">
+          CP Users
+        </button>
+        <button type="button" class="tabs__item" [class.tabs__item--active]="tab() === 'branch'"
+                role="tab" [attr.aria-selected]="tab() === 'branch'" (click)="setTab('branch')">
+          Branch Users
+        </button>
+        <button type="button" class="tabs__item" [class.tabs__item--active]="tab() === 'hub'"
+                role="tab" [attr.aria-selected]="tab() === 'hub'" (click)="setTab('hub')">
+          Hub Users
+        </button>
+      </div>
+
       <app-user-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
         [startIndex]="page().page * page().size"
                       [branchNames]="branchNames()" [hubNames]="hubNames()"
@@ -71,6 +90,10 @@ const BRANCH_STAFFING = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
   styles: [`
     .fbadge { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 5px; margin-left:2px;
       background:var(--brand-600); color:#fff; border-radius:999px; font:700 11px var(--font-sans); }
+    .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border-default, #e2e8f0); margin-bottom:12px; }
+    .tabs__item { padding:10px 4px; margin-right:20px; border:none; background:none; cursor:pointer;
+      font:600 14px var(--font-sans); color:var(--text-secondary, #64748b); border-bottom:2px solid transparent; }
+    .tabs__item--active { color:var(--brand-600); border-bottom-color:var(--brand-600); }
   `]
 })
 export class UserList implements OnInit {
@@ -86,6 +109,7 @@ export class UserList implements OnInit {
   readonly loading = signal(true);
   readonly exporting = signal(false);
   readonly filterOpen = signal(false);
+  readonly tab = signal<'company' | 'cp' | 'branch' | 'hub'>('company');
   readonly page = signal<Page<AppUser>>(emptyPage<AppUser>());
   readonly sort = signal<SortState | null>({ active: 'displayName', direction: 'asc' });
 
@@ -127,8 +151,16 @@ export class UserList implements OnInit {
       ...this.query, ...(size ? { size, page: 0 } : {}),
       status: f.status as unknown as string | undefined, locked: f.locked, branchId: f.branchId, hubId: f.hubId,
       department: f.department, designation: f.designation, roleCode: f.roleCode,
-      joinedFrom: f.joinedFrom, joinedTo: f.joinedTo
+      joinedFrom: f.joinedFrom, joinedTo: f.joinedTo,
+      placement: this.tab().toUpperCase()
     };
+  }
+
+  setTab(tab: 'company' | 'cp' | 'branch' | 'hub'): void {
+    if (this.tab() === tab) return;
+    this.tab.set(tab);
+    this.query = { ...this.query, page: 0 };
+    this.load();
   }
 
   private load(): void {

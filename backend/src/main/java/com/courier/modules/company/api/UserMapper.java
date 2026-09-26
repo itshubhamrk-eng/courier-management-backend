@@ -49,7 +49,7 @@ public class UserMapper {
         return new UserCriteria(
                 safe.companyId(), safe.status(), safe.locked(), safe.branchId(), safe.hubId(),
                 safe.department(), safe.designation(), safe.roleCode(),
-                safe.joinedFrom(), safe.joinedTo(), safe.search());
+                safe.joinedFrom(), safe.joinedTo(), safe.search(), safe.placement());
     }
 
     public UserResponse toResponse(User user, List<String> roleCodes) {

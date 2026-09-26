@@ -8,12 +8,12 @@ import {
   AppUser, UserProfile, CreateUserRequest, UpdateUserRequest
 } from '@core/models/user.model';
 import { CompanyRole } from '@core/models/role.model';
-import { Branch } from '@core/models/branch.model';
+import { Branch, BranchType } from '@core/models/branch.model';
 import { Department } from '@core/models/department.model';
 import { Page, PageQuery } from '@core/models/page.model';
 
 /** A minimal option for placement/manager/role dropdowns. */
-export interface Lookup { id: string; label: string; hint?: string; }
+export interface Lookup { id: string; label: string; hint?: string; branchType?: BranchType; }
 
 /**
  * Company user administration — talks to /api/v1/users via ApiService. Mirrors the 15
@@ -74,7 +74,8 @@ export class UserService {
   branches() {
     return this.api
       .page<Branch>(API.branches, { page: 0, size: 100, sort: 'branchName,asc' })
-      .pipe(map((p): Lookup[] => p.content.map((b) => ({ id: b.id, label: b.branchName, hint: b.branchCode }))));
+      .pipe(map((p): Lookup[] => p.content.map((b) =>
+        ({ id: b.id, label: b.branchName, hint: b.branchCode, branchType: b.branchType }))));
   }
   /** No Hub module exists yet (`GET /hubs` 404s — see app.routes.ts's commented-out hubs
    *  route) — calling it anyway meant every `/users` page load, for every role, toasted a

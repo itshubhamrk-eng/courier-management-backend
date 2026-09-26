@@ -1,5 +1,6 @@
 package com.courier.modules.company.api.dto;
 
+import com.courier.modules.company.domain.UserPlacement;
 import com.courier.modules.company.domain.UserStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
@@ -30,10 +31,12 @@ public record UserSearchRequest(
         LocalDate joinedTo,
         @Size(max = 100)
         @Schema(description = "Free text over name, email, username, employee code, mobile")
-        String search
+        String search,
+        @Schema(description = "Which of the Users screen's three tabs to scope to; omitted: all")
+        UserPlacement placement
 ) {
         public static UserSearchRequest empty() {
                 return new UserSearchRequest(null, null, null, null, null, null, null, null,
-                        null, null, null);
+                        null, null, null, null);
         }
 }

@@ -122,6 +122,8 @@ export interface UserSearchRequest {
   joinedFrom?: string;
   joinedTo?: string;
   search?: string;
+  /** Which of the Users screen's tabs to scope to; omit for all. */
+  placement?: 'COMPANY' | 'CP' | 'BRANCH' | 'HUB';
 }
 
 /** The /auth/me projection used to hydrate the session. */

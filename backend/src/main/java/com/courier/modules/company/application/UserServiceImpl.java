@@ -137,11 +137,17 @@ public class UserServiceImpl implements UserService {
         String username = User.normaliseUsername(command.username());
         // A branch employee's code is auto-generated as <branchCode>-<sequence> — never
         // taken from the request — so it reads a colleague's placement at a glance rather
-        // than an admin's free-typed guess. Users with no branch (hub/company-level) keep
-        // the existing manual, optional employeeCode.
+        // than an admin's free-typed guess. A company-level user (no branch) gets one too,
+        // under a flat EMP- prefix, when left blank; typing one still wins.
+        String typedEmployeeCode = User.normaliseEmployeeCode(command.employeeCode());
         String employeeCode = branchId != null
                 ? generateBranchEmployeeCode(companyId, branchId)
-                : User.normaliseEmployeeCode(command.employeeCode());
+                : typedEmployeeCode != null ? typedEmployeeCode : generateCompanyEmployeeCode(companyId);
+        // employeeId is the external payroll/HR reference — nothing to derive it from, so
+        // a blank one simply mirrors the employeeCode just resolved, same as a company
+        // with no separate HR system would file it.
+        String typedEmployeeId = command.employeeId() == null ? null : command.employeeId().trim();
+        String employeeId = (typedEmployeeId == null || typedEmployeeId.isEmpty()) ? employeeCode : typedEmployeeId;
 
         requireEmailAvailable(companyId, email, null);
         requireUsernameAvailable(username, null);
@@ -157,7 +163,7 @@ public class UserServiceImpl implements UserService {
 
         User user = User.builder()
                 .employeeCode(employeeCode)
-                .employeeId(command.employeeId())
+                .employeeId(employeeId)
                 .firstName(command.firstName())
                 .middleName(command.middleName())
                 .lastName(command.lastName())
@@ -727,6 +733,15 @@ public class UserServiceImpl implements UserService {
         Branch branch = branchRepository.findByIdWithinCompany(branchId, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", branchId));
         return branch.getBranchCode() + "-" + userRepository.nextEmployeeSequence(companyId, branch.getBranchCode());
+    }
+
+    private static final String COMPANY_EMPLOYEE_CODE_PREFIX = "EMP";
+
+    /** Same scheme as {@link #generateBranchEmployeeCode}, flat EMP- prefix for a
+     *  company-level user rather than a branch code. */
+    private String generateCompanyEmployeeCode(UUID companyId) {
+        return COMPANY_EMPLOYEE_CODE_PREFIX + "-"
+                + userRepository.nextEmployeeSequence(companyId, COMPANY_EMPLOYEE_CODE_PREFIX);
     }
 
     private void requireEmployeeCodeAvailable(UUID companyId, String employeeCode, UUID excludeId) {

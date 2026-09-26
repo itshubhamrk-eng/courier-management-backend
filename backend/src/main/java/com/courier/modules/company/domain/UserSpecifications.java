@@ -40,6 +40,29 @@ public final class UserSpecifications {
             if (safe.branchId() != null) {
                 predicates.add(cb.equal(root.get("branchId"), safe.branchId()));
             }
+            if (safe.placement() != null) {
+                if (safe.placement() == UserPlacement.COMPANY) {
+                    predicates.add(cb.isNull(root.get("branchId")));
+                } else {
+                    BranchType type = switch (safe.placement()) {
+                        case CP -> BranchType.CP;
+                        case BRANCH -> BranchType.BRANCH;
+                        case HUB -> BranchType.HUB;
+                        case COMPANY -> throw new IllegalStateException("handled above");
+                    };
+                    // branchId carries no @ManyToOne, so the branch's type is looked up the
+                    // same way roleCode looks up a role assignment: an EXISTS subquery, not
+                    // a join — keeps the count query honest and needs no fetch.
+                    jakarta.persistence.criteria.Subquery<java.util.UUID> branch =
+                            query.subquery(java.util.UUID.class);
+                    jakarta.persistence.criteria.Root<Branch> br = branch.from(Branch.class);
+                    branch.select(br.get("id"))
+                            .where(cb.and(
+                                    cb.equal(br.get("id"), root.get("branchId")),
+                                    cb.equal(br.get("branchType"), type)));
+                    predicates.add(cb.exists(branch));
+                }
+            }
             if (safe.hubId() != null) {
                 predicates.add(cb.equal(root.get("hubId"), safe.hubId()));
             }
