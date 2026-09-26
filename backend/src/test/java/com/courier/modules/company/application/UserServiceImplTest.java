@@ -219,6 +219,25 @@ class UserServiceImplTest {
     }
 
     @Test
+    @DisplayName("create resurrects a soft-deleted user with the same email instead of throwing a duplicate")
+    void createRevivesSoftDeletedUserWithSameEmail() {
+        User deleted = existing("asha@legacy.test");
+        deleted.setId(UUID.randomUUID());
+        deleted.softDelete(CALLER);
+        deleted.deactivate();
+        when(userRepository.findAnyByCompanyAndEmailIncludingDeleted(TENANT, "asha@legacy.test"))
+                .thenReturn(Optional.of(deleted));
+
+        UserService.CreatedUser created = service.create(createCommand("asha@legacy.test", null, null));
+
+        assertThat(created.user().getId()).isEqualTo(deleted.getId());
+        assertThat(created.user().isDeleted()).isFalse();
+        assertThat(created.user().getStatus()).isEqualTo(UserStatus.PENDING);
+        assertThat(created.user().getEmployeeCode()).isEqualTo("EMP001");
+        verify(userRoleRepository).deleteByUserId(deleted.getId());
+    }
+
+    @Test
     @DisplayName("create without a bound company is refused")
     void createWithoutCompany() {
         CompanyContext.clear();

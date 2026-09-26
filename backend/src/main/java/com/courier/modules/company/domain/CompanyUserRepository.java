@@ -60,6 +60,22 @@ public interface CompanyUserRepository extends JpaRepository<User, UUID>, JpaSpe
                 TimeOrderedUuid.toBytes(excludeId)) > 0;
     }
 
+    /**
+     * A soft-deleted user with this email, if any. {@code @SQLRestriction} hides it from
+     * every derived and JPQL query, so only a native query can see it — needed because
+     * creating a user with a formerly-deleted colleague's email must resurrect that row
+     * rather than insert a second one, which would collide with the unique key
+     * {@code (company_id, email)} (it does not know about {@code deleted} either).
+     */
+    default Optional<User> findAnyByCompanyAndEmailIncludingDeleted(UUID companyId, String email) {
+        return findAnyByCompanyAndEmailIncludingDeletedNative(TimeOrderedUuid.toBytes(companyId), email);
+    }
+
+    @Query(value = "SELECT * FROM users WHERE company_id = :companyId AND email = :email LIMIT 1",
+            nativeQuery = true)
+    Optional<User> findAnyByCompanyAndEmailIncludingDeletedNative(@Param("companyId") byte[] companyId,
+                                                                  @Param("email") String email);
+
     default boolean isEmployeeCodeTaken(UUID companyId, String employeeCode, UUID excludeId) {
         return employeeCode != null && countByCompanyEmployeeCodeIncludingDeleted(
                 TimeOrderedUuid.toBytes(companyId), employeeCode, TimeOrderedUuid.toBytes(excludeId)) > 0;

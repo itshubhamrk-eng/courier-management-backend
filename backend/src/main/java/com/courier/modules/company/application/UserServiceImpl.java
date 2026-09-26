@@ -135,13 +135,25 @@ public class UserServiceImpl implements UserService {
 
         String email = User.normaliseEmail(command.email());
         String username = User.normaliseUsername(command.username());
+
+        // A formerly-deleted colleague's email is still on the row @SQLRestriction hides —
+        // the unique key (company_id, email) doesn't know about `deleted`, so creating one
+        // now must resurrect that row rather than insert a second one, which would collide
+        // with it. Its own id is excluded from every uniqueness check below for the same
+        // reason: the row about to be reused would otherwise flag itself as taken.
+        Optional<User> revived = userRepository.findAnyByCompanyAndEmailIncludingDeleted(companyId, email);
+        UUID excludeId = revived.map(User::getId).orElse(null);
+        boolean reviving = revived.isPresent();
+
         // A branch employee's code is auto-generated as <branchCode>-<sequence> — never
         // taken from the request — so it reads a colleague's placement at a glance rather
         // than an admin's free-typed guess. A company-level user (no branch) gets one too,
-        // under a flat EMP- prefix, when left blank; typing one still wins.
+        // under a flat EMP- prefix, when left blank; typing one still wins. A revived row
+        // keeps its original code: the column is immutable (updatable = false), and it is
+        // still this same employee returning, not a new hire.
         String typedEmployeeCode = User.normaliseEmployeeCode(command.employeeCode());
-        String employeeCode = branchId != null
-                ? generateBranchEmployeeCode(companyId, branchId)
+        String employeeCode = reviving ? revived.get().getEmployeeCode()
+                : branchId != null ? generateBranchEmployeeCode(companyId, branchId)
                 : typedEmployeeCode != null ? typedEmployeeCode : generateCompanyEmployeeCode(companyId);
         // employeeId is the external payroll/HR reference — nothing to derive it from, so
         // a blank one simply mirrors the employeeCode just resolved, same as a company
@@ -149,9 +161,11 @@ public class UserServiceImpl implements UserService {
         String typedEmployeeId = command.employeeId() == null ? null : command.employeeId().trim();
         String employeeId = (typedEmployeeId == null || typedEmployeeId.isEmpty()) ? employeeCode : typedEmployeeId;
 
-        requireEmailAvailable(companyId, email, null);
-        requireUsernameAvailable(username, null);
-        requireEmployeeCodeAvailable(companyId, employeeCode, null);
+        requireEmailAvailable(companyId, email, excludeId);
+        requireUsernameAvailable(username, excludeId);
+        if (!reviving) {
+            requireEmployeeCodeAvailable(companyId, employeeCode, null);
+        }
 
         boolean passwordGenerated = command.password() == null || command.password().isBlank();
         String rawPassword = passwordGenerated ? unusablePassword() : command.password();
@@ -161,44 +175,67 @@ public class UserServiceImpl implements UserService {
             passwordPolicy.validate(rawPassword, email, null, passwordEncoder::matches);
         }
 
-        User user = User.builder()
-                .employeeCode(employeeCode)
-                .employeeId(employeeId)
-                .firstName(command.firstName())
-                .middleName(command.middleName())
-                .lastName(command.lastName())
-                .displayName(command.displayName())
-                .email(email)
-                .username(username)
-                .mobile(command.mobile())
-                .alternateMobile(command.alternateMobile())
-                .passwordHash(passwordEncoder.encode(rawPassword))
-                .gender(command.gender())
-                .dateOfBirth(command.dateOfBirth())
-                .designation(command.designation())
-                .department(command.department())
-                .departmentId(departmentId)
-                .joiningDate(command.joiningDate())
-                .reportingManagerId(command.reportingManagerId())
-                .branchId(branchId)
-                .hubId(hubId)
-                .profileImage(command.profileImage())
-                .remarks(command.remarks())
-                // A generated password is unusable, so the account cannot log in until an
-                // admin resets it — PENDING says exactly that. A supplied password means
-                // the admin intends the account usable now.
-                .status(passwordGenerated ? UserStatus.PENDING : UserStatus.ACTIVE)
-                .build();
+        User user = revived.orElseGet(User::new);
+        if (reviving) {
+            // Deactivate() at delete time is undone alongside the soft delete itself: a
+            // reactivated account should not silently carry the DISABLED status forward.
+            user.restore();
+            user.setLocked(false);
+            user.setFailedLoginCount(0);
+        }
+        user.setEmployeeId(employeeId);
+        user.setFirstName(command.firstName());
+        user.setMiddleName(command.middleName());
+        user.setLastName(command.lastName());
+        user.setDisplayName(command.displayName());
+        user.setEmail(email);
+        user.setUsername(username);
+        user.setMobile(command.mobile());
+        user.setAlternateMobile(command.alternateMobile());
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setGender(command.gender());
+        user.setDateOfBirth(command.dateOfBirth());
+        user.setDesignation(command.designation());
+        user.setDepartment(command.department());
+        user.setDepartmentId(departmentId);
+        user.setJoiningDate(command.joiningDate());
+        user.setReportingManagerId(command.reportingManagerId());
+        user.setBranchId(branchId);
+        user.setHubId(hubId);
+        user.setProfileImage(command.profileImage());
+        user.setRemarks(command.remarks());
+        if (!reviving) {
+            // employeeCode is set only on the fresh-row path: the column is immutable
+            // (updatable = false) once a row exists, so setting it again on a revived row
+            // would be silently ignored by Hibernate anyway.
+            user.setEmployeeCode(employeeCode);
+        }
+        // A generated password is unusable, so the account cannot log in until an admin
+        // resets it — PENDING says exactly that. A supplied password means the admin
+        // intends the account usable now.
+        user.setStatus(passwordGenerated ? UserStatus.PENDING : UserStatus.ACTIVE);
 
         validateReportingManager(companyId, user);
         user.applyInvariants();
         User saved = userRepository.save(user);
 
+        if (reviving) {
+            // User.delete() deliberately leaves these in place (see its own comment) so a
+            // read joining through the now-deleted user still hides them; re-assigning the
+            // same role on revival would otherwise collide with that still-active
+            // (company_id, user_id, role_id) row from before the deletion. The flush is not
+            // optional: Hibernate orders a flush's statements by action type — every
+            // insertion before every deletion, regardless of code order — so without it the
+            // new UserRole insert below reaches the database before this delete does and
+            // collides with the very row it was meant to clear.
+            userRoleRepository.deleteByUserId(saved.getId());
+            userRoleRepository.flush();
+        }
         List<String> roleCodes =
                 assignRoles(companyId, saved, command.roleIds(), branchManagerActor, departmentId);
 
-        log.info("User {} ({}) created in company {} by {}",
-                saved.getEmail(), saved.getId(), companyId, currentActor());
+        log.info("User {} ({}) {} in company {} by {}",
+                saved.getEmail(), saved.getId(), reviving ? "recreated" : "created", companyId, currentActor());
         auditService.record(AuditAction.USER_CREATED, ENTITY, saved.getId(),
                 Map.of("email", saved.getEmail(),
                         "employeeCode", String.valueOf(saved.getEmployeeCode()),

@@ -29,4 +29,13 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UUID> {
     /** Users a role is assigned to — consulted before a role is deleted or deactivated. */
     @Query("select ur.userId from UserRole ur where ur.roleId = :roleId")
     List<UUID> findUserIdsByRoleId(@Param("roleId") UUID roleId);
+
+    /**
+     * Drops every assignment for a user outright, not a soft delete. {@code User.delete()}
+     * leaves these rows in place (deliberately — see its comment), so reviving a
+     * soft-deleted user must clear them first: re-assigning the same role would otherwise
+     * collide with the still-active {@code (company_id, user_id, role_id)} row from before
+     * the deletion.
+     */
+    long deleteByUserId(UUID userId);
 }
