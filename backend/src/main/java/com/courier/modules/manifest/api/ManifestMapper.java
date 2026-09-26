@@ -48,23 +48,27 @@ public class ManifestMapper {
     }
 
     public CreateVehicleCommand toCommand(CreateVehicleRequest r) {
-        return new CreateVehicleCommand(r.vehicleNumber(), r.vehicleType(), r.make(), r.model(), r.fuelType(),
+        return new CreateVehicleCommand(r.vehicleNumber(), r.ownerName(), r.vehicleType(), r.make(), r.model(),
+                r.modelVariant(), r.series(), r.chassisNumber(), r.engineNumber(), r.dealerName(), r.fuelType(),
                 r.capacityKg(), r.currentOdometer(), r.purchaseDate(), r.registrationDate(), r.insuranceExpiry(),
                 r.pucExpiry(), r.fitnessExpiry(), r.permitExpiry(), r.branchId(), r.remarks());
     }
 
     public UpdateVehicleCommand toCommand(UpdateVehicleRequest r) {
-        return new UpdateVehicleCommand(r.vehicleNumber(), r.vehicleType(), r.make(), r.model(), r.fuelType(),
+        return new UpdateVehicleCommand(r.vehicleNumber(), r.ownerName(), r.vehicleType(), r.make(), r.model(),
+                r.modelVariant(), r.series(), r.chassisNumber(), r.engineNumber(), r.dealerName(), r.fuelType(),
                 r.capacityKg(), r.currentOdometer(), r.purchaseDate(), r.registrationDate(), r.insuranceExpiry(),
                 r.pucExpiry(), r.fitnessExpiry(), r.permitExpiry(), r.status(), r.branchId(), r.remarks(),
                 r.version());
     }
 
     public VehicleResponse toResponse(Vehicle v) {
-        return new VehicleResponse(v.getId(), v.getCompanyId(), v.getVehicleNumber(), v.getVehicleType(),
-                v.getMake(), v.getModel(), v.getFuelType(), v.getCapacityKg(), v.getCurrentOdometer(),
-                v.getPurchaseDate(), v.getRegistrationDate(), v.getInsuranceExpiry(), v.getPucExpiry(),
-                v.getFitnessExpiry(), v.getPermitExpiry(), v.getStatus(), v.getBranchId(), v.getRemarks(),
-                v.isActive(), v.getCreatedBy(), v.getCreatedAt(), v.getUpdatedBy(), v.getUpdatedAt(), v.getVersion());
+        return new VehicleResponse(v.getId(), v.getCompanyId(), v.getVehicleNumber(), v.getOwnerName(),
+                v.getVehicleType(), v.getMake(), v.getModel(), v.getModelVariant(), v.getSeries(),
+                v.getChassisNumber(), v.getEngineNumber(), v.getDealerName(), v.getFuelType(), v.getCapacityKg(),
+                v.getCurrentOdometer(), v.getPurchaseDate(), v.getRegistrationDate(), v.getInsuranceExpiry(),
+                v.getPucExpiry(), v.getFitnessExpiry(), v.getPermitExpiry(), v.getStatus(), v.getBranchId(),
+                v.getRemarks(), v.isActive(), v.getCreatedBy(), v.getCreatedAt(), v.getUpdatedBy(), v.getUpdatedAt(),
+                v.getVersion());
     }
 }

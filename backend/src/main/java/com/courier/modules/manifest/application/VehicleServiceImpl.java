@@ -44,9 +44,15 @@ public class VehicleServiceImpl implements VehicleService {
 
         Vehicle vehicle = Vehicle.builder()
                 .vehicleNumber(command.vehicleNumber())
+                .ownerName(command.ownerName())
                 .vehicleType(command.vehicleType())
                 .make(command.make())
                 .model(command.model())
+                .modelVariant(command.modelVariant())
+                .series(command.series())
+                .chassisNumber(command.chassisNumber())
+                .engineNumber(command.engineNumber())
+                .dealerName(command.dealerName())
                 .fuelType(command.fuelType())
                 .capacityKg(command.capacityKg())
                 .currentOdometer(command.currentOdometer())
@@ -83,9 +89,15 @@ public class VehicleServiceImpl implements VehicleService {
         Map<String, Object> before = snapshot(vehicle);
 
         vehicle.setVehicleNumber(command.vehicleNumber());
+        vehicle.setOwnerName(command.ownerName());
         vehicle.setVehicleType(command.vehicleType());
         vehicle.setMake(command.make());
         vehicle.setModel(command.model());
+        vehicle.setModelVariant(command.modelVariant());
+        vehicle.setSeries(command.series());
+        vehicle.setChassisNumber(command.chassisNumber());
+        vehicle.setEngineNumber(command.engineNumber());
+        vehicle.setDealerName(command.dealerName());
         vehicle.setFuelType(command.fuelType());
         vehicle.setCapacityKg(command.capacityKg());
         vehicle.setCurrentOdometer(command.currentOdometer());
@@ -181,9 +193,15 @@ public class VehicleServiceImpl implements VehicleService {
     private Map<String, Object> snapshot(Vehicle v) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("vehicleNumber", v.getVehicleNumber());
+        map.put("ownerName", v.getOwnerName());
         map.put("vehicleType", v.getVehicleType());
         map.put("make", v.getMake());
         map.put("model", v.getModel());
+        map.put("modelVariant", v.getModelVariant());
+        map.put("series", v.getSeries());
+        map.put("chassisNumber", v.getChassisNumber());
+        map.put("engineNumber", v.getEngineNumber());
+        map.put("dealerName", v.getDealerName());
         map.put("fuelType", v.getFuelType());
         map.put("capacityKg", v.getCapacityKg());
         map.put("currentOdometer", v.getCurrentOdometer());

@@ -33,11 +33,22 @@ const STATUS_OPTIONS: SelectOption[] = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'I
       <app-card title="Basic Information" subtitle="Identity and classification.">
         <div class="grid">
           <app-input [control]="c('vehicleNumber')" label="Vehicle Number" [required]="true" placeholder="MH12AB1234" [maxLength]="30" />
+          <app-input [control]="c('ownerName')" label="Owner Name" placeholder="Owner or fleet company name" [maxLength]="150" />
           <app-select [control]="c('vehicleType')" label="Vehicle Type" [options]="VEHICLE_TYPE_OPTIONS" />
           <app-input [control]="c('make')" label="Make" placeholder="Tata" [maxLength]="50" />
           <app-input [control]="c('model')" label="Model" placeholder="407" [maxLength]="50" />
+          <app-input [control]="c('modelVariant')" label="Model Variant" placeholder="MAXX PUB HD 1.7 LX BSVI" [maxLength]="50" />
+          <app-input [control]="c('series')" label="Series" placeholder="YQ" [maxLength]="30" />
           <app-select [control]="c('fuelType')" label="Fuel Type" [options]="FUEL_TYPE_OPTIONS" [allowEmpty]="true" emptyLabel="Not set" />
           <app-autocomplete [control]="c('branchId')" label="Base Branch" [options]="branchOptions()" placeholder="Search branch…" />
+        </div>
+      </app-card>
+
+      <app-card title="Identification" subtitle="Chassis, engine and dealer records.">
+        <div class="grid">
+          <app-input [control]="c('chassisNumber')" label="Chassis Number" placeholder="MA1RE2TTKS6J37720" [maxLength]="50" />
+          <app-input [control]="c('engineNumber')" label="Engine Number" placeholder="TTS4J18108" [maxLength]="50" />
+          <app-input [control]="c('dealerName')" label="Dealer Name" placeholder="Dealer or seller name" [maxLength]="150" />
         </div>
       </app-card>
 
@@ -126,7 +137,9 @@ export class VehicleForm {
   private hydrate(v: Vehicle): void {
     if (this.hydrated()) return;
     this.form.patchValue({
-      vehicleNumber: v.vehicleNumber, vehicleType: v.vehicleType, make: v.make ?? '', model: v.model ?? '',
+      vehicleNumber: v.vehicleNumber, ownerName: v.ownerName ?? '', vehicleType: v.vehicleType,
+      make: v.make ?? '', model: v.model ?? '', modelVariant: v.modelVariant ?? '', series: v.series ?? '',
+      chassisNumber: v.chassisNumber ?? '', engineNumber: v.engineNumber ?? '', dealerName: v.dealerName ?? '',
       fuelType: v.fuelType ?? null, branchId: v.branchId ?? null,
       capacityKg: v.capacityKg ?? null, currentOdometer: v.currentOdometer ?? null,
       purchaseDate: v.purchaseDate ?? null, registrationDate: v.registrationDate ?? null,
@@ -141,9 +154,15 @@ export class VehicleForm {
   private build(): FormGroup {
     return this.fb.group({
       vehicleNumber: ['', [Validators.required, Validators.maxLength(30)]],
+      ownerName: ['', Validators.maxLength(150)],
       vehicleType: ['OTHER' as VehicleType, Validators.required],
       make: ['', Validators.maxLength(50)],
       model: ['', Validators.maxLength(50)],
+      modelVariant: ['', Validators.maxLength(50)],
+      series: ['', Validators.maxLength(30)],
+      chassisNumber: ['', Validators.maxLength(50)],
+      engineNumber: ['', Validators.maxLength(50)],
+      dealerName: ['', Validators.maxLength(150)],
       fuelType: [null as FuelType | null],
       branchId: [null as string | null],
       capacityKg: [null as number | null, [Validators.min(0)]],
@@ -164,7 +183,10 @@ export class VehicleForm {
     const v = this.form.getRawValue();
 
     const shared = {
-      vehicleNumber: v.vehicleNumber, vehicleType: v.vehicleType, make: v.make || null, model: v.model || null,
+      vehicleNumber: v.vehicleNumber, ownerName: v.ownerName || null, vehicleType: v.vehicleType,
+      make: v.make || null, model: v.model || null, modelVariant: v.modelVariant || null,
+      series: v.series || null, chassisNumber: v.chassisNumber || null, engineNumber: v.engineNumber || null,
+      dealerName: v.dealerName || null,
       fuelType: v.fuelType || null, capacityKg: v.capacityKg !== null ? Number(v.capacityKg) : null,
       currentOdometer: v.currentOdometer !== null ? Number(v.currentOdometer) : null,
       purchaseDate: v.purchaseDate || null, registrationDate: v.registrationDate || null,

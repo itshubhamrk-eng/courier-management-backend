@@ -726,9 +726,15 @@ export interface Vehicle {
   id: string;
   companyId: string;
   vehicleNumber: string;
+  ownerName?: string | null;
   vehicleType: VehicleType;
   make?: string | null;
   model?: string | null;
+  modelVariant?: string | null;
+  series?: string | null;
+  chassisNumber?: string | null;
+  engineNumber?: string | null;
+  dealerName?: string | null;
   fuelType?: FuelType | null;
   capacityKg?: number | null;
   currentOdometer?: number | null;
@@ -751,9 +757,15 @@ export interface Vehicle {
 
 export interface CreateVehicleRequest {
   vehicleNumber: string;
+  ownerName?: string | null;
   vehicleType: VehicleType;
   make?: string | null;
   model?: string | null;
+  modelVariant?: string | null;
+  series?: string | null;
+  chassisNumber?: string | null;
+  engineNumber?: string | null;
+  dealerName?: string | null;
   fuelType?: FuelType | null;
   capacityKg?: number | null;
   currentOdometer?: number | null;
@@ -769,9 +781,15 @@ export interface CreateVehicleRequest {
 
 export interface UpdateVehicleRequest {
   vehicleNumber: string;
+  ownerName?: string | null;
   vehicleType: VehicleType;
   make?: string | null;
   model?: string | null;
+  modelVariant?: string | null;
+  series?: string | null;
+  chassisNumber?: string | null;
+  engineNumber?: string | null;
+  dealerName?: string | null;
   fuelType?: FuelType | null;
   capacityKg?: number | null;
   currentOdometer?: number | null;

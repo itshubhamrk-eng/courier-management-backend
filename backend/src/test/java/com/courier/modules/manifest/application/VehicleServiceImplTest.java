@@ -53,8 +53,8 @@ class VehicleServiceImplTest {
 
     private static CreateVehicleCommand createCommand(String vehicleNumber, VehicleType vehicleType,
                                                         BigDecimal capacityKg) {
-        return new CreateVehicleCommand(vehicleNumber, vehicleType, null, null, null, capacityKg,
-                null, null, null, null, null, null, null, null, null);
+        return new CreateVehicleCommand(vehicleNumber, null, vehicleType, null, null, null, null, null, null, null,
+                null, capacityKg, null, null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -111,8 +111,10 @@ class VehicleServiceImplTest {
         when(repository.findByIdWithinCompany(id, COMPANY)).thenReturn(java.util.Optional.of(vehicle));
         when(repository.existsByCompanyIdAndVehicleNumber(any(), any())).thenReturn(false);
 
-        UpdateVehicleCommand command = new UpdateVehicleCommand("MH12AB1234", VehicleType.VAN, null, null,
-                null, null, null, null, null, null, null, null, null, VehicleStatus.MAINTENANCE, null, null, 0L);
+        UpdateVehicleCommand command = new UpdateVehicleCommand(
+                "MH12AB1234", null, VehicleType.VAN, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                VehicleStatus.MAINTENANCE, null, null, 0L);
         Vehicle updated = service.update(id, command);
 
         assertThat(updated.getVehicleType()).isEqualTo(VehicleType.VAN);

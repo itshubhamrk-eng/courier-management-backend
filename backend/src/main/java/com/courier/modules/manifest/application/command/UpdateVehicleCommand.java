@@ -11,9 +11,15 @@ import java.util.UUID;
 /** {@code expectedVersion} guards a 409, same convention as {@code UpdateFreightFactorCommand}. */
 public record UpdateVehicleCommand(
         String vehicleNumber,
+        String ownerName,
         VehicleType vehicleType,
         String make,
         String model,
+        String modelVariant,
+        String series,
+        String chassisNumber,
+        String engineNumber,
+        String dealerName,
         FuelType fuelType,
         BigDecimal capacityKg,
         BigDecimal currentOdometer,

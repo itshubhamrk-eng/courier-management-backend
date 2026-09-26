@@ -15,9 +15,15 @@ import java.util.UUID;
 @Schema(name = "CreateVehicleRequest")
 public record CreateVehicleRequest(
         @NotBlank @Size(max = 30) String vehicleNumber,
+        @Size(max = 150) String ownerName,
         @NotNull VehicleType vehicleType,
         @Size(max = 50) String make,
         @Size(max = 50) String model,
+        @Size(max = 50) String modelVariant,
+        @Size(max = 30) String series,
+        @Size(max = 50) String chassisNumber,
+        @Size(max = 50) String engineNumber,
+        @Size(max = 150) String dealerName,
         FuelType fuelType,
         @DecimalMin(value = "0", inclusive = true) BigDecimal capacityKg,
         @DecimalMin(value = "0", inclusive = true) BigDecimal currentOdometer,

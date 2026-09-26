@@ -9,9 +9,15 @@ import java.util.UUID;
 
 public record CreateVehicleCommand(
         String vehicleNumber,
+        String ownerName,
         VehicleType vehicleType,
         String make,
         String model,
+        String modelVariant,
+        String series,
+        String chassisNumber,
+        String engineNumber,
+        String dealerName,
         FuelType fuelType,
         BigDecimal capacityKg,
         BigDecimal currentOdometer,

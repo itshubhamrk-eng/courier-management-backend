@@ -53,6 +53,9 @@ public class Vehicle extends CompanyOwnedEntity {
     @Column(name = "vehicle_number", nullable = false, length = 30)
     private String vehicleNumber;
 
+    @Column(name = "owner_name", length = 150)
+    private String ownerName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "vehicle_type", nullable = false, length = 20)
     @Builder.Default
@@ -63,6 +66,21 @@ public class Vehicle extends CompanyOwnedEntity {
 
     @Column(name = "model", length = 50)
     private String model;
+
+    @Column(name = "model_variant", length = 50)
+    private String modelVariant;
+
+    @Column(name = "series", length = 30)
+    private String series;
+
+    @Column(name = "chassis_number", length = 50)
+    private String chassisNumber;
+
+    @Column(name = "engine_number", length = 50)
+    private String engineNumber;
+
+    @Column(name = "dealer_name", length = 150)
+    private String dealerName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "fuel_type", length = 20)
@@ -142,6 +160,12 @@ public class Vehicle extends CompanyOwnedEntity {
         }
         this.make = make == null || make.isBlank() ? null : make.trim();
         this.model = model == null || model.isBlank() ? null : model.trim();
+        this.ownerName = ownerName == null || ownerName.isBlank() ? null : ownerName.trim();
+        this.modelVariant = modelVariant == null || modelVariant.isBlank() ? null : modelVariant.trim();
+        this.series = series == null || series.isBlank() ? null : series.trim();
+        this.chassisNumber = chassisNumber == null || chassisNumber.isBlank() ? null : chassisNumber.trim();
+        this.engineNumber = engineNumber == null || engineNumber.isBlank() ? null : engineNumber.trim();
+        this.dealerName = dealerName == null || dealerName.isBlank() ? null : dealerName.trim();
         this.remarks = remarks == null || remarks.isBlank() ? null : remarks.trim();
     }
 }
