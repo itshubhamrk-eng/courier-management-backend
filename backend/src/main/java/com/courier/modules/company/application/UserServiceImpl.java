@@ -94,8 +94,13 @@ public class UserServiceImpl implements UserService {
     private static final String WRITERS = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     private static final String BRANCH_WRITERS = "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '"
             + Roles.BRANCH_MANAGER + "')";
+    // hasAuthority('USER_READ') admits any staff member granted that menu permission
+    // (see UserPermissionServiceImpl) — not just the four roles that get it by default.
+    // Without this, checking the "Users" menu's Read box for a non-manager does nothing:
+    // every read here still 403s regardless of what the permission override UI grants.
     private static final String READERS = "hasAnyRole('" + Roles.COMPANY_ADMIN + "', '"
-            + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "', '" + Roles.HUB_MANAGER + "')";
+            + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "', '" + Roles.HUB_MANAGER
+            + "') or hasAuthority('USER_READ')";
 
     private final CompanyUserRepository userRepository;
     private final BranchRepository branchRepository;
@@ -666,22 +671,21 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * A branch or hub manager may only see users at their own placement. 404, not 403:
-     * telling them "this user exists but is not at your branch" leaks headcount.
+     * A non-admin caller (branch/hub manager by role, or any other staff member reading
+     * via the {@code USER_READ} menu permission) may only see users at their own
+     * placement — keyed off their own branch/hub, not their literal role, so a
+     * permission-only grant sees the same scope a manager would. 404, not 403: telling
+     * them "this user exists but is not at your branch" leaks headcount.
      */
     private void requireVisibleTo(AuthenticatedUser caller, User user) {
         if (caller.isSuperAdmin() || caller.hasRole(Roles.COMPANY_ADMIN)) {
             return;
         }
         User self = self(caller);
-        if (caller.hasRole(Roles.BRANCH_MANAGER)
-                && Objects.equals(self.getBranchId(), user.getBranchId())
-                && self.getBranchId() != null) {
+        if (self.getBranchId() != null && Objects.equals(self.getBranchId(), user.getBranchId())) {
             return;
         }
-        if (caller.hasRole(Roles.HUB_MANAGER)
-                && Objects.equals(self.getHubId(), user.getHubId())
-                && self.getHubId() != null) {
+        if (self.getHubId() != null && Objects.equals(self.getHubId(), user.getHubId())) {
             return;
         }
         throw new ResourceNotFoundException(ENTITY, user.getId());
@@ -724,13 +728,13 @@ public class UserServiceImpl implements UserService {
 
     private UserCriteria restrictToManagerScope(AuthenticatedUser caller, UserCriteria criteria) {
         User self = self(caller);
-        if (caller.hasRole(Roles.BRANCH_MANAGER) && self.getBranchId() != null) {
+        if (self.getBranchId() != null) {
             return criteria.withBranchId(self.getBranchId());
         }
-        if (caller.hasRole(Roles.HUB_MANAGER) && self.getHubId() != null) {
+        if (self.getHubId() != null) {
             return criteria.withHubId(self.getHubId());
         }
-        // A manager with no placement sees nobody, rather than everybody.
+        // No placement of their own: sees nobody, rather than everybody.
         return criteria.withBranchId(UUID.fromString("00000000-0000-0000-0000-000000000000"));
     }
 
