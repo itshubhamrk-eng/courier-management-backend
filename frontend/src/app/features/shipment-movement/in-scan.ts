@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, effect, untracked } from '@angular/core';
+import { ActingBranchService } from '@core/services/acting-branch.service';
+import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Observable, of } from 'rxjs';
@@ -39,7 +41,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
   selector: 'app-in-scan',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatIconModule, UiCard, UiLoader, UiButton, UiInput, ManifestCard, ScannerIllustration, StatusBadge],
+  imports: [ReactiveFormsModule, ActAsBranch, MatIconModule, UiCard, UiLoader, UiButton, UiInput, ManifestCard, ScannerIllustration, StatusBadge],
   template: `
     <div class="page">
       <header class="page__head" data-tour="in-scan-head">
@@ -48,13 +50,14 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
           <div><h1 class="text-h1">In Scan</h1>
           <p class="text-caption">Receive shipments dispatched to {{ myBranchLabel() }}.</p></div>
         </div>
+        <app-act-as-branch />
         @if (myBranchId) {
           <app-button variant="stroked" icon="refresh" (pressed)="loadPendingManifests()">Refresh</app-button>
         }
       </header>
 
       @if (!myBranchId) {
-        <app-card><p class="empty">No branch assigned — ask an admin.</p></app-card>
+        <app-card><p class="empty">{{ acting.canAct() ? 'Pick a branch or hub above to receive as.' : 'No branch assigned — ask an admin.' }}</p></app-card>
       } @else if (receivingManifest(); as rm) {
         <app-card>
           <div class="mh">
@@ -183,7 +186,9 @@ export class InScan implements OnInit {
   private readonly masterData = inject(MasterDataService);
   private readonly shipmentService = inject(ShipmentService);
 
-  protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  protected readonly acting = inject(ActingBranchService);
+  /** Own branch, or — for a branch-less admin — the branch/hub picked in "Act as". */
+  protected get myBranchId(): string | null { return this.acting.effectiveId(); }
   protected readonly myBranchLabel = computed(() => 'your branch');
 
   readonly scanning = signal(false);
@@ -209,9 +214,17 @@ export class InScan implements OnInit {
   readonly selectedPhoto = signal<File | null>(null);
   readonly uploadingPhoto = signal(false);
 
+  constructor() {
+    let first = true;
+    effect(() => {
+      this.acting.effectiveId();
+      if (first) { first = false; return; }
+      untracked(() => { this.cancelReceive(); this.pendingManifests.set([]); this.loadPendingManifests(); });
+    });
+  }
+
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'In Scan' }]);
-    if (!this.myBranchId) return;
     this.masterData.branchDirectory().subscribe((list) =>
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
     this.loadPendingManifests();

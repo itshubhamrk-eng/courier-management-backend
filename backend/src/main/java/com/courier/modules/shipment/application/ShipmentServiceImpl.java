@@ -922,6 +922,16 @@ public class ShipmentServiceImpl implements ShipmentService {
     @PreAuthorize(WRITERS)
     public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
                                      UUID expectedDeliveryBranchId, String manifestDestinationCity) {
+        return attachToManifest(shipmentId, manifestId, expectedBookingBranchId,
+                expectedDeliveryBranchId, manifestDestinationCity, false);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
+                                     UUID expectedDeliveryBranchId, String manifestDestinationCity,
+                                     boolean hubTransfer) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
 
@@ -955,7 +965,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                         "Shipment %s is going to %s, not %s.".formatted(
                                 shipment.getShipmentNumber(), shipment.getToCity(), manifestDestinationCity));
             }
-            shipment.setDeliveryBranchId(expectedDeliveryBranchId);
+            // A hub stop is only a next stop: the real delivery branch is assigned later, by
+            // the hub's own Load Sheet, once the shipment has been received there.
+            if (!hubTransfer) {
+                shipment.setDeliveryBranchId(expectedDeliveryBranchId);
+            }
             shipment.setNextLocationId(expectedDeliveryBranchId);
         } else {
             // Already has a real next stop — a crossing hop still ahead, or a legacy row
@@ -1273,7 +1287,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (shipment == null) {
             return new MovementOutcome(shipmentId.toString(), false, "No such shipment.");
         }
-        if (shipment.getStatus() != ShipmentStatus.IN_SCAN) {
+        // A shipment received at a hub (READY_FOR_MANIFEST, no delivery branch assigned, no
+        // longer at its booking branch) may be delivered straight from the hub.
+        boolean atHubUnassigned = shipment.getStatus() == ShipmentStatus.READY_FOR_MANIFEST
+                && shipment.getDeliveryBranchId() == null
+                && shipment.getCurrentLocationId() != null
+                && !Objects.equals(shipment.getCurrentLocationId(), shipment.getBookingBranchId());
+        if (shipment.getStatus() != ShipmentStatus.IN_SCAN && !atHubUnassigned) {
             return new MovementOutcome(shipment.getShipmentNumber(), false,
                     "Cannot be assigned — currently " + shipment.getStatus() + ".");
         }

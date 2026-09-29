@@ -112,6 +112,17 @@ public class ManifestServiceImpl implements ManifestService {
         if (command.shipmentIds() == null || command.shipmentIds().isEmpty()) {
             throw new BusinessRuleException("A manifest needs at least one shipment.");
         }
+        if (command.hubTransfer()) {
+            if (deliveryMode != DeliveryMode.BRANCH_DELIVERY) {
+                throw new BusinessRuleException("A hub Load Sheet cannot use Direct Company Delivery.");
+            }
+            boolean toHub = branchDirectory.findBranch(command.deliveryBranchId(), companyId)
+                    .map(branch -> "HUB".equals(branch.branchType()))
+                    .orElse(false);
+            if (!toHub) {
+                throw new BusinessRuleException("The selected branch is not a hub.");
+            }
+        }
 
         Manifest manifest = Manifest.builder()
                 .manifestNumber(nextManifestNumber(companyId))
@@ -124,8 +135,13 @@ public class ManifestServiceImpl implements ManifestService {
         Manifest saved = manifestRepository.save(manifest);
 
         for (UUID shipmentId : command.shipmentIds()) {
-            shipmentService.attachToManifest(shipmentId, saved.getId(),
-                    command.bookingBranchId(), command.deliveryBranchId(), command.destinationCity());
+            if (command.hubTransfer()) {
+                shipmentService.attachToManifest(shipmentId, saved.getId(), command.bookingBranchId(),
+                        command.deliveryBranchId(), command.destinationCity(), true);
+            } else {
+                shipmentService.attachToManifest(shipmentId, saved.getId(),
+                        command.bookingBranchId(), command.deliveryBranchId(), command.destinationCity());
+            }
         }
 
         log.info("Manifest {} ({}) created in company {} with {} shipment(s) by {}",

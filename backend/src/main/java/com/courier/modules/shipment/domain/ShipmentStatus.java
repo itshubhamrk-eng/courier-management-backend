@@ -48,6 +48,10 @@ import java.util.Set;
  * That is what finally gives {@link #READY_FOR_MANIFEST} a writer: a shipment received at
  * a hub is ready for its next leg's manifest, exactly what the status name already said
  * before anything wrote it.
+ *
+ * <p>{@link #READY_FOR_MANIFEST} -&gt; {@link #OUT_FOR_DELIVERY} is the hub's own DRS: a
+ * shipment received at a hub with no delivery branch assigned may be delivered straight
+ * from there instead of going on another leg (see {@code assignOneOutForDelivery}).
  */
 public enum ShipmentStatus {
 
@@ -63,7 +67,7 @@ public enum ShipmentStatus {
 
     private static final Map<ShipmentStatus, Set<ShipmentStatus>> TRANSITIONS = Map.ofEntries(
             Map.entry(BOOKED, EnumSet.of(READY_FOR_MANIFEST, MANIFEST_CREATED, CANCELLED)),
-            Map.entry(READY_FOR_MANIFEST, EnumSet.of(MANIFEST_CREATED, CANCELLED)),
+            Map.entry(READY_FOR_MANIFEST, EnumSet.of(MANIFEST_CREATED, OUT_FOR_DELIVERY, CANCELLED)),
             Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED, BOOKED, READY_FOR_MANIFEST)),
             Map.entry(DISPATCHED, EnumSet.of(IN_SCAN, READY_FOR_MANIFEST)),
             Map.entry(IN_SCAN, EnumSet.of(OUT_FOR_DELIVERY, RETURNED)),

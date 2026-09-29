@@ -211,3 +211,14 @@ the exact same `ManifestServiceImpl.dispatch()` code path, same `BranchDirectory
   hub-specific report; a real "Hub Reports" screen (todays' in/out volumes, hub-wise
   throughput) is a reasonable next increment.
 - A live hub-originated dispatch walkthrough (see above).
+
+## 2026-09-29 — routing to / from a hub
+
+- Load Sheet "Send to Hub" (`hubTransfer`) sets only `nextLocationId`; the hub's own city-mode
+  Load Sheet assigns the delivery branch. `Manifest.deliveryBranchId` is the hub (so hub In Scan
+  finds it), the shipment's `deliveryBranchId` stays null.
+- Hub DRS: `READY_FOR_MANIFEST -> OUT_FOR_DELIVERY` (branch-less, away from booking branch only).
+  DRS page "Hub Shipments" mode.
+- Admin "Act as branch / hub": `ActingBranchService` (frontend only).
+- Existing companies' Hub Manager role needs the four hub scan permissions re-granted.
+

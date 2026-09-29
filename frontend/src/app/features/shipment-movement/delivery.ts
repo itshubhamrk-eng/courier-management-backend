@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild, effect, untracked } from '@angular/core';
+import { ActingBranchService } from '@core/services/acting-branch.service';
+import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import jsQR from 'jsqr';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
@@ -47,7 +49,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
   selector: 'app-delivery',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ReactiveFormsModule, MatIconModule, UiCard, UiLoader, UiButton, UiInput, UiSelect, ShipmentStatusBadge, PinIllustration],
+  imports: [DecimalPipe, ReactiveFormsModule, ActAsBranch, MatIconModule, UiCard, UiLoader, UiButton, UiInput, UiSelect, ShipmentStatusBadge, PinIllustration],
   template: `
     <div class="page">
       <header class="page__head" data-tour="delivery-head">
@@ -58,6 +60,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
         </div>
         @if (!shipment()) {
           <div class="head-actions">
+            <app-act-as-branch />
             @if (myBranchId) {
               <app-button [variant]="directMode() ? 'stroked' : 'primary'" (pressed)="setDirectMode(false)">My Branch</app-button>
               <app-button [variant]="directMode() ? 'primary' : 'stroked'" (pressed)="setDirectMode(true)">Direct Company Delivery</app-button>
@@ -304,11 +307,13 @@ export class Delivery implements OnInit {
   private readonly masters = inject(MasterDataService);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  protected readonly acting = inject(ActingBranchService);
+  /** Own branch, or — for a branch-less admin — the branch/hub picked in "Act as". */
+  protected get myBranchId(): string | null { return this.acting.effectiveId(); }
   /** Direct Company Delivery shipments have no delivery branch at all, so they never show
    *  up under "my branch" — this switches the worklist to every such shipment company-wide
    *  instead. Defaults on for a caller with no own branch (e.g. a pure COMPANY_ADMIN). */
-  readonly directMode = signal(!this.auth.user()?.branchId);
+  readonly directMode = signal(!this.acting.effectiveId());
 
   readonly shipment = signal<Shipment | null>(null);
   readonly paymentMode = signal<PaymentMode | null>(null);
@@ -353,6 +358,19 @@ export class Delivery implements OnInit {
   });
 
   private pendingTrackingNumber: string | null = null;
+
+  constructor() {
+    let first = true;
+    effect(() => {
+      const id = this.acting.effectiveId();
+      if (first) { first = false; return; }
+      untracked(() => {
+        this.directMode.set(!id);
+        
+        this.load();
+      });
+    });
+  }
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Delivery' }]);

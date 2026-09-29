@@ -15,6 +15,7 @@ interface BranchSummary {
   id: string;
   branchCode: string;
   branchName: string;
+  branchType?: string;
   status: string;
   city?: string | null;
   postalCode: string;

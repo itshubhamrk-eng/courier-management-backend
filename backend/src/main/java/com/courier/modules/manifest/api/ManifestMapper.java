@@ -24,7 +24,7 @@ public class ManifestMapper {
     public CreateManifestCommand toCommand(CreateManifestRequest r) {
         return new CreateManifestCommand(r.bookingBranchId(), r.deliveryBranchId(),
                 r.deliveryMode() == null ? DeliveryMode.BRANCH_DELIVERY : r.deliveryMode(),
-                r.destinationCity(), r.shipmentIds(), r.remarks());
+                r.destinationCity(), r.shipmentIds(), r.remarks(), Boolean.TRUE.equals(r.hubTransfer()));
     }
 
     public ManifestCriteria toCriteria(ManifestSearchRequest r) {

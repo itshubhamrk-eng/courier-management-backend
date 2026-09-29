@@ -281,6 +281,12 @@ public interface ShipmentService {
     Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
                              UUID expectedDeliveryBranchId, String manifestDestinationCity);
 
+    /** As above; {@code hubTransfer} true means {@code expectedDeliveryBranchId} is a hub
+     *  stop only — a freshly BOOKED shipment gets its next stop set but no delivery branch. */
+    Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
+                             UUID expectedDeliveryBranchId, String manifestDestinationCity,
+                             boolean hubTransfer);
+
     /**
      * Called only by {@code ManifestServiceImpl.removeShipment} — the inverse of
      * {@link #attachToManifest}. Clears {@code manifestId} and reverts the shipment to

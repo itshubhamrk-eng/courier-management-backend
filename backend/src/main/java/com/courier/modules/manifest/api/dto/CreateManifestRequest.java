@@ -25,6 +25,9 @@ public record CreateManifestRequest(
                 + "branch (e.g. a crossing hop)")
         String destinationCity,
         @NotEmpty List<UUID> shipmentIds,
-        @Size(max = 500) String remarks
+        @Size(max = 500) String remarks,
+        @Schema(description = "true when deliveryBranchId is a HUB this Load Sheet is going to "
+                + "first — shipments keep no delivery branch; the hub assigns it later")
+        Boolean hubTransfer
 ) {
 }

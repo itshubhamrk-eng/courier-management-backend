@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal, effect, untracked } from '@angular/core';
+import { ActingBranchService } from '@core/services/acting-branch.service';
+import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError } from 'rxjs/operators';
@@ -46,7 +48,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
   selector: 'app-out-for-delivery',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiLoader, UiButton, UiInput, UiSelect, RouteIllustration],
+  imports: [ReactiveFormsModule, ActAsBranch, UiCard, UiLoader, UiButton, UiInput, UiSelect, RouteIllustration],
   template: `
     <div class="page">
       <header class="page__head" data-tour="out-for-delivery-head">
@@ -56,9 +58,11 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
           <p class="text-caption">Assign received shipments to a delivery user.</p></div>
         </div>
         <div class="head-actions">
+          <app-act-as-branch />
           @if (myBranchId) {
-            <app-button [variant]="directMode() ? 'stroked' : 'primary'" (pressed)="setDirectMode(false)">My Branch</app-button>
-            <app-button [variant]="directMode() ? 'primary' : 'stroked'" (pressed)="setDirectMode(true)">Direct Company Delivery</app-button>
+            <app-button [variant]="!directMode() && !hubMode() ? 'primary' : 'stroked'" (pressed)="setMode('branch')">My Branch</app-button>
+            <app-button [variant]="hubMode() ? 'primary' : 'stroked'" (pressed)="setMode('hub')">Hub Shipments</app-button>
+            <app-button [variant]="directMode() ? 'primary' : 'stroked'" (pressed)="setMode('direct')">Direct Company Delivery</app-button>
           }
           <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
         </div>
@@ -67,7 +71,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
       @if (!myBranchId && !directMode()) {
         <app-card><p class="empty">No branch assigned — ask an admin.</p></app-card>
       } @else {
-        <app-card title="Shipments" [subtitle]="directMode() ? 'Direct Company Delivery shipments waiting to go on DRS — no delivery branch involved.' : 'IN_SCAN shipments waiting to go on DRS at your branch.'">
+        <app-card title="Shipments" [subtitle]="hubMode() ? 'Shipments received at this hub, waiting to be delivered straight from here on a DRS.' : directMode() ? 'Direct Company Delivery shipments waiting to go on DRS — no delivery branch involved.' : 'IN_SCAN shipments waiting to go on DRS at your branch.'">
           @if (loading()) {
             <app-loader [minHeight]="120" caption="Loading…" />
           } @else if (!shipments().length) {
@@ -195,12 +199,17 @@ export class OutForDelivery implements OnInit, OnDestroy {
   private readonly movementService = inject(ShipmentMovementService);
   private readonly companyProfile = inject(CompanyProfileService);
 
-  protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  protected readonly acting = inject(ActingBranchService);
+  /** Own branch, or — for a branch-less admin — the branch/hub picked in "Act as". */
+  protected get myBranchId(): string | null { return this.acting.effectiveId(); }
   /** Direct Company Delivery shipments have no delivery branch at all, so they never show
    *  up under "my branch" — this switches the worklist to every such IN_SCAN shipment
    *  company-wide instead. Defaults on for a caller with no own branch (e.g. a pure
    *  COMPANY_ADMIN), since "my branch" would otherwise have nothing to show them. */
-  readonly directMode = signal(!this.auth.user()?.branchId);
+  readonly directMode = signal(!this.acting.effectiveId());
+  /** Hub delivery: shipments received (in-scanned) at this hub with no delivery branch,
+   *  delivered from here instead of going on another Load Sheet. */
+  readonly hubMode = signal(false);
   /** Company letterhead for the DRS header — same `CompanyProfileService` the LR and THC
    *  prints use, so every printed document shares one masthead. */
   readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
@@ -247,6 +256,19 @@ export class OutForDelivery implements OnInit, OnDestroy {
     deliveryCharge: [null as number | null, Validators.min(0)]
   });
 
+  constructor() {
+    let first = true;
+    effect(() => {
+      const id = this.acting.effectiveId();
+      if (first) { first = false; return; }
+      untracked(() => {
+        this.directMode.set(!id);
+        this.hubMode.set(false);
+        this.load();
+      });
+    });
+  }
+
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'DRS' }]);
     this.movementService.userOptions().subscribe((u) =>
@@ -280,16 +302,20 @@ export class OutForDelivery implements OnInit, OnDestroy {
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
 
-  protected setDirectMode(directMode: boolean): void {
-    this.directMode.set(directMode);
+  protected setMode(mode: 'branch' | 'hub' | 'direct'): void {
+    this.directMode.set(mode === 'direct');
+    this.hubMode.set(mode === 'hub');
     this.load();
   }
 
   load(): void {
     if (!this.myBranchId && !this.directMode()) return;
+    if (this.hubMode() && !this.myBranchId) return;
     this.loading.set(true);
     this.selectedIds.set(new Set());
-    this.shipmentService.list(this.directMode()
+    this.shipmentService.list(this.hubMode()
+      ? { page: 0, size: 100, currentLocationId: this.myBranchId!, unassignedDeliveryBranch: true, status: 'READY_FOR_MANIFEST' }
+      : this.directMode()
       ? { page: 0, size: 100, unassignedDeliveryBranch: true, status: 'IN_SCAN' }
       : { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status: 'IN_SCAN' }
     ).subscribe({
