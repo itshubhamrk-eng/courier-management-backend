@@ -108,6 +108,34 @@ class ManifestServiceImplTest {
     }
 
     @Test
+    @DisplayName("create with hubTransfer attaches through the hub path when the delivery branch is a hub")
+    void createHubTransferAttachesViaHub() {
+        UUID s1 = UUID.randomUUID();
+        when(manifestRepository.existsByCompanyIdAndManifestNumber(eq(COMPANY), any())).thenReturn(false);
+        when(branchDirectory.findBranch(DELIVERY_BRANCH, COMPANY)).thenReturn(java.util.Optional.of(
+                new com.courier.modules.manifest.domain.BranchDirectoryPort.BranchRef(DELIVERY_BRANCH, COMPANY, "HUB", true)));
+
+        Manifest created = service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, DeliveryMode.BRANCH_DELIVERY, "Pune", List.of(s1), null, true));
+
+        verify(shipmentService).attachToManifest(s1, created.getId(), BOOKING_BRANCH, DELIVERY_BRANCH, "Pune", true);
+    }
+
+    @Test
+    @DisplayName("create with hubTransfer refuses a delivery branch that is not a hub")
+    void createHubTransferRefusesNonHub() {
+        when(branchDirectory.findBranch(DELIVERY_BRANCH, COMPANY)).thenReturn(java.util.Optional.of(
+                new com.courier.modules.manifest.domain.BranchDirectoryPort.BranchRef(DELIVERY_BRANCH, COMPANY, "BRANCH", true)));
+
+        assertThatThrownBy(() -> service.create(new CreateManifestCommand(
+                BOOKING_BRANCH, DELIVERY_BRANCH, DeliveryMode.BRANCH_DELIVERY, "Pune",
+                List.of(UUID.randomUUID()), null, true)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("not a hub");
+        verify(manifestRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("create refuses an empty shipment list")
     void createRefusesEmptyShipmentList() {
         assertThatThrownBy(() -> service.create(

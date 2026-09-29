@@ -7,6 +7,16 @@
 
 ## Current Version
 
+`0.66.1` — **Hub routing from Load Sheet, hub DRS, "Act as branch / hub".** A Load Sheet can
+go to a hub (`hubTransfer`: shipment gets `nextLocationId = hub`, no `deliveryBranchId`); after hub
+In Scan the hub either makes a DRS (`READY_FOR_MANIFEST -> OUT_FOR_DELIVERY` allowed for
+branch-less shipments away from their booking branch) or a new Load Sheet/THC to the next
+branch/hub. Branch-less admins pick a branch/hub via `ActingBranchService` on In Scan/DRS/
+Delivery (frontend-only). Verified live on :4200. See `CHANGELOG.md` 2026-09-29 and
+`MEMORY/modules/hub-operations.md`.
+
+Previously current:
+
 `0.66.0` — **Hub Operations: receive/in-scan, sorting, Load Sheet, out-scan, dispatch,
 exceptions, a hub dashboard, movement history.** Direct request. Investigation found a
 hub is already `Branch{branchType: HUB}` (`V61`) — no new entity — and that most of the

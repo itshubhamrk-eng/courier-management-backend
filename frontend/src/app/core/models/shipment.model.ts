@@ -698,6 +698,9 @@ export interface CreateManifestRequest {
   destinationCity?: string | null;
   shipmentIds: string[];
   remarks?: string | null;
+  /** true when `deliveryBranchId` is a HUB this Load Sheet goes to first; the hub assigns
+   *  the shipments' real delivery branch from its own Load Sheet. */
+  hubTransfer?: boolean;
 }
 
 /** GET /manifests/summary — the THC Report summary row. Mirrors backend
