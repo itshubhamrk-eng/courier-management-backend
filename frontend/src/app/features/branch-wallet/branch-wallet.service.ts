@@ -41,6 +41,11 @@ export class BranchWalletService {
   transactions(query: PageQuery) {
     return this.api.page<WalletTransaction>(`${this.base}/transactions`, query);
   }
+  /** Company-wide recharge report — every `WRC` (Razorpay) and `MCR` (manual) entry across
+   *  every branch, one row each carrying its branch. `COMPANY_ADMIN`/`FINANCE_USER` only. */
+  rechargeReport(query: PageQuery) {
+    return this.api.page<WalletTransaction>(`${this.base}/recharge-report`, query);
+  }
 
   // ---- recharge ---------------------------------------------------------------
   /** Step one: opens a gateway order for the amount. Nothing is credited yet. */

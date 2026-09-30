@@ -248,6 +248,42 @@ public class WalletServiceImpl implements WalletService {
         return transactionRepository.findAll(WalletTransactionSpecifications.matching(safe), pageable);
     }
 
+    /** What "recharge" means in the company-wide report: Razorpay settlements and manual
+     *  credits, the two ways a wallet ever gains money from outside its own operations. */
+    private static final java.util.Set<SubTransactionType> RECHARGE_TYPES =
+            java.util.Set.of(SubTransactionType.WRC, SubTransactionType.MCR);
+
+    @Override
+    @Transactional
+    @PreAuthorize(FINANCE_READERS)
+    public Page<WalletTransaction> searchRecharges(UUID branchId, WalletTransactionCriteria criteria,
+                                                   Pageable pageable) {
+        UUID companyId = requireCompany();
+
+        // getOrCreateForBranch both validates branchId is this company's and resolves the
+        // wallet — the same check every other branch-scoped read here relies on.
+        UUID walletId = branchId == null ? null : getOrCreateForBranch(branchId).getId();
+
+        WalletTransactionCriteria safe = criteria == null ? WalletTransactionCriteria.none() : criteria;
+        java.util.Set<SubTransactionType> types = isNotEmpty(safe.subTransactionTypes())
+                ? safe.subTransactionTypes().stream()
+                        .filter(RECHARGE_TYPES::contains)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet())
+                : RECHARGE_TYPES;
+        if (types.isEmpty()) {
+            // Asked for reasons outside {WRC, MCR} — not a report error, just an empty page.
+            return Page.empty(pageable);
+        }
+
+        WalletTransactionCriteria scoped = safe.scopedToCompany(companyId, walletId, types);
+        return transactionRepository.findAll(
+                WalletTransactionSpecifications.matchingCompanyWide(scoped), pageable);
+    }
+
+    private static boolean isNotEmpty(java.util.Set<?> values) {
+        return values != null && !values.isEmpty();
+    }
+
     // ----------------------------------------------------------------- recharge
 
     @Override

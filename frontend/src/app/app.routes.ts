@@ -20,6 +20,9 @@ const CUSTOMER_READERS = [
   AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS, AppRole.FINANCE_USER, AppRole.CUSTOMER_SERVICE, AppRole.VIEWER
 ];
 const WALLET_RECHARGERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.FINANCE_USER];
+// Mirrors WalletServiceImpl.FINANCE_READERS on searchRecharges/companySummary — narrower
+// than WALLET_VIEWERS, since this report spans every branch, not just the caller's own.
+const WALLET_RECHARGE_REPORT_READERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER];
 // Shipment Booking: the counter desk's own job. Mirrors ShipmentServiceImpl's WRITERS
 // gate (COMPANY_ADMIN, BRANCH_MANAGER, OPERATOR); BOOKING_OPERATOR is the company-role
 // side of that same JWT-role gap the "authorise on permissions" capstone still owns.
@@ -575,6 +578,11 @@ export const routes: Routes = [
       {
         path: 'finance/branch-wallet/topup-requests', title: 'Top-up Requests', canActivate: [roleGuard], data: { roles: WALLET_VIEWERS },
         loadComponent: () => import('@features/branch-wallet/topup-requests').then((m) => m.TopupRequests)
+      },
+      {
+        path: 'finance/branch-wallet/recharge-report', title: 'Wallet Recharge Report',
+        canActivate: [roleGuard], data: { roles: WALLET_RECHARGE_REPORT_READERS },
+        loadComponent: () => import('@features/branch-wallet/wallet-recharge-report').then((m) => m.WalletRechargeReport)
       },
       // Follow-up Management. 'new' before ':id', and ':id/edit' before the bare ':id'
       // detail route is unaffected since it's a distinct trailing segment — same

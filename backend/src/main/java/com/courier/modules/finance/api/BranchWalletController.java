@@ -128,6 +128,27 @@ public class BranchWalletController {
         return ApiResponse.success(PageResponse.from(page, mapper::toResponse));
     }
 
+    @GetMapping("/recharge-report")
+    @Operation(summary = "Recharge report",
+            description = """
+                    `COMPANY_ADMIN`/`FINANCE_USER` only. Every wallet recharge across every
+                    branch of the company in one statement — Razorpay settlements (`WRC`)
+                    and manual credits (`MCR`) side by side, each row carrying its branch.
+                    Same filters, sort and paging as `GET /branch-wallet/transactions`;
+                    `subTransactionType` narrows further within {WRC, MCR} but cannot escape
+                    it, and `branchId` narrows to one branch instead of walking every page.
+                    """)
+    public ApiResponse<PageResponse<WalletTransactionResponse>> rechargeReport(
+            @Valid @ParameterObject WalletTransactionSearchRequest search,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt",
+                    direction = Sort.Direction.DESC) Pageable pageable) {
+
+        UUID branchId = search == null ? null : search.branchId();
+        Page<WalletTransaction> page = service.searchRecharges(
+                branchId, mapper.toCriteria(search), sanitise(pageable));
+        return ApiResponse.success(PageResponse.from(page, mapper::toRechargeReportRow));
+    }
+
     @PostMapping("/recharge/order")
     @Operation(summary = "Open a recharge payment",
             description = """

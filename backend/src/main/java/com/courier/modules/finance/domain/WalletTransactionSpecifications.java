@@ -41,44 +41,76 @@ public final class WalletTransactionSpecifications {
             if (safe.companyId() != null) {
                 predicates.add(cb.equal(root.get("companyId"), safe.companyId()));
             }
-            if (isNotEmpty(safe.transactionTypes())) {
-                predicates.add(root.get("transactionType").in(safe.transactionTypes()));
-            }
-            if (isNotEmpty(safe.subTransactionTypes())) {
-                predicates.add(root.get("subTransactionType").in(safe.subTransactionTypes()));
-            }
-            if (isNotEmpty(safe.referenceTypes())) {
-                predicates.add(root.get("referenceType").in(safe.referenceTypes()));
-            }
-            if (isNotEmpty(safe.paymentStatuses())) {
-                predicates.add(root.get("paymentStatus").in(safe.paymentStatuses()));
-            }
-
-            addExact(predicates, cb, root.get("referenceId"), safe.referenceId());
-            addExact(predicates, cb, root.get("transactionNo"), safe.transactionNo());
-            addExact(predicates, cb, root.get("paymentReference"), safe.paymentReference());
-
-            addFrom(predicates, cb, root.get("createdAt"), safe.from());
-            addBefore(predicates, cb, root.get("createdAt"), safe.to());
-
-            if (safe.minAmount() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), safe.minAmount()));
-            }
-            if (safe.maxAmount() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("amount"), safe.maxAmount()));
-            }
-
-            if (hasText(safe.search())) {
-                String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("transactionNo")), pattern, LIKE_ESCAPE),
-                        cb.like(cb.lower(root.get("remarks")), pattern, LIKE_ESCAPE),
-                        cb.like(cb.lower(root.get("referenceId")), pattern, LIKE_ESCAPE),
-                        cb.like(cb.lower(root.get("paymentReference")), pattern, LIKE_ESCAPE)));
-            }
-
+            addCommonFilters(predicates, cb, root, safe);
             return cb.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    /**
+     * Same filters as {@link #matching}, keyed on the company instead of one wallet — the
+     * recharge report walks every branch at once. Fails closed on a missing company for the
+     * same reason {@link #matching} fails closed on a missing wallet: a money query with no
+     * scope must return nothing, never everything. {@link WalletTransactionCriteria#walletId()}
+     * is optional here and, when set, narrows to that one wallet without widening the scope.
+     */
+    public static Specification<WalletTransaction> matchingCompanyWide(WalletTransactionCriteria criteria) {
+        WalletTransactionCriteria safe =
+                criteria == null ? WalletTransactionCriteria.none() : criteria;
+
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (safe.companyId() == null) {
+                return cb.disjunction();
+            }
+            predicates.add(cb.equal(root.get("companyId"), safe.companyId()));
+
+            if (safe.walletId() != null) {
+                predicates.add(cb.equal(root.get("walletId"), safe.walletId()));
+            }
+            addCommonFilters(predicates, cb, root, safe);
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private static void addCommonFilters(List<Predicate> predicates, CriteriaBuilder cb,
+                                         jakarta.persistence.criteria.Root<WalletTransaction> root,
+                                         WalletTransactionCriteria safe) {
+        if (isNotEmpty(safe.transactionTypes())) {
+            predicates.add(root.get("transactionType").in(safe.transactionTypes()));
+        }
+        if (isNotEmpty(safe.subTransactionTypes())) {
+            predicates.add(root.get("subTransactionType").in(safe.subTransactionTypes()));
+        }
+        if (isNotEmpty(safe.referenceTypes())) {
+            predicates.add(root.get("referenceType").in(safe.referenceTypes()));
+        }
+        if (isNotEmpty(safe.paymentStatuses())) {
+            predicates.add(root.get("paymentStatus").in(safe.paymentStatuses()));
+        }
+
+        addExact(predicates, cb, root.get("referenceId"), safe.referenceId());
+        addExact(predicates, cb, root.get("transactionNo"), safe.transactionNo());
+        addExact(predicates, cb, root.get("paymentReference"), safe.paymentReference());
+
+        addFrom(predicates, cb, root.get("createdAt"), safe.from());
+        addBefore(predicates, cb, root.get("createdAt"), safe.to());
+
+        if (safe.minAmount() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), safe.minAmount()));
+        }
+        if (safe.maxAmount() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("amount"), safe.maxAmount()));
+        }
+
+        if (hasText(safe.search())) {
+            String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
+            predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("transactionNo")), pattern, LIKE_ESCAPE),
+                    cb.like(cb.lower(root.get("remarks")), pattern, LIKE_ESCAPE),
+                    cb.like(cb.lower(root.get("referenceId")), pattern, LIKE_ESCAPE),
+                    cb.like(cb.lower(root.get("paymentReference")), pattern, LIKE_ESCAPE)));
+        }
     }
 
     private static void addExact(List<Predicate> predicates, CriteriaBuilder cb,

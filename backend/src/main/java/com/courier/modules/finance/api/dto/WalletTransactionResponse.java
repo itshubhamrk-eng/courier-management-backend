@@ -27,6 +27,14 @@ public record WalletTransactionResponse(
         UUID id,
         UUID companyId,
         UUID walletId,
+
+        @Schema(description = "Set only on the company-wide recharge report, which spans "
+                + "every branch; null on a single branch's own statement, which already "
+                + "knows whose it is.")
+        UUID branchId,
+        String branchCode,
+        String branchName,
+
         String transactionNo,
 
         @Schema(description = "CR (credit) or DR (debit)") TransactionType transactionType,

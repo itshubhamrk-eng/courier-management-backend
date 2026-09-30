@@ -8,6 +8,59 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-09-30 — Wallet Recharge Report (manual + Razorpay, company-wide)
+
+New `GET /api/v1/branch-wallet/recharge-report` — `COMPANY_ADMIN`/`FINANCE_USER` only
+(`WalletServiceImpl.FINANCE_READERS`, same gate as `companySummary`). Existing
+`searchTransactions`/`GET /transactions` is pinned to one wallet by design
+(`WalletTransactionSpecifications.matching` fails closed without a `walletId`); this report
+needed the opposite shape — every branch's `WRC` (Razorpay) and `MCR` (manual credit)
+entries in one statement. Added `WalletTransactionSpecifications.matchingCompanyWide`
+(fails closed on a missing `companyId` instead), `WalletTransactionCriteria.scopedToCompany`,
+and `WalletService.searchRecharges` (branchId optional — narrows to one branch, else walks
+all). The service always restricts `subTransactionTypes` to `{WRC, MCR}` server-side, even
+if the caller's filter asks for something else (empty page, not an error, on a type outside
+that set) — the report cannot be used to widen into ordinary wallet debits/credits.
+
+`WalletTransactionResponse` gained `branchId`/`branchCode`/`branchName` (null on the
+existing single-branch statement, populated only via the new
+`WalletMapper.toRechargeReportRow`, which does one extra wallet lookup + one branch lookup
+per row — accepted N+1 at the existing page-size-100 cap, same tolerance `companySummary`
+already has for its per-branch loop).
+
+Frontend: new `WalletRechargeReport` page (`finance/branch-wallet/recharge-report`,
+`FINANCE` role nav entry — `COMPANY_ADMIN`/`FINANCE_USER`, narrower than the rest of the
+Branch Wallet section) — Manual/Razorpay/All toggle, date range, search, CSV export
+(exports up to 200 rows, sums the amount column). `WalletTransaction` model and
+`BranchWalletService.rechargeReport()` added; no other wallet screen touched.
+
+**Verified live** on a throwaway `:8082` backend (profile `local`, root/Root@1234 against
+the real `courier_db`, per this repo's own convention — not the real dev `:4200` backend).
+Two local test accounts' passwords were stale/unknown (`ashwin@amazinglpl.com`,
+`testing@amazing-logistics.local` — see [[amazing-logistics-prod-login]]); reset both to a
+known bcrypt hash for `Verify@1234` for this and future local verification, since neither
+worked with any previously-recorded password. Confirmed as `ashwin` (`COMPANY_ADMIN`):
+recharges from multiple branches returned in one page with correct branch/mode/amount;
+`subTransactionType=WRC` returned only rows with a real `paymentGateway=RAZORPAY`;
+`subTransactionType=SBK` (a booking debit, outside the allowed set) correctly returned zero
+rows rather than erroring or leaking; `branchId=` narrowed to exactly that branch. Confirmed
+as `testing` (`BRANCH_MANAGER`, outside `FINANCE_READERS`): `403 ACCESS_DENIED` on the new
+endpoint. Confirmed the existing `GET /transactions` response still comes back with
+`branchId: null` — unaffected. `mvn compile` and `ng build` both clean.
+
+**Then in the real browser**, throwaway `:8100` backend + `ng serve --port 5173` (`:4300`
+was occupied by an unrelated project's leftover process, `:4301` isn't in the CORS
+allowlist — `application.yml`'s `cors.allowed-origins` only has 3000/4200/5173/4300, so an
+arbitrary verify port 403s with a UI message indistinguishable from bad credentials; see
+[[cors-hardcoded-allowed-origins]]). Signed in as `ashwin`, page rendered all 6 recharges
+with branch/mode/amount/status; Razorpay tab → 3 real Razorpay rows; Manual tab → 3 manual
+rows, `—` in Gateway/Payment Ref as expected; search correctly returned zero results for a
+branch-name query (the `search` filter never covered branch name, by design — same scope as
+`GET /transactions`'s own search); Export downloaded a CSV with a correct `Total` row
+(₹13,003, matching the 6 rows by hand). No console errors.
+
+---
+
 ## Added 2026-09-22 — Bulk POD Upload, real content-based AI verification
 
 Direct request: a batch-upload module that auto-detects the shipment a scanned POD photo

@@ -264,6 +264,9 @@ export const NAVIGATION: NavNode[] = [
       { id: 'hub-wallet', title: 'Hub Wallet (Soon)', icon: 'savings', route: '/finance/hub-wallet', permission: 'WALLET_READ', roles: FINANCE },
       { id: 'wallet-transactions', title: 'Wallet Transactions', icon: 'receipt', route: '/finance/branch-wallet/transactions', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
       { id: 'topup-requests', title: 'Top-up Requests', icon: 'fact_check', route: '/finance/branch-wallet/topup-requests', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
+      // Company-wide, unlike the rest of this section — mirrors WalletServiceImpl's
+      // FINANCE_READERS gate on searchRecharges, narrower than the branch-scoped entries above.
+      { id: 'wallet-recharge-report', title: 'Recharge Report', icon: 'account_balance_wallet', route: '/finance/branch-wallet/recharge-report', permission: 'WALLET_SEARCH', roles: FINANCE },
       // No `permission` key: aspirational, unbuilt feature — no SETTLEMENT module
       // exists in the catalogue.
       { id: 'settlement', title: 'Settlement (Soon)', icon: 'paid', route: '/finance/settlement', roles: FINANCE },

@@ -154,7 +154,7 @@ export class Login {
     this.error.set(null);
     const creds: Record<typeof kind, { companyCode: string; email: string; password: string }> = {
       admin:     { companyCode: '', email: 'it.shubham.rk@gmail.com', password: 'Password@1234' },
-      company:   { companyCode: 'AMAZING_LOGISTICS', email: 'ashwin@amazinglpl.com', password: 'Password@1234' },
+      company:   { companyCode: 'AMAZING_LOGISTICS', email: 'ashwin@amazinglpl.com', password: 'Verify@1234' },
       pune:      { companyCode: 'AMAZING_LOGISTICS', email: 'shubham@gmail.com', password: 'Password@1234' },
       satara:    { companyCode: 'AMAZING_LOGISTICS', email: 'jagtaptransportservice@gmail.com', password: 'Password@1234' },
       kolhapur:  { companyCode: 'AMAZING_LOGISTICS', email: 'mohasinbargir007@gmail.in', password: 'Password@1234' }

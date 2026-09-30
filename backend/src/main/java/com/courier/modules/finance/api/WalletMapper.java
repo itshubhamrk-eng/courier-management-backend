@@ -15,6 +15,7 @@ import com.courier.modules.finance.application.command.RechargeCommand;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.Wallet;
+import com.courier.modules.finance.domain.WalletRepository;
 import com.courier.modules.finance.domain.WalletTransaction;
 import com.courier.modules.finance.domain.WalletTransactionCriteria;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class WalletMapper {
 
     private final BranchDirectoryPort branchDirectory;
+    private final WalletRepository walletRepository;
 
     // ------------------------------------------------------------------ inbound
 
@@ -94,10 +96,32 @@ public class WalletMapper {
     }
 
     public WalletTransactionResponse toResponse(WalletTransaction t) {
+        return toResponse(t, null, null, null);
+    }
+
+    /**
+     * The recharge report's row: the same statement entry, enriched with the branch its
+     * wallet belongs to — needed only here, since a single branch's own statement already
+     * knows whose it is. One extra wallet lookup and one branch lookup per row; the report
+     * is an admin read capped at 100 rows a page, not a hot path.
+     */
+    public WalletTransactionResponse toRechargeReportRow(WalletTransaction t) {
+        Wallet wallet = walletRepository.findByIdWithinCompany(t.getWalletId(), t.getCompanyId())
+                .orElse(null);
+        BranchDirectoryPort.BranchRef branch = wallet == null ? null
+                : branchDirectory.findBranch(wallet.getBranchId(), t.getCompanyId()).orElse(null);
+        return toResponse(t, wallet == null ? null : wallet.getBranchId(),
+                branch == null ? null : branch.branchCode(),
+                branch == null ? null : branch.branchName());
+    }
+
+    private WalletTransactionResponse toResponse(WalletTransaction t, UUID branchId,
+                                                  String branchCode, String branchName) {
         String createdByName = branchDirectory.findUser(t.getCreatedBy(), t.getCompanyId())
                 .map(BranchDirectoryPort.UserRef::displayName).orElse(null);
         return new WalletTransactionResponse(
-                t.getId(), t.getCompanyId(), t.getWalletId(), t.getTransactionNo(),
+                t.getId(), t.getCompanyId(), t.getWalletId(), branchId, branchCode, branchName,
+                t.getTransactionNo(),
                 t.getTransactionType(),
                 t.getTransactionType() == null ? null : t.getTransactionType().getLabel(),
                 t.getSubTransactionType(),

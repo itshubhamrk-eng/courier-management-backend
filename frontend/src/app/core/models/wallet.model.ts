@@ -29,6 +29,14 @@ export const SUB_TRANSACTION_LABELS: Record<SubTransactionType, string> = {
   TRI: 'Transfer In', TRO: 'Transfer Out', ADJ: 'Adjustment', PNL: 'Penalty'
 };
 
+/** The two ways a wallet ever gains money from outside its own operations — what the
+ *  recharge report shows, side by side. */
+export type RechargeMode = 'MANUAL' | 'ONLINE';
+export const RECHARGE_MODE_SUB_TYPES: Record<RechargeMode, SubTransactionType> = { MANUAL: 'MCR', ONLINE: 'WRC' };
+export function rechargeModeOf(subType?: SubTransactionType | null): RechargeMode | null {
+  return subType === 'MCR' ? 'MANUAL' : subType === 'WRC' ? 'ONLINE' : null;
+}
+
 /** Reasons that may be filed on a credit — matches `SubTransactionType.creditable()`. */
 export const CREDIT_SUB_TYPES: SubTransactionType[] = ['WRC', 'SRF', 'COD', 'COM', 'BST', 'MCR', 'TRI', 'ADJ'];
 /** Reasons that may be filed on a debit — matches `SubTransactionType.debitable()`. */
@@ -102,6 +110,11 @@ export interface WalletTransaction {
   id: string;
   companyId: string;
   walletId: string;
+  /** Set only on the company-wide recharge report; null on a single branch's own statement,
+   *  which already knows whose it is. */
+  branchId?: string | null;
+  branchCode?: string | null;
+  branchName?: string | null;
   transactionNo: string;
   transactionType: TransactionType;
   transactionTypeLabel: string;
