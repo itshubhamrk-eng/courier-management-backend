@@ -61,6 +61,243 @@ branch-name query (the `search` filter never covered branch name, by design — 
 
 ---
 
+## Added 2026-09-29 — Ticket status-update timeline on the public tracking page
+
+New `PublicTicketEventResponse(status, changedAt)`, sourced from the already-existing
+`TicketStatusHistory` table. `PublicTrackTicketResponse` gained a `history` field;
+`toTicketResponse` now also takes `companyId` to query `TicketStatusHistoryRepository
+.findByTicket`. No remarks/who-changed-it exposed, same redaction boundary as the rest of
+that DTO.
+
+**Found and fixed a real bug in the process**: writing the initial OPEN history row for a
+publicly-raised ticket hit `changed_by_user_id cannot be null` — that column is genuinely
+NOT NULL, contradicting an assumption carried over from `TicketServiceImpl
+.raiseSystemTicket` (~line 202), which also passes null there but has evidently never been
+exercised against a real DB (dormant, unrelated bug — not fixed here, out of scope).
+Fixed with a documented nil-UUID sentinel, `PUBLIC_ACTOR_ID = new UUID(0L, 0L)`, in both
+`PublicTrackingServiceImpl` and `PublicLeadServiceImpl`.
+
+Frontend: `TrackingTicket` gained `history`; each ticket card in `TrackingDetailPanel` gets
+a "Show status updates (N)" toggle when there's more than one entry. Raising a new ticket
+re-fetches the detail view so it appears immediately with its history.
+
+**Verified live** on `:8100` (restarted twice — once for the feature, once more for the
+constraint fix): curl-raised `TKT-000007`, confirmed its history shows one real `OPEN`
+entry; pre-fix tickets correctly show empty history (no row was ever written, expected);
+pre-existing admin-raised `TKT-000002` unaffected. `mvn compile`/`ng build` clean. Then in
+the real browser: unlocked `26090000002`, confirmed all four tickets render (three with the
+toggle correctly hidden — only one history entry each); manually inserted a second
+`ticket_status_history` row (`OPEN` → `IN_PROGRESS`) on `TKT-000007` as a stand-in for a
+future admin status change, re-tracked, and confirmed "Show status updates (2)" appeared and
+expanded to the correct two-entry timeline with real timestamps. Test data left in
+`courier_db` per this repo's own convention (fixtures for the next module, not cleaned up).
+
+---
+
+## Added 2026-09-29 — "Raise a Complaint / Query" on the public tracking page's detail view
+
+Direct request: let someone tracking a shipment raise a ticket about *that specific
+shipment* from the marketing site, not just the general Contact/Quote lead flow (previous
+entry). New `POST /api/v1/track/{number}/tickets` (`PublicTrackController`,
+`PublicTrackingService.raiseTicket`) — same phone-last-4 second factor as `/verify`,
+re-checked independently on this call too (no session exists between requests to trust an
+earlier verify), and the *same* rate-limiter key (shipment number) as `/verify`, so raising
+a ticket can't be used as a second avenue to brute-force the phone code. Refactored the
+shared "check limiter, match phone, record failure or reset" logic out of
+`verifyAndGetDetail` into a private `verifyPhone` both methods now call, rather than
+duplicating it.
+
+Lands as a `Ticket` with `relatedShipmentId` set (unlike the general lead flow, which has
+none) and category **"Shipment Issue"** — already existed, unlike the lead flow's
+purpose-built category, since a shipment complaint is exactly what that category was for.
+Same `ticket.setCompanyId(companyId)`-before-save pattern as `PublicLeadServiceImpl` (no
+`CompanyContext` bound for an unauthenticated request); own ticket-number-sequence call
+duplicated (a third copy now, alongside `TicketServiceImpl`'s and `PublicLeadServiceImpl`'s
+— small enough each time that extracting a shared `TicketNumberGenerator` still doesn't pay
+for itself, but worth reconsidering if a fourth caller shows up).
+
+Frontend: `TrackingDetailPanel`'s existing read-only ticket list (shows tickets already
+raised for the shipment) gained a "Raise a Complaint / Query" button below it, only reachable
+once unlocked. Reuses the phone-last-4 already entered to unlock rather than asking again —
+still re-verified server-side. Issue-type select (Delay/Damage/Not Delivered/Wrong
+Address/Lost Shipment/Other) + a required 10+ character details textarea; success state
+shows the ticket reference inline, no page reload or re-fetch of the ticket list needed.
+
+**Verified live** on the real `:8100` backend (restarted for this feature): curl — wrong
+code → 400, correct code → `TKT-000005` tied to `26090000002`/`Shipment Issue`/`OPEN` — then
+a full real-browser run at `localhost:4300/tracking`: tracked `26090000002`, unlocked with
+`0001`, saw the two pre-existing tickets for that shipment, opened the new form, selected
+"Damage", submitted, got "Raised — reference TKT-000006" inline, confirmed in the DB tied to
+the same shipment. `mvn compile` and `ng build` both clean.
+
+---
+
+## Added 2026-09-29 — Request a Quote / Contact form now actually submits somewhere
+
+The marketing site's Contact and quote-request forms were UI-only (`setTimeout` fake
+success, nothing sent anywhere) — found when asked "is Request a Quote working, where do I
+see it in admin." Wired both to a new public endpoint, `POST /api/v1/leads`
+(`PublicLeadController`/`PublicLeadService`, `com.courier.modules.support`), same "no auth,
+own controller/service pair" boundary as `PublicTrackController`. No new table: it lands as
+a `Ticket` under the `AMAZING_LOGISTICS` tenant (this marketing site's own company, already
+provisioned — `company_code = 'AMAZING_LOGISTICS'`), so it shows up immediately on the
+existing admin screen at `/support/tickets` (`SUPPORT_READERS` roles) — no new admin UI
+needed. `Ticket` has no dedicated contact-detail columns, so name/company/email/phone/
+service are formatted into the `description`; subject is `"Website enquiry: {service}"`.
+
+New ticket category **"New Business / Quote Request"** (`V95`, same pattern `V57`'s
+POD-issue category used) — existing categories are all operational-issue-flavoured
+(Shipment Issue, Delivery Issue, ...), so a sales enquiry needed its own rather than getting
+lost in triage as "Other."
+
+Since `TicketService.create()` requires an authenticated caller (`SecurityUtils
+.requireCurrentUser()`) that doesn't exist for an anonymous submission,
+`PublicLeadServiceImpl` builds and saves the `Ticket` directly (same "bypass the
+authenticated service, talk to repositories" shape `PublicTrackingServiceImpl` already
+uses) — including explicitly calling `ticket.setCompanyId(companyId)` before save, the one
+legitimate exception to `CompanyOwnedEntity`'s own "code must never set companyId by hand"
+doc comment: `CompanyResolutionFilter` never binds a `CompanyContext` for an unauthenticated
+request, so `CompanyEntityListener` has nothing to auto-stamp from and would otherwise throw
+`CompanyIsolationException`.
+
+**Rate-limited** (`PublicLeadRateLimiter`, same in-memory shape as the tracking page's
+`PublicTrackVerificationLimiter`) — 1 submission/minute per caller IP (tightened same-day
+from an initial 5/hour, direct instruction), since it's an
+unauthenticated write endpoint with no CAPTCHA and would otherwise let a bot flood the
+ticket queue in a tight loop.
+
+Frontend: `FormSubmissionService` (marketing site) now does a real `HttpClient` POST
+instead of simulating one; both `ContactForm` and `QuoteForm` show the real backend error
+message on failure (was a hardcoded generic string) and the ticket number on success
+("Reference: TKT-000004") so a submitter has something to quote if they follow up. Quote
+form's `message` field is now required (backend does `@NotBlank` it) — was optional before.
+
+**Verified live** on the real `:8100` backend (restarted for this feature): `mvn -o compile`
+clean, `V95` migration applied cleanly on top of the real dev `courier_db`, curl-submitted a
+test lead → `TKT-000004`, confirmed in the DB scoped to the right company
+(`company_name = 'Amazing Logistics'`) and category (`New Business / Quote Request`),
+`status = OPEN`, `priority = MEDIUM`, description formatted with every submitted field.
+`ng build` clean on the marketing site.
+
+---
+
+## Fixed 2026-09-29 — Public tracking 500s on a cross-company tracking-number collision
+
+Found live-testing the new verified-detail feature (previous entry): `GET
+/api/v1/track/{number}` 500'd (`NonUniqueResultException: 2 results were returned`) for
+several real dev numbers (`26090000019`–`23`, 11 of 1826 shipments overall). Root cause:
+`tracking_number` is only unique **per company** (`uk_shipments_company_tracking`), not
+globally, but `findByTrackingNumberOrShipmentNumberForPublicTracking` searches across every
+company with no company context (it has to — the caller isn't logged in) and used to return
+`Optional<Shipment>`, which throws the moment two different companies happen to have booked
+the same number. Confirmed: `26090000019` belongs to two entirely unrelated shipments
+(`LT_BR12-000002` and `CP-SGMNR-000001`) in two different companies. The method's own doc
+comment already flagged this as a known, tolerated ambiguity elsewhere — just never actually
+handled here.
+
+Changed the repository method to `findAllByTrackingNumberOrShipmentNumberForPublicTracking`,
+returning `List<Shipment>` instead of `Optional`. `PublicTrackingServiceImpl.findShipment`
+now treats 2+ matches the same as zero — a 404 `"not found"`, not a 500, and not a guess:
+there is no way to tell which company's shipment an anonymous caller means, and picking one
+arbitrarily risked showing person A's shipment to person B on a coincidence. Logs a `WARN`
+with the match count for anyone auditing collisions later, but the caller only ever sees
+"not found" either way — same as the legitimate not-found case.
+
+**Verified live** on the real `:8100` backend (restarted for this fix, per explicit
+instruction — see the previous entry for why it needed restarting at all): `26090000019`
+now 404s cleanly instead of 500ing; unaffected numbers (`26090001815`, `26090000002`
++ `/verify`) still 200 exactly as before. `mvn compile` clean.
+
+---
+
+## Added 2026-09-29 — Hub routing from Load Sheet, hub DRS, "Act as branch / hub" for admins (0.66.1)
+
+Direct request. Flow: origin branch makes a Load Sheet **to a hub** -> THC -> hub In Scan ->
+then either (1) DRS straight to the destination city, or (2) a new Load Sheet + THC to another
+branch/hub.
+
+- **Load Sheet "Send to Hub"** (city mode): new `hubTransfer` flag on `CreateManifestRequest` /
+  `CreateManifestCommand` (6-arg constructor kept for existing callers). `ManifestServiceImpl.create`
+  refuses it unless `deliveryBranchId` is a HUB (via `BranchDirectoryPort`) or with Direct Company
+  Delivery. `ShipmentService.attachToManifest` gained a 6-arg overload: with `hubTransfer` a freshly
+  BOOKED shipment gets only `nextLocationId = hub`, **never** `deliveryBranchId` — the hub's own
+  city-mode Load Sheet assigns the real branch after In Scan (`scanOneIn` already leaves a
+  branch-less shipment `READY_FOR_MANIFEST` at the hub). The 5-arg method delegates with `false`.
+- **DRS from a hub**: `ShipmentStatus` allows `READY_FOR_MANIFEST -> OUT_FOR_DELIVERY`;
+  `assignOneOutForDelivery` accepts a `READY_FOR_MANIFEST` shipment only when it has no
+  `deliveryBranchId` and is no longer at its booking branch. DRS page gained a "Hub Shipments"
+  mode (`currentLocationId = my branch`, `unassignedDeliveryBranch`, `READY_FOR_MANIFEST`).
+  Such shipments also appear in Delivery's Direct Company Delivery list (no delivery branch).
+- **Act as branch / hub**: `ActingBranchService` + `<app-act-as-branch>`; a user with no branch
+  (COMPANY_ADMIN) picks a branch or hub and In Scan / DRS / Delivery use it (sessionStorage,
+  per tab). Frontend-only; backend already accepted any branch id from COMPANY_ADMIN. Users with
+  their own branch are unaffected. `BranchSummary` now carries `branchType`.
+- **Verified**: `mvn test` 1101/1101 (+2 in `ManifestServiceImplTest`), `ng build` clean.
+  Live API on a throwaway :8082 (LOADTEST01), then browser on :4200 (AMAZING_LOGISTICS): sheet to
+  hub, THC, hub In Scan, hub DRS, hub Load Sheet -> Kolhapur, hub Out Scan, THC, Kolhapur In Scan,
+  admin DRS while acting as Kolhapur. "Mark as Delivered" needs a POD photo; not exercised.
+- **Setup gotchas**: a company's existing `Hub Manager` role lacks the four hub scan permissions
+  (not backfilled, as V13 established) — re-grant via `POST /roles/{id}/permissions`. Out-scan is
+  403 for COMPANY_ADMIN for the same reason. Test hub `HUB-PUNE-01`
+  (`hub.pune.test@amazinglpl.com` / `Password@1234`) created on the local dev DB.
+
+---
+
+## Added 2026-09-29 — Verified detail on public tracking: sender/receiver, current location, POD, tickets
+
+Driven by a new external marketing site (`amazing-logistics-website/`, separate Angular
+project, not part of this repo) wanting its public "Track Shipment" page to show more than
+`PublicTrackResponse`'s redacted status/timeline — consignor/consignee name+address+phone,
+current hub location, POD photo/signature, and any customer-care tickets. Refused to just
+add those fields to the existing no-auth `/api/v1/track/{number}` response: tracking/
+shipment numbers are sequential integers, so an unauthenticated endpoint returning that much
+PII would be a trivially scrapable customer database, not a hypothetical risk.
+
+Built as a **second-factor-gated** extension instead, same shape real courier sites (Delhivery,
+Bluedart) use: new `POST /api/v1/track/{number}/verify` (`PublicTrackController`, still
+listed under `/api/v1/track/**` in `SecurityConfig.PUBLIC_ENDPOINTS`, so still no bearer
+token) takes the last 4 digits of the receiver's phone (`PublicTrackVerifyRequest`,
+`@Pattern` 4 digits) and only then returns `PublicTrackDetailResponse` — sender/receiver
+name+address+contact straight off `Shipment`, current location resolved from
+`currentLocationId` → `Branch.branchName`+`city`, POD, and tickets.
+
+**Brute-force throttling**: `PublicTrackVerificationLimiter` (new, in-memory,
+`ConcurrentHashMap`+`Deque<Instant>`), 5 attempts/15min keyed by shipment number — a 4-digit
+code is only 10,000 combinations, so without this the second factor is nearly as guessable
+as the AWB itself. Single-instance only, same caveat as any other in-process state in this
+app (see class doc) — a multi-instance rollout needs this backed by something shared.
+
+**POD is never handed out as a permanent link.** `FileStoragePort` gained `presignGet(url,
+ttl)`; `S3FileStorage` implements it with a real `S3Presigner` (new bean in
+`FileStorageConfig`, alongside the existing `S3Client`), 15-minute expiry, deriving the S3
+key by stripping the known URL prefix — falls back to returning the input URL unchanged for
+anything that isn't one of this store's own objects. `UnconfiguredFileStorage.presignGet` is
+a no-op (nothing was ever stored). The authenticated POD endpoints (`PodVerificationController`)
+are untouched and still return the permanent unsigned URL — only the new public path signs.
+POD is only surfaced at all once a human reviewer has approved the capture
+(`PodVerificationStatus.PASS`); still-`PENDING`/`FAIL` shipments get no `pod` block.
+
+Tickets: new `TicketRepository.findAllByRelatedShipmentIdWithinCompany`, mapped to a
+redacted `PublicTrackTicketResponse` (subject/status/priority/dates only — no assignee,
+internal notes, or SLA timestamps, the same public/staff boundary `PublicTrackResponse`
+already draws for the shipment itself).
+
+**Verified live**: real dev `courier_db` via a throwaway `:8082` (`local` profile,
+`:8100`/`:4200` untouched — this ran alongside the real dev backend rather than restarting
+it) — wrong code → 400 `VALIDATION_FAILED`; correct code (`26090000002`, receiver contact
+`...0001`) → full sender/receiver/location/POD/ticket payload; 6th attempt in a row → 429
+`RATE_LIMIT_EXCEEDED`; malformed (non-4-digit) code → 400 with field error; presigned POD
+photo URL fetched directly (200, real bytes off the real `courier-saas-pod-*` bucket) from
+the marketing site's own tracking page end to end, including the "View"/"Download" links.
+`mvn compile` clean.
+
+**Not done**: the real `:8100` dev backend was never restarted, so it doesn't have this
+code yet — whoever redeploys it will pick it up. The marketing site's production domain
+also still needs adding to `CorsProperties`' allowed-origins before this (or the existing
+`/api/v1/track/{number}` GET) works from a browser outside `localhost`.
+
+---
+
 ## Added 2026-09-22 — Bulk POD Upload, real content-based AI verification
 
 Direct request: a batch-upload module that auto-detects the shipment a scanned POD photo

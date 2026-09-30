@@ -4,6 +4,8 @@ import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.shared.exception.BusinessRuleException;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Duration;
+
 /**
  * The storage backend used when no bucket is configured. Refuses every upload.
  *
@@ -24,5 +26,11 @@ public class UnconfiguredFileStorage implements FileStoragePort {
     public StoredFile upload(UploadRequest request) {
         log.warn("File upload refused: no storage backend configured (filename {})", request.filename());
         throw new BusinessRuleException(MESSAGE);
+    }
+
+    /** Nothing was ever stored, so there is nothing to sign — hand back the input as-is. */
+    @Override
+    public String presignGet(String storedUrl, Duration ttl) {
+        return storedUrl;
     }
 }

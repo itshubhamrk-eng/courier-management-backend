@@ -85,11 +85,15 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     /** Public Track Shipment (login page, no auth): looked up cross-company by either
      *  column, same ambiguity {@code findAllByCompanyIdAndTrackingNumberInOrShipmentNumberIn}
-     *  already tolerates. Only ever called from {@code PublicTrackingService}, which returns
-     *  a redacted projection — never hand the raw {@link Shipment} entity back to an
-     *  unauthenticated caller. */
+     *  already tolerates — {@code tracking_number} is only unique per company ({@code
+     *  uk_shipments_company_tracking}), so two different companies can genuinely share one.
+     *  Returns every match rather than {@code Optional} precisely so the caller can tell a
+     *  real cross-company collision apart from "not found" instead of this throwing {@code
+     *  NonUniqueResultException} on the second row. Only ever called from {@code
+     *  PublicTrackingService}, which returns a redacted projection — never hand the raw
+     *  {@link Shipment} entity back to an unauthenticated caller. */
     @Query("select s from Shipment s where s.trackingNumber = :number or s.shipmentNumber = :number")
-    Optional<Shipment> findByTrackingNumberOrShipmentNumberForPublicTracking(@Param("number") String number);
+    List<Shipment> findAllByTrackingNumberOrShipmentNumberForPublicTracking(@Param("number") String number);
 
     /** Backs the platform-wide "Shipment Trend" chart — one row per day that had at
      *  least one booking; days with none simply don't appear (DashboardServiceImpl

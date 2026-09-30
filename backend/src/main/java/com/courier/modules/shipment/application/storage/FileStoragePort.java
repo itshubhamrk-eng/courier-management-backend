@@ -1,5 +1,7 @@
 package com.courier.modules.shipment.application.storage;
 
+import java.time.Duration;
+
 /**
  * The seam between POD (proof of delivery) capture and whichever object store a
  * deployment uses. Nothing in the shipment module knows S3's name, wire format or SDK —
@@ -15,6 +17,19 @@ public interface FileStoragePort {
      *         or the store could not be reached
      */
     StoredFile upload(UploadRequest request);
+
+    /**
+     * A short-lived signed URL for an object this port already stored, given the plain URL
+     * {@link #upload} returned. Used anywhere a POD file needs to be handed to a caller who
+     * should not get a permanent link — the public tracking page, in particular. Returns the
+     * input unchanged if it does not look like one of this store's own objects (never signs
+     * an arbitrary external URL), and if this store has nothing to sign against (no backend
+     * configured).
+     *
+     * @param storedUrl the URL previously returned by {@link #upload}
+     * @param ttl        how long the signed URL should remain valid
+     */
+    String presignGet(String storedUrl, Duration ttl);
 
     /**
      * @param content     the whole file, already read off the multipart request

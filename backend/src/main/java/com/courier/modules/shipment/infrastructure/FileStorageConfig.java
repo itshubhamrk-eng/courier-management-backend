@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * Picks the file storage backend for this deployment. Same shape as
@@ -36,9 +37,13 @@ public class FileStorageConfig {
                 .region(Region.of(properties.getRegion()))
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
+        S3Presigner presigner = S3Presigner.builder()
+                .region(Region.of(properties.getRegion()))
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
         log.info("S3 file storage enabled (bucket {}, region {})",
                 properties.getBucket(), properties.getRegion());
-        return new S3FileStorage(client, properties);
+        return new S3FileStorage(client, presigner, properties);
     }
 
     @Bean

@@ -15,6 +15,14 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID>, JpaSpecif
     @Query("select t from Ticket t where t.id = :id and t.companyId = :companyId")
     Optional<Ticket> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 
+    /** Tickets raised against a shipment, newest first — the public tracking page's
+     *  verified detail view and the authenticated Shipment view's ticket card both use
+     *  this. */
+    @Query("select t from Ticket t where t.relatedShipmentId = :shipmentId "
+            + "and t.companyId = :companyId order by t.createdAt desc")
+    List<Ticket> findAllByRelatedShipmentIdWithinCompany(
+            @Param("shipmentId") UUID shipmentId, @Param("companyId") UUID companyId);
+
     @Query("select t.status as status, count(t) as total from Ticket t where t.companyId = :companyId group by t.status")
     List<StatusCount> countByStatus(@Param("companyId") UUID companyId);
 
