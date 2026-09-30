@@ -406,10 +406,12 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     /** Native-query projection for {@link #findSlaBreachCandidates}. */
     interface ShipmentSlaCandidateRow {
-        UUID getShipmentId();
+        byte[] getShipmentId();
         String getTrackingNumber();
-        UUID getBranchId();
+        byte[] getBranchId();
         String getStatus();
-        java.time.Instant getEnteredAt();
+        /** Raw driver value — {@code Timestamp}, {@code LocalDateTime} or {@code Instant}
+         *  depending on the dialect path; callers normalise via {@code toInstant}. */
+        Object getEnteredAt();
     }
 }

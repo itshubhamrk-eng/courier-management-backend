@@ -1,6 +1,7 @@
 package com.courier.modules.shipment.infrastructure;
 
 import com.courier.modules.shipment.domain.ShipmentRepository;
+import com.courier.shared.domain.TimeOrderedUuid;
 import com.courier.modules.support.domain.ShipmentSlaPort;
 import com.courier.modules.support.domain.ShipmentSlaStage;
 import com.courier.modules.support.domain.ShipmentSlaThresholds;
@@ -42,13 +43,29 @@ public class ShipmentSlaAdapter implements ShipmentSlaPort {
                 thresholds.thcToInscanHours(), thresholds.inscanToDrsHours(), thresholds.drsToDeliveryHours());
 
         return rows.stream()
-                .map(row -> new Candidate(
-                        row.getShipmentId(),
+                .map(row -> {
+                    Instant enteredAt = toInstant(row.getEnteredAt());
+                    return new Candidate(
+                        TimeOrderedUuid.fromBytes(row.getShipmentId()),
                         row.getTrackingNumber(),
-                        row.getBranchId(),
+                        row.getBranchId() == null ? null : TimeOrderedUuid.fromBytes(row.getBranchId()),
                         STAGE_BY_STATUS.get(row.getStatus()),
-                        row.getEnteredAt(),
-                        Duration.between(row.getEnteredAt(), asOf).toHours()))
+                        enteredAt,
+                        Duration.between(enteredAt, asOf).toHours());
+                })
                 .toList();
+    }
+
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant i) {
+            return i;
+        }
+        if (value instanceof java.sql.Timestamp t) {
+            return t.toInstant();
+        }
+        if (value instanceof java.time.LocalDateTime l) {
+            return l.toInstant(java.time.ZoneOffset.UTC);
+        }
+        throw new IllegalStateException("Unexpected SLA enteredAt type: " + value);
     }
 }
