@@ -757,12 +757,18 @@ public class TicketServiceImpl implements TicketService {
         writeStatusHistory(ticket, from, target, actorId, remarks);
     }
 
+    /** Actor recorded for changes made by the system itself (the SLA sweep, POD/shortage auto-tickets)
+     *  rather than a signed-in user. {@code changed_by_user_id} and {@code assigned_by_user_id} are
+     *  NOT NULL, so a null actor would fail the insert and roll the whole sweep back. Same nil-UUID
+     *  convention as {@code PublicLeadServiceImpl}'s and {@code PublicTrackingServiceImpl}'s PUBLIC_ACTOR_ID. */
+    static final UUID SYSTEM_ACTOR_ID = new UUID(0L, 0L);
+
     private void writeStatusHistory(Ticket ticket, TicketStatus from, TicketStatus to, UUID actorId, String remarks) {
         statusHistoryRepository.save(TicketStatusHistory.builder()
                 .ticketId(ticket.getId())
                 .fromStatus(from)
                 .toStatus(to)
-                .changedByUserId(actorId)
+                .changedByUserId(actorId != null ? actorId : SYSTEM_ACTOR_ID)
                 .remarks(trimOrNull(remarks))
                 .build());
     }
@@ -772,7 +778,7 @@ public class TicketServiceImpl implements TicketService {
         assignmentHistoryRepository.save(TicketAssignmentHistory.builder()
                 .ticketId(ticket.getId())
                 .assignedToUserId(assigneeId)
-                .assignedByUserId(actorId)
+                .assignedByUserId(actorId != null ? actorId : SYSTEM_ACTOR_ID)
                 .action(action)
                 .remarks(trimOrNull(remarks))
                 .build());

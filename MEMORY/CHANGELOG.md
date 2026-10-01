@@ -8,6 +8,16 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-10-01 — Hourly SLA sweep failing on prod ("Column 'changed_by_user_id' cannot be null")
+
+`TicketServiceImpl.raiseSystemTicket` (used by the SLA sweep and the POD/shortage auto-tickets) wrote
+`ticket_status_history.changed_by_user_id` and `ticket_assignment_history.assigned_by_user_id` with a null actor; both columns
+are NOT NULL, so every system-raised ticket failed and the sweep rolled back per company (seen on prod 12:00, both
+companies, after 4ca149c fixed the earlier byte[]->UUID failure). Null actor now records `SYSTEM_ACTOR_ID` (nil UUID, same
+convention as the public endpoints' PUBLIC_ACTOR_ID). +1 test (fails without the fix). `mvn test` 1114/1114.
+
+---
+
 ## Fixed 2026-10-01 — Loading Sheet: hub preselected but shipment list not loading
 
 Frontend only (`loading-sheet.ts`). The branch directory is cached, so on any visit after the first its callback fired

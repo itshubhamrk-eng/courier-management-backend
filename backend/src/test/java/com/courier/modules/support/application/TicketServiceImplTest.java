@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -129,6 +130,27 @@ class TicketServiceImplTest {
         assertThat(created.getStatus()).isEqualTo(TicketStatus.ASSIGNED);
         assertThat(created.getAssigneeUserId()).isEqualTo(AGENT);
         assertThat(created.getCreatedByUserId()).isNull();
+    }
+
+    @Test
+    @DisplayName("a system-raised ticket records the system actor in its history, never a null "
+            + "(both history columns are NOT NULL — a null failed the whole SLA sweep)")
+    void systemRaisedTicketHistoryUsesSystemActor() {
+        SecurityContextHolder.clearContext();
+        when(directory.findUser(AGENT, COMPANY)).thenReturn(
+                Optional.of(new TicketDirectoryPort.UserRef(AGENT, COMPANY, "Branch Manager", "bm@test.local")));
+
+        service.raiseSystemTicket(command(), AGENT, "Auto-raised: test");
+
+        org.mockito.ArgumentCaptor<com.courier.modules.support.domain.TicketStatusHistory> status =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.support.domain.TicketStatusHistory.class);
+        verify(statusHistoryRepository, atLeastOnce()).save(status.capture());
+        assertThat(status.getAllValues()).isNotEmpty()
+                .allSatisfy(h -> assertThat(h.getChangedByUserId()).isEqualTo(TicketServiceImpl.SYSTEM_ACTOR_ID));
+        org.mockito.ArgumentCaptor<com.courier.modules.support.domain.TicketAssignmentHistory> assign =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.support.domain.TicketAssignmentHistory.class);
+        verify(assignmentHistoryRepository).save(assign.capture());
+        assertThat(assign.getValue().getAssignedByUserId()).isEqualTo(TicketServiceImpl.SYSTEM_ACTOR_ID);
     }
 
     @Test
