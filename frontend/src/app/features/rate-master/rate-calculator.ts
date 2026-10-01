@@ -2,9 +2,10 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { RateCalculatorForm } from './components/rate-calculator-form';
+import { PincodeRateCalculatorForm } from './components/pincode-rate-calculator-form';
 import { FreightCalculatorForm } from '@features/freight-factor/components/freight-calculator-form';
 
-type CalcTab = 'freight' | 'rate';
+type CalcTab = 'freight' | 'rate' | 'pincode';
 
 /**
  * Rate Master's Calculator page — tabbed: this module's own Rate calculator, and the
@@ -16,7 +17,7 @@ type CalcTab = 'freight' | 'rate';
   selector: 'app-rate-calculator',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiCard, RateCalculatorForm, FreightCalculatorForm],
+  imports: [UiCard, RateCalculatorForm, PincodeRateCalculatorForm, FreightCalculatorForm],
   template: `
     <div class="page">
       <header class="page__head">
@@ -26,10 +27,13 @@ type CalcTab = 'freight' | 'rate';
         <div class="tabs" role="tablist">
           <button type="button" role="tab" class="tab" [class.tab--active]="activeTab() === 'freight'" (click)="activeTab.set('freight')">Freight Factor</button>
           <button type="button" role="tab" class="tab" [class.tab--active]="activeTab() === 'rate'" (click)="activeTab.set('rate')">Route Rate</button>
+          <button type="button" role="tab" class="tab" [class.tab--active]="activeTab() === 'pincode'" (click)="activeTab.set('pincode')">Pincode to Pincode</button>
         </div>
 
         @if (activeTab() === 'freight') {
           <app-freight-calculator-form />
+        } @else if (activeTab() === 'pincode') {
+          <app-pincode-rate-calculator-form />
         } @else {
           <app-rate-calculator-form />
         }
