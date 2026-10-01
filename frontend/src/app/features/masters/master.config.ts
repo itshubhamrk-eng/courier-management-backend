@@ -551,7 +551,9 @@ export const MASTER_PERMISSIONS = {
 };
 
 export const GLOBAL_MASTER_PERMISSIONS = {
-  view: ['GLOBAL_MASTER_READ'],
+  // Read is role-gated only: COMPANY_ADMIN never holds GLOBAL_MASTER_READ (a platform-only
+  // module), and the backend's geography reads are `isAuthenticated()` anyway.
+  view: [] as string[],
   create: ['GLOBAL_MASTER_CREATE'],
   update: ['GLOBAL_MASTER_UPDATE'],
   delete: ['GLOBAL_MASTER_DELETE'],

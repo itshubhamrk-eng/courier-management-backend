@@ -163,12 +163,14 @@ export const NAVIGATION: NavNode[] = [
       // (`readAccessFor`/`writeAccessFor` keyed on MasterDefinition.global), since this
       // nav bridge and the shared `masters/:master` route can't tell geography from a
       // company's own catalogue on their own.
-      { id: 'global-countries', title: 'Country', icon: 'public', route: '/masters/countries', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
-      { id: 'global-states', title: 'State', icon: 'flag', route: '/masters/states', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
-      { id: 'global-districts', title: 'District', icon: 'map', route: '/masters/districts', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
-      { id: 'global-cities', title: 'City', icon: 'location_city', route: '/masters/cities', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
-      { id: 'global-areas', title: 'Area', icon: 'pin_drop', route: '/masters/areas', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
-      { id: 'global-pincodes', title: 'Pincode', icon: 'markunread_mailbox', route: '/masters/pincodes', permission: 'GLOBAL_MASTER_READ', roles: GLOBAL_MASTER_READERS },
+      // For now only Pincode is shown to COMPANY_ADMIN; the other five geography lists stay
+      // SUPER_ADMIN-only in the menu (their routes/screens are unchanged).
+      { id: 'global-countries', title: 'Country', icon: 'public', route: '/masters/countries', roles: PLATFORM },
+      { id: 'global-states', title: 'State', icon: 'flag', route: '/masters/states', roles: PLATFORM },
+      { id: 'global-districts', title: 'District', icon: 'map', route: '/masters/districts', roles: PLATFORM },
+      { id: 'global-cities', title: 'City', icon: 'location_city', route: '/masters/cities', roles: PLATFORM },
+      { id: 'global-areas', title: 'Area', icon: 'pin_drop', route: '/masters/areas', roles: PLATFORM },
+      { id: 'global-pincodes', title: 'Pincode', icon: 'markunread_mailbox', route: '/masters/pincodes', roles: GLOBAL_MASTER_READERS },
       // Which branch serves which pincode — company-owned (a branch is the company's own),
       // unlike the shared geography list above it. COMPANY_ADMIN only, same tier as the
       // company's own six catalogues below.

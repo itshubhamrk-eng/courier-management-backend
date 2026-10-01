@@ -127,9 +127,10 @@ describe('NAVIGATION — SUPER_ADMIN excluded from company-side sections', () =>
     }
   });
 
-  it('the shared geography (under Masters) reads for SUPER_ADMIN and COMPANY_ADMIN, unlike the company-only catalogues', () => {
-    for (const id of ['global-countries', 'global-states', 'global-districts', 'global-cities', 'global-areas', 'global-pincodes']) {
-      expect(leaf(id).roles).toEqual([AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN]);
+  it('of the shared geography (under Masters) only Pincode is shown to COMPANY_ADMIN, unlike the company-only catalogues', () => {
+    expect(leaf('global-pincodes').roles).toEqual([AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN]);
+    for (const id of ['global-countries', 'global-states', 'global-districts', 'global-cities', 'global-areas']) {
+      expect(leaf(id).roles).toEqual([AppRole.SUPER_ADMIN]);
     }
     for (const id of ['vehicle-types', 'package-types', 'service-types', 'payment-modes', 'weight-slabs', 'routes']) {
       expect(leaf(id).roles).toEqual([AppRole.COMPANY_ADMIN]);
