@@ -218,15 +218,9 @@ export class LoadingSheet implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
-    this.masterData.branchDirectory().subscribe((list) => {
-      this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
-      this.assignedHubId.set(list.find((b) => b.id === this.myBranchId)?.assignedHubId ?? null);
-      this.branchNames.set(new Map(list.map((b) =>
-        [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
-      this.applyAssignedHub();
-      this.loadEligibleDeliveryBranches();
-    });
-    this.loadDestinationCities();
+    // Listeners first: the branch directory is cached, so its callback can fire synchronously and
+    // preselect the assigned hub — a listener registered after that would miss the change and the
+    // shipment list would never load.
     this.createForm.get('destinationCity')!.valueChanges.subscribe((city) => {
       if (this.mode() !== 'city') return;
       this.createForm.get('deliveryBranchId')!.setValue(null);
@@ -236,6 +230,15 @@ export class LoadingSheet implements OnInit {
       if (this.mode() === 'lane') this.loadBooked(id);
       else if (this.mode() === 'hub') this.loadBookedForHub(id);
     });
+    this.masterData.branchDirectory().subscribe((list) => {
+      this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
+      this.assignedHubId.set(list.find((b) => b.id === this.myBranchId)?.assignedHubId ?? null);
+      this.branchNames.set(new Map(list.map((b) =>
+        [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
+      this.applyAssignedHub();
+      this.loadEligibleDeliveryBranches();
+    });
+    this.loadDestinationCities();
     this.filterBranchControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.sortControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>

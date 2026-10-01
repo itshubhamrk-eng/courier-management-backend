@@ -8,6 +8,15 @@ All notable changes to this project. Format based on
 
 ---
 
+## Fixed 2026-10-01 — Loading Sheet: hub preselected but shipment list not loading
+
+Frontend only (`loading-sheet.ts`). The branch directory is cached, so on any visit after the first its callback fired
+synchronously inside `ngOnInit` and preselected the assigned hub *before* the `deliveryBranchId` listener was registered:
+hub shown, no list request. Listeners are now registered before the directory subscription. Verified live on :4200 as
+Sangamner (Login as Branch): first and repeat visits both load CP-SGMNR-000003 with HB-PUN preselected. Not yet deployed.
+
+---
+
 ## Added 2026-10-01 — "Pune Hub (HB-PUN)" dev quick-fill (and the old hub button renamed "Pune Test Hub")
 
 Two hubs both display as "Pune Hub" (HB-PUN "PUNE HUB", HUB-PUNE-01 "Pune Test Hub"), so a Satara Load Sheet to HB-PUN was
