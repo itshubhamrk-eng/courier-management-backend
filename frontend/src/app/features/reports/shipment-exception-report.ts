@@ -17,12 +17,12 @@ import { ShipmentService } from '../shipment/shipment.service';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
- * Shipment Exception Report — shipments that ended in `RETURNED` or `CANCELLED`, the two
- * actual exception outcomes `ShipmentStatus` defines (there is no separate RTO/damaged/
+ * Shipment Exception Report — shipments that ended in `RETURNED` (cancelled ones
+ * are in the Cancelled Orders Report; `ShipmentStatus` defines (there is no separate RTO/damaged/
  * lost status in this system). SLA-breach visibility already exists as auto-raised
  * tickets in Ticket Support (category "SLA Breach") — not duplicated here.
  */
-const EXCEPTION_STATUSES = ['RETURNED', 'CANCELLED'] as const;
+const EXCEPTION_STATUSES = ['RETURNED'] as const;
 
 @Component({
   selector: 'app-shipment-exception-report',
@@ -33,7 +33,7 @@ const EXCEPTION_STATUSES = ['RETURNED', 'CANCELLED'] as const;
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Shipment Exception Report</h1>
-          <p class="text-caption">{{ page().totalElements }} returned/cancelled shipment(s) {{ myBranchId ? 'at your branch' : 'across the company' }}.</p></div>
+          <p class="text-caption">{{ page().totalElements }} returned shipment(s) {{ myBranchId ? 'at your branch' : 'across the company' }}.</p></div>
         <div class="page__actions">
           <label class="dfld">From <input type="date" [value]="from()" (change)="onFrom($event)" /></label>
           <label class="dfld">To <input type="date" [value]="to()" (change)="onTo($event)" /></label>
@@ -44,7 +44,6 @@ const EXCEPTION_STATUSES = ['RETURNED', 'CANCELLED'] as const;
       <div class="stats">
         <div class="stat"><span class="stat__l">Total Exceptions</span><span class="stat__v">{{ summary()?.totalCount ?? '—' }}</span></div>
         <div class="stat"><span class="stat__l">Returned</span><span class="stat__v">{{ summary()?.statusCounts?.RETURNED ?? 0 }}</span></div>
-        <div class="stat"><span class="stat__l">Cancelled</span><span class="stat__v">{{ summary()?.statusCounts?.CANCELLED ?? 0 }}</span></div>
         <div class="stat"><span class="stat__l">Chargeable Weight</span>
           <span class="stat__v">{{ summary() ? (summary()!.totalChargeableWeight | number: '1.3-3') + ' kg' : '—' }}</span></div>
         <div class="stat"><span class="stat__l">Amount</span>
@@ -53,7 +52,7 @@ const EXCEPTION_STATUSES = ['RETURNED', 'CANCELLED'] as const;
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
                  [startIndex]="page().page * page().size"
-                 emptyTitle="No exceptions" emptyHint="No returned or cancelled shipment in this range."
+                 emptyTitle="No exceptions" emptyHint="No returned shipment in this range."
                  (sortChange)="onSort($event)" (rowClick)="view($event)">
         <ng-template #row let-s>
           <td><span class="mono">{{ s.shipmentNumber }}</span></td>

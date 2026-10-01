@@ -11,6 +11,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { excludingCancelled } from './non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 interface BranchRow extends BranchPerformanceSummary {
@@ -19,7 +20,7 @@ interface BranchRow extends BranchPerformanceSummary {
 
 /**
  * Branch Performance Report — one row per booking branch: shipment volume, delivered/
- * in-transit/returned/cancelled outcomes, chargeable weight, amount and total commission
+ * in-transit/returned outcomes, chargeable weight, amount and total commission
  * over the date range. Joins `GET /shipments/branch-performance` and
  * `GET /shipments/commission-summary` client-side, both already grouped server-side by
  * `bookingBranchId` — same "unpaged aggregate, single call" shape every other report uses.
@@ -45,8 +46,8 @@ interface BranchRow extends BranchPerformanceSummary {
         <div class="stat"><span class="stat__l">Shipments</span><span class="stat__v">{{ loading() ? '—' : totals().shipmentCount }}</span></div>
         <div class="stat"><span class="stat__l">Delivered</span><span class="stat__v">{{ loading() ? '—' : totals().deliveredCount }}</span></div>
         <div class="stat"><span class="stat__l">In Transit</span><span class="stat__v">{{ loading() ? '—' : totals().inTransitCount }}</span></div>
-        <div class="stat"><span class="stat__l">Returned / Cancelled</span>
-          <span class="stat__v">{{ loading() ? '—' : (totals().returnedCount + totals().cancelledCount) }}</span></div>
+        <div class="stat"><span class="stat__l">Returned</span>
+          <span class="stat__v">{{ loading() ? '—' : totals().returnedCount }}</span></div>
         <div class="stat"><span class="stat__l">Total Commission</span>
           <span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().totalCommission | number: '1.2-2')) }}</span></div>
       </div>
@@ -59,7 +60,6 @@ interface BranchRow extends BranchPerformanceSummary {
           <td class="num">{{ r.deliveredCount }}</td>
           <td class="num">{{ r.inTransitCount }}</td>
           <td class="num">{{ r.returnedCount }}</td>
-          <td class="num">{{ r.cancelledCount }}</td>
           <td class="num">{{ r.totalChargeableWeight | number: '1.3-3' }} kg</td>
           <td class="num">₹{{ r.totalNetAmount | number: '1.2-2' }}</td>
           <td class="num strong">₹{{ r.totalCommission | number: '1.2-2' }}</td>
@@ -103,7 +103,6 @@ export class BranchReport implements OnInit {
     { key: 'deliveredCount', header: 'Delivered', align: 'right' },
     { key: 'inTransitCount', header: 'In Transit', align: 'right' },
     { key: 'returnedCount', header: 'Returned', align: 'right' },
-    { key: 'cancelledCount', header: 'Cancelled', align: 'right' },
     { key: 'totalChargeableWeight', header: 'Weight', align: 'right' },
     { key: 'totalNetAmount', header: 'Amount', align: 'right' },
     { key: 'totalCommission', header: 'Total Commission', align: 'right' }
@@ -112,8 +111,8 @@ export class BranchReport implements OnInit {
   protected readonly totals = computed(() => this.rows().reduce((t, r) => ({
     shipmentCount: t.shipmentCount + r.shipmentCount, deliveredCount: t.deliveredCount + r.deliveredCount,
     inTransitCount: t.inTransitCount + r.inTransitCount, returnedCount: t.returnedCount + r.returnedCount,
-    cancelledCount: t.cancelledCount + r.cancelledCount, totalCommission: t.totalCommission + r.totalCommission
-  }), { shipmentCount: 0, deliveredCount: 0, inTransitCount: 0, returnedCount: 0, cancelledCount: 0, totalCommission: 0 }));
+    totalCommission: t.totalCommission + r.totalCommission
+  }), { shipmentCount: 0, deliveredCount: 0, inTransitCount: 0, returnedCount: 0, totalCommission: 0 }));
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Reports' }, { label: 'Branch Performance Report' }]);
@@ -123,6 +122,7 @@ export class BranchReport implements OnInit {
 
   private filterRequest(): ShipmentSearchRequest {
     return {
+      status: excludingCancelled(),
       bookingBranchId: this.myBranchId ?? undefined,
       bookingDateFrom: this.from() || undefined, bookingDateTo: this.to() || undefined
     };
@@ -161,12 +161,12 @@ export class BranchReport implements OnInit {
 
   private download(rows: BranchRow[]): void {
     const header = ['branch', 'shipmentCount', 'deliveredCount', 'inTransitCount', 'returnedCount',
-      'cancelledCount', 'totalChargeableWeight', 'totalNetAmount', 'totalCommission'];
+      'totalChargeableWeight', 'totalNetAmount', 'totalCommission'];
     const lines = rows.map((r) => [this.branchLabel(r.bookingBranchId), r.shipmentCount, r.deliveredCount,
-      r.inTransitCount, r.returnedCount, r.cancelledCount, r.totalChargeableWeight, r.totalNetAmount,
+      r.inTransitCount, r.returnedCount, r.totalChargeableWeight, r.totalNetAmount,
       r.totalCommission]);
     downloadCsv(`branch-performance-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
-      [1, 2, 3, 4, 5, 6, 7, 8]);
+      [1, 2, 3, 4, 5, 6, 7]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

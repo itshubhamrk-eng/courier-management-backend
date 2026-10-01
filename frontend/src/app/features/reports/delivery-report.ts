@@ -17,6 +17,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentFilter } from '../shipment/components/shipment-filter';
 import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badge';
 import { ShipmentService } from '../shipment/shipment.service';
+import { excludingCancelled } from './non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /** The delivery-flow statuses a Delivery Report opens on — same worklist the delivery
@@ -80,7 +81,7 @@ const DEFAULT_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELI
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
 
       <app-drawer [open]="filterOpen()" title="Advanced filters" subtitle="Narrow the delivery report." (closed)="filterOpen.set(false)">
-        <app-shipment-filter mode="delivery" [lockDeliveryBranch]="!!myBranchId" (changed)="onFilter($event)" />
+        <app-shipment-filter mode="delivery" [excludeCancelled]="true" [lockDeliveryBranch]="!!myBranchId" (changed)="onFilter($event)" />
       </app-drawer>
     </div>
   `,
@@ -157,7 +158,7 @@ export class DeliveryReport implements OnInit {
   private filterRequest(): ShipmentSearchRequest {
     const f = this.filters();
     return {
-      status: f.status,
+      status: excludingCancelled(f.status),
       bookingBranchId: f.bookingBranchId, deliveryBranchId: this.myBranchId ?? f.deliveryBranchId,
       deliveredDateFrom: f.deliveredDateFrom, deliveredDateTo: f.deliveredDateTo
     };

@@ -406,6 +406,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/shipment-exception-report').then((m) => m.ShipmentExceptionReport)
       },
       {
+        path: 'reports/cancelled-orders', title: 'Cancelled Orders Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/cancelled-orders-report').then((m) => m.CancelledOrdersReport)
+      },
+      {
         path: 'reports/bulk-tracking', title: 'Bulk Shipment Tracking', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/reports/bulk-tracking-report').then((m) => m.BulkTrackingReport)
       },

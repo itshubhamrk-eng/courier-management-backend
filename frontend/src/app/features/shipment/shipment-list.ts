@@ -18,6 +18,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentTable, ShipmentPerms, ShipmentAction } from './components/shipment-table';
 import { ShipmentFilter } from './components/shipment-filter';
 import { ShipmentService } from './shipment.service';
+import { excludingCancelled } from '../reports/non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
@@ -56,7 +57,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
 
       <app-drawer [open]="filterOpen()" title="Advanced filters" subtitle="Narrow the shipment list." (closed)="filterOpen.set(false)">
-        <app-shipment-filter [lockBookingBranch]="!!myBranchId" (changed)="onFilter($event)" />
+        <app-shipment-filter [excludeCancelled]="true" [lockBookingBranch]="!!myBranchId" (changed)="onFilter($event)" />
       </app-drawer>
     </div>
   `,
@@ -111,7 +112,7 @@ export class ShipmentList implements OnInit {
     const f = this.filters();
     return {
       ...this.query, ...(size ? { size, page: 0 } : {}),
-      status: f.status as unknown as string | undefined,
+      status: excludingCancelled(f.status) as unknown as string,
       bookingBranchId: this.myBranchId ?? f.bookingBranchId, deliveryBranchId: f.deliveryBranchId,
       bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo, paymentModeId: f.paymentModeId
     };

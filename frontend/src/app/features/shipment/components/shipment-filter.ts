@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
@@ -23,7 +23,7 @@ const STATUSES: SelectOption[] = ([
   imports: [ReactiveFormsModule, UiSelect, UiAutocomplete, UiButton],
   template: `
     <form [formGroup]="form" (ngSubmit)="apply()" class="cf">
-      <app-select [control]="c('status')" label="Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
+      <app-select [control]="c('status')" label="Status" [options]="statusOptions()" [multiple]="true" placeholder="Any status" />
       @if (!lockBookingBranch()) {
         <app-autocomplete [control]="c('bookingBranchId')" label="Booking Branch" [options]="branchOptions()" placeholder="Any branch" />
       }
@@ -63,8 +63,11 @@ export class ShipmentFilter {
    *  deliveryBranchId to their own branch, so the picker would just be misleading. */
   readonly lockDeliveryBranch = input(false);
   readonly mode = input<'booking' | 'delivery'>('booking');
+  /** Reports never list cancelled orders (see Cancelled Orders Report) — hides that status choice. */
+  readonly excludeCancelled = input(false);
 
-  protected readonly statuses = STATUSES;
+  protected readonly statusOptions = computed(() =>
+    this.excludeCancelled() ? STATUSES.filter((s) => s.value !== 'CANCELLED') : STATUSES);
   protected readonly branchOptions = signal<SelectOption[]>([]);
   protected readonly paymentModeOptions = signal<SelectOption[]>([]);
 

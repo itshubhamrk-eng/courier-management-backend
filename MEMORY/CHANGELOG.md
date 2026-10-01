@@ -18,6 +18,23 @@ Total Revenue is now its own branch's, no longer company-wide. `DashboardService
 
 ---
 
+## Changed 2026-09-30 — Cancelled orders hidden from every report; new Cancelled Orders Report
+
+Frontend-only. Booking/Delivery/Commission/Branch/Vendor Audit/Exception reports now send an
+explicit non-`CANCELLED` status list (`features/reports/non-cancelled.util.ts`); the shared
+`ShipmentFilter` hides the Cancelled choice via `[excludeCancelled]` (Shipments list unchanged).
+Removed the Cancelled stat/column from Branch Performance, Vendor Audit and Exception reports
+(Exception is now Returned-only). New `/reports/cancelled-orders` (`CancelledOrdersReport`, nav
+"Cancelled Orders"). Bulk Shipment Tracking is a lookup by number and was left as-is. `ng build` clean.
+Follow-up same day ("no cancelled in any count"): Shipments list (rows + count + filter) also excludes
+cancelled now; dashboard already did. Fixed a pre-existing Vendor Audit 500 (`NullPointerException:
+element cannot be mapped to a null key`) — delivered shipments with null `deliveryBranchId` (V79) broke
+`groupingBy` in `ShipmentServiceImpl.vendorAudit`; now filtered out. Verified live on :8082/:4300
+(AMAZING_LOGISTICS: 13 shipments, 1 cancelled -> Booking/Commission/Branch/Dashboard/Shipments show 12,
+Cancelled Orders Report shows 1; vendor-audit 13 -> 12, cancelled 1 -> 0).
+
+---
+
 ## Added 2026-09-30 — Wallet Recharge Report (manual + Razorpay, company-wide)
 
 New `GET /api/v1/branch-wallet/recharge-report` — `COMPANY_ADMIN`/`FINANCE_USER` only

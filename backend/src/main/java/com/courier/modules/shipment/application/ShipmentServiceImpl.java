@@ -626,7 +626,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         Map<UUID, List<Shipment>> byBookingBranch = matches.stream()
                 .collect(Collectors.groupingBy(Shipment::getBookingBranchId));
         Map<UUID, List<Shipment>> byDeliveryBranch = matches.stream()
-                .filter(s -> s.getStatus() == ShipmentStatus.DELIVERED)
+                .filter(s -> s.getStatus() == ShipmentStatus.DELIVERED && s.getDeliveryBranchId() != null)
                 .collect(Collectors.groupingBy(Shipment::getDeliveryBranchId));
 
         Map<UUID, BigDecimal> drsRates = new java.util.HashMap<>();

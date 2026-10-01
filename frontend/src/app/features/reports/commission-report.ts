@@ -15,6 +15,7 @@ import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentFilter } from '../shipment/components/shipment-filter';
 import { ShipmentService } from '../shipment/shipment.service';
+import { excludingCancelled } from './non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
@@ -75,7 +76,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
       </section>
 
       <app-drawer [open]="filterOpen()" title="Advanced filters" subtitle="Narrow the commission report." (closed)="filterOpen.set(false)">
-        <app-shipment-filter mode="booking" [lockBookingBranch]="!!myBranchId" (changed)="onFilter($event)" />
+        <app-shipment-filter mode="booking" [excludeCancelled]="true" [lockBookingBranch]="!!myBranchId" (changed)="onFilter($event)" />
       </app-drawer>
     </div>
   `,
@@ -157,6 +158,7 @@ export class CommissionReport implements OnInit {
   private filterRequest(): ShipmentSearchRequest {
     const f = this.filters();
     return {
+      status: excludingCancelled(f.status),
       bookingBranchId: this.myBranchId ?? f.bookingBranchId,
       bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo
     };
@@ -166,6 +168,7 @@ export class CommissionReport implements OnInit {
     const f = this.filterRequest();
     return {
       ...this.query, ...(size ? { size, page: 0 } : {}),
+      status: f.status as unknown as string,
       bookingBranchId: f.bookingBranchId, bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo
     };
   }

@@ -9,12 +9,13 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { excludingCancelled } from './non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
  * Vendor Audit Report — one row per company branch (booking-side or delivery-side), the
  * reconciliation table a franchise/vendor audit reviews: paid/to-pay volumes and amounts,
- * booking and delivery (DRS) commission, ODA charges, other charges and cancellations.
+ * booking and delivery (DRS) commission, ODA charges and other charges.
  * Company-level by design — unlike every other report in this module, it is deliberately
  * not locked to the caller's own branch, since an audit needs every branch side by side.
  * `GET /shipments/vendor-audit`, already grouped server-side — same "unpaged aggregate,
@@ -43,7 +44,6 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
         <div class="stat"><span class="stat__l">Total Delivered</span><span class="stat__v">{{ loading() ? '—' : totals().totalDeliveredOrderCount }}</span></div>
         <div class="stat"><span class="stat__l">Paid Orders</span><span class="stat__v">{{ loading() ? '—' : totals().paidOrderCount }}</span></div>
         <div class="stat"><span class="stat__l">To-Pay Orders</span><span class="stat__v">{{ loading() ? '—' : totals().topayOrderCount }}</span></div>
-        <div class="stat"><span class="stat__l">Cancelled</span><span class="stat__v">{{ loading() ? '—' : totals().cancelledOrderCount }}</span></div>
         <div class="stat"><span class="stat__l">Booking Commission</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().bookingTotalCommission | number: '1.2-2')) }}</span></div>
         <div class="stat"><span class="stat__l">Delivery Commission</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().deliveryTotalCommission | number: '1.2-2')) }}</span></div>
         <div class="stat"><span class="stat__l">ODA Charges</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().odaCharges | number: '1.2-2')) }}</span></div>
@@ -69,7 +69,6 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
             <td class="num strong">₹{{ r.deliveryTotalCommission | number: '1.2-2' }}</td>
             <td class="num">₹{{ r.odaCharges | number: '1.2-2' }}</td>
             <td class="num">₹{{ r.otherCharges | number: '1.2-2' }}</td>
-            <td class="num">{{ r.cancelledOrderCount }}</td>
           </ng-template>
         </app-table>
       </div>
@@ -119,8 +118,7 @@ export class VendorAuditReport implements OnInit {
     { key: 'bookingTotalCommission', header: 'Booking Total Commission', align: 'right' },
     { key: 'deliveryTotalCommission', header: 'Delivery Total Commission', align: 'right' },
     { key: 'odaCharges', header: 'ODA Charges', align: 'right' },
-    { key: 'otherCharges', header: 'Other Charges', align: 'right' },
-    { key: 'cancelledOrderCount', header: 'Cancelled', align: 'right' }
+    { key: 'otherCharges', header: 'Other Charges', align: 'right' }
   ];
 
   protected readonly totals = computed(() => this.rows().reduce((t, r) => ({
@@ -131,11 +129,10 @@ export class VendorAuditReport implements OnInit {
     bookingTotalCommission: t.bookingTotalCommission + r.bookingTotalCommission,
     deliveryTotalCommission: t.deliveryTotalCommission + r.deliveryTotalCommission,
     odaCharges: t.odaCharges + r.odaCharges,
-    otherCharges: t.otherCharges + r.otherCharges,
-    cancelledOrderCount: t.cancelledOrderCount + r.cancelledOrderCount
+    otherCharges: t.otherCharges + r.otherCharges
   }), {
     paidOrderCount: 0, topayOrderCount: 0, totalBookedOrderCount: 0, totalDeliveredOrderCount: 0,
-    bookingTotalCommission: 0, deliveryTotalCommission: 0, odaCharges: 0, otherCharges: 0, cancelledOrderCount: 0
+    bookingTotalCommission: 0, deliveryTotalCommission: 0, odaCharges: 0, otherCharges: 0
   }));
 
   ngOnInit(): void {
@@ -147,7 +144,7 @@ export class VendorAuditReport implements OnInit {
   /** No branch lock, on purpose — this report is company-level, not scoped to the
    *  caller's own branch like every other report in this module. */
   private filterRequest(): ShipmentSearchRequest {
-    return { bookingDateFrom: this.from() || undefined, bookingDateTo: this.to() || undefined };
+    return { status: excludingCancelled(), bookingDateFrom: this.from() || undefined, bookingDateTo: this.to() || undefined };
   }
 
   load(): void {
@@ -176,13 +173,13 @@ export class VendorAuditReport implements OnInit {
     const header = ['branch', 'paidOrderCount', 'paidOrderQuantity', 'paidOrderAmount',
       'topayOrderCount', 'topayOrderQuantity', 'topayOrderAmount', 'paidCommission', 'deliveryCommission',
       'totalBookedOrderCount', 'totalDeliveredOrderCount', 'bookingTotalCommission', 'deliveryTotalCommission',
-      'odaCharges', 'otherCharges', 'cancelledOrderCount'];
+      'odaCharges', 'otherCharges'];
     const lines = rows.map((r) => [this.branchLabel(r.branchId), r.paidOrderCount, r.paidOrderQuantity,
       r.paidOrderAmount, r.topayOrderCount, r.topayOrderQuantity, r.topayOrderAmount, r.paidCommission,
       r.deliveryCommission, r.totalBookedOrderCount, r.totalDeliveredOrderCount, r.bookingTotalCommission,
-      r.deliveryTotalCommission, r.odaCharges, r.otherCharges, r.cancelledOrderCount]);
+      r.deliveryTotalCommission, r.odaCharges, r.otherCharges]);
     downloadCsv(`vendor-audit-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }
