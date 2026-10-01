@@ -150,7 +150,12 @@ class BranchServiceImplTest {
 
     private CreateBranchCommand createCommand(String code, String name, UUID managerId,
                                               CreateBranchCommand.NewBranchUser branchUser) {
-        return new CreateBranchCommand(code, name, BranchType.BRANCH,
+        return createCommand(code, name, BranchType.BRANCH, managerId, branchUser);
+    }
+
+    private CreateBranchCommand createCommand(String code, String name, BranchType type, UUID managerId,
+                                              CreateBranchCommand.NewBranchUser branchUser) {
+        return new CreateBranchCommand(code, name, type,
                 null, null, null, managerId,
                 null, null, null, null, "Pune", null, null, "411001",
                 null, null, null, null, null,
@@ -213,6 +218,23 @@ class BranchServiceImplTest {
         verify(branchRoleProvisioningService).ensureBranchManagerRole(TENANT, BRANCH_USER);
         assertThat(created.branchManagerRoleId()).isEqualTo(BRANCH_MANAGER_ROLE);
         assertThat(created.branchManagerRoleCode()).isEqualTo(DefaultRoleCatalog.BRANCH_MANAGER);
+    }
+
+    @Test
+    @DisplayName("creating a HUB also grants the account HUB_MANAGER, so Hub Operations shows")
+    void createHubGrantsHubManagerRole() {
+        service.create(createCommand("pune_hub", "Pune Hub", BranchType.HUB, null, null));
+
+        verify(branchRoleProvisioningService).ensureBranchManagerRole(TENANT, BRANCH_USER);
+        verify(branchRoleProvisioningService).ensureHubManagerRole(TENANT, BRANCH_USER);
+    }
+
+    @Test
+    @DisplayName("creating an ordinary branch does not grant HUB_MANAGER")
+    void createBranchDoesNotGrantHubManager() {
+        service.create(createCommand("pune_main", "Pune Main", null));
+
+        verify(branchRoleProvisioningService, never()).ensureHubManagerRole(any(), any());
     }
 
     @Test
@@ -464,6 +486,109 @@ class BranchServiceImplTest {
 
         assertThat(saved.getManagerId()).isEqualTo(manager);
         verify(auditService).record(eq(AuditAction.BRANCH_MANAGER_ASSIGNED), any(), any(), any());
+    }
+
+    // ----------------------------------------------------------------------- hub
+
+    private Branch hub(String code) {
+        Branch h = existing(code);
+        h.setBranchType(BranchType.HUB);
+        h.setId(UUID.randomUUID());
+        return h;
+    }
+
+    @Test
+    @DisplayName("assign hub stores the hub id and audits the change")
+    void assignHub() {
+        Branch b = existing("PUNE_MAIN");
+        Branch h = hub("HUB_ONE");
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(repository.findByIdWithinCompany(h.getId(), TENANT)).thenReturn(Optional.of(h));
+
+        Branch saved = service.assignHub(b.getId(), h.getId());
+
+        assertThat(saved.getAssignedHubId()).isEqualTo(h.getId());
+        verify(auditService).record(eq(AuditAction.BRANCH_HUB_ASSIGNED), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("assign hub rejects a target that is not a HUB branch")
+    void assignHubRejectsNonHub() {
+        Branch b = existing("PUNE_MAIN");
+        Branch other = existing("OTHER");
+        other.setId(UUID.randomUUID());
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(repository.findByIdWithinCompany(other.getId(), TENANT)).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> service.assignHub(b.getId(), other.getId()))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a hub");
+        assertThat(b.getAssignedHubId()).isNull();
+        verify(repository, never()).save(any(Branch.class));
+    }
+
+    @Test
+    @DisplayName("assign hub rejects an inactive hub")
+    void assignHubRejectsInactiveHub() {
+        Branch b = existing("PUNE_MAIN");
+        Branch h = hub("HUB_ONE");
+        h.setStatus(BranchStatus.INACTIVE);
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(repository.findByIdWithinCompany(h.getId(), TENANT)).thenReturn(Optional.of(h));
+
+        assertThatThrownBy(() -> service.assignHub(b.getId(), h.getId()))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not active");
+        verify(repository, never()).save(any(Branch.class));
+    }
+
+    @Test
+    @DisplayName("assign hub rejects a branch being its own hub")
+    void assignHubRejectsSelf() {
+        Branch h = hub("HUB_ONE");
+        when(repository.findByIdWithinCompany(h.getId(), TENANT)).thenReturn(Optional.of(h));
+
+        assertThatThrownBy(() -> service.assignHub(h.getId(), h.getId()))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("own hub");
+        verify(repository, never()).save(any(Branch.class));
+    }
+
+    @Test
+    @DisplayName("assign hub rejects a hub outside the company")
+    void assignHubRejectsForeignHub() {
+        Branch b = existing("PUNE_MAIN");
+        UUID foreign = UUID.randomUUID();
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(repository.findByIdWithinCompany(foreign, TENANT)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.assignHub(b.getId(), foreign))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(repository, never()).save(any(Branch.class));
+    }
+
+    @Test
+    @DisplayName("assign hub with null clears it, and reassigning replaces it")
+    void assignHubClearAndReplace() {
+        Branch b = existing("PUNE_MAIN");
+        Branch h1 = hub("HUB_ONE");
+        Branch h2 = hub("HUB_TWO");
+        when(repository.findByIdWithinCompany(b.getId(), TENANT)).thenReturn(Optional.of(b));
+        when(repository.findByIdWithinCompany(h1.getId(), TENANT)).thenReturn(Optional.of(h1));
+        when(repository.findByIdWithinCompany(h2.getId(), TENANT)).thenReturn(Optional.of(h2));
+
+        service.assignHub(b.getId(), h1.getId());
+        service.assignHub(b.getId(), h2.getId());
+        assertThat(b.getAssignedHubId()).isEqualTo(h2.getId());
+
+        service.assignHub(b.getId(), null);
+        assertThat(b.getAssignedHubId()).isNull();
+    }
+
+    @Test
+    @DisplayName("assign hub is COMPANY_ADMIN only")
+    void assignHubIsAdminOnly() throws Exception {
+        var pre = BranchServiceImpl.class.getMethod("assignHub", UUID.class, UUID.class)
+                .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+        assertThat(pre).isNotNull();
+        assertThat(pre.value()).contains("COMPANY_ADMIN");
     }
 
     // --------------------------------------------------------------- assign users

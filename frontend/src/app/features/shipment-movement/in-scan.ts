@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, e
 import { ActingBranchService } from '@core/services/acting-branch.service';
 import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
@@ -139,6 +140,15 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
                 </div>
               }
             </div>
+            @if (atHub() && successCount() > 0) {
+              <div class="next">
+                <span class="text-caption">Received at your hub — what next?</span>
+                <div class="next__btns">
+                  <app-button icon="add_box" (pressed)="goLoadingSheet()">Create Loading Sheet</app-button>
+                  <app-button variant="stroked" icon="directions_run" (pressed)="goDrs()">Generate DRS</app-button>
+                </div>
+              </div>
+            }
           </app-card>
         }
 
@@ -160,12 +170,16 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
   styles: [`
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; }
     .section-title { margin:8px 0 0; }
+    .next { display:flex; flex-direction:column; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--surface-border); }
+    .next__btns { display:flex; gap:10px; flex-wrap:wrap; }
     .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
     .row app-input { flex:1; min-width:200px; }
     .row--sub { margin-top:12px; }
     .ol { display:flex; flex-direction:column; gap:6px; }
     .ol__row { display:flex; align-items:center; gap:8px; font:400 13px var(--font-sans); color:var(--success-600, #16a34a); }
     .ol__row--fail { color:var(--danger-600, #dc2626); }
+    .next { display:flex; flex-direction:column; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--surface-border); }
+    .next__btns { display:flex; gap:10px; flex-wrap:wrap; }
     .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
     .mh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .mh strong { display:block; font:600 15px var(--font-sans); }
@@ -180,6 +194,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
 export class InScan implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
+  private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly movementService = inject(ShipmentMovementService);
   private readonly manifestService = inject(ManifestService);
@@ -193,6 +208,11 @@ export class InScan implements OnInit {
 
   readonly scanning = signal(false);
   readonly outcomes = signal<MovementOutcome[]>([]);
+  /** True when the branch being received at is a HUB — a received shipment there is not
+   *  final-delivery IN_SCAN, it is READY_FOR_MANIFEST and can go onward on a Load Sheet or out
+   *  for delivery on a DRS straight from the hub. */
+  readonly hubIds = signal<Set<string>>(new Set());
+  readonly atHub = computed(() => !!this.myBranchId && this.hubIds().has(this.myBranchId));
   readonly successCount = computed(() => this.outcomes().filter((o) => o.success).length);
 
   readonly pendingManifests = signal<Manifest[]>([]);
@@ -225,10 +245,16 @@ export class InScan implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'In Scan' }]);
-    this.masterData.branchDirectory().subscribe((list) =>
-      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
+    this.masterData.branchDirectory().subscribe((list) => {
+      this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
+      this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+    });
     this.loadPendingManifests();
   }
+
+  protected goLoadingSheet(): void { this.router.navigate(['/hub-operations/load-sheet']); }
+
+  protected goDrs(): void { this.router.navigate(['/movement/out-for-delivery'], { queryParams: { tab: 'hub' } }); }
 
   loadPendingManifests(): void {
     if (!this.myBranchId) return;

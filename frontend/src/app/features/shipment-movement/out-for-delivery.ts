@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject
 import { ActingBranchService } from '@core/services/acting-branch.service';
 import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
@@ -191,6 +192,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
 export class OutForDelivery implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly breadcrumb = inject(BreadcrumbService);
+  private readonly route = inject(ActivatedRoute);
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthService);
   private readonly shipmentService = inject(ShipmentService);
@@ -286,6 +288,8 @@ export class OutForDelivery implements OnInit, OnDestroy {
         this.branchLabel.set(b ? `${b.branchName} (${b.branchCode})` : '');
       }
     });
+    // In Scan at a hub links here with ?tab=hub: open straight on the hub's own shipments.
+    if (this.route.snapshot.queryParamMap.get('tab') === 'hub') this.hubMode.set(true);
     this.c('deliveryUserId').valueChanges.subscribe(() => this.resetOtpState());
     // Digits-only, 4 chars max — strips anything a paste or a non-numeric keyboard slips
     // in, since the field itself (a plain text input) doesn't block that on its own.

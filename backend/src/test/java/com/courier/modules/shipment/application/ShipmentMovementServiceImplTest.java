@@ -215,6 +215,25 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
+    @DisplayName("hub transfer attaches an unassigned shipment with no destination city, "
+            + "whatever its own city, and sets only the next stop")
+    void attachHubTransferNeedsNoDestinationCity() {
+        Shipment shipment = shipment(ShipmentStatus.BOOKED);
+        shipment.setDeliveryBranchId(null);
+        shipment.setNextLocationId(null);
+        shipment.setToCity("Mumbai");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+
+        Shipment result = service.attachToManifest(
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null, true);
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
+        assertThat(result.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(result.getDeliveryBranchId()).isNull();
+    }
+
+    @Test
     @DisplayName("attachToManifest refuses an unassigned shipment going to a different city")
     void attachRefusesWrongDestinationCity() {
         Shipment shipment = shipment(ShipmentStatus.BOOKED);

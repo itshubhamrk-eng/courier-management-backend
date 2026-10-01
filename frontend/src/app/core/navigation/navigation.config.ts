@@ -175,6 +175,7 @@ export const NAVIGATION: NavNode[] = [
       // unlike the shared geography list above it. COMPANY_ADMIN only, same tier as the
       // company's own six catalogues below.
       { id: 'branch-pincode-mapping', title: 'Pincode Branch Mapping', icon: 'pin_drop', route: '/masters/pincode-branch-mapping', roles: COMPANY_ONLY },
+      { id: 'branch-hub-assignment', title: 'Assign Hub to Branch', icon: 'hub', route: '/masters/branch-hub-assignment', roles: COMPANY_ONLY },
       // The company's own six catalogues — COMPANY_ADMIN only, both read and write.
       { id: 'vehicle-types', title: 'Vehicle Type', icon: 'local_shipping', route: '/masters/vehicle-types', permission: 'MASTER_DATA_READ', roles: COMPANY_ONLY },
       // The fleet itself (registration, class, ownership dates, statutory document

@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from '@core/guards/auth.guard';
 import { guestGuard } from '@core/guards/guest.guard';
 import { roleGuard } from '@core/guards/role.guard';
+import { hubLandingGuard } from '@core/guards/hub-landing.guard';
 import { AppRole } from '@core/models/role.model';
 
 const ADMINS = [AppRole.SUPER_ADMIN, AppRole.COMPANY_ADMIN];
@@ -145,7 +146,7 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {
-        path: 'dashboard', title: 'Dashboard',
+        path: 'dashboard', title: 'Dashboard', canActivate: [hubLandingGuard],
         loadComponent: () => import('@features/dashboard/dashboard').then((m) => m.Dashboard)
       },
       // The platform console. Everything here is SUPER_ADMIN's; nothing here is a
@@ -226,6 +227,12 @@ export const routes: Routes = [
         canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () =>
           import('@features/branch/branch-pincode-mapping').then((m) => m.BranchPincodeMapping)
+      },
+      {
+        path: 'masters/branch-hub-assignment', title: 'Assign Hub to Branch',
+        canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () =>
+          import('@features/branch/branch-hub-assignment').then((m) => m.BranchHubAssignment)
       },
       // Customers — reusable master data, independent of Shipment Order. Any
       // authenticated company user reads (no roles restriction admits everyone signed

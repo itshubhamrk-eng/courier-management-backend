@@ -2,6 +2,7 @@ package com.courier.modules.company.api;
 
 import com.courier.modules.company.api.dto.AddBranchPincodesRequest;
 import com.courier.modules.company.api.dto.AddBranchPincodesResponse;
+import com.courier.modules.company.api.dto.AssignHubRequest;
 import com.courier.modules.company.api.dto.AssignManagerRequest;
 import com.courier.modules.company.api.dto.AssignUsersRequest;
 import com.courier.modules.company.api.dto.AssignUsersResponse;
@@ -192,6 +193,16 @@ public class BranchController {
                                                      @RequestBody AssignManagerRequest request) {
         return ApiResponse.success(
                 mapper.toResponse(service.assignManager(id, request.managerId())), "Manager assigned");
+    }
+
+    @PatchMapping("/{id}/assign-hub")
+    @Operation(summary = "Assign the branch's hub",
+            description = "`COMPANY_ADMIN`. Names the HUB-type branch this branch's Loading "
+                    + "Sheets go to by default (null clears it).")
+    public ApiResponse<BranchSummaryResponse> assignHub(@PathVariable UUID id,
+                                                        @RequestBody AssignHubRequest request) {
+        return ApiResponse.success(
+                mapper.toSummary(service.assignHub(id, request.hubId())), "Hub assigned");
     }
 
     @PatchMapping("/{id}/assign-users")

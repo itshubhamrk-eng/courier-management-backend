@@ -114,6 +114,17 @@ public class BranchRoleProvisioningService {
         return ensureRole(companyId, userId, DefaultRoleCatalog.COMPANY_ADMIN, "admin provisioned");
     }
 
+    /**
+     * Ensures the company's {@code HUB_MANAGER} role exists and that {@code userId} holds it.
+     * A hub's account needs it on top of {@code BRANCH_MANAGER}: the Hub Operations menu and
+     * routes are gated on {@code HUB_MANAGER}, so a hub whose only grant is
+     * {@code BRANCH_MANAGER} signs in to a nav with no Hub Operations in it.
+     */
+    @Transactional
+    public BranchManagerRoleAssignment ensureHubManagerRole(UUID companyId, UUID userId) {
+        return ensureRole(companyId, userId, DefaultRoleCatalog.HUB_MANAGER, "hub branch created");
+    }
+
     private BranchManagerRoleAssignment ensureRole(UUID companyId, UUID userId, String roleCode, String reason) {
         boolean roleCreated = false;
         CompanyRole role = roleRepository.findByRoleCode(roleCode).orElse(null);

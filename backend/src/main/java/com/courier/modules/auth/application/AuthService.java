@@ -377,8 +377,8 @@ public class AuthService {
         User target = admins.get(0);
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
-                target.getId(), targetCompanyId, target.getEmail(), target.roleNames(),
-                userPermissionsPort.resolveEffectivePermissions(target.getId(), target.roleNames()),
+                target.getId(), targetCompanyId, target.getEmail(), tokenIssuer.effectiveRoles(target),
+                userPermissionsPort.resolveEffectivePermissions(target.getId(), tokenIssuer.effectiveRoles(target)),
                 target.getBranchId(), target.getHubId(), company.name(), company.logo(),
                 superAdmin.getId(), superAdmin.getEmail(), IMPERSONATION_TTL);
 
@@ -441,8 +441,8 @@ public class AuthService {
         CompanyDirectoryPort.CompanyRef company = companyBrand(principal.companyId());
 
         String accessToken = jwtTokenProvider.generateImpersonationAccessToken(
-                target.getId(), principal.companyId(), target.getEmail(), target.roleNames(),
-                userPermissionsPort.resolveEffectivePermissions(target.getId(), target.roleNames()),
+                target.getId(), principal.companyId(), target.getEmail(), tokenIssuer.effectiveRoles(target),
+                userPermissionsPort.resolveEffectivePermissions(target.getId(), tokenIssuer.effectiveRoles(target)),
                 target.getBranchId(), target.getHubId(),
                 company != null ? company.name() : null, company != null ? company.logo() : null,
                 companyAdmin.getId(), companyAdmin.getEmail(), IMPERSONATION_TTL);

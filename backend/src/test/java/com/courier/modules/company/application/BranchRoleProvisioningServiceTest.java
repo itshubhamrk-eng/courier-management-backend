@@ -96,6 +96,21 @@ class BranchRoleProvisioningServiceTest {
     }
 
     @Test
+    @DisplayName("ensureHubManagerRole grants the company's HUB_MANAGER role")
+    void ensuresHubManagerRole() {
+        CompanyRole hub = CompanyRole.builder().roleCode(DefaultRoleCatalog.HUB_MANAGER)
+                .roleName("Hub Manager").systemRole(true).status(RoleStatus.ACTIVE).build();
+        hub.setId(ROLE_ID);
+        hub.setCompanyId(COMPANY);
+        when(roleRepository.findByRoleCode(DefaultRoleCatalog.HUB_MANAGER)).thenReturn(Optional.of(hub));
+
+        var result = service.ensureHubManagerRole(COMPANY, USER);
+
+        assertThat(result.granted()).isTrue();
+        assertThat(result.role().getRoleCode()).isEqualTo(DefaultRoleCatalog.HUB_MANAGER);
+    }
+
+    @Test
     @DisplayName("the company's existing role is reused, not duplicated")
     void reusesExistingRole() {
         when(roleRepository.findByRoleCode(DefaultRoleCatalog.BRANCH_MANAGER))

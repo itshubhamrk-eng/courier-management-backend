@@ -56,6 +56,8 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
             <button type="button" class="login__dev-btn" (click)="fill('pune')">Pune Branch</button>
             <button type="button" class="login__dev-btn" (click)="fill('satara')">Satara Branch</button>
             <button type="button" class="login__dev-btn" (click)="fill('kolhapur')">Kolhapur Branch</button>
+            <button type="button" class="login__dev-btn" (click)="fill('hub')">Pune Test Hub</button>
+            <button type="button" class="login__dev-btn" (click)="fill('hubPun')">Pune Hub (HB-PUN)</button>
           </div>
         </div>
       }
@@ -150,14 +152,16 @@ export class Login {
    *  courier_db was replaced with a prod dump on 2026-09-18. No Latur/Hub branch exists
    *  under this company, so those slots were repointed to real branches (Satara/Kolhapur)
    *  instead of being left broken. */
-  fill(kind: 'admin' | 'company' | 'pune' | 'satara' | 'kolhapur'): void {
+  fill(kind: 'admin' | 'company' | 'pune' | 'satara' | 'kolhapur' | 'hub' | 'hubPun'): void {
     this.error.set(null);
     const creds: Record<typeof kind, { companyCode: string; email: string; password: string }> = {
       admin:     { companyCode: '', email: 'it.shubham.rk@gmail.com', password: 'Password@1234' },
       company:   { companyCode: 'AMAZING_LOGISTICS', email: 'ashwin@amazinglpl.com', password: 'Verify@1234' },
       pune:      { companyCode: 'AMAZING_LOGISTICS', email: 'shubham@gmail.com', password: 'Password@1234' },
       satara:    { companyCode: 'AMAZING_LOGISTICS', email: 'jagtaptransportservice@gmail.com', password: 'Password@1234' },
-      kolhapur:  { companyCode: 'AMAZING_LOGISTICS', email: 'mohasinbargir007@gmail.in', password: 'Password@1234' }
+      kolhapur:  { companyCode: 'AMAZING_LOGISTICS', email: 'mohasinbargir007@gmail.in', password: 'Password@1234' },
+      hub:       { companyCode: 'AMAZING_LOGISTICS', email: 'hub.pune.test@amazinglpl.com', password: 'Password@1234' },
+      hubPun:    { companyCode: 'AMAZING_LOGISTICS', email: 'punehub@gmail.com', password: 'Password@1234' }
     };
     const { companyCode, email, password } = creds[kind];
     this.form.patchValue({ companyCode, email, password });

@@ -161,6 +161,12 @@ public class BranchServiceImpl implements BranchService {
         BranchRoleProvisioningService.BranchManagerRoleAssignment roleAssignment =
                 branchRoleProvisioningService.ensureBranchManagerRole(companyId, user.userId());
 
+        // A hub's account also needs HUB_MANAGER, or it signs in to a nav with no Hub
+        // Operations in it (the menu and routes are gated on that role).
+        if (saved.getBranchType() == BranchType.HUB) {
+            branchRoleProvisioningService.ensureHubManagerRole(companyId, user.userId());
+        }
+
         // A branch created without a manager gets the account that was just made for it.
         // A branch created *with* one keeps that person; the new account is staff, not the
         // manager, and overwriting an explicit choice would be a surprise.
@@ -499,6 +505,36 @@ public class BranchServiceImpl implements BranchService {
         eventPublisher.publishEvent(new BranchEvent.ManagerAssigned(
                 saved.getId(), companyId, managerId, previous, Instant.now()));
 
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    public Branch assignHub(UUID id, UUID hubId) {
+        UUID companyId = requireCompany();
+        Branch branch = loadOrThrow(id, companyId);
+        if (hubId != null) {
+            if (hubId.equals(id)) {
+                throw new BusinessRuleException("A branch cannot be its own hub.");
+            }
+            Branch hub = loadOrThrow(hubId, companyId);
+            if (hub.getBranchType() != BranchType.HUB) {
+                throw new BusinessRuleException("The selected branch is not a hub.");
+            }
+            if (hub.getStatus() != BranchStatus.ACTIVE) {
+                throw new BusinessRuleException("The selected hub is not active.");
+            }
+        }
+        UUID previous = branch.getAssignedHubId();
+        branch.assignHub(hubId);
+        Branch saved = repository.save(branch);
+        log.info("Branch {} hub set to {} (was {}) by {}",
+                saved.getBranchCode(), hubId, previous, currentActor());
+        auditService.record(AuditAction.BRANCH_HUB_ASSIGNED, ENTITY, saved.getId(),
+                Map.of("branchCode", saved.getBranchCode(),
+                        "hubId", String.valueOf(hubId),
+                        "previousHubId", String.valueOf(previous)));
         return saved;
     }
 

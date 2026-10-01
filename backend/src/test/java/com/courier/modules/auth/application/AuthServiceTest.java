@@ -633,6 +633,41 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("impersonating a branch carries the company roles too, so a hub account keeps HUB_MANAGER")
+    void impersonateBranchCarriesCompanyRoles() {
+        UUID companyAdminId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        User admin = User.builder().email("admin@acme.test").passwordHash("h").status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.COMPANY_ADMIN)).emailVerified(true).build();
+        admin.setId(companyAdminId);
+        admin.setCompanyId(companyId);
+        signedInAsCompanyAdmin(companyAdminId, companyId);
+        when(userRepository.findByIdWithinCompany(companyAdminId, companyId)).thenReturn(Optional.of(admin));
+        when(companyDirectory.findById(companyId))
+                .thenReturn(Optional.of(new CompanyDirectoryPort.CompanyRef(companyId, "ACME", true, "Acme Co", null)));
+        UUID hubId = UUID.randomUUID();
+        when(branchDirectory.findById(hubId, companyId))
+                .thenReturn(Optional.of(new BranchDirectoryPort.BranchRef(hubId, "HUB", "Pune Hub", true)));
+        User hubUser = User.builder().email("hub@acme.test").passwordHash("h").status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.BRANCH_MANAGER)).emailVerified(true).build();
+        UUID hubUserId = UUID.randomUUID();
+        hubUser.setId(hubUserId);
+        hubUser.setCompanyId(companyId);
+        when(userRepository.findByCompanyIdAndBranchIdAndRoleAndStatus(
+                companyId, hubId, Role.BRANCH_MANAGER, UserStatus.ACTIVE)).thenReturn(List.of(hubUser));
+        Set<String> union = Set.of("BRANCH_MANAGER", "HUB_MANAGER");
+        when(tokenIssuer.effectiveRoles(hubUser)).thenReturn(union);
+        when(jwtTokenProvider.generateImpersonationAccessToken(
+                eq(hubUserId), eq(companyId), eq("hub@acme.test"), eq(union), anySet(),
+                any(), any(), eq("Acme Co"), any(), eq(companyAdminId), eq("admin@acme.test"), any()))
+                .thenReturn("hub-jwt");
+
+        AuthService.ImpersonationResult result = authService.impersonateBranch(hubId, "10.0.0.1");
+
+        assertThat(result.accessToken()).isEqualTo("hub-jwt");
+    }
+
+    @Test
     @DisplayName("branch impersonation refuses an unknown or foreign branch")
     void impersonateBranchRejectsUnknownBranch() {
         UUID companyAdminId = UUID.randomUUID();

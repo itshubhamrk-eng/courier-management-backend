@@ -93,6 +93,9 @@ public interface BranchService {
 
     Branch assignManager(UUID id, UUID managerId);
 
+    /** Sets (or, with null, clears) the hub this branch sends its Loading Sheets to. */
+    Branch assignHub(UUID id, UUID hubId);
+
     /**
      * Places the given users at this branch (sets their {@code branchId}). Only users of
      * the same company are affected; unknown or foreign ids are reported back, not

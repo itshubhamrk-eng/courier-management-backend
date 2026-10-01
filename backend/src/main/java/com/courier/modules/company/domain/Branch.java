@@ -186,6 +186,11 @@ public class Branch extends CompanyOwnedEntity {
     @Builder.Default
     private boolean instantCommission = true;
 
+    /** The HUB-type branch this branch's Loading Sheets go to by default; null = none. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "assigned_hub_id", columnDefinition = "BINARY(16)")
+    private UUID assignedHubId;
+
     @Column(name = "remarks", length = 500)
     private String remarks;
 
@@ -263,6 +268,10 @@ public class Branch extends CompanyOwnedEntity {
 
     public void assignManager(UUID managerId) {
         this.managerId = managerId;
+    }
+
+    public void assignHub(UUID hubId) {
+        this.assignedHubId = hubId;
     }
 
     /** Normalises the matched/derived fields and validates hours and coordinates. */

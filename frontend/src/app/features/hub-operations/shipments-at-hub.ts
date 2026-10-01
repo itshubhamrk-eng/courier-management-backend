@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { AuthService } from '@core/auth/auth.service';
 import { Page, PageQuery, emptyPage } from '@core/models/page.model';
@@ -59,6 +60,12 @@ const STATUS_OPTIONS: SelectOption[] = [
           <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
           <td><app-shipment-status-badge [status]="s.status" /></td>
           <td>{{ s.receivedAt ? (s.receivedAt | date: 'dd MMM, HH:mm') : '—' }}</td>
+          <td class="acts">
+            @if (s.status === 'READY_FOR_MANIFEST') {
+              <app-button variant="stroked" (pressed)="goLoadingSheet()">Loading Sheet</app-button>
+              <app-button variant="stroked" (pressed)="goDrs()">DRS</app-button>
+            }
+          </td>
         </ng-template>
       </app-table>
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
@@ -71,11 +78,13 @@ const STATUS_OPTIONS: SelectOption[] = [
     .dfld input { padding:8px 10px; border:1px solid var(--surface-border); border-radius:var(--r-field); }
     .cs { font:600 14px var(--font-sans); }
     .tbl--right { text-align:right; }
+    .acts { display:flex; gap:6px; }
   `]
 })
 export class ShipmentsAtHub implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly shipmentService = inject(ShipmentService);
   private readonly masterData = inject(MasterDataService);
 
@@ -99,7 +108,8 @@ export class ShipmentsAtHub implements OnInit {
     { key: 'nextLocationId', header: 'Next Destination' },
     { key: 'chargeableWeight', header: 'Weight', width: '90px' },
     { key: 'status', header: 'Status', width: '160px' },
-    { key: 'receivedAt', header: 'Received', width: '140px' }
+    { key: 'receivedAt', header: 'Received', width: '140px' },
+    { key: 'actions', header: 'Next', width: '220px' }
   ];
 
   ngOnInit(): void {
@@ -121,6 +131,10 @@ export class ShipmentsAtHub implements OnInit {
       error: () => this.loading.set(false)
     });
   }
+
+  protected goLoadingSheet(): void { this.router.navigate(['/hub-operations/load-sheet']); }
+
+  protected goDrs(): void { this.router.navigate(['/movement/out-for-delivery'], { queryParams: { tab: 'hub' } }); }
 
   onSearch(t: string): void {
     this.query = { ...this.query, search: t || undefined, page: 0 };

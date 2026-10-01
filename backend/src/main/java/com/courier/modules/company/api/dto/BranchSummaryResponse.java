@@ -19,6 +19,6 @@ public record BranchSummaryResponse(
         String city, String state, String postalCode, UUID managerId,
         boolean allowBooking, boolean allowDelivery,
         Instant createdDate, Long version,
-        BigDecimal gstPercentage
+        BigDecimal gstPercentage, UUID assignedHubId
 ) {
 }

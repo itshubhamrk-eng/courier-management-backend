@@ -955,15 +955,19 @@ public class ShipmentServiceImpl implements ShipmentService {
                 throw new BusinessRuleException(
                         "Shipment %s is not at this branch.".formatted(shipment.getShipmentNumber()));
             }
-            if (manifestDestinationCity == null || manifestDestinationCity.isBlank()) {
-                throw new BusinessRuleException(
-                        "This Load Sheet has no destination city — pick one before adding shipments.");
-            }
-            if (shipment.getToCity() == null
-                    || !shipment.getToCity().trim().equalsIgnoreCase(manifestDestinationCity.trim())) {
-                throw new BusinessRuleException(
-                        "Shipment %s is going to %s, not %s.".formatted(
-                                shipment.getShipmentNumber(), shipment.getToCity(), manifestDestinationCity));
+            // A hub Load Sheet carries mixed destinations — the hub sorts them onward — so
+            // the city match only applies to a sheet going straight to a delivery branch.
+            if (!hubTransfer) {
+                if (manifestDestinationCity == null || manifestDestinationCity.isBlank()) {
+                    throw new BusinessRuleException(
+                            "This Load Sheet has no destination city — pick one before adding shipments.");
+                }
+                if (shipment.getToCity() == null
+                        || !shipment.getToCity().trim().equalsIgnoreCase(manifestDestinationCity.trim())) {
+                    throw new BusinessRuleException(
+                            "Shipment %s is going to %s, not %s.".formatted(
+                                    shipment.getShipmentNumber(), shipment.getToCity(), manifestDestinationCity));
+                }
             }
             // A hub stop is only a next stop: the real delivery branch is assigned later, by
             // the hub's own Load Sheet, once the shipment has been received there.

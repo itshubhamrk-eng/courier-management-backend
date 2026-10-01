@@ -20,6 +20,7 @@ interface BranchSummary {
   city?: string | null;
   postalCode: string;
   gstPercentage: number;
+  assignedHubId?: string | null;
 }
 
 /**

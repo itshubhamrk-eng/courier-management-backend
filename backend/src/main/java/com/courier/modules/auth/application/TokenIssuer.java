@@ -132,6 +132,18 @@ public class TokenIssuer {
         return pair;
     }
 
+    /**
+     * The roles a session for {@code user} carries: the legacy JWT-authority {@code Role} enum
+     * plus any role granted through Role/Permission Management ({@code user_company_roles}).
+     * One definition for normal login and impersonation, so an impersonated session sees
+     * exactly the menu the real login would (e.g. a hub account's {@code HUB_MANAGER}).
+     */
+    public Set<String> effectiveRoles(User user) {
+        Set<String> roles = new HashSet<>(user.roleNames());
+        roles.addAll(userCompanyRolesPort.resolveRoleCodes(user.getId()));
+        return roles;
+    }
+
     private TokenPair issue(User user,
                             UserSession session,
                             UUID familyId,
@@ -142,8 +154,7 @@ public class TokenIssuer {
         CompanyDirectoryPort.CompanyRef company = companyDirectory.findById(user.getCompanyId()).orElse(null);
         // Union: the legacy JWT-authority Role enum (user_roles) plus any role granted
         // through Role/Permission Management (user_company_roles) — see UserCompanyRolesPort.
-        Set<String> roles = new HashSet<>(user.roleNames());
-        roles.addAll(userCompanyRolesPort.resolveRoleCodes(user.getId()));
+        Set<String> roles = effectiveRoles(user);
         String accessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getCompanyId(), user.getEmail(), roles,
                 userPermissionsPort.resolveEffectivePermissions(user.getId(), roles),

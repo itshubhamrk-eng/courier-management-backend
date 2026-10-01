@@ -121,6 +121,6 @@ public class BranchMapper {
                 b.getBranchType(), b.getStatus(),
                 b.getCity(), b.getState(), b.getPostalCode(), b.getManagerId(),
                 b.isAllowBooking(), b.isAllowDelivery(),
-                b.getCreatedAt(), b.getVersion(), b.getGstPercentage());
+                b.getCreatedAt(), b.getVersion(), b.getGstPercentage(), b.getAssignedHubId());
     }
 }

@@ -8,6 +8,137 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-10-01 — "Pune Hub (HB-PUN)" dev quick-fill (and the old hub button renamed "Pune Test Hub")
+
+Two hubs both display as "Pune Hub" (HB-PUN "PUNE HUB", HUB-PUNE-01 "Pune Test Hub"), so a Satara Load Sheet to HB-PUN was
+invisible to the HUB-PUNE-01 login. Added `hubPun` (punehub@gmail.com) to the login dev quick fill; renamed the existing
+`hub` button label to "Pune Test Hub". Dev DB: punehub@gmail.com's password hash set to the standard dev one (it
+rejected Password@1234 before, by user's choice). Verified live on :4200: button logs in, lands on Hub Dashboard with
+the full Hub Operations menu, In Scan lists MFT-261001-4303 (CP-SGMNR-000007) and MFT-261001-1694.
+
+---
+
+## Fixed 2026-10-01 — Hub login: Hub Operations menu / Dispatch missing (live-tested on :4200/:8100)
+
+Found by "Login as Branch" on the real stack. Three causes: (1) hubs created via branch creation held only BRANCH_MANAGER
+(V97 + `ensureHubManagerRole`, see below); (2) **impersonation tokens carried only the legacy `Role` enum**, never
+`user_company_roles`, so an impersonated hub had no HUB_MANAGER and landed on /unauthorized — `TokenIssuer.effectiveRoles`
+is now the single role-union used by login, refresh and both impersonation paths (+1 AuthServiceTest); (3) this company's
+HUB_MANAGER role lacked HUB_DISPATCH (and could lack the other hub codes), so no Dispatch menu entry — `V98` grants
+HUB_READ/IN_SCAN/OUT_SCAN/SORT/DISPATCH/EXCEPTION_MANAGE to every active HUB_MANAGER role missing them (deliberately
+removed grants are left alone). Verified: impersonating HB-PUN -> lands on Hub Dashboard, Hub Operations menu shown;
+after V98, both HB-PUN and HUB-TEST-01 impersonation tokens carry roles [BRANCH_MANAGER, HUB_MANAGER] and all six hub
+codes. Real :8100 restarted (V97, V98 applied). Not re-checked visually after V98 (token claims checked directly).
+
+---
+
+## Changed 2026-10-01 — Hub dashboard, hub landing, hub menu, Loading Sheet hub-only form
+
+- Hub users (staffed at a HUB branch) land on `/hub-operations/dashboard` (`hubLandingGuard` on `/dashboard`). The
+  dashboard gained Incoming (DISPATCHED, nextLocation = hub), At hub awaiting action (READY_FOR_MANIFEST, with Loading
+  Sheet/DRS buttons) and open Load Sheets from the hub (CREATED, booked at hub) alongside the 8 tiles.
+- **Hub Operations menu missing for some hub logins**: nav needs HUB_MANAGER, but a hub created through branch creation
+  only got BRANCH_MANAGER (HB-PUN, HUB-TEST-01). Branch creation now also grants HUB_MANAGER for HUB branches
+  (`ensureHubManagerRole`); `V97` backfills users staffed at existing hubs (only where the company already has an active
+  HUB_MANAGER role). Tests: +2 BranchServiceImplTest, +1 BranchRoleProvisioningServiceTest.
+- Loading Sheet: ordinary branches see only the hub picker (no mode toggle); a hub keeps To Hub / By Destination City /
+  By Delivery Branch so it can route onward.
+- Verified live (:4300/:8082): Pune Hub lands on the hub dashboard, At-hub list populated, hub user sees the toggle,
+  Kolhapur sees none; V97 applied and HB-PUN / HUB-TEST-01 now hold HUB_MANAGER (DB). Not verified in a browser as
+  HB-PUN/HUB-TEST-01 (no known dev login); Incoming list had no in-transit row to display.
+
+---
+
+## Added 2026-10-01 — Received at hub: "Create Loading Sheet" or "Generate DRS"
+
+Frontend only. After a hub In Scan receive, the Result card shows two actions (Create Loading Sheet -> /hub-operations/load-sheet,
+Generate DRS -> /movement/out-for-delivery?tab=hub; DRS now honours `?tab=hub` to open on Hub Shipments). Shipments At
+Hub rows in READY_FOR_MANIFEST get the same two buttons. Loading Sheet always opens on To Hub, hub users included (a brief
+hub-user default of By Destination City was reverted same day on request). Verified live (:4300/:8082) as Pune Hub:
+CP-KOL-000018 received -> both buttons -> DRS opened on the hub tab with the shipment listed; Loading Sheet opened in
+city mode. Buttons do not preselect the shipment on the target screen (just navigate).
+
+---
+
+## Changed 2026-10-01 — Loading Sheet: "To Hub" is the first/default mode, no destination city
+
+Loading Sheet modes are now `To Hub` (default) / `By Destination City` / `By Delivery Branch (crossing hub)`. To Hub:
+pick a hub (branch's assigned hub preselected) -> shipment list (every unrouted shipment at the branch, any city) ->
+Create. The old in-city "Send to Hub / Branch Delivery / Direct Company Delivery" sub-toggle is gone (city mode =
+branch delivery only). Backend: `attachToManifest(..., hubTransfer=true)` no longer requires a manifest destination
+city or a city match (hub sheets carry mixed destinations; Manifest.destinationCity stays null); +1 test in
+`ShipmentMovementServiceImplTest`. Verified live on :4300/:8082 as Kolhapur: CP-KOL-000018 -> MFT-261001-5337 to
+HUB-PUNE-01, nextLocation = hub, no delivery branch. Real :8100 restarted with the new code; :4200 hot-reloads.
+Verified on :4300 (not :4200) because the :4200 tab was in someone's impersonation session.
+
+---
+
+## Verified 2026-10-01 — Assign Hub to Branch, edge cases (live on real :4200/:8100) + unit tests
+
+Live: reassign and clear (UI -> DB), branch user PATCH assign-hub = 403 ACCESS_DENIED, no auth = 401, mid-session
+assignment is NOT seen until reload (branch directory is cached per session; acceptable), reload preselects the new
+hub, deactivated assigned hub -> no preselect. Found + fixed: backend accepted an INACTIVE hub (now "The selected
+hub is not active."); Loading Sheet now says so when the assigned hub is inactive. 7 new `BranchServiceImplTest` cases
+(valid, non-hub, self, foreign, inactive, clear/replace, COMPANY_ADMIN-only). Real :8100 backend restarted (with .env
+secrets) to run the new code. Fixtures restored: CP-KOL -> HUB-PUNE-01, CP-STR -> HUB-TEST-01, DEMO-HUB active.
+
+---
+
+## Verified 2026-10-01 — hub -> branch second leg, as the hub user (live)
+
+CP-KOL-000017: Kolhapur books -> Load Sheet to hub -> THC -> **Pune Hub user** In Scan (READY_FOR_MANIFEST) -> hub Load
+Sheet MFT-261001-8938 to Satara (Branch Delivery) -> hub out-scan -> hub THC dispatch -> Satara In Scan (IN_SCAN at
+CP-STR). Hub user's driver picker only offers hub-branch users (a Kolhapur driver id 404s "User not found").
+
+---
+
+## Added 2026-10-01 — "Pune Hub" dev quick-fill button
+
+`login.ts` dev quick fill gained `hub` (hub.pune.test@amazinglpl.com, HUB-PUNE-01). Verified live: signs in,
+dashboard "Pune Hub", token carries HUB_IN_SCAN/OUT_SCAN/SORT; hub dashboard, In Scan, Shipments At Hub,
+Load Sheet, Out Scan, Exceptions, DRS all load with no 403. Not exercised as hub user: hub -> branch second
+leg (no READY_FOR_MANIFEST shipment left at the hub). Observed, pre-existing: a manifest stays DISPATCHED
+after receipt (nothing sets COMPLETED), so In Scan's Pending Manifests keeps listing it.
+
+---
+
+## Verified 2026-10-01 — full hub flow, live (:8082/:4300)
+
+Book (CP-KOL-000016, To Pay) -> Loading Sheet MFT-261001-9682 (defaulted to HUB-PUNE-01) -> THC dispatch
+-> Hub In Scan (admin "Act as hub") -> hub DRS, shipment OUT_FOR_DELIVERY at the hub. Notes: PAID
+booking refused (branch wallet -478); UI "Declared Value" input needed the control set directly
+under automation. Fixture rows left in dev DB.
+
+---
+
+## Added 2026-10-01 — Assign Hub to Branch; Loading Sheet defaults to hub, Direct Delivery removed
+
+`V96` adds `branches.assigned_hub_id` (plain column, no FK, like `manager_id`). `PATCH
+/branches/{id}/assign-hub` (COMPANY_ADMIN; target must be a HUB, not itself; audited as
+`BRANCH_HUB_ASSIGNED`); `assignedHubId` rides on `BranchSummaryResponse` (so `/branches/directory`).
+New menu Masters > "Assign Hub to Branch" (`branch-hub-assignment.ts`, COMPANY_ONLY). Loading
+Sheet city mode now defaults to "Send to Hub" with the caller branch's assigned hub preselected;
+"Direct Company Delivery" button removed from the form (backend `DIRECT_COMPANY_DELIVERY` mode
+untouched, just not offered). `mvn` compile + Branch/Manifest tests pass, `ng build` clean.
+Verified live on :8082/:4300 (V96 applied; API negatives, admin screen, Loading Sheet defaults to hub, manifest created CP-KOL -> HUB-PUNE-01; fixtures left in dev DB). Pre-existing unrelated failure:
+`navigation.config.spec` "every branch staff role reads the branch and shipment reports".
+
+---
+
+## Added 2026-10-01 — Calculator: "Pincode to Pincode" tab
+
+Frontend only. Rate Master Calculator gained a third tab, `PincodeRateCalculatorForm`
+(`features/rate-master/components/`), on `POST /district-level-freight/calculate` — the
+booking screen's own freight call. First built on `POST /pricing/calculate`, but that returns
+freight 0 for any lane with no route/rate, so it was swapped. Origin is the booking *branch*:
+From Pincode auto-picks the branch whose postal code matches, Booking Branch can be set
+directly (defaults to caller's). To Pincode loads its Areas, primary preselected. Shows
+slab, rate/kg, base freight, ODA, total. Verified live on :4300 -> :8100: HUB-TEST-01 ->
+413501, 20 kg = 12.50 x 20 + 250 ODA = 500.00; a lane with no config shows the backend's
+"No District Level Freight configuration" message. Result/error clear as soon as any input changes.
+
+---
+
 ## Changed 2026-10-01 — Pincode-only geography menu for COMPANY_ADMIN; dashboard Total Revenue is month-to-date
 
 Frontend: of the six geography Masters, only Pincode is shown to COMPANY_ADMIN (the rest
