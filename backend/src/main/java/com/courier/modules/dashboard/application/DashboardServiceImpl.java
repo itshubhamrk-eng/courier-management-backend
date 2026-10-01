@@ -204,7 +204,6 @@ public class DashboardServiceImpl implements DashboardService {
                     () -> shipmentRepository.countByStatusNot(ShipmentStatus.CANCELLED));
             totalActualWeight = CompanyContext.<BigDecimal>runAs(null,
                     () -> shipmentRepository.sumActualWeightByBookingDateBetween(monthStart, today));
-            totalRevenue = CompanyContext.<BigDecimal>runAs(null, () -> shipmentChargeRepository.sumNetAmount());
             todayCollection = CompanyContext.<BigDecimal>runAs(null,
                     () -> shipmentChargeRepository.sumNetAmountForBookingDateBetween(monthStart, today));
             recent = CompanyContext.<List<Shipment>>runAs(null,
@@ -231,7 +230,6 @@ public class DashboardServiceImpl implements DashboardService {
             totalShipments = shipmentRepository.countByCompanyIdAndStatusNot(scope, ShipmentStatus.CANCELLED);
             totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingBranchIdAndBookingDateBetween(
                     scope, ownBranchId, monthStart, today);
-            totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
             todayCollection = shipmentChargeRepository
                     .sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
                             scope, ownBranchId, monthStart, today);
@@ -254,7 +252,6 @@ public class DashboardServiceImpl implements DashboardService {
             totalShipments = shipmentRepository.countByCompanyIdAndStatusNot(scope, ShipmentStatus.CANCELLED);
             totalActualWeight = shipmentRepository.sumActualWeightByCompanyIdAndBookingDateBetween(
                     scope, monthStart, today);
-            totalRevenue = shipmentChargeRepository.sumNetAmountByCompanyId(scope);
             todayCollection = shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
                     scope, monthStart, today);
             recent = shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(scope);
@@ -262,6 +259,11 @@ public class DashboardServiceImpl implements DashboardService {
                     .findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(scope, ShipmentStatus.DELIVERED);
             recentWalletTransactions = walletTransactionRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(scope);
         }
+
+        // Total Revenue is month-to-date, like every other tile here — the same figure (and
+        // the same company/branch/cross-company scoping) as todayCollection above, no
+        // longer an all-time sum.
+        totalRevenue = todayCollection;
 
         BigDecimal walletBalance = ownWallet == null ? null : ownWallet.getAvailableBalance();
         // No own branch (company/platform admins) means no "Pending Delivery" tile is

@@ -115,7 +115,6 @@ class DashboardServiceImplTest {
         when(shipmentRepository.countByCompanyIdAndStatusInAndBookingDateBetween(
                 eq(COMPANY), any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(3L);
         when(shipmentRepository.countByCompanyIdAndStatusNot(COMPANY, ShipmentStatus.CANCELLED)).thenReturn(4L);
-        when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class))).thenReturn(BigDecimal.ONE);
         when(shipmentRepository.findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY)).thenReturn(List.of());
@@ -190,7 +189,8 @@ class DashboardServiceImplTest {
         verify(shipmentRepository, org.mockito.Mockito.times(2)).countByCompanyIdAndStatusAndBookingDateBetween(
                 eq(COMPANY), eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class));
         verify(shipmentRepository).findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY);
-        verify(shipmentChargeRepository).sumNetAmountByCompanyId(COMPANY);
+        // Total Revenue is month-to-date now — the all-time sum is never queried.
+        verify(shipmentChargeRepository, never()).sumNetAmountByCompanyId(any());
         verify(shipmentStatusHistoryRepository).findTop5ByCompanyIdAndStatusOrderByChangedAtDesc(
                 COMPANY, ShipmentStatus.DELIVERED);
         verify(walletTransactionRepository).findTop5ByCompanyIdOrderByCreatedAtDesc(COMPANY);
@@ -226,7 +226,6 @@ class DashboardServiceImplTest {
         when(shipmentRepository.countByStatusInAndBookingDateBetween(
                 any(Collection.class), any(LocalDate.class), any(LocalDate.class))).thenReturn(30L);
         when(shipmentRepository.countByStatusNot(ShipmentStatus.CANCELLED)).thenReturn(40L);
-        when(shipmentChargeRepository.sumNetAmount()).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountForBookingDateBetween(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(BigDecimal.ONE);
         when(shipmentRepository.findTop5ByOrderByCreatedAtDesc()).thenReturn(List.of());
@@ -261,7 +260,7 @@ class DashboardServiceImplTest {
         verify(shipmentRepository).countByStatusAndBookingDateBetween(
                 eq(ShipmentStatus.DELIVERED), any(LocalDate.class), any(LocalDate.class));
         verify(shipmentRepository).findTop5ByOrderByCreatedAtDesc();
-        verify(shipmentChargeRepository).sumNetAmount();
+        verify(shipmentChargeRepository, never()).sumNetAmount();
         verify(shipmentStatusHistoryRepository).findTop5ByStatusOrderByChangedAtDesc(ShipmentStatus.DELIVERED);
         verify(walletTransactionRepository).findTop5ByOrderByCreatedAtDesc();
 
@@ -301,7 +300,6 @@ class DashboardServiceImplTest {
                 eq(COMPANY), eq(branch), any(Collection.class), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(3L);
         when(shipmentRepository.countByCompanyIdAndStatusNot(COMPANY, ShipmentStatus.CANCELLED)).thenReturn(4L);
-        when(shipmentChargeRepository.sumNetAmountByCompanyId(COMPANY)).thenReturn(BigDecimal.TEN);
         when(shipmentChargeRepository.sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
                 eq(COMPANY), eq(branch), any(LocalDate.class), any(LocalDate.class))).thenReturn(new BigDecimal("77"));
         when(shipmentRepository.findTop5ByCompanyIdAndBookingBranchIdOrderByCreatedAtDesc(

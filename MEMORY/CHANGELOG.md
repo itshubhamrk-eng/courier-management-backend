@@ -8,6 +8,16 @@ All notable changes to this project. Format based on
 
 ---
 
+## Changed 2026-10-01 — Pincode-only geography menu for COMPANY_ADMIN; dashboard Total Revenue is month-to-date
+
+Frontend: of the six geography Masters, only Pincode is shown to COMPANY_ADMIN (the rest
+SUPER_ADMIN-only in the menu); read is role-gated, not `GLOBAL_MASTER_READ` (COMPANY_ADMIN never
+holds it). Backend: `DashboardServiceImpl` `totalRevenue` = month-to-date (same figure and
+scoping as `todayCollection`) instead of the all-time `sumNetAmount*`; a branch-scoped caller's
+Total Revenue is now its own branch's, no longer company-wide. `DashboardServiceImplTest` updated.
+
+---
+
 ## Added 2026-09-30 — Wallet Recharge Report (manual + Razorpay, company-wide)
 
 New `GET /api/v1/branch-wallet/recharge-report` — `COMPANY_ADMIN`/`FINANCE_USER` only
