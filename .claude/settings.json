@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -i ~/.ssh/skra-prod ubuntu@35.154.220.116:*)",
+      "Bash(ssh -i ~/.ssh/skra-prod ubuntu@35.154.220.116*)"
+    ]
+  }
+}
