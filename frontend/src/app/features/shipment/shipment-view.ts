@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { AuthService } from '@core/auth/auth.service';
@@ -25,6 +26,8 @@ import { EwayBillService } from './eway-bill.service';
 import { printConsignmentCopies, companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
 import { printAmboxCopies } from './ambox-consignment-print.util';
 import { printPerformaBillCopies } from './performa-bill-print.util';
+import { ShipmentLabelsDialog } from './shipment-labels-dialog';
+import { ShipmentLabelData } from './shipment-label-print.util';
 import { emptyPage } from '@core/models/page.model';
 import { TicketService } from '@core/services/ticket.service';
 import { Ticket } from '@core/models/ticket.model';
@@ -72,6 +75,7 @@ const TIMELINE_ICONS: Record<string, string> = {
              [queryParams]="{ shipmentId: id, branchId: shipment()!.bookingBranchId }">
             <mat-icon>event_repeat</mat-icon> Create Follow-up</a>
           <span class="sv__spacer"></span>
+          <app-button variant="stroked" icon="label" (pressed)="printLabels()">Print Labels</app-button>
           @if (charge(); as c) {
             <app-button variant="stroked" icon="print" (pressed)="print(c)">Delivery Receipt</app-button>
             <app-button variant="stroked" icon="print" (pressed)="print2(c)">Print 2</app-button>
@@ -380,6 +384,7 @@ export class ShipmentView implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly confirmDialog = inject(DialogService);
+  private readonly matDialog = inject(MatDialog);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -552,6 +557,30 @@ export class ShipmentView implements OnInit {
       invoiceValue: s.invoiceValue ?? null,
       items: s.items.map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
     })));
+  }
+
+  /** One label per package (`numberOfPackages`), all under this shipment's single AWB. */
+  printLabels(): void {
+    const s = this.shipment()!;
+    this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((company) => {
+      const data: ShipmentLabelData = {
+        companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
+        companyLogo: company?.logo ?? this.auth.companyLogo(),
+        trackingNumber: s.trackingNumber,
+        bookingDate: s.bookingDate,
+        bookingBranchLabel: this.branchLabel(s.bookingBranchId),
+        destinationLabel: s.toCity || (s.deliveryBranchId ? this.branchLabel(s.deliveryBranchId) : '—'),
+        destinationPincode: s.deliveryPincode || null,
+        senderName: s.senderName,
+        receiverName: s.receiverName, receiverContact: s.receiverContact, receiverAddress: s.receiverAddress,
+        weight: s.chargeableWeight,
+        paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
+        serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId),
+        routing: s.fromCity && s.toCity ? `${s.fromCity} → ${s.toCity}` : null,
+        numberOfPackages: Math.max(1, s.numberOfPackages || 1)
+      };
+      this.matDialog.open(ShipmentLabelsDialog, { data, width: '560px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
+    });
   }
 
   print(c: ShipmentCharge): void {

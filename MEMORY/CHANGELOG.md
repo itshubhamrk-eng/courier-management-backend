@@ -8,6 +8,18 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-10-02 — Package labels ("Print Labels") on Shipment details
+
+Frontend only. Track page resolves to `ShipmentView` (`/shipments/:id`); a **Print Labels** button there opens
+`ShipmentLabelsDialog` (preview + Print All + per-package reprint). `shipment-label-print.util.ts` renders one
+4x6in B/W label per `numberOfPackages` (AWB, CODE128 + QR of package id `AWB10001-001`, dest/pincode, `n/N`,
+receiver, payment, service, route). Reuses `barcodeSvg`/`qrSvg`; same hidden-iframe print as the consignment note;
+`@page margin:0`. No new shipments/entities. Package id is `<AWB>-NNN` — `parsePackageId()` splits it; backend
+scan endpoints do not yet resolve it (they still expect the plain AWB). Build clean, new spec passes; one
+unrelated pre-existing failure in `navigation.config.spec.ts` ("reports-dashboard").
+
+---
+
 ## Fixed 2026-10-01 — Hourly SLA sweep failing on prod ("Column 'changed_by_user_id' cannot be null")
 
 `TicketServiceImpl.raiseSystemTicket` (used by the SLA sweep and the POD/shortage auto-tickets) wrote
