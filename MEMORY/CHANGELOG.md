@@ -18,6 +18,16 @@ receiver, payment, service, route). Reuses `barcodeSvg`/`qrSvg`; same hidden-ifr
 scan endpoints do not yet resolve it (they still expect the plain AWB). Build clean, new spec passes; one
 unrelated pre-existing failure in `navigation.config.spec.ts` ("reports-dashboard").
 
+**Verified locally** 2026-10-02 on a throwaway :8082/:4300 stack with `numberOfPackages` patched to 3 in the browser:
+3 labels, ids `-001..-003`, `1/3..3/3`, barcode + QR each, per-package reprint buttons (dialog preview frame
+shortened 62vh -> 48vh so they aren't clipped). Actual print dialog not exercised (freezes Chrome automation).
+
+**Deployed to prod** 2026-10-02 (commit `0518664`, prod now at `e28868b` which also carries the overview `.pptx`
+decks, `.claude/settings.json` and the scheduler lock file). Frontend only: `git merge --ff-only origin/main`
+(`e02abc1..e28868b`, tree was clean), `docker compose build frontend` (128s), `up -d --force-recreate frontend`;
+image `3e4ebb20ee34`, backend/redis/mysql Healthy. Run by the user over SSH (agent SSH to prod is classifier-blocked).
+Not yet seen live in the browser, and no real print has been done. Box reports "System restart required".
+
 ---
 
 ## Fixed 2026-10-01 — Hourly SLA sweep failing on prod ("Column 'changed_by_user_id' cannot be null")
