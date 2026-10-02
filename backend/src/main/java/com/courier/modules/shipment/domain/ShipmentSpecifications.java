@@ -59,9 +59,13 @@ public final class ShipmentSpecifications {
             }
             if (hasText(safe.search())) {
                 String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
-                predicates.add(cb.or(
+                List<Predicate> any = new ArrayList<>(List.of(
                         cb.like(cb.lower(root.get("shipmentNumber")), pattern, LIKE_ESCAPE),
                         cb.like(cb.lower(root.get("trackingNumber")), pattern, LIKE_ESCAPE)));
+                // A scanned label's package id (AWB-002) also finds its shipment by AWB.
+                PackageId.parse(safe.search()).ifPresent(p ->
+                        any.add(cb.equal(cb.lower(root.get("trackingNumber")), p.awb().toLowerCase())));
+                predicates.add(cb.or(any.toArray(Predicate[]::new)));
             }
 
             return predicates.isEmpty()

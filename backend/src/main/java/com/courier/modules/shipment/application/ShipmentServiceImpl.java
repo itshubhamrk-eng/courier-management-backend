@@ -47,6 +47,7 @@ import com.courier.modules.shipment.domain.DeliveryDispatchOtpRepository;
 import com.courier.modules.shipment.domain.DeliveryType;
 import com.courier.modules.shipment.domain.BranchCommissionSummary;
 import com.courier.modules.shipment.domain.BranchPerformanceSummary;
+import com.courier.modules.shipment.domain.PackageId;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
@@ -502,7 +503,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @PreAuthorize("hasAuthority('SHIPMENT_READ')")
     public Shipment getByTrackingNumber(String trackingNumber) {
         UUID companyId = requireCompany();
-        return shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, trackingNumber)
+        return findByTrackingOrPackageId(companyId, trackingNumber)
                 .orElseThrow(() -> new ResourceNotFoundException(ENTITY, trackingNumber));
     }
 
@@ -1189,9 +1190,19 @@ public class ShipmentServiceImpl implements ShipmentService {
         return ticket.getTicketNumber();
     }
 
+    /** Exact tracking number first; failing that, a label's package id ({@code AWB-002}) resolves
+     *  to its shipment when the package number is within the shipment's {@code numberOfPackages}. */
+    private Optional<Shipment> findByTrackingOrPackageId(UUID companyId, String scanned) {
+        Optional<Shipment> exact = shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, scanned);
+        if (exact.isPresent()) return exact;
+        return PackageId.parse(scanned)
+                .flatMap(p -> shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, p.awb())
+                        .filter(s -> p.packageNo() <= (s.getNumberOfPackages() == null ? 1 : s.getNumberOfPackages())));
+    }
+
     private MovementOutcome scanOneIn(UUID companyId, UUID receivingBranchId, String trackingNumber,
                                        String remarks, String photoUrl) {
-        Optional<Shipment> found = shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, trackingNumber);
+        Optional<Shipment> found = findByTrackingOrPackageId(companyId, trackingNumber);
         if (found.isEmpty()) {
             return new MovementOutcome(trackingNumber, false, "No such tracking number.");
         }

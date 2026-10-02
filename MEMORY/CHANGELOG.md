@@ -8,6 +8,18 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-10-02 — Backend resolves label package ids (`AWB-002`) on scan/track/search
+
+`PackageId` (shipment.domain) parses `<AWB>-NNN`. `ShipmentServiceImpl.findByTrackingOrPackageId` tries the exact
+tracking number first (a real AWB ending `-NNN` still wins), then the base AWB if package no. is 1..`numberOfPackages`;
+used by `scanOneIn` (In Scan), `getByTrackingNumber` (`GET /shipments/track/{n}`, hub Out Scan) and the shipment search
+spec (`?search=AWB-002` also matches the AWB). Scanning one package still moves the **whole shipment** — there is no
+per-package state/table. Frontend scan screens still exact-compare `trackingNumber` client-side after the search, so
+they need the suffix stripped (not done). Bulk Track and public tracking are unchanged. +4 tests; `mvn test` 1118/1118.
+Live on throwaway :8082: `-001`/`-010` 200, `-011`/`-000`/unknown 404 for a 10-package shipment.
+
+---
+
 ## Added 2026-10-02 — Package labels ("Print Labels") on Shipment details
 
 Frontend only. Track page resolves to `ShipmentView` (`/shipments/:id`); a **Print Labels** button there opens

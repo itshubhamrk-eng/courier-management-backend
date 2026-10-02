@@ -368,6 +368,39 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
+    @DisplayName("inScan resolves a label's package id (AWB-002) to its shipment when within numberOfPackages")
+    void inScanAcceptsPackageId() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        org.springframework.test.util.ReflectionTestUtils.setField(shipment, "numberOfPackages", 3);
+        String awb = shipment.getTrackingNumber();
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, awb + "-002"))
+                .thenReturn(Optional.empty());
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, awb))
+                .thenReturn(Optional.of(shipment));
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(awb + "-002"), null, null, null, null);
+
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+    }
+
+    @Test
+    @DisplayName("inScan rejects a package id beyond the shipment's numberOfPackages")
+    void inScanRejectsOutOfRangePackageId() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        String awb = shipment.getTrackingNumber();
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, awb + "-002"))
+                .thenReturn(Optional.empty());
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, awb))
+                .thenReturn(Optional.of(shipment));
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(awb + "-002"), null, null, null, null);
+
+        assertThat(result.failureCount()).isEqualTo(1);
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.DISPATCHED);
+    }
+
+    @Test
     @DisplayName("inScan records the caller's remark on the status-history row and the photo as "
             + "an IN_SCAN ShipmentAsset when both are supplied")
     void inScanRecordsRemarkAndPhoto() {
