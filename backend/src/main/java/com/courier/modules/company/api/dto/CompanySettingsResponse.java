@@ -48,7 +48,8 @@ public record CompanySettingsResponse(
                            boolean allowDuplicateReferenceNumber, boolean manualStatusOverrideEnabled,
                            boolean autoAssignTrackingNumber,
                            BigDecimal defaultChargeableWeightKg,
-                           BigDecimal defaultAppointmentDeliveryCharge) {
+                           BigDecimal defaultAppointmentDeliveryCharge,
+                           BigDecimal toPayCharge) {
     }
 
     @Schema(name = "FinanceSettings")

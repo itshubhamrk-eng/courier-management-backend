@@ -112,6 +112,15 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                   </div>
                 </div>
                 <div class="dcw">
+                  <label class="text-caption" for="tpc-input">To-Pay Charge (added to every To-Pay booking, GST applies; 0 turns it off)</label>
+                  <div class="dcw__row">
+                    <input id="tpc-input" class="dcw__i" type="number" step="0.01" min="0"
+                           [value]="toPayChargeInput() ?? ''" (input)="onToPayChargeInput($event)" />
+                    <button type="button" class="dcw__save" [disabled]="savingToPayCharge() || toPayChargeInput() == null"
+                            (click)="saveToPayCharge()">{{ savingToPayCharge() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
+                <div class="dcw">
                   <label class="rzp__check">
                     <input type="checkbox" [checked]="manualStatusOverrideInput()" [disabled]="savingManualOverride()"
                            (change)="onManualStatusOverrideToggle($event)" />
@@ -278,6 +287,8 @@ export class SettingsPage implements OnInit {
    *  Default Chargeable Weight above. */
   readonly defaultAppointmentChargeInput = signal<number | null>(null);
   readonly savingAppointmentCharge = signal(false);
+  readonly toPayChargeInput = signal<number | null>(null);
+  readonly savingToPayCharge = signal(false);
 
   /** Shipment's third inline field — a plain toggle, saved immediately on change (no
    *  separate Save button, unlike the two numeric fields above). Gates whether a
@@ -330,7 +341,7 @@ export class SettingsPage implements OnInit {
       next: (d) => {
         this.data.set(d ?? {});
         const shipment = (d as { shipment?: {
-          defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number;
+          defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number;
           manualStatusOverrideEnabled?: boolean;
         } })?.shipment;
         if (shipment?.defaultChargeableWeightKg != null) {
@@ -339,6 +350,7 @@ export class SettingsPage implements OnInit {
         if (shipment?.defaultAppointmentDeliveryCharge != null) {
           this.defaultAppointmentChargeInput.set(Number(shipment.defaultAppointmentDeliveryCharge));
         }
+        if (shipment?.toPayCharge != null) this.toPayChargeInput.set(Number(shipment.toPayCharge));
         this.manualStatusOverrideInput.set(shipment?.manualStatusOverrideEnabled === true);
         const finance = (d as { finance?: {
           gstPercentage?: number; roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
@@ -411,6 +423,26 @@ export class SettingsPage implements OnInit {
         this.notify.success('Default appointment delivery charge updated');
       },
       error: () => this.savingAppointmentCharge.set(false)
+    });
+  }
+
+  onToPayChargeInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.toPayChargeInput.set(v === '' ? null : Number(v));
+  }
+
+  saveToPayCharge(): void {
+    const value = this.toPayChargeInput();
+    if (value == null || value < 0) return;
+    this.savingToPayCharge.set(true);
+    this.service.patchSection('shipment', { toPayCharge: value }).subscribe({
+      next: (d) => {
+        const shipment = (d as { shipment?: unknown })?.shipment;
+        if (shipment) this.data.update((prev) => ({ ...prev, shipment }));
+        this.savingToPayCharge.set(false);
+        this.notify.success('To-Pay charge updated');
+      },
+      error: () => this.savingToPayCharge.set(false)
     });
   }
 

@@ -251,6 +251,7 @@ public class CompanySettingsServiceImpl implements CompanySettingsService {
         set(c.autoAssignTrackingNumber(), s::setAutoAssignTrackingNumber);
         set(c.defaultChargeableWeightKg(), s::setDefaultChargeableWeightKg);
         set(c.defaultAppointmentDeliveryCharge(), s::setDefaultAppointmentDeliveryCharge);
+        set(c.toPayCharge(), s::setToPayCharge);
     }
 
     private void applyFinance(CompanySettings s, CompanySettingsCommand c) {

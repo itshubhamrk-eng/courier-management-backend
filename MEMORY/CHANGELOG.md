@@ -8,6 +8,24 @@ All notable changes to this project. Format based on
 
 ---
 
+## Added 2026-10-02 — Company-level To-Pay charge, added automatically on To-Pay bookings
+
+Direct request: To-Pay bookings carry a flat charge (50), configured per company, not editable at booking, GST applies.
+`V99`: `company_settings_config.to_pay_charge` (DEFAULT 50 — **takes effect for every company on deploy**; set 0 to disable) and
+`shipment_charges.to_pay_charge` (frozen per shipment). Backend decides, never the request: `ShipmentServiceImpl.toPayChargeFor`
+returns the setting only when the payment mode `collectAtDelivery && !cashOnDelivery` (PAID/TBB/COD get 0). Threaded through
+`copyCharge`/`netAmountWithOtherCharges` next to `doorDeliveryCharge` (GST at the booking branch %, folded into `gstAmount`,
+re-rounded with the company rule); create + update both recompute it (changing payment mode on edit re-prices).
+`ShipmentChargeResponse.toPayCharge`, `CompanySettings` shipment section `toPayCharge` (Settings page field). Frontend: read-only
+"To-Pay Charge" row in `ChargeSummary`, booking preview mirrors it (To-Pay detected by `(TO_PAY)` in the option label, same as PAID
+is), print totals add it (view-print passes netAmount minus it so it is counted once). Existing shipments are untouched (column
+defaults 0). +5 backend tests (To-Pay adds charge+GST, net rises, PAID/COD get none, 0 disables); `mvn test` 1123/1123. Verified
+live on :8082/:4300: V99 applied, setting reads 50, To-Pay booking -> toPayCharge 50 / GST +2.50 (branch is 5%), TBB booking -> 0;
+persisted charges page and booking preview show the row and the preview net matches. Not verified: reprint totals on a To-Pay
+shipment, the edit-shipment path in the browser. Running :8100 backend must be restarted to pick this up.
+
+---
+
 ## Added 2026-10-02 — Backend resolves label package ids (`AWB-002`) on scan/track/search
 
 `PackageId` (shipment.domain) parses `<AWB>-NNN`. `ShipmentServiceImpl.findByTrackingOrPackageId` tries the exact

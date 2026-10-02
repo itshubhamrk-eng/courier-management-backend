@@ -277,9 +277,10 @@ public class ShipmentServiceImpl implements ShipmentService {
         DeliveryType deliveryType = command.deliveryType() == null ? DeliveryType.DOOR : command.deliveryType();
         BigDecimal doorDeliveryCharge = deliveryType == DeliveryType.DOOR && command.doorDeliveryCharge() != null
                 ? command.doorDeliveryCharge() : BigDecimal.ZERO;
+        BigDecimal toPayCharge = toPayChargeFor(paymentMode);
         BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
                 freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable,
-                doorDeliveryCharge, command.invoiceValue());
+                doorDeliveryCharge, toPayCharge, command.invoiceValue());
 
         if (paymentMode.isCollectAtBooking()) {
             requireSufficientBalance(command.bookingBranchId(), netAmount);
@@ -345,7 +346,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         persistItems(saved, companyId, items);
         persistCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
-                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge,
+                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, toPayCharge,
                 command.invoiceValue());
         appendHistory(saved, companyId, null, ShipmentStatus.BOOKED, "Shipment booked");
 
@@ -464,13 +465,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                 ? BigDecimal.ZERO : command.appointmentDeliveryCharge();
         BigDecimal doorDeliveryCharge = deliveryType == DeliveryType.DOOR && command.doorDeliveryCharge() != null
                 ? command.doorDeliveryCharge() : BigDecimal.ZERO;
+        BigDecimal toPayCharge = toPayChargeFor(paymentModeService.getById(command.paymentModeId()));
         com.courier.modules.company.domain.Branch bookingBranch =
                 branchService.getById(shipment.getBookingBranchId());
 
         itemRepository.deleteAllByShipmentIdAndCompanyId(saved.getId(), companyId);
         persistItems(saved, companyId, items);
         replaceCharges(saved, companyId, priced, otherCharges, command.odaCharge(), bookingBranch, freightCalc,
-                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge,
+                command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, toPayCharge,
                 command.invoiceValue());
 
         log.info("Shipment {} ({}) updated in company {} by {}", saved.getShipmentNumber(),
@@ -479,7 +481,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 Map.of("shipmentNumber", saved.getShipmentNumber(),
                         "netAmount", netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
                                 freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable,
-                                doorDeliveryCharge, command.invoiceValue())
+                                doorDeliveryCharge, toPayCharge, command.invoiceValue())
                                 .toPlainString()));
 
         return saved;
@@ -2115,9 +2117,9 @@ public class ShipmentServiceImpl implements ShipmentService {
                                           com.courier.modules.company.domain.Branch bookingBranch,
                                           FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
                                           BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
-                                          BigDecimal doorDeliveryCharge, BigDecimal invoiceValue) {
+                                          BigDecimal doorDeliveryCharge, BigDecimal toPayCharge, BigDecimal invoiceValue) {
         ShipmentCharge charge = toCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc,
-                ratePerKgOverride, appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, invoiceValue);
+                ratePerKgOverride, appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, toPayCharge, invoiceValue);
         charge.setCompanyId(companyId);
         charge.setShipmentId(shipment.getId());
         return chargeRepository.save(charge);
@@ -2127,7 +2129,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                                 BigDecimal odaCharge, com.courier.modules.company.domain.Branch bookingBranch,
                                 FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
                                 BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
-                                BigDecimal doorDeliveryCharge, BigDecimal invoiceValue) {
+                                BigDecimal doorDeliveryCharge, BigDecimal toPayCharge, BigDecimal invoiceValue) {
         ShipmentCharge existing = chargeRepository
                 .findByShipmentIdWithinCompany(shipment.getId(), companyId)
                 .orElseGet(() -> {
@@ -2137,7 +2139,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     return fresh;
                 });
         copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride,
-                appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, invoiceValue, existing);
+                appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, toPayCharge, invoiceValue, existing);
         chargeRepository.save(existing);
     }
 
@@ -2145,11 +2147,22 @@ public class ShipmentServiceImpl implements ShipmentService {
                                     com.courier.modules.company.domain.Branch bookingBranch,
                                     FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
                                     BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
-                                    BigDecimal doorDeliveryCharge, BigDecimal invoiceValue) {
+                                    BigDecimal doorDeliveryCharge, BigDecimal toPayCharge, BigDecimal invoiceValue) {
         ShipmentCharge charge = ShipmentCharge.builder().build();
         copyCharge(priced, otherCharges, odaCharge, bookingBranch, freightCalc, ratePerKgOverride,
-                appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, invoiceValue, charge);
+                appointmentDeliveryCharge, insuranceApplicable, doorDeliveryCharge, toPayCharge, invoiceValue, charge);
         return charge;
+    }
+
+    /** The company's To-Pay charge when {@code paymentMode} collects at delivery (To-Pay), else
+     *  zero. Cash-on-delivery also collects at delivery but is the consignee's money, not a To-Pay
+     *  freight collection, so it is excluded. Backend-decided — never taken from the request. */
+    private BigDecimal toPayChargeFor(PaymentMode paymentMode) {
+        if (!paymentMode.isCollectAtDelivery() || paymentMode.isCashOnDelivery()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal configured = companySettingsService.get().getToPayCharge();
+        return configured == null ? BigDecimal.ZERO : configured;
     }
 
     /** Scale/rounding for money derived from a percentage — matches the column's own
@@ -2227,16 +2240,22 @@ public class ShipmentServiceImpl implements ShipmentService {
      * user request; was previously GST-free like {@code appointmentDeliveryCharge}, which
      * stays untaxed). Callers already zero {@code doorDeliveryCharge} out for {@code OFFICE}
      * before it reaches here, so this method trusts it verbatim.
+     *
+     * <p>{@code toPayCharge} (the company's To-Pay charge, decided by {@link #toPayChargeFor} —
+     * not typed) is taxed with GST at the booking branch's {@code gstPercentage}, same as
+     * {@code doorDeliveryCharge}.
      */
     private void copyCharge(PricingResult priced, BigDecimal otherCharges, BigDecimal odaCharge,
                             com.courier.modules.company.domain.Branch bookingBranch,
                             FreightCalculationResult freightCalc, BigDecimal ratePerKgOverride,
                             BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
-                            BigDecimal doorDeliveryCharge, BigDecimal invoiceValue, ShipmentCharge charge) {
+                            BigDecimal doorDeliveryCharge, BigDecimal toPayCharge, BigDecimal invoiceValue, ShipmentCharge charge) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
         BigDecimal safeAppointmentDeliveryCharge =
                 appointmentDeliveryCharge == null ? BigDecimal.ZERO : appointmentDeliveryCharge;
         BigDecimal safeDoorDeliveryCharge = doorDeliveryCharge == null ? BigDecimal.ZERO : doorDeliveryCharge;
+        BigDecimal safeToPayCharge = toPayCharge == null ? BigDecimal.ZERO : toPayCharge;
+        BigDecimal gstOnToPayCharge = percentOf(safeToPayCharge, bookingBranch.getGstPercentage());
         BigDecimal safeInvoiceValue = invoiceValue == null ? BigDecimal.ZERO : invoiceValue;
         BigDecimal freight = effectiveFreight(freightCalc, ratePerKgOverride);
         BigDecimal freightDelta = freight.subtract(priced.freight());
@@ -2272,7 +2291,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         charge.setInsuranceCharge(finalInsuranceCharge);
         charge.setApplicableCharges(priced.applicableCharges());
         charge.setGstAmount(priced.gstAmount().add(gstOnOtherCharges).add(gstOnOdaChargeDelta).add(gstOnFreightDelta)
-                .add(gstOnInsuranceChargeDelta).add(gstOnDoorDeliveryCharge));
+                .add(gstOnInsuranceChargeDelta).add(gstOnDoorDeliveryCharge).add(gstOnToPayCharge));
         charge.setDiscountAmount(priced.discountAmount());
         // Other Charges/ODA/Door Delivery/Freight/Insurance deltas are added after the
         // Pricing Engine already rounded its own totalBeforeRoundOff — re-round the full
@@ -2282,12 +2301,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .add(safeOtherCharges).add(gstOnOtherCharges)
                 .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta)
                 .add(safeAppointmentDeliveryCharge).add(safeDoorDeliveryCharge).add(gstOnDoorDeliveryCharge)
-                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta);
+                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta)
+                .add(safeToPayCharge).add(gstOnToPayCharge);
         BigDecimal roundedNetAmount = roundOffRule().apply(totalBeforeRoundOff);
         charge.setRoundOff(roundedNetAmount.subtract(totalBeforeRoundOff));
         charge.setOtherCharges(safeOtherCharges);
         charge.setAppointmentDeliveryCharge(safeAppointmentDeliveryCharge);
         charge.setDoorDeliveryCharge(safeDoorDeliveryCharge);
+        charge.setToPayCharge(safeToPayCharge);
         charge.setCommissionOnBasicFreight(commissionOnBasicFreight);
         charge.setBranchCommissionOnOtherAmount(branchCommissionOnOtherAmount);
         charge.setCompanyCommissionOnBasicFreight(companyCommissionOnBasicFreight);
@@ -2320,11 +2341,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                                                   BigDecimal appointmentDeliveryCharge,
                                                   boolean insuranceApplicable,
                                                   BigDecimal doorDeliveryCharge,
+                                                  BigDecimal toPayCharge,
                                                   BigDecimal invoiceValue) {
         BigDecimal safeOtherCharges = otherCharges == null ? BigDecimal.ZERO : otherCharges;
         BigDecimal safeAppointmentDeliveryCharge =
                 appointmentDeliveryCharge == null ? BigDecimal.ZERO : appointmentDeliveryCharge;
         BigDecimal safeDoorDeliveryCharge = doorDeliveryCharge == null ? BigDecimal.ZERO : doorDeliveryCharge;
+        BigDecimal safeToPayCharge = toPayCharge == null ? BigDecimal.ZERO : toPayCharge;
+        BigDecimal gstOnToPayCharge = percentOf(safeToPayCharge, bookingBranch.getGstPercentage());
         BigDecimal safeInvoiceValue = invoiceValue == null ? BigDecimal.ZERO : invoiceValue;
         BigDecimal gstOnDoorDeliveryCharge = percentOf(safeDoorDeliveryCharge, bookingBranch.getGstPercentage());
         BigDecimal freight = effectiveFreight(freightCalc, ratePerKgOverride);
@@ -2341,7 +2365,8 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .add(safeOtherCharges).add(gstOnOtherCharges(safeOtherCharges, bookingBranch))
                 .add(odaChargeDelta).add(gstOnOdaChargeDelta).add(freightDelta).add(gstOnFreightDelta)
                 .add(safeAppointmentDeliveryCharge).add(safeDoorDeliveryCharge).add(gstOnDoorDeliveryCharge)
-                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta);
+                .add(insuranceChargeDelta).add(gstOnInsuranceChargeDelta)
+                .add(safeToPayCharge).add(gstOnToPayCharge);
         return roundOffRule().apply(totalBeforeRoundOff);
     }
 

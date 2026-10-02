@@ -417,11 +417,12 @@ type FreightOutcome =
                   applicableCharges: p.chargeBreakup.applicableCharges,
                   applicableChargeLines: p.chargeBreakup.applicableChargeLines,
                   gstAmount: p.chargeBreakup.gstAmount + gstOnOtherCharges() + gstOnOdaChargeDelta() + gstOnFreightDelta()
-                    + gstOnInsuranceChargeDelta() + gstOnDoorDeliveryCharge(),
+                    + gstOnInsuranceChargeDelta() + gstOnDoorDeliveryCharge() + gstOnToPayCharge(),
                   discountAmount: p.chargeBreakup.discount, roundOff: computedRoundOff(),
                   otherCharges: otherCharges(),
                   appointmentDeliveryCharge: c('appointmentDelivery').value ? appointmentDeliveryCharge() : undefined,
                   doorDeliveryCharge: c('deliveryType').value === 'DOOR' ? doorDeliveryCharge() : undefined,
+                  toPayCharge: toPayCharge(),
                   netAmount: manualNetAmount() ?? computedNetAmount()
                 }" [editable]="true" (netAmountChange)="onManualNetAmountChange($event)"
                   (otherChargesChange)="otherCharges.set($event)"
@@ -665,6 +666,8 @@ export class ShipmentCreate implements OnInit {
    *  {@link appointmentDeliveryCharge}. Reset to zero whenever Office Delivery is picked,
    *  see `ngOnInit`. */
   protected readonly doorDeliveryCharge = signal<number>(0);
+  /** `CompanySettings.toPayCharge` — the flat amount the backend adds to every To-Pay booking. */
+  private readonly toPayChargeSetting = signal<number>(0);
 
   /** Set only when the current preview priced through the Freight Factor fallback (no
    *  route/rate for this lane) — gates the "Freight Factor" input in the summary. */
@@ -803,10 +806,11 @@ export class ShipmentCreate implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
     this.settings.get().subscribe((d) => {
-      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number } })?.shipment;
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number } })?.shipment;
       if (shipment?.defaultChargeableWeightKg != null) {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
       }
+      if (shipment?.toPayCharge != null) this.toPayChargeSetting.set(Number(shipment.toPayCharge));
       if (shipment?.defaultAppointmentDeliveryCharge != null) {
         this.defaultAppointmentDeliveryCharge.set(Number(shipment.defaultAppointmentDeliveryCharge));
         if (this.c('appointmentDelivery').value) {
@@ -1128,6 +1132,22 @@ export class ShipmentCreate implements OnInit {
     return (this.doorDeliveryCharge() * this.myBranchGstPercentage()) / 100;
   }
 
+  /** The company's To-Pay charge when the selected payment mode is To-Pay, else zero — the
+   *  backend decides and adds it (`ShipmentServiceImpl.toPayChargeFor`); this only mirrors it
+   *  so the live total matches what gets booked. To-Pay is recognised by its `(TO_PAY)` code,
+   *  the same way `PAID` is above. */
+  protected toPayCharge(): number {
+    const id = this.c('paymentModeId').value;
+    const label = this.paymentModeOptions().find((o) => o.value === id)?.label ?? '';
+    return label.endsWith('(TO_PAY)') ? this.toPayChargeSetting() : 0;
+  }
+
+  /** GST on {@link toPayCharge} at the booking branch's GST% — mirrors `copyCharge`'s
+   *  `gstOnToPayCharge`. */
+  protected gstOnToPayCharge(): number {
+    return (this.toPayCharge() * this.myBranchGstPercentage()) / 100;
+  }
+
   /** ODA Charge is normally the Pricing Engine's own figure (GST on it already folded into
    *  `chargeBreakup.gstAmount`) — once the operator types an override, only the *difference*
    *  from the engine's figure needs fresh GST, same branch GST% as {@link gstOnOtherCharges}.
@@ -1200,6 +1220,7 @@ export class ShipmentCreate implements OnInit {
       + this.freightDelta() + this.gstOnFreightDelta()
       + appointmentCharge
       + doorCharge + this.gstOnDoorDeliveryCharge()
+      + this.toPayCharge() + this.gstOnToPayCharge()
       + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta();
   }
 
@@ -1598,7 +1619,8 @@ export class ShipmentCreate implements OnInit {
               odaCharge: this.odaChargeOverride() ?? f.odaCharge,
               insuranceCharge: this.finalInsuranceCharge(),
               gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
-                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge(),
+                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
+                + this.gstOnToPayCharge(),
               // `roundOff`/`netAmount` deliberately exclude raw otherCharges/appointmentDeliveryCharge/
               // doorDeliveryCharge here (unlike the sidebar preview) — this file's own `total`
               // (performa-bill-print.util.ts `sheet()`) adds those three back on top of
@@ -1609,6 +1631,7 @@ export class ShipmentCreate implements OnInit {
               netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
                 + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
                 + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
+                + this.gstOnToPayCharge()
                 + (this.computedRoundOff() - p.chargeBreakup.roundOff)
             },
             otherCharges: this.otherCharges(),
@@ -1616,6 +1639,7 @@ export class ShipmentCreate implements OnInit {
             appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
             appointmentTimeSlot: v.appointmentDelivery ? v.appointmentTimeSlot : null,
             doorDeliveryCharge: v.deliveryType === 'DOOR' ? this.doorDeliveryCharge() : undefined,
+            toPayCharge: this.toPayCharge(),
             remarks: v.remarks || null,
             createdByName: s.createdByName ?? null,
             invoiceValue: v.invoiceValue || null,

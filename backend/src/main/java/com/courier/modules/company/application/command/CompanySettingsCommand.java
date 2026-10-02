@@ -22,6 +22,7 @@ public record CompanySettingsCommand(
         Boolean allowDuplicateReferenceNumber, Boolean manualStatusOverrideEnabled,
         Boolean autoAssignTrackingNumber,
         BigDecimal defaultChargeableWeightKg, BigDecimal defaultAppointmentDeliveryCharge,
+        BigDecimal toPayCharge,
 
         BigDecimal gstPercentage, String invoicePrefix, BigDecimal creditLimit,
         Boolean walletEnabled, Boolean codEnabled, Boolean onlinePaymentEnabled,

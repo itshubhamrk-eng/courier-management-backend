@@ -165,6 +165,13 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal defaultAppointmentDeliveryCharge = new BigDecimal("1000.0000");
 
+    /** Flat charge the backend adds to every booking whose payment mode collects at delivery
+     *  (To-Pay) — not a prefill, the booking form shows it read-only. Taxed with GST, folded
+     *  into {@code ShipmentCharge.toPayCharge}. Zero turns it off for this company. */
+    @Column(name = "to_pay_charge", precision = 19, scale = 4, nullable = false)
+    @Builder.Default
+    private BigDecimal toPayCharge = new BigDecimal("50.0000");
+
     // === Finance ============================================================
 
     /** Percentage, 0–100. {@code DECIMAL(5,2)} — money-adjacent, never a double. */

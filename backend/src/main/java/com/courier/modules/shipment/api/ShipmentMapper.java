@@ -234,6 +234,7 @@ public class ShipmentMapper {
                 c.charge().getGstAmount(),
                 c.charge().getDiscountAmount(), c.charge().getRoundOff(), c.charge().getOtherCharges(),
                 c.charge().getAppointmentDeliveryCharge(), c.charge().getDoorDeliveryCharge(),
+                c.charge().getToPayCharge(),
                 c.charge().getCommissionOnBasicFreight(), c.charge().getBranchCommissionOnOtherAmount(),
                 c.charge().getCompanyCommissionOnBasicFreight(), c.charge().getTotalCommission(),
                 c.charge().getNetAmount(),

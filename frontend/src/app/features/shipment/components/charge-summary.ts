@@ -32,6 +32,9 @@ export interface ChargeSummaryData {
    *  into `gstAmount`), unlike {@link appointmentDeliveryCharge}. Undefined/omitted hides
    *  the row entirely. */
   doorDeliveryCharge?: number;
+  /** Company-configured To-Pay charge — added by the backend on To-Pay bookings, never typed
+   *  (read-only here), taxed with GST (folded into `gstAmount`). Zero/omitted hides the row. */
+  toPayCharge?: number;
   netAmount: number;
 }
 
@@ -104,6 +107,9 @@ export interface ChargeSummaryData {
         } @else {
           <dd class="mono">{{ charges().doorDeliveryCharge ?? 0 | number: '1.2-2' }}</dd>
         }
+      }
+      @if (charges().toPayCharge) {
+        <dt>To-Pay Charge</dt><dd class="mono">{{ charges().toPayCharge | number: '1.2-2' }}</dd>
       }
       @if (charges().gstAmount) {
         <dt>GST</dt><dd class="mono">{{ charges().gstAmount | number: '1.2-2' }}</dd>

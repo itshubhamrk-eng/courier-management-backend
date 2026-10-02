@@ -323,6 +323,9 @@ export interface ShipmentCharge {
    *  into `gstAmount`), unlike `appointmentDeliveryCharge`. Zero when `deliveryType` is
    *  OFFICE. */
   doorDeliveryCharge: number;
+  /** Company-configured flat To-Pay charge, added by the backend on To-Pay bookings — taxed
+   *  with GST (folded into `gstAmount`). Zero on any other payment mode. */
+  toPayCharge: number;
   /** Commission breakdown (V28), computed from the booking branch's own charge percentages. */
   commissionOnBasicFreight: number;
   branchCommissionOnOtherAmount: number;

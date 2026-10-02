@@ -547,11 +547,16 @@ export class ShipmentView implements OnInit {
         freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
         insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges,
         applicableChargeLines: c.applicableChargeLines, gstAmount: c.gstAmount,
-        discount: c.discountAmount, roundOff: c.roundOff, netAmount: c.netAmount
+        discount: c.discountAmount, roundOff: c.roundOff,
+        // The saved netAmount already includes the To-Pay charge, and the print totals add
+        // `toPayCharge` back on top (same shape as the booking-time print) — take it out here
+        // so it is counted once.
+        netAmount: c.netAmount - (c.toPayCharge ?? 0)
       },
       otherCharges: c.otherCharges,
       appointmentDeliveryCharge: c.appointmentDeliveryCharge,
       doorDeliveryCharge: c.doorDeliveryCharge,
+      toPayCharge: c.toPayCharge,
       remarks: s.remarks ?? null,
       createdByName: s.createdByName ?? null,
       invoiceValue: s.invoiceValue ?? null,

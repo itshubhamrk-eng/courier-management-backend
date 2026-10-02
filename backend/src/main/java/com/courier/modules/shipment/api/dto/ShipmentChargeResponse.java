@@ -32,6 +32,9 @@ public record ShipmentChargeResponse(
                 + "Taxed with GST (folded into gstAmount), unlike appointmentDeliveryCharge. "
                 + "Zero when deliveryType is OFFICE.")
         BigDecimal doorDeliveryCharge,
+        @Schema(description = "Company-configured flat charge added by the backend on To-Pay "
+                + "bookings. Taxed with GST (folded into gstAmount). Zero otherwise.")
+        BigDecimal toPayCharge,
         BigDecimal commissionOnBasicFreight, BigDecimal branchCommissionOnOtherAmount,
         BigDecimal companyCommissionOnBasicFreight, BigDecimal totalCommission, BigDecimal netAmount,
         UUID matchedRouteId, String matchedRouteCode,

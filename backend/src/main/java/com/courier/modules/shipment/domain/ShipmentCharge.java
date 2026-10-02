@@ -103,6 +103,14 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal doorDeliveryCharge = BigDecimal.ZERO;
 
+    /** The company's configured To-Pay charge ({@code CompanySettings.toPayCharge}) at
+     *  booking time, charged only when the payment mode collects at delivery — added by the
+     *  backend, never typed. Taxed with GST (folded into {@link #gstAmount}). Frozen here so
+     *  a later change to the setting never rewrites an existing shipment. */
+    @Column(name = "to_pay_charge", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal toPayCharge = BigDecimal.ZERO;
+
     /** {@code freight * commissionOnBasicFreight%} — the booking branch's own percentage
      *  ({@code Branch}) at booking time. */
     @Column(name = "commission_on_basic_freight", nullable = false, precision = 19, scale = 4)

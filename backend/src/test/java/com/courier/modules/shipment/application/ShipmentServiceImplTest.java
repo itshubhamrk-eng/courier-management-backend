@@ -165,8 +165,11 @@ class ShipmentServiceImplTest {
         when(freightCalculationService.calculate(any(), any(), any(), any()))
                 .thenReturn(freightCalculationResult(new BigDecimal("100.00"), BigDecimal.ZERO));
 
+        // To-Pay charge zeroed here so the many TO_PAY-mode tests below keep their own,
+        // charge-unrelated expectations; the To-Pay charge tests set it explicitly.
         when(companySettingsService.get())
-                .thenReturn(com.courier.modules.company.domain.CompanySettings.builder().build());
+                .thenReturn(com.courier.modules.company.domain.CompanySettings.builder()
+                        .toPayCharge(BigDecimal.ZERO).build());
     }
 
     @AfterEach
@@ -377,6 +380,82 @@ class ShipmentServiceImplTest {
         // booking branch's own 18% on the difference only: 20.70 (priced) + 4.50 = 25.20.
         assertThat(captor.getValue().getFreight()).isEqualByComparingTo("125.00");
         assertThat(captor.getValue().getGstAmount()).isEqualByComparingTo("25.20");
+    }
+
+    private com.courier.modules.shipment.domain.ShipmentCharge bookAndCaptureCharge() {
+        service.create(command());
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> captor =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private void configureToPayCharge(String amount) {
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .toPayCharge(new BigDecimal(amount)).build());
+    }
+
+    @Test
+    @DisplayName("a To-Pay booking gets the company's To-Pay charge added by the backend, "
+            + "taxed with GST at the booking branch's rate")
+    void toPayBookingAddsConfiguredChargeWithGst() {
+        configureToPayCharge("50.00");
+
+        var charge = bookAndCaptureCharge();
+
+        assertThat(charge.getToPayCharge()).isEqualByComparingTo("50.00");
+        // 20.70 (priced) + 18% of 50.00 = 9.00
+        assertThat(charge.getGstAmount()).isEqualByComparingTo("29.70");
+    }
+
+    @Test
+    @DisplayName("the To-Pay charge raises the stored net amount by charge + GST")
+    void toPayChargeRaisesNetAmount() {
+        var without = bookAndCaptureCharge();
+        org.mockito.Mockito.clearInvocations(chargeRepository);
+        configureToPayCharge("50.00");
+
+        var with = bookAndCaptureCharge();
+
+        // 59.00 before the company's round-off rule re-rounds the total
+        assertThat(with.getNetAmount().subtract(without.getNetAmount()).doubleValue())
+                .isBetween(55.0, 65.0);
+    }
+
+    @Test
+    @DisplayName("a PAID booking never carries the To-Pay charge, whatever the setting says")
+    void paidBookingHasNoToPayCharge() {
+        configureToPayCharge("50.00");
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        Wallet wallet = mock(Wallet.class);
+        when(wallet.getAvailableBalance()).thenReturn(new BigDecimal("1000.00"));
+        when(walletService.getForBranch(BOOKING_BRANCH)).thenReturn(wallet);
+
+        assertThat(bookAndCaptureCharge().getToPayCharge()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("a COD booking never carries the To-Pay charge — it collects at delivery "
+            + "but is the consignee's money, not To-Pay freight")
+    void codBookingHasNoToPayCharge() {
+        configureToPayCharge("50.00");
+        PaymentMode cod = paymentMode(false);
+        cod.setCashOnDelivery(true);
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(cod);
+
+        assertThat(bookAndCaptureCharge().getToPayCharge()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("a company that sets the To-Pay charge to zero charges nothing on To-Pay bookings")
+    void zeroConfiguredToPayChargeChargesNothing() {
+        configureToPayCharge("0");
+
+        var charge = bookAndCaptureCharge();
+
+        assertThat(charge.getToPayCharge()).isEqualByComparingTo("0");
+        assertThat(charge.getGstAmount()).isEqualByComparingTo("20.70");
     }
 
     @Test
