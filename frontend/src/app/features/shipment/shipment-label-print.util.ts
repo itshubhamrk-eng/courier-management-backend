@@ -38,6 +38,20 @@ export function parsePackageId(scanned: string): { awb: string; packageNo: numbe
   return m ? { awb: m[1], packageNo: parseInt(m[2], 10) } : null;
 }
 
+/** The identifiers a scanned value could mean, lower-cased: itself, plus its AWB when it is a
+ *  package id. Exact AWB first-class, so a real tracking number ending `-NNN` still matches. */
+export function scanCandidates(raw: string): string[] {
+  const r = raw.trim().toLowerCase();
+  const p = parsePackageId(r);
+  return p ? [r, p.awb] : [r];
+}
+
+/** True when a scanned/typed value (AWB, shipment no., or a label's package id) names this shipment. */
+export function matchesScan(s: { trackingNumber: string; shipmentNumber: string }, raw: string): boolean {
+  const c = scanCandidates(raw);
+  return c.includes(s.trackingNumber.toLowerCase()) || c.includes(s.shipmentNumber.toLowerCase());
+}
+
 function label(d: ShipmentLabelData, n: number): string {
   const pkgId = packageId(d.trackingNumber, n);
   const weight = d.weight % 1 === 0 ? d.weight.toFixed(0) : d.weight.toFixed(3);

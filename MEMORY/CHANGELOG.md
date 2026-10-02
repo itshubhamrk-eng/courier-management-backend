@@ -14,8 +14,9 @@ All notable changes to this project. Format based on
 tracking number first (a real AWB ending `-NNN` still wins), then the base AWB if package no. is 1..`numberOfPackages`;
 used by `scanOneIn` (In Scan), `getByTrackingNumber` (`GET /shipments/track/{n}`, hub Out Scan) and the shipment search
 spec (`?search=AWB-002` also matches the AWB). Scanning one package still moves the **whole shipment** — there is no
-per-package state/table. Frontend scan screens still exact-compare `trackingNumber` client-side after the search, so
-they need the suffix stripped (not done). Bulk Track and public tracking are unchanged. +4 tests; `mvn test` 1118/1118.
+per-package state/table. Frontend: `matchesScan`/`scanCandidates` (shipment-label-print.util) now used by In Scan, the Track box and the Delivery
+search filter, so a typed/scanned `AWB-002` matches its shipment (verified live: Track box opens the right shipment).
+Hub Out Scan sends the raw value and relies on the backend. Not live-tested: In Scan/Delivery (need a DISPATCHED fixture). Bulk Track and public tracking are unchanged. +4 tests; `mvn test` 1118/1118.
 Live on throwaway :8082: `-001`/`-010` 200, `-011`/`-000`/unknown 404 for a 10-package shipment.
 
 ---

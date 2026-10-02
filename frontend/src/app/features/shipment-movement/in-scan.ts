@@ -18,6 +18,7 @@ import { Manifest, MovementOutcome, Shipment } from '@core/models/shipment.model
 import { ManifestService } from '@features/manifest/manifest.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '@features/shipment/shipment.service';
+import { matchesScan } from '@features/shipment/shipment-label-print.util';
 import { ShipmentMovementService } from './shipment-movement.service';
 import { ManifestCard } from './components/manifest-card';
 import { ScannerIllustration } from '@shared/components/illustrations/scanner-illustration';
@@ -316,8 +317,8 @@ export class InScan implements OnInit {
   private resolveShipment(raw: string): void {
     this.shipmentService.list({ page: 0, size: 5, search: raw }).subscribe({
       next: (sp) => {
-        const shipment = sp.content.find((s) =>
-          s.trackingNumber.toLowerCase() === raw.toLowerCase() || s.shipmentNumber.toLowerCase() === raw.toLowerCase());
+        // A label's package id (AWB-002) resolves to its shipment; scan the AWB, not the suffix.
+        const shipment = sp.content.find((s) => matchesScan(s, raw));
         this.runScan([shipment?.trackingNumber ?? raw]);
       },
       error: () => this.runScan([raw])

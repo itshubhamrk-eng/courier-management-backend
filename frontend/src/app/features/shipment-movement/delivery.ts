@@ -18,6 +18,7 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { ShipmentStatusBadge } from '@features/shipment/components/shipment-status-badge';
 import { ShipmentService } from '@features/shipment/shipment.service';
+import { scanCandidates } from '@features/shipment/shipment-label-print.util';
 import { ShipmentMovementService } from './shipment-movement.service';
 import { Shipment, ShipmentStatus } from '@core/models/shipment.model';
 import { PinIllustration } from '@shared/components/illustrations/pin-illustration';
@@ -345,8 +346,10 @@ export class Delivery implements OnInit {
   protected readonly filteredShipments = computed(() => {
     const q = (this.searchControl.value ?? '').trim().toLowerCase();
     if (!q) return this.shipments();
+    const awb = scanCandidates(q)[1];
     return this.shipments().filter((s) =>
       s.trackingNumber.toLowerCase().includes(q) ||
+      (awb !== undefined && s.trackingNumber.toLowerCase() === awb) ||
       s.shipmentNumber.toLowerCase().includes(q) ||
       s.receiverName.toLowerCase().includes(q));
   });

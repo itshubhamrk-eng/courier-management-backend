@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packageId, parsePackageId, renderLabelsHtml, ShipmentLabelData } from './shipment-label-print.util';
+import { matchesScan, packageId, parsePackageId, renderLabelsHtml, ShipmentLabelData } from './shipment-label-print.util';
 
 const data: ShipmentLabelData = {
   companyName: 'Acme', companyLogo: null, trackingNumber: 'AWB10001', bookingDate: '2026-10-02',
@@ -21,5 +21,12 @@ describe('shipment labels', () => {
     expect(count(one)).toBe(1);
     expect(one).toContain('AWB10001-002');
     expect(one).toContain('2/3');
+  });
+  it('matches a scanned package id, AWB or shipment no. to its shipment', () => {
+    const ship = { trackingNumber: 'AWB10001', shipmentNumber: 'SHP-1' };
+    expect(matchesScan(ship, 'awb10001-002')).toBe(true);
+    expect(matchesScan(ship, 'AWB10001')).toBe(true);
+    expect(matchesScan(ship, 'SHP-1')).toBe(true);
+    expect(matchesScan(ship, 'AWB10002-001')).toBe(false);
   });
 });

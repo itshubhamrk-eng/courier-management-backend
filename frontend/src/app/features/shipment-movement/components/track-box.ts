@@ -6,6 +6,7 @@ import { NotificationService } from '@core/services/notification.service';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { ShipmentService } from '@features/shipment/shipment.service';
+import { matchesScan } from '@features/shipment/shipment-label-print.util';
 
 /** One box, AWB (Tracking No.) or Shipment No.; resolves to the shipment and navigates
  *  straight to its full details view (`ShipmentView`, `/shipments/:id`) — that page shows
@@ -64,8 +65,7 @@ export class TrackBox {
     this.shipmentService.list({ page: 0, size: 5, search: raw }).subscribe({
       next: (p) => {
         this.searching.set(false);
-        const shipment = p.content.find((s) =>
-          s.trackingNumber.toLowerCase() === raw.toLowerCase() || s.shipmentNumber.toLowerCase() === raw.toLowerCase());
+        const shipment = p.content.find((s) => matchesScan(s, raw));
         if (shipment) this.router.navigate(['/shipments', shipment.id]);
         else this.notFound.set(true);
       },
