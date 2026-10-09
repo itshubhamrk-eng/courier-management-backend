@@ -352,7 +352,10 @@ public class DashboardServiceImpl implements DashboardService {
         List<ShipmentChargeRepository.DailyRevenueRow> revenueRows = crossTenant
                 ? CompanyContext.<List<ShipmentChargeRepository.DailyRevenueRow>>runAs(null,
                         () -> shipmentChargeRepository.dailyRevenueByBookingDateBetween(trendStart, today))
-                : shipmentChargeRepository.dailyRevenueByCompanyIdAndBookingDateBetween(scope, trendStart, today);
+                : branchId != null
+                        ? shipmentChargeRepository.dailyRevenueByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+                                scope, branchId, trendStart, today)
+                        : shipmentChargeRepository.dailyRevenueByCompanyIdAndBookingDateBetween(scope, trendStart, today);
         Map<LocalDate, BigDecimal> revenueByDay = revenueRows.stream().collect(Collectors.toMap(
                 ShipmentChargeRepository.DailyRevenueRow::getDay, ShipmentChargeRepository.DailyRevenueRow::getRevenue));
         List<ChartSeriesResponse> revenueTrend = List.of(new ChartSeriesResponse("Revenue",

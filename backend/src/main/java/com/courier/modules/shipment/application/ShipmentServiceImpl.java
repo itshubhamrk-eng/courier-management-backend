@@ -823,7 +823,25 @@ public class ShipmentServiceImpl implements ShipmentService {
             spec = spec.and((root, query, cb) -> deliveredIds.isEmpty()
                     ? cb.disjunction() : root.get("id").in(deliveredIds));
         }
-        return spec;
+        return spec.and(ownBranchScope());
+    }
+
+    /** A branch-bound caller (not a company/platform admin) only sees shipments their own
+     *  branch booked, delivers, holds right now, or is next in line for. */
+    private Specification<Shipment> ownBranchScope() {
+        com.courier.shared.security.AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        UUID ownBranchId = userService.getById(caller.userId()).getBranchId();
+        if (ownBranchId == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return (root, query, cb) -> cb.or(
+                cb.equal(root.get("bookingBranchId"), ownBranchId),
+                cb.equal(root.get("deliveryBranchId"), ownBranchId),
+                cb.equal(root.get("currentLocationId"), ownBranchId),
+                cb.equal(root.get("nextLocationId"), ownBranchId));
     }
 
     @Override

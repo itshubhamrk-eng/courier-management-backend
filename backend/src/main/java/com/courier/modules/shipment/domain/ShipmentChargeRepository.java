@@ -67,6 +67,18 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
                                                                         @Param("start") LocalDate start,
                                                                         @Param("end") LocalDate end);
 
+    /** Branch-scoped sibling of {@link #dailyRevenueByCompanyIdAndBookingDateBetween} — the
+     *  "Revenue Trend" chart for a caller with an own branch. */
+    @Query("select s.bookingDate as day, coalesce(sum(c.netAmount), 0) as revenue "
+            + "from ShipmentCharge c, Shipment s "
+            + "where c.shipmentId = s.id and c.companyId = :companyId and s.companyId = :companyId "
+            + "and s.bookingBranchId = :bookingBranchId "
+            + "and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED "
+            + "group by s.bookingDate")
+    List<DailyRevenueRow> dailyRevenueByCompanyIdAndBookingBranchIdAndBookingDateBetween(
+            @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
+            @Param("start") LocalDate start, @Param("end") LocalDate end);
+
     /** Cross-tenant sibling of {@link #dailyRevenueByCompanyIdAndBookingDateBetween} — only
      *  safe from inside {@code CompanyContext.runAs(null, ...)}, same convention as every
      *  other unscoped method in this repository. */

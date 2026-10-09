@@ -8,6 +8,16 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-09 — Branch revenue chart + shipment list scoped to the caller's branch
+
+- `DashboardServiceImpl.charts`: Revenue Trend now branch-scoped for a caller with an own branch
+  (`ShipmentChargeRepository.dailyRevenueByCompanyIdAndBookingBranchIdAndBookingDateBetween`, cancelled excluded). It was company-wide.
+- `ShipmentServiceImpl.buildSpecification` (shipment list + every report built on it): a branch-bound caller (not COMPANY_ADMIN/platform)
+  sees only shipments their branch booked, delivers, currently holds, or is next in line for. Not scoped: `GET /shipments/{id}`,
+  tracking lookups, and summary endpoints that bypass `buildSpecification`.
+- Verified via API on :8082: admin 33 shipments, Kolhapur 17, Pune Test Hub 4; Kolhapur revenue trend 4780 vs company 8560.
+  Not yet deployed.
+
 ## Deployed 2026-10-09 — branch-scoped load sheets, cancelled-order charts, number reuse, admin Rate/KG to prod
 
 Prod (35.154.220.116) -> `83b169b` (`d035e47`, `83b169b`). Run by the user over SSH: `git merge --ff-only origin/main`,
