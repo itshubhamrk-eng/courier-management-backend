@@ -59,6 +59,7 @@ public class RazorpayWebhookController {
 
     private static final String SIGNATURE_HEADER = "X-Razorpay-Signature";
     private static final String EVENT_PAYMENT_CAPTURED = "payment.captured";
+    private static final String EVENT_PAYMENT_FAILED = "payment.failed";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
     private final WalletService walletService;
@@ -91,7 +92,11 @@ public class RazorpayWebhookController {
 
         // Every event this deployment does not act on is still acknowledged with 200 —
         // Razorpay retries on anything else, and there is nothing to retry towards.
-        if (!EVENT_PAYMENT_CAPTURED.equals(root.path("event").asText(""))) {
+        String event = root.path("event").asText("");
+        if (EVENT_PAYMENT_FAILED.equals(event)) {
+            return handleFailed(root);
+        }
+        if (!EVENT_PAYMENT_CAPTURED.equals(event)) {
             return ResponseEntity.ok().build();
         }
 
@@ -125,6 +130,25 @@ public class RazorpayWebhookController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
 
+        return ResponseEntity.ok().build();
+    }
+
+    /** Marks the recharge attempt FAILED (never downgrades SUCCESS; a later capture still settles it). */
+    private ResponseEntity<Void> handleFailed(JsonNode root) {
+        JsonNode entity = root.path("payload").path("payment").path("entity");
+        String orderId = textOrNull(entity, "order_id");
+        UUID companyId = uuidOrNull(entity.path("notes"), "companyId");
+        if (orderId == null || companyId == null) {
+            return ResponseEntity.ok().build();
+        }
+        String reason = textOrNull(entity, "error_description");
+        try {
+            CompanyContext.runAs(companyId, () ->
+                    walletService.markRechargeFailed(companyId, orderId, reason == null ? "The payment failed." : reason));
+        } catch (Exception e) {
+            log.error("Could not record failed Razorpay payment for order {}", orderId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
         return ResponseEntity.ok().build();
     }
 

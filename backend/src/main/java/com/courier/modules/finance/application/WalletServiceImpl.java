@@ -13,6 +13,8 @@ import com.courier.modules.finance.application.event.WalletEvent;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.RechargeOrder;
+import com.courier.modules.finance.domain.RechargeOrderRepository;
 import com.courier.modules.finance.domain.PendingCommissionPort;
 import com.courier.modules.finance.domain.ReferenceType;
 import com.courier.modules.finance.domain.SubTransactionType;
@@ -117,6 +119,8 @@ public class WalletServiceImpl implements WalletService {
     private final CompanyPaymentGatewayResolver paymentGatewayResolver;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RechargeOrderTracker rechargeOrders;
+    private final RechargeOrderRepository rechargeOrderRepository;
 
     // ------------------------------------------------------------- provisioning
 
@@ -298,25 +302,37 @@ public class WalletServiceImpl implements WalletService {
 
         BigDecimal amount = requirePositiveAmount(command.amount());
 
-        // No ledger row yet, on purpose. An entry is a record of money that moved; a
-        // PENDING row for a checkout the user may simply close would make every statement
-        // and every balance-before/after figure a guess. The intent is recorded in the
-        // audit trail instead, which is where "who tried what" belongs.
+        // Our own record first, with our own transaction number — committed before the
+        // gateway is called, so an attempt is never lost to a gateway timeout or a crash,
+        // and the number is the gateway receipt. It is a recharge-order row, deliberately not
+        // a ledger entry: a ledger entry is a record of money that moved (see V102).
+        String transactionNo = WalletNumberGenerator.transactionNumber();
+        RechargeOrder attempt = rechargeOrders.begin(companyId, wallet.getId(), branchId, amount,
+                wallet.getCurrency(), paymentGateway.name(), transactionNo);
+
         Map<String, String> notes = new HashMap<>();
         notes.put("walletNumber", wallet.getWalletNumber());
         notes.put("branchId", branchId.toString());
         notes.put("companyId", companyId.toString());
+        notes.put("transactionNo", transactionNo);
 
-        PaymentGatewayPort.GatewayOrder order = paymentGateway.createOrder(
-                amount, wallet.getCurrency(), WalletNumberGenerator.transactionNumber(), notes);
+        PaymentGatewayPort.GatewayOrder order;
+        try {
+            order = paymentGateway.createOrder(amount, wallet.getCurrency(), transactionNo, notes);
+        } catch (RuntimeException e) {
+            rechargeOrders.markFailed(attempt.getId(), "Gateway order was not created: " + e.getMessage());
+            throw e;
+        }
+        rechargeOrders.attachGatewayOrder(attempt.getId(), order.orderId());
 
-        log.info("Recharge order {} opened for wallet {} ({} {}) by {}",
-                order.orderId(), wallet.getWalletNumber(), wallet.getCurrency(),
+        log.info("Recharge {} (order {}) opened for wallet {} ({} {}) by {}",
+                transactionNo, order.orderId(), wallet.getWalletNumber(), wallet.getCurrency(),
                 amount.toPlainString(), currentActor());
         auditService.record(AuditAction.WALLET_RECHARGE_INITIATED, ENTITY, wallet.getId(),
                 Map.of("walletNumber", wallet.getWalletNumber(),
                         "amount", amount.toPlainString(),
                         "gateway", order.gateway(),
+                        "transactionNo", transactionNo,
                         "gatewayOrderId", order.orderId()));
 
         return order;
@@ -341,6 +357,7 @@ public class WalletServiceImpl implements WalletService {
         if (already.isPresent()) {
             log.info("Recharge {} already recorded as {}; returning it unchanged",
                     paymentId, already.get().getTransactionNo());
+            rechargeOrders.markSuccess(companyId, orderId, paymentId, already.get().getId());
             return already.get();
         }
         // Not ours, but recorded by someone. Refuse flatly rather than saying whose it is.
@@ -405,6 +422,7 @@ public class WalletServiceImpl implements WalletService {
         if (already.isPresent()) {
             log.info("Recharge {} already recorded as {}; returning it unchanged",
                     paymentId, already.get().getTransactionNo());
+            rechargeOrders.markSuccess(companyId, orderId, paymentId, already.get().getId());
             return already.get();
         }
         // Not ours, but recorded by someone. Refuse flatly rather than saying whose it is.
@@ -437,6 +455,7 @@ public class WalletServiceImpl implements WalletService {
                 SubTransactionType.WRC, payment.amount(),
                 ReferenceType.PAYMENT, orderId, remarks,
                 payment.gateway(), paymentId, PaymentStatus.SUCCESS);
+        rechargeOrders.markSuccess(companyId, orderId, paymentId, entry.getId());
 
         log.info("Wallet {} recharged {} {} via {} ({}) by {}",
                 wallet.getWalletNumber(), wallet.getCurrency(),
@@ -453,6 +472,68 @@ public class WalletServiceImpl implements WalletService {
                 payment.amount(), entry.getBalanceAfter(), Instant.now()));
 
         return entry;
+    }
+
+    @Override
+    @Transactional
+    public void markRechargeFailed(UUID companyId, String gatewayOrderId, String reason) {
+        rechargeOrders.markFailedByGatewayOrder(companyId, gatewayOrderId, reason);
+    }
+
+    /** A PENDING recharge older than this with no captured payment is given up on (a late
+     *  capture is still settled by the webhook). */
+    private static final java.time.Duration RECHARGE_PAYMENT_WINDOW = java.time.Duration.ofMinutes(30);
+    /** An attempt that never got a gateway order id (crash between the two steps). */
+    private static final java.time.Duration RECHARGE_ORDER_CREATE_WINDOW = java.time.Duration.ofMinutes(10);
+
+    @Override
+    @Transactional
+    public void reconcileRecharge(UUID rechargeOrderId) {
+        RechargeOrder order = rechargeOrderRepository.findById(rechargeOrderId).orElse(null);
+        if (order == null || !order.isPending()) {
+            return;
+        }
+        UUID companyId = order.getCompanyId();
+        Instant now = Instant.now();
+        java.time.Duration age = java.time.Duration.between(order.getCreatedAt(), now);
+
+        if (order.getGatewayOrderId() == null) {
+            if (age.compareTo(RECHARGE_ORDER_CREATE_WINDOW) > 0) {
+                rechargeOrders.markFailed(order.getId(), "The gateway order was never created.");
+            }
+            return;
+        }
+
+        PaymentGatewayPort gateway = paymentGatewayResolver.resolve(companyId);
+        List<PaymentGatewayPort.OrderPayment> payments;
+        try {
+            payments = gateway.fetchOrderPayments(order.getGatewayOrderId());
+        } catch (BusinessRuleException unreachable) {
+            // Transient (gateway down) or misconfigured: leave PENDING, try again next run.
+            log.warn("Recharge {} could not be checked at the gateway: {}",
+                    order.getTransactionNo(), unreachable.getMessage());
+            rechargeOrders.touch(order.getId());
+            return;
+        }
+
+        Optional<PaymentGatewayPort.OrderPayment> captured =
+                payments.stream().filter(PaymentGatewayPort.OrderPayment::captured).findFirst();
+        if (captured.isPresent()) {
+            settlePayment(companyId, order.getBranchId(), gateway, order.getGatewayOrderId(),
+                    captured.get().paymentId(), "Settled by reconciliation — no confirmation reached us",
+                    "scheduler");
+            return;
+        }
+        if (!payments.isEmpty() && payments.stream().allMatch(p -> "failed".equalsIgnoreCase(p.status()))) {
+            String reason = payments.get(payments.size() - 1).error();
+            rechargeOrders.markFailed(order.getId(), reason == null ? "The payment failed at the gateway." : reason);
+            return;
+        }
+        if (age.compareTo(RECHARGE_PAYMENT_WINDOW) > 0) {
+            rechargeOrders.markFailed(order.getId(), "No payment was captured within 30 minutes.");
+            return;
+        }
+        rechargeOrders.touch(order.getId());
     }
 
     // ------------------------------------------------------------ manual credit

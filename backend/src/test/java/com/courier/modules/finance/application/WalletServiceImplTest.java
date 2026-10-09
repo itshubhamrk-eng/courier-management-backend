@@ -8,6 +8,8 @@ import com.courier.modules.finance.application.command.ShipmentReversalCommand;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.RechargeOrder;
+import com.courier.modules.finance.domain.RechargeOrderRepository;
 import com.courier.modules.finance.domain.PendingCommissionPort;
 import com.courier.modules.finance.domain.ReferenceType;
 import com.courier.modules.finance.domain.SubTransactionType;
@@ -83,6 +85,8 @@ class WalletServiceImplTest {
     @Mock private CompanyPaymentGatewayResolver paymentGatewayResolver;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private RechargeOrderTracker rechargeOrders;
+    @Mock private RechargeOrderRepository rechargeOrderRepository;
 
     private WalletServiceImpl service;
     private Wallet wallet;
@@ -90,8 +94,16 @@ class WalletServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new WalletServiceImpl(walletRepository, transactionRepository, branchDirectory,
-                pendingCommission, paymentGatewayResolver, auditService, eventPublisher);
+                pendingCommission, paymentGatewayResolver, auditService, eventPublisher,
+                rechargeOrders, rechargeOrderRepository);
         when(paymentGatewayResolver.resolve(any())).thenReturn(paymentGateway);
+        when(paymentGateway.name()).thenReturn("RAZORPAY");
+        when(rechargeOrders.begin(any(), any(), any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            RechargeOrder o = RechargeOrder.builder().transactionNo(inv.getArgument(6))
+                    .status(PaymentStatus.PENDING).build();
+            o.setId(java.util.UUID.randomUUID());
+            return o;
+        });
         when(pendingCommission.pendingCommissionFor(any(), any()))
                 .thenReturn(PendingCommissionPort.PendingCommission.ZERO);
 
@@ -419,6 +431,89 @@ class WalletServiceImplTest {
         assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1000.00");
         verify(transactionRepository, never()).save(any());
         verify(auditService).record(eq(AuditAction.WALLET_RECHARGE_INITIATED), any(), any(), any());
+        // Our record exists before the gateway order, and the gateway receipt is our txn number.
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(rechargeOrders, paymentGateway);
+        inOrder.verify(rechargeOrders).begin(any(), any(), any(), any(), any(), eq("RAZORPAY"), any());
+        inOrder.verify(paymentGateway).createOrder(any(), any(), any(), any());
+        inOrder.verify(rechargeOrders).attachGatewayOrder(any(), eq("order_1"));
+    }
+
+    @Test
+    @DisplayName("a gateway failure on opening is recorded as FAILED, not lost")
+    void openRechargeGatewayDown() {
+        when(paymentGateway.createOrder(any(), any(), any(), any()))
+                .thenThrow(new BusinessRuleException("The payment gateway could not be reached."));
+
+        assertThatThrownBy(() -> service.openRecharge(
+                new RechargeCommand(BRANCH, new BigDecimal("5000.00"), null, null, null, null)))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verify(rechargeOrders).markFailed(any(), org.mockito.ArgumentMatchers.contains("not created"));
+        verify(rechargeOrders, never()).attachGatewayOrder(any(), any());
+    }
+
+    private RechargeOrder pendingOrder(String gatewayOrderId, java.time.Duration age) {
+        RechargeOrder o = RechargeOrder.builder().branchId(BRANCH).transactionNo("TXN1")
+                .gatewayOrderId(gatewayOrderId).status(PaymentStatus.PENDING).build();
+        o.setId(java.util.UUID.randomUUID());
+        o.setCompanyId(TENANT);
+        org.springframework.test.util.ReflectionTestUtils.setField(o, "createdAt", java.time.Instant.now().minus(age));
+        when(rechargeOrderRepository.findById(o.getId())).thenReturn(Optional.of(o));
+        return o;
+    }
+
+    @Test
+    @DisplayName("reconciliation credits a captured payment the browser never confirmed")
+    void reconcileCaptured() {
+        RechargeOrder o = pendingOrder("order_1", java.time.Duration.ofMinutes(5));
+        when(paymentGateway.fetchOrderPayments("order_1")).thenReturn(
+                java.util.List.of(new PaymentGatewayPort.OrderPayment("pay_1", "captured", true, null)));
+        gatewayReports("500.00", "INR", true);
+
+        service.reconcileRecharge(o.getId());
+
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1500.00");
+        verify(rechargeOrders).markSuccess(eq(TENANT), eq("order_1"), eq("pay_1"), any());
+    }
+
+    @Test
+    @DisplayName("reconciliation marks an order whose payments all failed as FAILED")
+    void reconcileFailed() {
+        RechargeOrder o = pendingOrder("order_1", java.time.Duration.ofMinutes(5));
+        when(paymentGateway.fetchOrderPayments("order_1")).thenReturn(
+                java.util.List.of(new PaymentGatewayPort.OrderPayment("pay_1", "failed", false, "Card declined")));
+
+        service.reconcileRecharge(o.getId());
+
+        verify(rechargeOrders).markFailed(o.getId(), "Card declined");
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("reconciliation leaves a young unpaid order pending and gives up on an old one")
+    void reconcileUnpaid() {
+        RechargeOrder young = pendingOrder("order_1", java.time.Duration.ofMinutes(5));
+        when(paymentGateway.fetchOrderPayments("order_1")).thenReturn(java.util.List.of());
+        service.reconcileRecharge(young.getId());
+        verify(rechargeOrders).touch(young.getId());
+        verify(rechargeOrders, never()).markFailed(eq(young.getId()), any());
+
+        RechargeOrder old = pendingOrder("order_1", java.time.Duration.ofMinutes(45));
+        service.reconcileRecharge(old.getId());
+        verify(rechargeOrders).markFailed(eq(old.getId()), org.mockito.ArgumentMatchers.contains("30 minutes"));
+    }
+
+    @Test
+    @DisplayName("a gateway outage during reconciliation leaves the order pending")
+    void reconcileGatewayDown() {
+        RechargeOrder o = pendingOrder("order_1", java.time.Duration.ofMinutes(45));
+        when(paymentGateway.fetchOrderPayments("order_1"))
+                .thenThrow(new BusinessRuleException("The payment gateway could not be reached."));
+
+        service.reconcileRecharge(o.getId());
+
+        verify(rechargeOrders).touch(o.getId());
+        verify(rechargeOrders, never()).markFailed(any(), any());
     }
 
     @Test

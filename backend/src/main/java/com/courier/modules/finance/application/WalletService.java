@@ -84,6 +84,21 @@ public interface WalletService {
     WalletTransaction completeRecharge(RechargeCommand command);
 
     /**
+     * Webhook path: the gateway says a payment on this order failed. Marks the recharge
+     * attempt {@code FAILED} (never downgrades a {@code SUCCESS}). No authenticated user —
+     * same caller contract as {@link #settleFromWebhook}.
+     */
+    void markRechargeFailed(UUID companyId, String gatewayOrderId, String reason);
+
+    /**
+     * Scheduler path: asks the gateway what happened to a still-{@code PENDING} recharge and
+     * settles it (credit + {@code SUCCESS}), fails it, or leaves it for the next run. Called
+     * only by {@code RechargeReconciliationJob}, never from a request.
+     */
+    void reconcileRecharge(UUID rechargeOrderId);
+
+
+    /**
      * Same settlement as {@link #completeRecharge}, reached from a Razorpay webhook instead
      * of the browser — covers a tab closed after the gateway captured the payment but before
      * the browser confirmed it. No {@code @PreAuthorize}: a webhook carries no authenticated

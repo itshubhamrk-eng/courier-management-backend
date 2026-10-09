@@ -160,6 +160,32 @@ public class RazorpayPaymentGateway implements PaymentGatewayPort {
                 "captured".equalsIgnoreCase(status));
     }
 
+    @Override
+    public java.util.List<OrderPayment> fetchOrderPayments(String orderId) {
+        if (isBlank(orderId)) {
+            throw new BusinessRuleException("An order id is required.");
+        }
+        Map<?, ?> response;
+        try {
+            response = restClient.get().uri("/orders/{id}/payments", orderId).retrieve().body(Map.class);
+        } catch (Exception e) {
+            throw translateGatewayException(e, "order payments lookup", orderId);
+        }
+        java.util.List<OrderPayment> payments = new java.util.ArrayList<>();
+        Object items = response == null ? null : response.get("items");
+        if (items instanceof java.util.List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> p && p.get("id") != null) {
+                    String status = String.valueOf(p.get("status"));
+                    Object error = p.get("error_description");
+                    payments.add(new OrderPayment(String.valueOf(p.get("id")), status,
+                            "captured".equalsIgnoreCase(status), error == null ? null : String.valueOf(error)));
+                }
+            }
+        }
+        return payments;
+    }
+
     /**
      * A 401/403 from Razorpay means our own key id/secret is wrong or disabled — that is
      * an operator misconfiguration, not a transient outage, and telling the caller to

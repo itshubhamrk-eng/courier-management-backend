@@ -47,4 +47,10 @@ public class UnconfiguredPaymentGateway implements PaymentGatewayPort {
         log.warn("Payment lookup refused: no payment gateway configured");
         throw new BusinessRuleException(MESSAGE);
     }
+
+    @Override
+    public java.util.List<OrderPayment> fetchOrderPayments(String orderId) {
+        log.warn("Order payment lookup refused: no payment gateway configured");
+        throw new BusinessRuleException(MESSAGE);
+    }
 }

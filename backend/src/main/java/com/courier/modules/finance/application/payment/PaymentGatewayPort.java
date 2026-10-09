@@ -51,6 +51,22 @@ public interface PaymentGatewayPort {
     GatewayPayment fetchPayment(String paymentId);
 
     /**
+     * Every payment attempt the gateway holds for an order — what the reconciliation job asks
+     * when no confirmation ever reached us (browser closed, webhook missed).
+     */
+    java.util.List<OrderPayment> fetchOrderPayments(String orderId);
+
+    /**
+     * One payment attempt on an order.
+     *
+     * @param status   the gateway's own status word, e.g. {@code captured}, {@code failed}
+     * @param captured true once the money is actually with the merchant
+     * @param error    the gateway's failure description, when it gave one
+     */
+    record OrderPayment(String paymentId, String status, boolean captured, String error) {
+    }
+
+    /**
      * An order opened at the gateway.
      *
      * @param gateway    which gateway produced it

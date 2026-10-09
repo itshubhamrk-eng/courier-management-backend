@@ -8,6 +8,23 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-09 — Online recharge: record first, gateway second, scheduler for the unanswered (V102)
+
+- **`wallet_recharge_orders` (V102)** — one row per Razorpay recharge attempt, created *before* the gateway is called with our own
+  transaction number (`TXN...`, also the Razorpay `receipt`). `PENDING` -> `SUCCESS` (wallet credited, ledger id stored) or `FAILED`
+  (reason stored). Deliberately **not** a ledger row: the ledger still only records money that moved (the old "no PENDING row"
+  rationale in `openRecharge` stands, the attempt record just lives in its own table). `FAILED` is not terminal — a later captured
+  payment still settles the order.
+- `WalletServiceImpl.openRecharge` -> `RechargeOrderTracker.begin` (own transaction, survives a gateway failure) -> `createOrder` ->
+  `attachGatewayOrder`; a gateway exception marks the attempt `FAILED` and rethrows. `settlePayment` (browser confirm, webhook and
+  scheduler all go through it) flips the order to `SUCCESS` in the same transaction as the credit; idempotent on the payment id.
+- **Webhook** now also handles `payment.failed` (marks the attempt `FAILED`, never downgrades `SUCCESS`). Enable that event on the
+  Razorpay dashboard webhook alongside `payment.captured`.
+- **`RechargeReconciliationJob`** (every 2 min, 90 s initial delay): picks `PENDING` orders older than 2 min, per company's own gateway
+  asks Razorpay `GET /orders/{id}/payments` (`PaymentGatewayPort.fetchOrderPayments`) and settles a captured payment, fails an order whose
+  payments all failed, fails one with no captured payment after 30 min (10 min if no gateway order id), or leaves it for the next run
+  (gateway outage). Not yet deployed.
+
 ## 2026-10-09 — Branch revenue chart + shipment list scoped to the caller's branch
 
 - `DashboardServiceImpl.charts`: Revenue Trend now branch-scoped for a caller with an own branch
