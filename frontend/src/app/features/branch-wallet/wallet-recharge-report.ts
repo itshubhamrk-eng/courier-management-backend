@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
@@ -14,8 +15,11 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 import { BranchWalletService } from './branch-wallet.service';
+import { RechargeDialog } from './components/recharge-dialog';
 
 const VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER, AppRole.BRANCH_MANAGER];
+/** Same gate as the Recharge button on Branch Wallet. */
+const RECHARGERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.FINANCE_USER];
 
 const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
   { value: null, label: 'All modes' }, { value: 'ONLINE', label: 'Razorpay' }, { value: 'MANUAL', label: 'Manual' }
@@ -48,6 +52,9 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
         <div class="page__actions">
           <app-search placeholder="Search transaction no, order or payment id…" (changed)="onSearch($event)" />
           <app-button variant="stroked" icon="refresh" (pressed)="reload()">Refresh</app-button>
+          @if (canRecharge) {
+            <app-button icon="add_card" [loading]="opening()" (pressed)="recharge()">Recharge</app-button>
+          }
           <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
         </div>
       </header>
@@ -134,6 +141,7 @@ export class WalletRechargeReport implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   readonly tabs = STATUS_TABS;
   readonly modeTabs = MODE_TABS;
@@ -141,6 +149,8 @@ export class WalletRechargeReport implements OnInit {
   readonly loading = signal(true);
   readonly exporting = signal(false);
   readonly checkingId = signal<string | null>(null);
+  readonly opening = signal(false);
+  protected readonly canRecharge = this.perms.canAccess({ roles: RECHARGERS, permissions: ['WALLET_RECHARGE'] });
   readonly page = signal<Page<RechargeAttempt>>(emptyPage<RechargeAttempt>());
   readonly sort = signal<SortState | null>({ active: 'createdAt', direction: 'desc' });
   readonly status = signal<RechargeAttemptStatus | null>(null);
@@ -192,6 +202,27 @@ export class WalletRechargeReport implements OnInit {
   }
 
   reload() { this.load(); }
+
+  /** Razorpay recharge for the caller's own branch wallet, right from the report. An admin has no
+   *  branch of their own — they pick the branch on Branch Wallet instead. The report reloads
+   *  afterwards whatever happened, since even a cancelled checkout leaves a row behind. */
+  recharge(): void {
+    this.opening.set(true);
+    this.service.get().subscribe({
+      next: (w) => {
+        this.opening.set(false);
+        this.dialog.open(RechargeDialog, {
+          autoFocus: false, panelClass: 'app-dialog',
+          data: { branchId: w.branchId, walletName: w.branchName || w.walletNumber, currency: w.currency }
+        }).afterClosed().subscribe(() => this.load());
+      },
+      error: () => {
+        this.opening.set(false);
+        this.notify.info('Choose the branch to recharge on the Branch Wallet page.');
+        this.router.navigate(['/finance/branch-wallet']);
+      }
+    });
+  }
 
   /** Asks the gateway about one pending attempt right now, then reports what became of it. */
   check(a: RechargeAttempt): void {

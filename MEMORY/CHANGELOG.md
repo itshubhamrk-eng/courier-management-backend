@@ -25,7 +25,8 @@ All notable changes to this project. Format based on
   `MANUAL`/`SUCCESS` row linked to its `MCR` entry, commission credit made no recharge row; Transactions page has no status column.
   `mvn test` 1130/1130. Not yet deployed.
 - **Branch side:** Finance > Recharge Report is now also in the BRANCH_MANAGER menu/route; the backend (`searchRechargeAttempts`) forces a non-admin
-  caller to their own branch (a `branchId` for another branch is ignored), so a branch only sees its own recharges.
+  caller to their own branch (a `branchId` for another branch is ignored), so a branch only sees its own recharges. The report also has a **Recharge** button (Razorpay dialog, same `WALLET_RECHARGE` gate as Branch Wallet) for the caller's own
+  branch wallet; the report reloads when the checkout closes. A company admin has no branch of their own, so the button sends them to Branch Wallet to pick one.
 
 ## 2026-10-09 — Online recharge: record first, gateway second, scheduler for the unanswered (V102)
 
