@@ -52,6 +52,11 @@ export class BranchWalletService {
     return this.api.page<RechargeAttempt>(`${this.base}/recharge-attempts`, query);
   }
 
+  /** "Check status" on a pending attempt — asks the gateway now; returns the attempt afterwards. */
+  checkRechargeAttempt(id: string) {
+    return this.api.post<RechargeAttempt>(`${this.base}/recharge-attempts/${id}/check`, {});
+  }
+
   // ---- recharge ---------------------------------------------------------------
   /** Step one: opens a gateway order for the amount. Nothing is credited yet. */
   openRechargeOrder(body: RechargeRequest) {

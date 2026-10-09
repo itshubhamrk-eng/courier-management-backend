@@ -27,7 +27,9 @@ All notable changes to this project. Format based on
 - **Recharge Attempts report.** `GET /branch-wallet/recharge-attempts` (status/branch/date/search filters; COMPANY_ADMIN/FINANCE_USER see every
   branch, anyone else only their own) + Finance > "Recharge Attempts" page (`/finance/branch-wallet/recharge-attempts`): All/Pending/Success/
   Failed tabs, failure reason, gateway order/payment ids, settled/last-checked time, CSV export. The existing Recharge Report still lists
-  credited recharges only. **Gotcha:** the local dev DB mirrors prod, where AMAZING_LOGISTICS has its own Razorpay account in LIVE mode
+  credited recharges only. Pending rows carry a **Check status** button (`POST /branch-wallet/recharge-attempts/{id}/check`): same gateway
+  check the scheduler runs, on demand — credits / fails / leaves it, toast says which.
+  **Gotcha:** the local dev DB mirrors prod, where AMAZING_LOGISTICS has its own Razorpay account in LIVE mode
   (`company_razorpay_config`), overriding the `rzp_test_` key in `.env` — a recharge started on :4200/:8082 opens a real live order and
   Razorpay checkout redirects to the real bank. Never complete one while testing; unpaid orders just expire and the scheduler fails them.
 

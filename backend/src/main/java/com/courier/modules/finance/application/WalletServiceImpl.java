@@ -514,6 +514,24 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     @Transactional
+    @PreAuthorize(COMPANY_USERS_ONLY)
+    public RechargeOrder checkRechargeAttempt(UUID rechargeOrderId) {
+        UUID companyId = requireCompany();
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        RechargeOrder order = rechargeOrderRepository.findById(rechargeOrderId)
+                .filter(o -> companyId.equals(o.getCompanyId()))
+                .orElseThrow(() -> new ResourceNotFoundException(ENTITY, rechargeOrderId));
+        boolean companyWide = isAdmin(caller) || caller.hasRole(
+                com.courier.modules.company.domain.DefaultRoleCatalog.FINANCE_USER);
+        if (!companyWide && !ownBranch(caller, companyId).filter(order.getBranchId()::equals).isPresent()) {
+            throw new ResourceNotFoundException(ENTITY, rechargeOrderId);
+        }
+        reconcileRecharge(order.getId());
+        return rechargeOrderRepository.findById(order.getId()).orElse(order);
+    }
+
+    @Override
+    @Transactional
     public void markRechargeFailed(UUID companyId, String gatewayOrderId, String reason) {
         rechargeOrders.markFailedByGatewayOrder(companyId, gatewayOrderId, reason);
     }

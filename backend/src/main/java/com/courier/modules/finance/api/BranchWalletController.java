@@ -33,6 +33,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -175,6 +176,17 @@ public class BranchWalletController {
         Page<RechargeOrder> page = service.searchRechargeAttempts(
                 branchId, status, fromDate, toDate, search, sanitise(pageable));
         return ApiResponse.success(PageResponse.from(page, mapper::toAttemptResponse));
+    }
+
+    @PostMapping("/recharge-attempts/{id}/check")
+    @Operation(summary = "Check a pending recharge now",
+            description = """
+                    Asks the gateway what happened to this attempt right now — the same check the
+                    scheduler runs every 2 minutes — and credits, fails or leaves it. Returns the
+                    attempt as it stands afterwards.
+                    """)
+    public ApiResponse<RechargeAttemptResponse> checkRechargeAttempt(@PathVariable UUID id) {
+        return ApiResponse.success(mapper.toAttemptResponse(service.checkRechargeAttempt(id)));
     }
 
     @PostMapping("/recharge/order")

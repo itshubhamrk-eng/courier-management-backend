@@ -83,6 +83,12 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
             @else if (a.lastCheckedAt) { <span class="dash">checked {{ a.lastCheckedAt | date:'HH:mm' }}</span> }
             @else { <span class="dash">—</span> }
           </td>
+          <td>
+            @if (a.status === 'PENDING') {
+              <app-button variant="stroked" icon="sync" [loading]="checkingId() === a.id"
+                          [disabled]="checkingId() !== null" (pressed)="check(a)">Check status</app-button>
+            }
+          </td>
         </ng-template>
       </app-table>
 
@@ -117,6 +123,7 @@ export class WalletRechargeAttempts implements OnInit {
   readonly tabs = STATUS_TABS;
   readonly loading = signal(true);
   readonly exporting = signal(false);
+  readonly checkingId = signal<string | null>(null);
   readonly page = signal<Page<RechargeAttempt>>(emptyPage<RechargeAttempt>());
   readonly sort = signal<SortState | null>({ active: 'createdAt', direction: 'desc' });
   readonly status = signal<RechargeAttemptStatus | null>(null);
@@ -134,7 +141,8 @@ export class WalletRechargeAttempts implements OnInit {
     { key: 'failureReason', header: 'Reason' },
     { key: 'gatewayOrderId', header: 'Gateway Order' },
     { key: 'gatewayPaymentId', header: 'Payment Id' },
-    { key: 'settledAt', header: 'Settled / Checked' }
+    { key: 'settledAt', header: 'Settled / Checked' },
+    { key: 'status', header: '', width: '150px' }
   ];
 
   ngOnInit(): void {
@@ -164,6 +172,21 @@ export class WalletRechargeAttempts implements OnInit {
   }
 
   reload() { this.load(); }
+
+  /** Asks the gateway about one pending attempt right now, then reports what became of it. */
+  check(a: RechargeAttempt): void {
+    this.checkingId.set(a.id);
+    this.service.checkRechargeAttempt(a.id).subscribe({
+      next: (r) => {
+        this.checkingId.set(null);
+        this.page.update((p) => ({ ...p, content: p.content.map((x) => (x.id === r.id ? r : x)) }));
+        if (r.status === 'SUCCESS') this.notify.success(`Payment received — ${this.money(r.amount)} credited to the wallet.`);
+        else if (r.status === 'FAILED') this.notify.error(r.failureReason ?? 'The payment failed.');
+        else this.notify.info('Still pending — the gateway has no completed payment for it yet.');
+      },
+      error: (e) => { this.checkingId.set(null); this.notify.error(e?.error?.message ?? 'Could not check the payment.'); }
+    });
+  }
   onSearch(t: string) { this.query = { ...this.query, search: t || undefined, page: 0 }; this.load(); }
   onPage(i: number) { this.query = { ...this.query, page: i }; this.load(); }
   onSort(s: SortState) { this.sort.set(s); this.query = { ...this.query, sort: `${s.active},${s.direction}`, page: 0 }; this.load(); }

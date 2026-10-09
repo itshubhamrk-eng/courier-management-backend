@@ -99,6 +99,13 @@ public interface WalletService {
             java.time.LocalDate fromDate, java.time.LocalDate toDate, String search,
             org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * The "Check status" button on a {@code PENDING} attempt: runs the same gateway check the
+     * scheduler would, right now, and returns the attempt as it stands afterwards. Company
+     * admins/finance users may check any branch's; anyone else only their own.
+     */
+    com.courier.modules.finance.domain.RechargeOrder checkRechargeAttempt(UUID rechargeOrderId);
+
     void markRechargeFailed(UUID companyId, String gatewayOrderId, String reason);
 
     /**
