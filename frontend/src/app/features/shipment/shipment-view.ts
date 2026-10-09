@@ -131,6 +131,25 @@ const TIMELINE_ICONS: Record<string, string> = {
               <app-loader [minHeight]="140" caption="Loading…" />
             } @else if (charge(); as c) {
               <app-charge-summary [charges]="c" />
+              @if (canEditRate()) {
+                <div class="rate-edit">
+                  <label class="rate-edit__l">Rate/KG
+                    <input class="rate-edit__i" type="number" min="0.01" step="0.01"
+                           [value]="rateInput() ?? currentRatePerKg()" (input)="onRateInput($event)" />
+                  </label>
+                  <app-button variant="stroked" icon="calculate" [loading]="rateCalculating()"
+                              [disabled]="rateInput() === null" (pressed)="calculateRate()">Calculate</app-button>
+                  <app-button icon="check" [loading]="rateSaving()" [disabled]="!ratePreview()"
+                              (pressed)="saveRate()">Update Rate/KG</app-button>
+                  <span class="rate-edit__h">Calculate to preview the new charges, then update.</span>
+                </div>
+                @if (ratePreview(); as p) {
+                  <div class="rate-preview">
+                    <div class="rate-preview__t">Preview at {{ rateInput() | number: '1.2-2' }}/KG — not saved yet</div>
+                    <app-charge-summary [charges]="p" />
+                  </div>
+                }
+              }
             } @else {
               <p class="empty">No charge record.</p>
             }
@@ -347,6 +366,12 @@ const TIMELINE_ICONS: Record<string, string> = {
       padding:6px 0; border-bottom:1px solid var(--surface-border); }
     .tag { font:600 10px var(--font-sans); padding:2px 6px; border-radius:6px; background:var(--warning-bg); color:var(--warning); margin-left:6px; }
     .tag--d { background:var(--danger-bg); color:var(--danger); }
+    .rate-edit { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--border, #e5e7eb); }
+    .rate-edit__l { display:flex; flex-direction:column; gap:4px; font:500 12px var(--font-sans); color:var(--content-fg); }
+    .rate-edit__i { width:120px; padding:8px 10px; font:400 14px var(--font-sans); border:1px solid var(--border, #d1d5db); border-radius:6px; background:transparent; color:inherit; }
+    .rate-preview { margin-top:12px; padding:12px; border:1px dashed var(--border, #d1d5db); border-radius:8px; }
+    .rate-preview__t { font:600 12px var(--font-sans); margin-bottom:8px; opacity:.8; }
+    .rate-edit__h { font:400 12px var(--font-sans); opacity:.7; }
     .sv__remarks { margin:0; font:400 14px var(--font-sans); color:var(--content-fg); }
     .sv__pod { display:block; max-width:100%; max-height:360px; border-radius:var(--r-field); border:1px solid var(--surface-border); }
     .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:24px; }
@@ -416,6 +441,45 @@ export class ShipmentView implements OnInit {
   readonly cancellable = computed(() => !!this.shipment() && CANCELLABLE_STATUSES.includes(this.shipment()!.status));
   /** Commission is a company-level figure — hidden for branch-level roles tracking
    *  someone else's shipment (BRANCH_MANAGER, BOOKING_OPERATOR, etc). */
+  readonly rateInput = signal<number | null>(null);
+  readonly rateSaving = signal(false);
+  readonly rateCalculating = signal(false);
+  /** Charges recalculated for the typed Rate/KG; cleared whenever the input changes. */
+  readonly ratePreview = signal<ShipmentCharge | null>(null);
+  /** Admin-only, BOOKED-only — the backend enforces both, this just hides the control. */
+  readonly canEditRate = computed(() =>
+    this.auth.hasAnyRole([AppRole.COMPANY_ADMIN]) && this.shipment()?.status === 'BOOKED');
+  readonly currentRatePerKg = computed(() => {
+    const c = this.charge(); const w = this.shipment()?.chargeableWeight;
+    return c && w ? Math.round((c.freight / w) * 100) / 100 : 0;
+  });
+
+  protected onRateInput(e: Event): void {
+    const v = Number((e.target as HTMLInputElement).value);
+    this.rateInput.set(Number.isFinite(v) && v > 0 ? v : null);
+    this.ratePreview.set(null);
+  }
+
+  protected calculateRate(): void {
+    const s = this.shipment(); const rate = this.rateInput();
+    if (!s || rate === null) return;
+    this.rateCalculating.set(true);
+    this.service.previewRatePerKg(s.id, rate).subscribe({
+      next: (c) => { this.rateCalculating.set(false); this.ratePreview.set(c); },
+      error: (e) => { this.rateCalculating.set(false); this.notify.error(e?.error?.message ?? 'Could not calculate.'); }
+    });
+  }
+
+  protected saveRate(): void {
+    const s = this.shipment(); const rate = this.rateInput();
+    if (!s || rate === null) return;
+    this.rateSaving.set(true);
+    this.service.updateRatePerKg(s.id, s.version, rate).subscribe({
+      next: () => { this.rateSaving.set(false); this.rateInput.set(null); this.ratePreview.set(null); this.notify.success('Rate/KG updated.'); this.load(); },
+      error: (e) => { this.rateSaving.set(false); this.notify.error(e?.error?.message ?? 'Could not update Rate/KG.'); }
+    });
+  }
+
   readonly isCompanyLevel = computed(() => this.auth.hasAnyRole([AppRole.COMPANY_ADMIN]));
 
   id = '';

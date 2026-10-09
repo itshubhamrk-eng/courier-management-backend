@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { AuthService } from '@core/auth/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -91,8 +92,10 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
                 <input class="fld__i" type="number" min="1" [formControl]="c('numberOfPackages')" /></label>
               <label class="fld"><span class="fld__l">Declared Value</span>
                 <input class="fld__i" type="number" [value]="c('declaredValue').value ?? 0" readonly title="Sum of every item's own Value below" /></label>
-              <label class="fld"><span class="fld__l">Other Charges</span>
-                <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
+              @if (isAdmin) {
+                <label class="fld"><span class="fld__l">Other Charges</span>
+                  <input class="fld__i" type="number" min="0" step="0.01" [formControl]="c('otherCharges')" /></label>
+              }
             </div>
             <div class="spacer"></div>
             <div class="fld"><span class="fld__l">Delivery Type</span>
@@ -190,6 +193,9 @@ const TYPE_OPTIONS: SelectOption[] = SHIPMENT_TYPES.map((t) => ({ value: t, labe
 })
 export class ShipmentEdit implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+  /** Charges are admin-only after booking — see ShipmentServiceImpl.update. */
+  protected readonly isAdmin = this.auth.hasAnyRole(['COMPANY_ADMIN']);
   private readonly service = inject(ShipmentService);
   private readonly masters = inject(MasterDataService);
   private readonly settings = inject(SettingsService);

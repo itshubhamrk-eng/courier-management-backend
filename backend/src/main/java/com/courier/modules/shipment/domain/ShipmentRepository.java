@@ -27,6 +27,13 @@ import java.util.UUID;
 public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
         JpaSpecificationExecutor<Shipment> {
 
+    /** Cancelled shipments give their number back (see V100); the column is
+     *  {@code updatable = false} on the entity, so the rename goes through SQL. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "UPDATE shipments SET shipment_number = :newNumber WHERE id = :id", nativeQuery = true)
+    void renameShipmentNumber(@Param("id") byte[] id, @Param("newNumber") String newNumber);
+
+
     @Query("select s from Shipment s where s.id = :id and s.companyId = :companyId")
     Optional<Shipment> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 
@@ -99,7 +106,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
      *  least one booking; days with none simply don't appear (DashboardServiceImpl
      *  fills the gaps with zero). */
     @Query("select s.bookingDate as day, count(s) as count from Shipment s "
-            + "where s.bookingDate between :start and :end group by s.bookingDate")
+            + "where s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED group by s.bookingDate")
     List<DailyCountRow> countDailyByBookingDateBetween(@Param("start") LocalDate start,
                                                         @Param("end") LocalDate end);
 
@@ -187,7 +194,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     /** Backs the "Shipment Trend" chart for a company-bound caller — see the unscoped
      *  sibling {@link #countDailyByBookingDateBetween} for the cross-tenant case. */
     @Query("select s.bookingDate as day, count(s) as count from Shipment s "
-            + "where s.companyId = :companyId and s.bookingDate between :start and :end "
+            + "where s.companyId = :companyId and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED "
             + "group by s.bookingDate")
     List<DailyCountRow> countDailyByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
                                                                     @Param("start") LocalDate start,
@@ -291,7 +298,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     /** Backs the "Shipment Trend" chart for a branch-scoped caller. */
     @Query("select s.bookingDate as day, count(s) as count from Shipment s "
             + "where s.companyId = :companyId and s.bookingBranchId = :bookingBranchId "
-            + "and s.bookingDate between :start and :end group by s.bookingDate")
+            + "and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED group by s.bookingDate")
     List<DailyCountRow> countDailyByCompanyIdAndBookingBranchIdAndBookingDateBetween(
             @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
             @Param("start") LocalDate start, @Param("end") LocalDate end);
@@ -321,7 +328,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
             FROM shipments s
             LEFT JOIN shipment_charges c ON c.shipment_id = s.id AND c.company_id = :companyId
             WHERE s.company_id = :companyId AND s.deleted = FALSE
-              AND s.booking_date BETWEEN :start AND :end
+              AND s.booking_date BETWEEN :start AND :end AND s.status <> 'CANCELLED'
             GROUP BY s.delivery_branch_id
             ORDER BY shipmentCount DESC
             """, nativeQuery = true)
@@ -351,7 +358,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
             FROM shipments s
             LEFT JOIN shipment_charges c ON c.shipment_id = s.id AND c.company_id = :companyId
             WHERE s.company_id = :companyId AND s.deleted = FALSE
-              AND s.booking_date BETWEEN :start AND :end AND s.sender_contact IS NOT NULL
+              AND s.booking_date BETWEEN :start AND :end AND s.status <> 'CANCELLED' AND s.sender_contact IS NOT NULL
             GROUP BY s.sender_contact
             ORDER BY shipmentCount DESC
             """, nativeQuery = true)

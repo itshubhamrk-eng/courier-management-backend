@@ -156,4 +156,8 @@ public class ShipmentCharge extends CompanyOwnedEntity {
      *  PricingResult#appliedFreightFactor}. */
     @Column(name = "applied_freight_factor", precision = 19, scale = 4)
     private BigDecimal appliedFreightFactor;
+
+    /** Rate/KG fixed by a company admin after booking (see V101); null = follows the slab. */
+    @Column(name = "rate_per_kg_override", precision = 19, scale = 4)
+    private BigDecimal ratePerKgOverride;
 }

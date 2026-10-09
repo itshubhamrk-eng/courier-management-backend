@@ -62,6 +62,14 @@ export class ShipmentService {
   update(id: string, body: UpdateShipmentRequest) {
     return this.api.put<ShipmentResponse>(`${API.shipments}/${id}`, body);
   }
+  /** COMPANY_ADMIN only — recalculated charges at `ratePerKg`, nothing saved. */
+  previewRatePerKg(id: string, ratePerKg: number) {
+    return this.api.get<ShipmentCharge>(`${API.shipments}/${id}/rate-per-kg/preview`, { ratePerKg });
+  }
+  /** COMPANY_ADMIN only — see ShipmentController.updateRatePerKg. */
+  updateRatePerKg(id: string, version: number, ratePerKg: number) {
+    return this.api.put<ShipmentCharge>(`${API.shipments}/${id}/rate-per-kg`, { version, ratePerKg });
+  }
   cancel(id: string, remarks: string) {
     return this.api.post<ShipmentResponse>(
       `${API.shipments}/${id}/cancel?remarks=${encodeURIComponent(remarks)}`, {});

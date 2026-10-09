@@ -8,6 +8,25 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-09 — Branch-scoped load sheets, cancelled orders out of charts, number reuse, admin Rate/KG
+
+Verified live on :4200 (backend :8100 restarted with the new code) and via API on a throwaway :8082.
+
+- **Load sheet / THC branch scope.** `GET /manifests` (`ManifestServiceImpl.search`) now limits a branch-bound caller to manifests their
+  branch booked, plus manifests addressed to it once dispatched (never `CREATED` ones). COMPANY_ADMIN / platform / branch-less users see
+  all. THC page also passes the user's branch as `bookingBranchId`. Not scoped: `GET /manifests/{id}`, `/summary`, `/{id}/shipments`.
+- **Cancelled orders out of dashboard data.** Shipment-trend (3 queries), revenue-trend (2), This Month's Collection (branch + company),
+  Top Routes and Top Customers all skip `status = CANCELLED`.
+- **Shipment number reuse (V100).** Cancelling an auto-generated number (`<BRANCH_CODE>-<6 digits>`) renames the cancelled row to
+  `<number>-CXL` and frees the serial in `released_shipment_numbers`; the branch's next booking takes the lowest freed serial before
+  advancing `branch_shipment_sequences`. Manual numbers are never reused. Wallet/audit rows store the number as text, so an old record
+  for the cancelled shipment now matches the new holder of that number.
+- **Admin-only Rate/KG after booking (V101).** `PUT /shipments/{id}/rate-per-kg` (COMPANY_ADMIN, BOOKED only) recalculates freight, GST,
+  commissions and net amount; may go below the slab rate. `GET /shipments/{id}/rate-per-kg/preview` is the "Calculate" button (saves
+  nothing). `ShipmentServiceImpl.update` now pins every charge input for non-admins (other/ODA/appointment/door charges and the stored
+  `shipment_charges.rate_per_kg_override`); weight/route changes still re-price from the pinned rate. UI: Rate/KG box + Calculate +
+  Update on the shipment view (admin, BOOKED); Other Charges hidden on the edit page for non-admins. Wallet is not adjusted.
+
 ## Deployed 2026-10-09 — AWB-002 label ids + To-Pay charge to prod
 
 Prod (35.154.220.116) `e28868b` -> `54c3113` (3 commits: `7aa0e3f`, `c3ded4e`, `54c3113`). Run by the user over SSH

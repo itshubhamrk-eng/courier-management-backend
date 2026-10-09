@@ -122,6 +122,24 @@ public class ShipmentController {
                         shipmentService.getEwayBill(id).orElse(null)), "Shipment updated");
     }
 
+    @GetMapping("/{id}/rate-per-kg/preview")
+    @Operation(summary = "Preview a booked shipment's charges at a Rate/KG",
+            description = "COMPANY_ADMIN only. Recalculates exactly like the update, saves nothing.")
+    public ApiResponse<ShipmentChargeResponse> previewRatePerKg(@PathVariable UUID id,
+            @RequestParam java.math.BigDecimal ratePerKg) {
+        return ApiResponse.success(mapper.toResponse(shipmentService.previewRatePerKg(id, ratePerKg)));
+    }
+
+    @PutMapping("/{id}/rate-per-kg")
+    @Operation(summary = "Set a booked shipment's Rate/KG",
+            description = "COMPANY_ADMIN only, while `BOOKED`. Recomputes freight, GST, commissions "
+                    + "and net amount from the new rate; nothing else changes. `version` required.")
+    public ApiResponse<ShipmentChargeResponse> updateRatePerKg(@PathVariable UUID id,
+            @Valid @RequestBody com.courier.modules.shipment.api.dto.UpdateRatePerKgRequest request) {
+        shipmentService.updateRatePerKg(id, request.version(), request.ratePerKg());
+        return ApiResponse.success(mapper.toResponse(shipmentService.getCharges(id)), "Rate/KG updated");
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Fetch a shipment", description = "Includes its item grid.")
     public ApiResponse<ShipmentResponse> get(@PathVariable UUID id) {

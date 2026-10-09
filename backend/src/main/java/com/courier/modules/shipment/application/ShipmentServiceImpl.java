@@ -37,6 +37,7 @@ import com.courier.modules.shipment.application.command.UpdateShipmentCommand;
 import com.courier.modules.shipment.application.event.ShipmentEvent;
 import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.shipment.domain.BranchShipmentSequenceRepository;
+import com.courier.modules.shipment.domain.ReleasedShipmentNumberRepository;
 import com.courier.modules.shipment.domain.CompanyDrsSequenceRepository;
 import com.courier.modules.shipment.domain.CompanyShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
@@ -166,6 +167,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final ShipmentDocumentRepository documentRepository;
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final BranchShipmentSequenceRepository branchShipmentSequenceRepository;
+    private final ReleasedShipmentNumberRepository releasedShipmentNumberRepository;
     private final CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
     private final CompanyDrsSequenceRepository companyDrsSequenceRepository;
 
@@ -389,6 +391,17 @@ public class ShipmentServiceImpl implements ShipmentService {
                     .formatted(shipment.getShipmentNumber()));
         }
 
+        // Charges are an admin-only edit after booking: anyone else's edit keeps every charge
+        // input exactly as booked (and the admin's Rate/KG, if any) and only re-derives from
+        // the changed weight/route. The admin changes Rate/KG through updateRatePerKg.
+        boolean chargesPinned = !SecurityUtils.requireCurrentUser().hasRole(Roles.COMPANY_ADMIN);
+        if (chargesPinned) {
+            ShipmentCharge stored = chargeRepository.findByShipmentIdWithinCompany(id, companyId).orElse(null);
+            if (stored != null) {
+                command = pinCharges(command, stored);
+            }
+        }
+
         List<ShipmentItem> items = buildItems(command.items(), command.actualWeight(),
                 command.length(), command.width(), command.height());
         WeightSummary weight = summariseWeight(items);
@@ -404,7 +417,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
                 shipment.getBookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
                 weight.chargeableWeight());
-        requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
+        if (!chargesPinned) {
+            requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
+        }
 
         // No delivery branch to resolve any more — pricing runs with none, same as
         // create(). A BOOKED shipment's deliveryBranchId stays whatever it already was
@@ -485,6 +500,116 @@ public class ShipmentServiceImpl implements ShipmentService {
                                 .toPlainString()));
 
         return saved;
+    }
+
+    private static UpdateShipmentCommand pinCharges(UpdateShipmentCommand c, ShipmentCharge stored) {
+        return new UpdateShipmentCommand(c.expectedVersion(), c.pickupPincode(), c.deliveryPincode(),
+                c.senderName(), c.senderAddress(), c.senderContact(), c.receiverName(), c.receiverAddress(),
+                c.receiverContact(), c.serviceTypeId(), c.packageTypeId(), c.paymentModeId(), c.shipmentType(),
+                c.bookingDate(), c.declaredValue(), c.numberOfPackages(), c.remarks(),
+                stored.getOtherCharges(), stored.getOdaCharge(), c.freightFactorOverride(), c.items(),
+                c.actualWeight(), c.length(), c.width(), c.height(), c.invoiceValue(), c.ewayBill(),
+                c.destinationAreaId(), stored.getRatePerKgOverride(), c.appointmentDelivery(),
+                c.appointmentDate(), c.appointmentTimeSlot(), stored.getAppointmentDeliveryCharge(),
+                c.insuranceApplicable(), c.deliveryType(), stored.getDoorDeliveryCharge());
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    public Shipment updateRatePerKg(UUID id, Long expectedVersion, BigDecimal ratePerKg) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(id, companyId);
+        requireCurrentVersion(shipment, expectedVersion);
+        ShipmentCharge stored = chargeRepository.findByShipmentIdWithinCompany(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", id));
+        ShipmentCharge recalculated = recalculateAtRate(shipment, stored, companyId, ratePerKg);
+
+        BigDecimal previousNet = stored.getNetAmount();
+        copyChargeValues(recalculated, stored);
+        chargeRepository.save(stored);
+
+        log.info("Shipment {} ({}) Rate/KG set to {} by {}", shipment.getShipmentNumber(), id,
+                recalculated.getRatePerKgOverride(), currentActor());
+        auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, id,
+                Map.of("shipmentNumber", shipment.getShipmentNumber(),
+                        "ratePerKg", recalculated.getRatePerKgOverride().toPlainString(),
+                        "previousNetAmount", String.valueOf(previousNet),
+                        "netAmount", stored.getNetAmount().toPlainString()));
+        return shipmentRepository.save(shipment);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    public ShipmentCharges previewRatePerKg(UUID id, BigDecimal ratePerKg) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(id, companyId);
+        ShipmentCharge stored = chargeRepository.findByShipmentIdWithinCompany(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", id));
+        ShipmentCharge preview = recalculateAtRate(shipment, stored, companyId, ratePerKg);
+        List<com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator.Line> lines =
+                applicableChargesCalculator.resolve(shipment.getServiceTypeId(), shipment.getChargeableWeight(),
+                        shipment.getActualWeight(), shipment.getNumberOfPackages(),
+                        shipment.getBookingBranchId(), shipment.getDeliveryBranchId(), preview.getFreight());
+        return new ShipmentCharges(preview, resolveRouteCode(preview), resolveRateCode(preview), lines);
+    }
+
+    /** A fresh, unsaved charge for {@code shipment} at {@code ratePerKg} — every other input
+     *  (other/ODA/appointment/door/To-Pay charges, insurance, weights) is the booked value. */
+    private ShipmentCharge recalculateAtRate(Shipment shipment, ShipmentCharge stored, UUID companyId,
+                                             BigDecimal ratePerKg) {
+        if (!shipment.isEditable()) {
+            throw new BusinessRuleException("Rate/KG can only be changed while shipment %s is BOOKED."
+                    .formatted(shipment.getShipmentNumber()));
+        }
+        if (ratePerKg == null || ratePerKg.signum() <= 0) {
+            throw new BusinessRuleException("Rate/KG must be greater than zero.");
+        }
+        List<ShipmentItem> items = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
+        FreightCalculationResult freightCalc = freightCalculationService.calculate(
+                shipment.getBookingBranchId(), shipment.getDeliveryPincode(), shipment.getDestinationAreaId(),
+                shipment.getChargeableWeight());
+        PricingResult priced = priceIt(shipment.getBookingBranchId(), null,
+                shipment.getPickupPincode(), shipment.getDeliveryPincode(), shipment.getServiceTypeId(),
+                shipment.getPackageTypeId(), shipment.getPaymentModeId(), shipment.getChargeableWeight(),
+                shipment.getDeclaredValue(), shipment.getBookingDate(), stored.getAppliedFreightFactor(),
+                shipment.getActualWeight(), totalQuantity(items));
+        com.courier.modules.company.domain.Branch bookingBranch =
+                branchService.getById(shipment.getBookingBranchId());
+        ShipmentCharge fresh = toCharge(priced, stored.getOtherCharges(), stored.getOdaCharge(), bookingBranch,
+                freightCalc, ratePerKg.setScale(2, java.math.RoundingMode.HALF_UP),
+                stored.getAppointmentDeliveryCharge(), shipment.isInsuranceApplicable(),
+                stored.getDoorDeliveryCharge(), stored.getToPayCharge(), shipment.getInvoiceValue());
+        fresh.setShipmentId(shipment.getId());
+        fresh.setCompanyId(companyId);
+        return fresh;
+    }
+
+    /** Copies every computed money/commission field of {@code from} onto the managed {@code to}. */
+    private static void copyChargeValues(ShipmentCharge from, ShipmentCharge to) {
+        to.setFreight(from.getFreight());
+        to.setFuelCharge(from.getFuelCharge());
+        to.setHandlingCharge(from.getHandlingCharge());
+        to.setOdaCharge(from.getOdaCharge());
+        to.setInsuranceCharge(from.getInsuranceCharge());
+        to.setApplicableCharges(from.getApplicableCharges());
+        to.setGstAmount(from.getGstAmount());
+        to.setDiscountAmount(from.getDiscountAmount());
+        to.setRoundOff(from.getRoundOff());
+        to.setOtherCharges(from.getOtherCharges());
+        to.setAppointmentDeliveryCharge(from.getAppointmentDeliveryCharge());
+        to.setDoorDeliveryCharge(from.getDoorDeliveryCharge());
+        to.setToPayCharge(from.getToPayCharge());
+        to.setCommissionOnBasicFreight(from.getCommissionOnBasicFreight());
+        to.setBranchCommissionOnOtherAmount(from.getBranchCommissionOnOtherAmount());
+        to.setCompanyCommissionOnBasicFreight(from.getCompanyCommissionOnBasicFreight());
+        to.setTotalCommission(from.getTotalCommission());
+        to.setNetAmount(from.getNetAmount());
+        to.setMatchedRouteId(from.getMatchedRouteId());
+        to.setMatchedRateId(from.getMatchedRateId());
+        to.setAppliedFreightFactor(from.getAppliedFreightFactor());
+        to.setRatePerKgOverride(from.getRatePerKgOverride());
     }
 
     // --------------------------------------------------------------------- reads
@@ -864,6 +989,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.transitionTo(ShipmentStatus.CANCELLED);
         Shipment saved = shipmentRepository.save(shipment);
         appendHistory(saved, companyId, previous, ShipmentStatus.CANCELLED, remarks.trim());
+        releaseShipmentNumber(saved);
 
         log.info("Shipment {} ({}) cancelled in company {} by {}", saved.getShipmentNumber(),
                 saved.getId(), companyId, currentActor());
@@ -2317,6 +2443,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         charge.setMatchedRouteId(priced.matchedRoute() == null ? null : priced.matchedRoute().getId());
         charge.setMatchedRateId(priced.matchedRate() == null ? null : priced.matchedRate().getId());
         charge.setAppliedFreightFactor(priced.appliedFreightFactor());
+        charge.setRatePerKgOverride(ratePerKgOverride);
     }
 
     private static BigDecimal percentOf(BigDecimal amount, BigDecimal percentage) {
@@ -2451,6 +2578,25 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(ENTITY, id));
     }
 
+    /** Frees an auto-generated number ({@code "<BRANCH_CODE>-<6 digits>"} of the booking
+     *  branch) for the branch's next booking and renames the cancelled row to
+     *  {@code "<number>-CXL"}. Manually typed numbers are left alone. */
+    private void releaseShipmentNumber(Shipment shipment) {
+        String number = shipment.getShipmentNumber();
+        if (shipment.getBookingBranchId() == null || number.length() + 4 > 30) {
+            return;
+        }
+        String branchCode = branchService.getById(shipment.getBookingBranchId()).getBranchCode();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^" + java.util.regex.Pattern.quote(branchCode) + "-(\\d{6})$").matcher(number);
+        if (!m.matches()) {
+            return;
+        }
+        shipmentRepository.renameShipmentNumber(TimeOrderedUuid.toBytes(shipment.getId()), number + "-CXL");
+        releasedShipmentNumberRepository.release(
+                TimeOrderedUuid.toBytes(shipment.getBookingBranchId()), Long.parseLong(m.group(1)));
+    }
+
     /**
      * {@code "<BRANCH_CODE>-<6-digit serial>"} — a per-branch counter, not a random
      * candidate: {@link BranchShipmentSequenceRepository#advance} takes the row's own
@@ -2459,6 +2605,11 @@ public class ShipmentServiceImpl implements ShipmentService {
      */
     private String nextShipmentNumber(UUID bookingBranchId, String branchCode) {
         byte[] branchIdBytes = TimeOrderedUuid.toBytes(bookingBranchId);
+        // A cancelled shipment's number is handed out again before the counter moves.
+        java.util.Optional<Long> released = releasedShipmentNumberRepository.take(branchIdBytes);
+        if (released.isPresent()) {
+            return "%s-%06d".formatted(branchCode, released.get());
+        }
         branchShipmentSequenceRepository.advance(branchIdBytes);
         long serial = branchShipmentSequenceRepository.nextValue();
         return "%s-%06d".formatted(branchCode, serial);

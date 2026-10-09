@@ -28,7 +28,7 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
     BigDecimal sumNetAmount();
 
     @Query("select coalesce(sum(c.netAmount), 0) from ShipmentCharge c "
-            + "where c.shipmentId in (select s.id from Shipment s where s.bookingDate between :start and :end)")
+            + "where c.shipmentId in (select s.id from Shipment s where s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED)")
     BigDecimal sumNetAmountForBookingDateBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     @Query("select coalesce(sum(c.netAmount), 0) from ShipmentCharge c where c.companyId = :companyId")
@@ -37,7 +37,7 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
     @Query("select coalesce(sum(c.netAmount), 0) from ShipmentCharge c "
             + "where c.companyId = :companyId "
             + "and c.shipmentId in (select s.id from Shipment s where s.companyId = :companyId "
-            + "and s.bookingDate between :start and :end)")
+            + "and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED)")
     BigDecimal sumNetAmountByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
                                                             @Param("start") LocalDate start,
                                                             @Param("end") LocalDate end);
@@ -48,7 +48,7 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
     @Query("select coalesce(sum(c.netAmount), 0) from ShipmentCharge c "
             + "where c.companyId = :companyId "
             + "and c.shipmentId in (select s.id from Shipment s where s.companyId = :companyId "
-            + "and s.bookingBranchId = :bookingBranchId and s.bookingDate between :start and :end)")
+            + "and s.bookingBranchId = :bookingBranchId and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED)")
     BigDecimal sumNetAmountByCompanyIdAndBookingBranchIdAndBookingDateBetween(
             @Param("companyId") UUID companyId, @Param("bookingBranchId") UUID bookingBranchId,
             @Param("start") LocalDate start, @Param("end") LocalDate end);
@@ -62,7 +62,7 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
     @Query("select s.bookingDate as day, coalesce(sum(c.netAmount), 0) as revenue "
             + "from ShipmentCharge c, Shipment s "
             + "where c.shipmentId = s.id and c.companyId = :companyId and s.companyId = :companyId "
-            + "and s.bookingDate between :start and :end group by s.bookingDate")
+            + "and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED group by s.bookingDate")
     List<DailyRevenueRow> dailyRevenueByCompanyIdAndBookingDateBetween(@Param("companyId") UUID companyId,
                                                                         @Param("start") LocalDate start,
                                                                         @Param("end") LocalDate end);
@@ -72,7 +72,7 @@ public interface ShipmentChargeRepository extends JpaRepository<ShipmentCharge, 
      *  other unscoped method in this repository. */
     @Query("select s.bookingDate as day, coalesce(sum(c.netAmount), 0) as revenue "
             + "from ShipmentCharge c, Shipment s "
-            + "where c.shipmentId = s.id and s.bookingDate between :start and :end group by s.bookingDate")
+            + "where c.shipmentId = s.id and s.bookingDate between :start and :end and s.status <> com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED group by s.bookingDate")
     List<DailyRevenueRow> dailyRevenueByBookingDateBetween(@Param("start") LocalDate start,
                                                             @Param("end") LocalDate end);
 

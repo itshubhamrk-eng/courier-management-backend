@@ -67,6 +67,16 @@ public interface ShipmentService {
      */
     Shipment update(UUID id, UpdateShipmentCommand command);
 
+    /**
+     * {@code COMPANY_ADMIN} only: sets the Rate/KG of a still-{@code BOOKED} shipment and
+     * recomputes freight, GST, commissions and net amount from it — nothing else about the
+     * booking changes. May go below the slab rate (unlike booking, where it can only be raised).
+     */
+    Shipment updateRatePerKg(UUID id, Long expectedVersion, java.math.BigDecimal ratePerKg);
+
+    /** Same recalculation as {@link #updateRatePerKg}, nothing saved — the "Calculate" button. */
+    ShipmentCharges previewRatePerKg(UUID id, java.math.BigDecimal ratePerKg);
+
     Shipment getById(UUID id);
 
     Shipment getByTrackingNumber(String trackingNumber);

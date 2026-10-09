@@ -24,6 +24,7 @@ import com.courier.modules.company.domain.Branch;
 import com.courier.modules.shipment.application.event.ShipmentEvent;
 import com.courier.modules.shipment.application.storage.FileStoragePort;
 import com.courier.modules.shipment.domain.BranchShipmentSequenceRepository;
+import com.courier.modules.shipment.domain.ReleasedShipmentNumberRepository;
 import com.courier.modules.shipment.domain.CompanyShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignmentRepository;
 import com.courier.modules.shipment.domain.Shipment;
@@ -97,6 +98,7 @@ class ShipmentServiceImplTest {
     @Mock private ShipmentDocumentRepository documentRepository;
     @Mock private DeliveryAssignmentRepository deliveryAssignmentRepository;
     @Mock private BranchShipmentSequenceRepository branchShipmentSequenceRepository;
+    @Mock private ReleasedShipmentNumberRepository releasedShipmentNumberRepository;
     @Mock private CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
     @Mock private com.courier.modules.shipment.domain.CompanyDrsSequenceRepository companyDrsSequenceRepository;
     @Mock private com.courier.modules.company.application.UserService userService;
@@ -132,7 +134,7 @@ class ShipmentServiceImplTest {
     void setUp() {
         service = new ShipmentServiceImpl(shipmentRepository, itemRepository, chargeRepository,
                 historyRepository, documentRepository, deliveryAssignmentRepository,
-                branchShipmentSequenceRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
+                branchShipmentSequenceRepository, releasedShipmentNumberRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
                 userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
