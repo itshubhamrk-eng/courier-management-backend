@@ -406,9 +406,15 @@ export class TripHireChallan implements OnInit, OnDestroy {
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
 
+  /** A branch-bound user only ever sees their own branch's load sheets; branch-less admins see all. */
+  private branchScope(): { bookingBranchId?: string } {
+    const branchId = this.auth.user()?.branchId;
+    return branchId ? { bookingBranchId: branchId } : {};
+  }
+
   loadOpenManifests(): void {
     this.loadingManifests.set(true);
-    this.manifestService.list({ page: 0, size: 50, status: 'CREATED', sort: 'createdAt,desc' }).subscribe({
+    this.manifestService.list({ page: 0, size: 50, status: 'CREATED', sort: 'createdAt,desc', ...this.branchScope() }).subscribe({
       next: (p) => { this.openManifests.set(p.content); this.loadingManifests.set(false); },
       error: () => { this.openManifests.set([]); this.loadingManifests.set(false); }
     });
@@ -426,7 +432,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
     const query = this.searchControl.value?.trim();
     if (!query) return;
     this.searching.set(true);
-    this.manifestService.list({ page: 0, size: 1, search: query }).subscribe({
+    this.manifestService.list({ page: 0, size: 1, search: query, ...this.branchScope() }).subscribe({
       next: (p) => {
         this.searching.set(false);
         if (!p.content.length) { this.notify.error('No manifest found.'); return; }

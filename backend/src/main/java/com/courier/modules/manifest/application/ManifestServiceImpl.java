@@ -20,6 +20,7 @@ import com.courier.modules.manifest.domain.ManifestNumberGenerator;
 import com.courier.modules.manifest.domain.ManifestRepository;
 import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
 import com.courier.modules.manifest.domain.ManifestSpecifications;
+import com.courier.modules.manifest.domain.ManifestStatus;
 import com.courier.modules.manifest.domain.ManifestSummaryStats;
 import com.courier.modules.manifest.domain.Vehicle;
 import com.courier.shared.activity.application.ActivityContext;
@@ -36,6 +37,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import com.courier.shared.security.AuthenticatedUser;
+import com.courier.shared.security.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -165,7 +169,25 @@ public class ManifestServiceImpl implements ManifestService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasAuthority('MANIFEST_READ')")
     public Page<Manifest> search(ManifestCriteria criteria, Pageable pageable) {
-        return manifestRepository.findAll(ManifestSpecifications.matching(criteria), pageable);
+        return manifestRepository.findAll(ManifestSpecifications.matching(criteria).and(ownBranchScope()), pageable);
+    }
+
+    /** A branch-bound caller (not a company/platform admin) only sees manifests their own
+     *  branch books, or dispatched ones addressed to it — never another branch's load sheets. */
+    private Specification<Manifest> ownBranchScope() {
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        UUID ownBranchId = userService.getById(caller.userId()).getBranchId();
+        if (ownBranchId == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        // Until dispatch a load sheet belongs to the branch that created it alone; the
+        // receiving branch only gets it once it is on the road (In Scan).
+        return (root, query, cb) -> cb.or(cb.equal(root.get("bookingBranchId"), ownBranchId),
+                cb.and(cb.equal(root.get("deliveryBranchId"), ownBranchId),
+                        cb.notEqual(root.get("status"), ManifestStatus.CREATED)));
     }
 
     @Override
