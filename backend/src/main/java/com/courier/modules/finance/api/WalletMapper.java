@@ -62,7 +62,7 @@ public class WalletMapper {
         return new WalletTransactionCriteria(
                 null, null,
                 safe.transactionType(), safe.subTransactionType(),
-                safe.referenceType(), safe.paymentStatus(),
+                safe.referenceType(),
                 safe.referenceId(), safe.transactionNo(), safe.paymentReference(),
                 startOfDay(safe.fromDate()), startOfNextDay(safe.toDate()),
                 safe.minAmount(), safe.maxAmount(), safe.search());
@@ -78,8 +78,11 @@ public class WalletMapper {
                 o.getId(), o.getTransactionNo(), o.getBranchId(),
                 branch == null ? null : branch.branchCode(),
                 branch == null ? null : branch.branchName(),
-                o.getAmount(), o.getCurrency(), o.getGateway(), o.getGatewayOrderId(),
-                o.getGatewayPaymentId(), o.getStatus().name(), o.getFailureReason(),
+                o.getAmount(), o.getCurrency(), o.getMode().name(), o.getGateway(), o.getGatewayOrderId(),
+                o.getGatewayPaymentId(), o.getStatus().name(), o.getFailureReason(), o.getRemarks(),
+                o.getCreatedBy() == null ? null
+                        : branchDirectory.findUser(o.getCreatedBy(), o.getCompanyId())
+                                .map(BranchDirectoryPort.UserRef::displayName).orElse(null),
                 o.getLedgerTransactionId(), o.getLastCheckedAt(), o.getSettledAt(), o.getCreatedAt());
     }
 
@@ -141,7 +144,7 @@ public class WalletMapper {
                 t.getSubTransactionType() == null ? null : t.getSubTransactionType().getLabel(),
                 t.getAmount(), t.getBalanceBefore(), t.getBalanceAfter(),
                 t.getReferenceType(), t.getReferenceId(), t.getRemarks(),
-                t.getPaymentGateway(), t.getPaymentReference(), t.getPaymentStatus(),
+                t.getPaymentGateway(), t.getPaymentReference(),
                 t.getCreatedBy(), createdByName, t.getCreatedAt());
     }
 

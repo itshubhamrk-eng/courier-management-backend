@@ -13,6 +13,7 @@ import com.courier.modules.finance.application.event.WalletEvent;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
 import com.courier.modules.finance.domain.BranchDirectoryPort;
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.RechargeMode;
 import com.courier.modules.finance.domain.RechargeOrder;
 import com.courier.modules.finance.domain.RechargeOrderRepository;
 import com.courier.modules.finance.domain.PendingCommissionPort;
@@ -209,7 +210,7 @@ public class WalletServiceImpl implements WalletService {
                 transactionRepository.findRecent(wallet.getId(), companyId, PageRequest.of(0, 1)));
         WalletTransaction lastRecharge = firstOf(
                 transactionRepository.findLatestSettledOfType(wallet.getId(), companyId,
-                        SubTransactionType.WRC, PaymentStatus.SUCCESS, PageRequest.of(0, 1)));
+                        SubTransactionType.WRC, PageRequest.of(0, 1)));
 
         PendingCommissionPort.PendingCommission pending =
                 pendingCommission.pendingCommissionFor(resolved, companyId);
@@ -252,38 +253,6 @@ public class WalletServiceImpl implements WalletService {
         return transactionRepository.findAll(WalletTransactionSpecifications.matching(safe), pageable);
     }
 
-    /** What "recharge" means in the company-wide report: Razorpay settlements and manual
-     *  credits, the two ways a wallet ever gains money from outside its own operations. */
-    private static final java.util.Set<SubTransactionType> RECHARGE_TYPES =
-            java.util.Set.of(SubTransactionType.WRC, SubTransactionType.MCR);
-
-    @Override
-    @Transactional
-    @PreAuthorize(FINANCE_READERS)
-    public Page<WalletTransaction> searchRecharges(UUID branchId, WalletTransactionCriteria criteria,
-                                                   Pageable pageable) {
-        UUID companyId = requireCompany();
-
-        // getOrCreateForBranch both validates branchId is this company's and resolves the
-        // wallet — the same check every other branch-scoped read here relies on.
-        UUID walletId = branchId == null ? null : getOrCreateForBranch(branchId).getId();
-
-        WalletTransactionCriteria safe = criteria == null ? WalletTransactionCriteria.none() : criteria;
-        java.util.Set<SubTransactionType> types = isNotEmpty(safe.subTransactionTypes())
-                ? safe.subTransactionTypes().stream()
-                        .filter(RECHARGE_TYPES::contains)
-                        .collect(java.util.stream.Collectors.toUnmodifiableSet())
-                : RECHARGE_TYPES;
-        if (types.isEmpty()) {
-            // Asked for reasons outside {WRC, MCR} — not a report error, just an empty page.
-            return Page.empty(pageable);
-        }
-
-        WalletTransactionCriteria scoped = safe.scopedToCompany(companyId, walletId, types);
-        return transactionRepository.findAll(
-                WalletTransactionSpecifications.matchingCompanyWide(scoped), pageable);
-    }
-
     private static boolean isNotEmpty(java.util.Set<?> values) {
         return values != null && !values.isEmpty();
     }
@@ -293,7 +262,7 @@ public class WalletServiceImpl implements WalletService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(COMPANY_USERS_ONLY)
-    public Page<RechargeOrder> searchRechargeAttempts(UUID branchId, PaymentStatus status,
+    public Page<RechargeOrder> searchRechargeAttempts(UUID branchId, PaymentStatus status, RechargeMode mode,
                                                       java.time.LocalDate fromDate, java.time.LocalDate toDate,
                                                       String search, Pageable pageable) {
         UUID companyId = requireCompany();
@@ -315,6 +284,7 @@ public class WalletServiceImpl implements WalletService {
             p.add(cb.equal(root.get("companyId"), companyId));
             if (scopedBranch != null) p.add(cb.equal(root.get("branchId"), scopedBranch));
             if (status != null) p.add(cb.equal(root.get("status"), status));
+            if (mode != null) p.add(cb.equal(root.get("mode"), mode));
             if (from != null) p.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
             if (to != null) p.add(cb.lessThan(root.get("createdAt"), to));
             if (like != null) {
@@ -492,7 +462,7 @@ public class WalletServiceImpl implements WalletService {
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR,
                 SubTransactionType.WRC, payment.amount(),
                 ReferenceType.PAYMENT, orderId, remarks,
-                payment.gateway(), paymentId, PaymentStatus.SUCCESS);
+                payment.gateway(), paymentId);
         rechargeOrders.markSuccess(companyId, orderId, paymentId, entry.getId());
 
         log.info("Wallet {} recharged {} {} via {} ({}) by {}",
@@ -609,9 +579,20 @@ public class WalletServiceImpl implements WalletService {
         Wallet wallet = lockOrThrow(branchId, companyId);
         requireOperational(wallet);
 
+        // A manual recharge is recorded in the recharge table first (born SUCCESS), then the
+        // ledger entry is written — same order as an online one. Other manual credit reasons
+        // (commission, adjustment...) are not recharges and touch only the ledger.
+        RechargeOrder manualRecharge = reason == SubTransactionType.MCR
+                ? rechargeOrders.recordManual(companyId, wallet.getId(), branchId, amount,
+                        wallet.getCurrency(), nextTransactionNumber(), command.remarks())
+                : null;
+
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, amount,
                 command.referenceType() == null ? ReferenceType.MANUAL : command.referenceType(),
-                command.referenceId(), command.remarks(), null, null, null);
+                command.referenceId(), command.remarks(), null, null);
+        if (manualRecharge != null) {
+            rechargeOrders.linkLedger(manualRecharge.getId(), entry.getId());
+        }
 
         log.info("Wallet {} credited {} {} ({}) by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), amount.toPlainString(), reason, currentActor());
@@ -645,7 +626,7 @@ public class WalletServiceImpl implements WalletService {
         // succeeds, so a rejected debit leaves no trace of a balance that never changed.
         WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, amount,
                 command.referenceType() == null ? ReferenceType.MANUAL : command.referenceType(),
-                command.referenceId(), command.remarks(), null, null, null);
+                command.referenceId(), command.remarks(), null, null);
 
         log.info("Wallet {} debited {} {} ({}) by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), amount.toPlainString(), reason, currentActor());
@@ -675,8 +656,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} debited {} {} for COD delivery {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
@@ -707,8 +687,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} debited {} {} for TO_PAY receipt {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
@@ -739,8 +718,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} credited {} {} DRS commission for shipment {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
@@ -771,8 +749,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} credited {} {} delivery weight commission for shipment {} by {}",
                 wallet.getWalletNumber(), wallet.getCurrency(), validated.toPlainString(),
@@ -803,8 +780,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.DR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} debited {} {} for booking {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
@@ -835,8 +811,7 @@ public class WalletServiceImpl implements WalletService {
         requireOperational(wallet);
 
         WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
-                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null,
-                null);
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
 
         log.info("Wallet {} credited {} {} commission for booking {} by {}", wallet.getWalletNumber(),
                 wallet.getCurrency(), validated.toPlainString(), command.shipmentNumber(),
@@ -860,8 +835,7 @@ public class WalletServiceImpl implements WalletService {
 
         List<WalletTransaction> originals = new java.util.ArrayList<>(
                 transactionRepository.findSettledByReferenceWithinCompany(
-                        ReferenceType.SHIPMENT, command.shipmentNumber(), companyId,
-                        PaymentStatus.SUCCESS));
+                        ReferenceType.SHIPMENT, command.shipmentNumber(), companyId));
         // Deterministic lock order across wallets, not the ledger's own creation order —
         // the same "never lock rows in caller-decided order" discipline the class javadoc's
         // row-locking rule implies, in case two entries here land on different branches.
@@ -901,7 +875,7 @@ public class WalletServiceImpl implements WalletService {
 
         WalletTransaction entry = post(wallet, companyId, type, reason, original.getAmount(),
                 ReferenceType.SHIPMENT, original.getReferenceId(),
-                remarks + " — reversing " + original.getTransactionNo(), null, null, null);
+                remarks + " — reversing " + original.getTransactionNo(), null, null);
 
         log.info("Wallet {} {} {} {} reversing {} {} for shipment {} by {}",
                 wallet.getWalletNumber(), creditBack ? "credited" : "debited", wallet.getCurrency(),
@@ -933,8 +907,7 @@ public class WalletServiceImpl implements WalletService {
                                    TransactionType type, SubTransactionType reason,
                                    BigDecimal amount,
                                    ReferenceType referenceType, String referenceId, String remarks,
-                                   String gateway, String paymentReference,
-                                   PaymentStatus paymentStatus) {
+                                   String gateway, String paymentReference) {
 
         BigDecimal before = Wallet.normalise(wallet.getAvailableBalance());
         // TPY (TO_PAY received at branch) is a liability the branch owes the company the
@@ -958,7 +931,6 @@ public class WalletServiceImpl implements WalletService {
                 .remarks(remarks)
                 .paymentGateway(gateway)
                 .paymentReference(paymentReference)
-                .paymentStatus(paymentStatus)
                 .build();
 
         WalletTransaction saved = transactionRepository.save(entry);
@@ -1079,7 +1051,7 @@ public class WalletServiceImpl implements WalletService {
     /** Null (no matching rows) normalises to zero — a wallet with no history has no total. */
     private BigDecimal sum(Wallet wallet, UUID companyId, TransactionType type, Instant from) {
         return Wallet.normalise(transactionRepository.sumSettledSince(
-                wallet.getId(), companyId, type, from, PaymentStatus.SUCCESS));
+                wallet.getId(), companyId, type, from));
     }
 
     private static final List<SubTransactionType> COMMISSION_REASONS =
@@ -1089,7 +1061,7 @@ public class WalletServiceImpl implements WalletService {
      *  {@code COM}/{@code DRS}. */
     private BigDecimal sumCommission(Wallet wallet, UUID companyId, Instant from) {
         return Wallet.normalise(transactionRepository.sumSettledSinceForSubTypes(
-                wallet.getId(), companyId, TransactionType.CR, COMMISSION_REASONS, from, PaymentStatus.SUCCESS));
+                wallet.getId(), companyId, TransactionType.CR, COMMISSION_REASONS, from));
     }
 
     private static WalletTransaction firstOf(List<WalletTransaction> rows) {

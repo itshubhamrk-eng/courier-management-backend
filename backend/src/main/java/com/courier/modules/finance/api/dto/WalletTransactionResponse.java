@@ -52,7 +52,6 @@ public record WalletTransactionResponse(
 
         String paymentGateway,
         String paymentReference,
-        PaymentStatus paymentStatus,
 
         UUID createdBy,
         String createdByName,

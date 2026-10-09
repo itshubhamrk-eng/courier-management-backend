@@ -127,10 +127,10 @@ class WalletServiceImplTest {
         when(transactionRepository.save(any(WalletTransaction.class)))
                 .thenAnswer(i -> i.getArgument(0));
         when(transactionRepository.existsByTransactionNo(anyString())).thenReturn(false);
-        when(transactionRepository.sumSettledSince(any(), any(), any(), any(), any()))
+        when(transactionRepository.sumSettledSince(any(), any(), any(), any()))
                 .thenReturn(BigDecimal.ZERO);
         when(transactionRepository.findRecent(any(), any(), any())).thenReturn(List.of());
-        when(transactionRepository.findLatestSettledOfType(any(), any(), any(), any(), any()))
+        when(transactionRepository.findLatestSettledOfType(any(), any(), any(), any()))
                 .thenReturn(List.of());
     }
 
@@ -302,6 +302,33 @@ class WalletServiceImplTest {
 
         assertThat(entry.getSubTransactionType()).isEqualTo(SubTransactionType.MCR);
         assertThat(entry.getReferenceType()).isEqualTo(ReferenceType.MANUAL);
+    }
+
+    @Test
+    @DisplayName("a manual recharge is recorded in the recharge table first, then linked to its ledger entry")
+    void manualRechargeRecordedFirst() {
+        RechargeOrder recharge = RechargeOrder.builder().status(PaymentStatus.SUCCESS).build();
+        recharge.setId(java.util.UUID.randomUUID());
+        when(rechargeOrders.recordManual(any(), any(), any(), any(), any(), any(), any())).thenReturn(recharge);
+
+        WalletTransaction entry = service.credit(new CreditCommand(BRANCH, new BigDecimal("250.00"),
+                SubTransactionType.MCR, null, null, "cash received"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(rechargeOrders, transactionRepository);
+        order.verify(rechargeOrders).recordManual(any(), any(), any(),
+                org.mockito.ArgumentMatchers.argThat((BigDecimal a) -> a.compareTo(new BigDecimal("250")) == 0), any(), any(),
+                eq("cash received"));
+        order.verify(transactionRepository).save(any());
+        verify(rechargeOrders).linkLedger(eq(recharge.getId()), any());
+        assertThat(entry.getSubTransactionType()).isEqualTo(SubTransactionType.MCR);
+    }
+
+    @Test
+    @DisplayName("a non-recharge credit reason never touches the recharge table")
+    void commissionCreditIsNotARecharge() {
+        service.credit(new CreditCommand(BRANCH, new BigDecimal("10.00"),
+                SubTransactionType.COM, null, null, "commission"));
+        verify(rechargeOrders, never()).recordManual(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -528,7 +555,6 @@ class WalletServiceImplTest {
         assertThat(entry.getBalanceAfter()).isEqualByComparingTo("1500.00");
         assertThat(entry.getSubTransactionType()).isEqualTo(SubTransactionType.WRC);
         assertThat(entry.getTransactionType()).isEqualTo(TransactionType.CR);
-        assertThat(entry.getPaymentStatus()).isEqualTo(PaymentStatus.SUCCESS);
         assertThat(entry.getPaymentReference()).isEqualTo("pay_1");
         assertThat(entry.getReferenceType()).isEqualTo(ReferenceType.PAYMENT);
         verify(paymentGateway).verifyPayment(any());
@@ -542,8 +568,7 @@ class WalletServiceImplTest {
                 .transactionNo("TXN-EXISTING").walletId(wallet.getId())
                 .transactionType(TransactionType.CR).subTransactionType(SubTransactionType.WRC)
                 .amount(new BigDecimal("500.00")).balanceBefore(new BigDecimal("1000.00"))
-                .balanceAfter(new BigDecimal("1500.00")).paymentReference("pay_1")
-                .paymentStatus(PaymentStatus.SUCCESS).build();
+                .balanceAfter(new BigDecimal("1500.00")).paymentReference("pay_1").build();
         when(transactionRepository.findByPaymentReferenceWithinCompany("pay_1", TENANT))
                 .thenReturn(Optional.of(existing));
 
@@ -649,9 +674,9 @@ class WalletServiceImplTest {
     @DisplayName("the summary reports the balances and the derived period figures")
     void summary() {
         when(transactionRepository.sumSettledSince(eq(wallet.getId()), eq(TENANT),
-                eq(TransactionType.CR), any(), any())).thenReturn(new BigDecimal("3000"));
+                eq(TransactionType.CR), any())).thenReturn(new BigDecimal("3000"));
         when(transactionRepository.sumSettledSince(eq(wallet.getId()), eq(TENANT),
-                eq(TransactionType.DR), any(), any())).thenReturn(new BigDecimal("1200"));
+                eq(TransactionType.DR), any())).thenReturn(new BigDecimal("1200"));
         when(transactionRepository.countByWallet(wallet.getId(), TENANT)).thenReturn(17L);
 
         WalletService.WalletSummary summary = service.summarise(BRANCH);
@@ -710,7 +735,7 @@ class WalletServiceImplTest {
         WalletTransaction original = originalEntry(wallet.getId(), TransactionType.DR,
                 SubTransactionType.SBK, "300.00", "SHP-1");
         when(transactionRepository.findSettledByReferenceWithinCompany(
-                ReferenceType.SHIPMENT, "SHP-1", TENANT, PaymentStatus.SUCCESS))
+                ReferenceType.SHIPMENT, "SHP-1", TENANT))
                 .thenReturn(List.of(original));
         when(walletRepository.findByIdWithinCompany(wallet.getId(), TENANT))
                 .thenReturn(Optional.of(wallet));
@@ -734,7 +759,7 @@ class WalletServiceImplTest {
         WalletTransaction original = originalEntry(wallet.getId(), TransactionType.CR,
                 SubTransactionType.COM, "150.00", "SHP-2");
         when(transactionRepository.findSettledByReferenceWithinCompany(
-                ReferenceType.SHIPMENT, "SHP-2", TENANT, PaymentStatus.SUCCESS))
+                ReferenceType.SHIPMENT, "SHP-2", TENANT))
                 .thenReturn(List.of(original));
         when(walletRepository.findByIdWithinCompany(wallet.getId(), TENANT))
                 .thenReturn(Optional.of(wallet));
@@ -756,7 +781,7 @@ class WalletServiceImplTest {
         WalletTransaction alreadyReversed = originalEntry(wallet.getId(), TransactionType.CR,
                 SubTransactionType.SRF, "300.00", "SHP-3");
         when(transactionRepository.findSettledByReferenceWithinCompany(
-                ReferenceType.SHIPMENT, "SHP-3", TENANT, PaymentStatus.SUCCESS))
+                ReferenceType.SHIPMENT, "SHP-3", TENANT))
                 .thenReturn(List.of(alreadyReversed));
 
         List<WalletTransaction> reversals = service.reverseForShipment(
@@ -784,7 +809,7 @@ class WalletServiceImplTest {
         WalletTransaction succeeding = originalEntry(wallet.getId(), TransactionType.DR,
                 SubTransactionType.SBK, "200.00", "SHP-4");
         when(transactionRepository.findSettledByReferenceWithinCompany(
-                ReferenceType.SHIPMENT, "SHP-4", TENANT, PaymentStatus.SUCCESS))
+                ReferenceType.SHIPMENT, "SHP-4", TENANT))
                 .thenReturn(List.of(failing, succeeding));
         when(walletRepository.findByIdWithinCompany(inactiveWallet.getId(), TENANT))
                 .thenReturn(Optional.of(inactiveWallet));

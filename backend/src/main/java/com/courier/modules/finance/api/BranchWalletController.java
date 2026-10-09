@@ -76,8 +76,7 @@ public class BranchWalletController {
             Map.entry("amount", "amount"),
             Map.entry("balanceAfter", "balanceAfter"),
             Map.entry("transactionType", "transactionType"),
-            Map.entry("subTransactionType", "subTransactionType"),
-            Map.entry("paymentStatus", "paymentStatus"));
+            Map.entry("subTransactionType", "subTransactionType"));
 
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -122,7 +121,7 @@ public class BranchWalletController {
                     export as-is. Filter by direction, reason, reference kind, payment status,
                     date range, amount range or free text. Sort: `createdDate`,
                     `transactionNo`, `amount`, `balanceAfter`, `transactionType`,
-                    `subTransactionType`, `paymentStatus`. Newest first by default; `size`
+                    `subTransactionType`. Newest first by default; `size`
                     capped at 100, so an export walks the pages.
                     """)
     public ApiResponse<PageResponse<WalletTransactionResponse>> transactions(
@@ -139,46 +138,27 @@ public class BranchWalletController {
     @GetMapping("/recharge-report")
     @Operation(summary = "Recharge report",
             description = """
-                    `COMPANY_ADMIN`/`FINANCE_USER` only. Every wallet recharge across every
-                    branch of the company in one statement — Razorpay settlements (`WRC`)
-                    and manual credits (`MCR`) side by side, each row carrying its branch.
-                    Same filters, sort and paging as `GET /branch-wallet/transactions`;
-                    `subTransactionType` narrows further within {WRC, MCR} but cannot escape
-                    it, and `branchId` narrows to one branch instead of walking every page.
-                    """)
-    public ApiResponse<PageResponse<WalletTransactionResponse>> rechargeReport(
-            @Valid @ParameterObject WalletTransactionSearchRequest search,
-            @ParameterObject @PageableDefault(size = 20, sort = "createdAt",
-                    direction = Sort.Direction.DESC) Pageable pageable) {
-
-        UUID branchId = search == null ? null : search.branchId();
-        Page<WalletTransaction> page = service.searchRecharges(
-                branchId, mapper.toCriteria(search), sanitise(pageable));
-        return ApiResponse.success(PageResponse.from(page, mapper::toRechargeReportRow));
-    }
-
-    @GetMapping("/recharge-attempts")
-    @Operation(summary = "Online recharge attempts",
-            description = """
-                    Every Razorpay recharge attempt — `PENDING`, `SUCCESS` and `FAILED` — with the
-                    failure reason and when the scheduler last checked it. The recharge report
-                    lists only credited recharges. Company admins/finance users see all
-                    branches (`branchId` narrows to one); anyone else sees their own branch.
+                    Every recharge — online (Razorpay) and manual — with its status `PENDING`,
+                    `SUCCESS` or `FAILED`, the failure reason and when the scheduler last checked
+                    it. A wallet ledger entry exists only for `SUCCESS` ones. `mode` filters
+                    ONLINE/MANUAL. Company admins/finance users see all branches (`branchId`
+                    narrows to one); anyone else sees their own branch.
                     """)
     public ApiResponse<PageResponse<RechargeAttemptResponse>> rechargeAttempts(
             @RequestParam(required = false) UUID branchId,
             @RequestParam(required = false) PaymentStatus status,
+            @RequestParam(required = false) com.courier.modules.finance.domain.RechargeMode mode,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(required = false) @Size(max = 100) String search,
             @ParameterObject @PageableDefault(size = 20, sort = "createdAt",
                     direction = Sort.Direction.DESC) Pageable pageable) {
         Page<RechargeOrder> page = service.searchRechargeAttempts(
-                branchId, status, fromDate, toDate, search, sanitise(pageable));
+                branchId, status, mode, fromDate, toDate, search, sanitise(pageable));
         return ApiResponse.success(PageResponse.from(page, mapper::toAttemptResponse));
     }
 
-    @PostMapping("/recharge-attempts/{id}/check")
+    @PostMapping("/recharge-report/{id}/check")
     @Operation(summary = "Check a pending recharge now",
             description = """
                     Asks the gateway what happened to this attempt right now — the same check the

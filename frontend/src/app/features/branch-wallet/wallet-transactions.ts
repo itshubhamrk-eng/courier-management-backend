@@ -123,7 +123,6 @@ export class WalletTransactions implements OnInit {
       ...(branchId ? { branchId } : {}),
       transactionType: f.transactionType as unknown as string | undefined,
       subTransactionType: f.subTransactionType as unknown as string | undefined,
-      paymentStatus: f.paymentStatus as unknown as string | undefined,
       referenceId: f.referenceId,
       fromDate: f.fromDate, toDate: f.toDate
     };
@@ -157,10 +156,10 @@ export class WalletTransactions implements OnInit {
   }
 
   private download(rows: WalletTransaction[]): void {
-    const header = ['createdAt', 'transactionNo', 'transactionType', 'subTransactionType', 'amount', 'balanceAfter', 'referenceId', 'paymentGateway', 'paymentStatus'];
+    const header = ['createdAt', 'transactionNo', 'transactionType', 'subTransactionType', 'amount', 'balanceAfter', 'referenceId', 'paymentGateway'];
     const lines = rows.map((t) => [
       t.createdAt, t.transactionNo, t.transactionType, subTypeLabel(t.subTransactionType), t.amount, t.balanceAfter,
-      t.referenceId, t.paymentGateway ?? '', t.paymentStatus ?? ''
+      t.referenceId, t.paymentGateway ?? ''
     ]);
     // balanceAfter (index 5) is a running balance, not additive — excluded from the total.
     downloadCsv(`wallet-transactions-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [4]);

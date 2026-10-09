@@ -34,10 +34,9 @@ import java.util.UUID;
  * a correcting entry is inserted out of order. Storing the running balance means an entry
  * is a fact about the moment it happened.
  *
- * <p>The only mutable field is {@link #paymentStatus} — a gateway payment starts
- * {@code PENDING} (intent recorded, no money moved) and is later settled or failed. The
- * amounts and balances are {@code updatable = false}: an entry is never edited, a
- * correction is a new entry.
+ * <p>An entry is never edited — a correction is a new entry. Every row here is money that
+ * has actually moved; the pending/failed/success life of a recharge lives in {@code
+ * RechargeOrder} (V103) and a ledger entry is only written once that recharge succeeded.
  */
 @Entity(name = "WalletTransaction")
 @Getter
@@ -118,16 +117,6 @@ public class WalletTransaction extends CompanyOwnedEntity {
     @Column(name = "payment_reference", updatable = false, length = 100)
     private String paymentReference;
 
-    /**
-     * The one mutable field: a payment is opened PENDING and settled later. Everything
-     * else about an entry is fixed at the moment it is written.
-     */
-    @Setter
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(name = "payment_status", length = 20)
-    private PaymentStatus paymentStatus;
-
     // ---------------------------------------------------------------- behaviour
 
     public boolean isCredit() {
@@ -136,11 +125,6 @@ public class WalletTransaction extends CompanyOwnedEntity {
 
     public boolean isDebit() {
         return transactionType != null && transactionType.isDebit();
-    }
-
-    /** True once the money has actually moved: either a non-payment entry, or a settled one. */
-    public boolean isSettled() {
-        return paymentStatus == null || paymentStatus == PaymentStatus.SUCCESS;
     }
 
     /** Signed amount, for summing a ledger: credits positive, debits negative. */

@@ -4,13 +4,11 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import {
-  WalletTransactionSearchRequest, TransactionType, PaymentStatus, SubTransactionType,
+  WalletTransactionSearchRequest, TransactionType, SubTransactionType,
   TRANSACTION_SUB_TYPES, prettyToken, subTypeLabel
 } from '@core/models/wallet.model';
 
 const TYPES: SelectOption[] = [{ value: 'CR', label: 'Credit' }, { value: 'DR', label: 'Debit' }];
-const PAYMENT_STATUSES: SelectOption[] = (['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED'] as PaymentStatus[])
-  .map((s) => ({ value: s, label: prettyToken(s) }));
 const SUB_TYPES: SelectOption[] = TRANSACTION_SUB_TYPES.map((s) => ({ value: s, label: subTypeLabel(s) }));
 
 /**
@@ -33,7 +31,6 @@ const SUB_TYPES: SelectOption[] = TRANSACTION_SUB_TYPES.map((s) => ({ value: s, 
       </div>
       <app-select [control]="c('transactionType')" label="Transaction Type" [options]="types" [multiple]="true" placeholder="Any type" />
       <app-select [control]="c('subTransactionType')" label="Sub Transaction Type" [options]="subTypes" [multiple]="true" placeholder="Any sub type" />
-      <app-select [control]="c('paymentStatus')" label="Payment Status" [options]="statuses" [multiple]="true" placeholder="Any status" />
       <app-input [control]="c('referenceId')" label="Reference" placeholder="e.g. RZP-XXXX / UTR" [maxLength]="100" />
 
       <div class="tf__bar">
@@ -59,12 +56,11 @@ export class TransactionFilter {
   readonly changed = output<WalletTransactionSearchRequest>();
 
   protected readonly types = TYPES;
-  protected readonly statuses = PAYMENT_STATUSES;
   protected readonly subTypes = SUB_TYPES;
 
   protected readonly form: FormGroup = this.fb.group({
     fromDate: [''], toDate: [''],
-    transactionType: [[] as string[]], subTransactionType: [[] as string[]], paymentStatus: [[] as string[]],
+    transactionType: [[] as string[]], subTransactionType: [[] as string[]],
     referenceId: ['']
   });
 
@@ -77,13 +73,12 @@ export class TransactionFilter {
       fromDate: s(v.fromDate), toDate: s(v.toDate),
       transactionType: v.transactionType?.length ? (v.transactionType as TransactionType[]) : undefined,
       subTransactionType: v.subTransactionType?.length ? (v.subTransactionType as SubTransactionType[]) : undefined,
-      paymentStatus: v.paymentStatus?.length ? (v.paymentStatus as PaymentStatus[]) : undefined,
       referenceId: s(v.referenceId)
     });
   }
 
   protected clear(): void {
-    this.form.reset({ fromDate: '', toDate: '', transactionType: [], subTransactionType: [], paymentStatus: [], referenceId: '' });
+    this.form.reset({ fromDate: '', toDate: '', transactionType: [], subTransactionType: [], referenceId: '' });
     this.changed.emit({});
   }
 }

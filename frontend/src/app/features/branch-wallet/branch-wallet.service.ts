@@ -41,20 +41,15 @@ export class BranchWalletService {
   transactions(query: PageQuery) {
     return this.api.page<WalletTransaction>(`${this.base}/transactions`, query);
   }
-  /** Company-wide recharge report — every `WRC` (Razorpay) and `MCR` (manual) entry across
-   *  every branch, one row each carrying its branch. `COMPANY_ADMIN`/`FINANCE_USER` only. */
-  rechargeReport(query: PageQuery) {
-    return this.api.page<WalletTransaction>(`${this.base}/recharge-report`, query);
-  }
 
   /** Every online recharge attempt (PENDING / SUCCESS / FAILED) — the recharge report lists only credited ones. */
   rechargeAttempts(query: PageQuery) {
-    return this.api.page<RechargeAttempt>(`${this.base}/recharge-attempts`, query);
+    return this.api.page<RechargeAttempt>(`${this.base}/recharge-report`, query);
   }
 
   /** "Check status" on a pending attempt — asks the gateway now; returns the attempt afterwards. */
   checkRechargeAttempt(id: string) {
-    return this.api.post<RechargeAttempt>(`${this.base}/recharge-attempts/${id}/check`, {});
+    return this.api.post<RechargeAttempt>(`${this.base}/recharge-report/${id}/check`, {});
   }
 
   // ---- recharge ---------------------------------------------------------------

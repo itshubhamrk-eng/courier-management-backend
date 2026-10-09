@@ -85,14 +85,12 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             select sum(t.amount) from WalletTransaction t
             where t.walletId = :walletId and t.companyId = :companyId
               and t.transactionType = :type
-              and (t.paymentStatus is null or t.paymentStatus = :settled)
               and t.createdAt >= :from
             """)
     BigDecimal sumSettledSince(@Param("walletId") UUID walletId,
                                @Param("companyId") UUID companyId,
                                @Param("type") TransactionType type,
-                               @Param("from") Instant from,
-                               @Param("settled") PaymentStatus settled);
+                               @Param("from") Instant from);
 
     @Query("""
             select count(t) from WalletTransaction t
@@ -110,15 +108,13 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             where t.walletId = :walletId and t.companyId = :companyId
               and t.transactionType = :type
               and t.subTransactionType in :subTypes
-              and (t.paymentStatus is null or t.paymentStatus = :settled)
               and t.createdAt >= :from
             """)
     BigDecimal sumSettledSinceForSubTypes(@Param("walletId") UUID walletId,
                                @Param("companyId") UUID companyId,
                                @Param("type") TransactionType type,
                                @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
-                               @Param("from") Instant from,
-                               @Param("settled") PaymentStatus settled);
+                               @Param("from") Instant from);
 
     /** Newest entries first — the statement head and the dashboard's "recent activity". */
     @Query("""
@@ -148,26 +144,22 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             select t from WalletTransaction t
             where t.companyId = :companyId and t.referenceType = :referenceType
               and t.referenceId = :referenceId
-              and (t.paymentStatus is null or t.paymentStatus = :settled)
             order by t.createdAt asc
             """)
     List<WalletTransaction> findSettledByReferenceWithinCompany(
             @Param("referenceType") ReferenceType referenceType,
             @Param("referenceId") String referenceId,
-            @Param("companyId") UUID companyId,
-            @Param("settled") PaymentStatus settled);
+            @Param("companyId") UUID companyId);
 
     /** Most recent settled entry of one reason — used for "last recharge". */
     @Query("""
             select t from WalletTransaction t
             where t.walletId = :walletId and t.companyId = :companyId
               and t.subTransactionType = :subType
-              and (t.paymentStatus is null or t.paymentStatus = :settled)
             order by t.createdAt desc
             """)
     List<WalletTransaction> findLatestSettledOfType(@Param("walletId") UUID walletId,
                                                     @Param("companyId") UUID companyId,
                                                     @Param("subType") SubTransactionType subType,
-                                                    @Param("settled") PaymentStatus settled,
                                                     org.springframework.data.domain.Pageable pageable);
 }

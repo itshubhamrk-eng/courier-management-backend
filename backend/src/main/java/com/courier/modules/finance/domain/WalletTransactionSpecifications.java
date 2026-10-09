@@ -85,9 +85,6 @@ public final class WalletTransactionSpecifications {
         if (isNotEmpty(safe.referenceTypes())) {
             predicates.add(root.get("referenceType").in(safe.referenceTypes()));
         }
-        if (isNotEmpty(safe.paymentStatuses())) {
-            predicates.add(root.get("paymentStatus").in(safe.paymentStatuses()));
-        }
 
         addExact(predicates, cb, root.get("referenceId"), safe.referenceId());
         addExact(predicates, cb, root.get("transactionNo"), safe.transactionNo());

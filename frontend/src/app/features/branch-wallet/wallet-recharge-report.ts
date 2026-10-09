@@ -1,13 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
-import {
-  WalletTransaction, RechargeMode, RECHARGE_MODE_SUB_TYPES, rechargeModeOf, formatMoney, prettyToken
-} from '@core/models/wallet.model';
+import { RechargeAttempt, RechargeAttemptStatus, RechargeMode, formatMoney } from '@core/models/wallet.model';
 import { Page, PageQuery, emptyPage } from '@core/models/page.model';
 import { SortState, TableColumn, UiTable } from '@shared/components/ui-table/ui-table';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
@@ -16,54 +14,54 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 import { BranchWalletService } from './branch-wallet.service';
-import { WalletRechargeAttempts } from './wallet-recharge-attempts';
 
 const VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER];
 
 const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
-  { value: null, label: 'All' }, { value: 'ONLINE', label: 'Razorpay' }, { value: 'MANUAL', label: 'Manual' }
+  { value: null, label: 'All modes' }, { value: 'ONLINE', label: 'Razorpay' }, { value: 'MANUAL', label: 'Manual' }
+];
+
+const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
+  { value: null, label: 'All' }, { value: 'PENDING', label: 'Pending' },
+  { value: 'SUCCESS', label: 'Success' }, { value: 'FAILED', label: 'Failed' }
 ];
 
 /**
- * Wallet Recharge Report — company-wide, across every branch: every `WRC` (Razorpay) and
- * `MCR` (manual credit) entry side by side, each row carrying its branch. `COMPANY_ADMIN`/
- * `FINANCE_USER` only, same gate as `GET /branch-wallet/recharge-report`. Server pagination,
- * sort, debounced search, a Manual/Razorpay toggle, a date range and CSV export.
+ * Wallet Recharge Report — every recharge, online (Razorpay) and manual, across every branch,
+ * with its status: `PENDING` (waiting on the gateway / the scheduler), `SUCCESS` (the wallet
+ * was credited — only then does a wallet transaction exist) or `FAILED` (with the reason).
+ * `COMPANY_ADMIN`/`FINANCE_USER`, same gate as `GET /branch-wallet/recharge-report`.
  */
 @Component({
   selector: 'app-wallet-recharge-report',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, UiTable, UiPagination, UiSearch, UiButton, StatusBadge, WalletRechargeAttempts],
+  imports: [DatePipe, UiTable, UiPagination, UiSearch, UiButton, StatusBadge],
   template: `
     <div class="page">
-      <div class="views" role="tablist">
-        <button type="button" role="tab" [attr.aria-selected]="view() === 'credited'"
-                [class.tab--active]="view() === 'credited'" (click)="view.set('credited')">Recharges (credited)</button>
-        <button type="button" role="tab" [attr.aria-selected]="view() === 'attempts'"
-                [class.tab--active]="view() === 'attempts'" (click)="view.set('attempts')">Online attempts — Pending / Failed / Success</button>
-      </div>
-
-      @if (view() === 'attempts') {
-        <h1 class="text-h1">Wallet Recharge Report</h1>
-        <app-wallet-recharge-attempts [embedded]="true" />
-      } @else {
       <header class="page__head">
         <div>
           <h1 class="text-h1">Wallet Recharge Report</h1>
-          <p class="text-caption">Every branch, manual and Razorpay recharges — {{ page().totalElements }} entries.</p>
+          <p class="text-caption">Every recharge by outcome — {{ page().totalElements }} entries. Pending online ones are re-checked with the gateway every 2 minutes.</p>
         </div>
         <div class="page__actions">
-          <app-search placeholder="Search transaction no, payment ref…" (changed)="onSearch($event)" />
+          <app-search placeholder="Search transaction no, order or payment id…" (changed)="onSearch($event)" />
+          <app-button variant="stroked" icon="refresh" (pressed)="reload()">Refresh</app-button>
           <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
         </div>
       </header>
 
       <div class="toolbar">
         <div class="tabs" role="tablist">
-          @for (t of tabs; track t.label) {
+          @for (t of modeTabs; track t.label) {
             <button type="button" role="tab" [attr.aria-selected]="mode() === t.value"
                     [class.tab--active]="mode() === t.value" (click)="onMode(t.value)">{{ t.label }}</button>
+          }
+        </div>
+        <div class="tabs" role="tablist">
+          @for (t of tabs; track t.label) {
+            <button type="button" role="tab" [attr.aria-selected]="status() === t.value"
+                    [class.tab--active]="status() === t.value" (click)="onStatus(t.value)">{{ t.label }}</button>
           }
         </div>
         <label class="dt"><span class="dt__l">From</span>
@@ -74,38 +72,44 @@ const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
 
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
                  [startIndex]="page().page * page().size"
-                 emptyTitle="No recharges" emptyHint="A manual credit or a settled Razorpay recharge will appear here."
+                 emptyTitle="No recharge attempts" emptyHint="An online recharge started from Branch Wallet will appear here."
                  (sortChange)="onSort($event)">
-        <ng-template #row let-t>
-          <td><div class="tc">{{ t.createdAt | date:'dd MMM y' }}</div>
-              <div class="tc__sub">{{ t.createdAt | date:'HH:mm' }}</div></td>
-          <td>{{ t.branchName || '—' }}<div class="tc__sub">{{ t.branchCode }}</div></td>
-          <td><span class="mono">{{ t.transactionNo }}</span></td>
+        <ng-template #row let-a>
+          <td><div class="tc">{{ a.createdAt | date:'dd MMM y' }}</div>
+              <div class="tc__sub">{{ a.createdAt | date:'HH:mm:ss' }}</div></td>
+          <td>{{ a.branchName || '—' }}<div class="tc__sub">{{ a.branchCode }}</div></td>
+          <td><span class="mono">{{ a.transactionNo }}</span></td>
+          <td><app-status-badge [value]="a.mode" [label]="a.mode === 'ONLINE' ? 'Razorpay' : 'Manual'"
+                                 [tone]="a.mode === 'ONLINE' ? 'info' : 'neutral'" /></td>
+          <td class="amt">{{ money(a.amount) }}</td>
+          <td><app-status-badge [value]="a.status" [label]="label(a.status)" /></td>
           <td>
-            @if (modeOf(t.subTransactionType); as m) {
-              <app-status-badge [value]="m" [label]="m === 'ONLINE' ? 'Razorpay' : 'Manual'"
-                                 [tone]="m === 'ONLINE' ? 'info' : 'neutral'" />
+            @if (a.failureReason) { <span class="reason">{{ a.failureReason }}</span> }
+            @else if (a.remarks) { <span class="dash">{{ a.remarks }}</span> }
+            @else if (a.status === 'PENDING') { <span class="dash">Waiting for the gateway</span> }
+            @else { <span class="dash">—</span> }
+          </td>
+          <td><span class="mono">{{ a.gatewayOrderId || '—' }}</span></td>
+          <td><span class="mono">{{ a.gatewayPaymentId || '—' }}</span></td>
+          <td>{{ a.recordedByName || '—' }}</td>
+          <td>
+            @if (a.settledAt) { {{ a.settledAt | date:'dd MMM, HH:mm' }} }
+            @else if (a.lastCheckedAt) { <span class="dash">checked {{ a.lastCheckedAt | date:'HH:mm' }}</span> }
+            @else { <span class="dash">—</span> }
+          </td>
+          <td>
+            @if (a.status === 'PENDING') {
+              <app-button variant="stroked" icon="sync" [loading]="checkingId() === a.id"
+                          [disabled]="checkingId() !== null" (pressed)="check(a)">Check status</app-button>
             }
           </td>
-          <td class="amt amt--cr">+{{ money(t.amount) }}</td>
-          <td>{{ t.paymentGateway || '—' }}</td>
-          <td><span class="mono">{{ t.paymentReference || '—' }}</span></td>
-          <td>
-            @if (t.paymentStatus) { <app-status-badge [value]="t.paymentStatus" [label]="pretty(t.paymentStatus)" /> }
-            @else { <span class="dash">Settled</span> }
-          </td>
-          <td>{{ t.createdByName || '—' }}</td>
         </ng-template>
       </app-table>
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
-      }
     </div>
   `,
   styles: [`
-    .views { display:inline-flex; background:var(--surface-muted); border-radius:var(--r-pill); padding:3px; gap:2px; margin-bottom:16px; }
-    .views button { border:0; background:transparent; padding:8px 18px; border-radius:var(--r-pill);
-      font:600 13px var(--font-sans); color:var(--content-muted); cursor:pointer; }
     .toolbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:4px 0 16px; }
     .tabs { display:inline-flex; background:var(--surface-muted); border-radius:var(--r-pill); padding:3px; gap:2px; }
     .tabs button { border:0; background:transparent; padding:7px 16px; border-radius:var(--r-pill);
@@ -117,10 +121,10 @@ const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
       border-radius:var(--r-field); font:400 13px var(--font-sans); color:var(--content-fg); }
     .tc { font:600 13px var(--font-sans); }
     .tc__sub { font:400 12px var(--font-sans); color:var(--content-muted); }
-    .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
+    .mono { font:600 12px var(--font-mono, ui-monospace); color:var(--content-fg); word-break:break-all; }
     .amt { font:700 14px var(--font-mono, ui-monospace); white-space:nowrap; }
-    .amt--cr { color:var(--success); }
-    .dash { color:var(--content-muted); }
+    .reason { font:400 13px var(--font-sans); color:var(--danger); }
+    .dash { color:var(--content-muted); font:400 13px var(--font-sans); }
   `]
 })
 export class WalletRechargeReport implements OnInit {
@@ -130,29 +134,33 @@ export class WalletRechargeReport implements OnInit {
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
 
-  /** `credited` = ledger recharges (WRC/MCR); `attempts` = every online attempt incl. pending and failed. */
-  readonly view = signal<'credited' | 'attempts'>('credited');
-  readonly tabs = MODE_TABS;
+  readonly tabs = STATUS_TABS;
+  readonly modeTabs = MODE_TABS;
+  readonly mode = signal<RechargeMode | null>(null);
   readonly loading = signal(true);
   readonly exporting = signal(false);
-  readonly page = signal<Page<WalletTransaction>>(emptyPage<WalletTransaction>());
+  readonly checkingId = signal<string | null>(null);
+  readonly page = signal<Page<RechargeAttempt>>(emptyPage<RechargeAttempt>());
   readonly sort = signal<SortState | null>({ active: 'createdAt', direction: 'desc' });
-  readonly mode = signal<RechargeMode | null>(null);
+  readonly status = signal<RechargeAttemptStatus | null>(null);
   readonly fromDate = signal<string>('');
   readonly toDate = signal<string>('');
 
   private query: PageQuery = { page: 0, size: 20, sort: 'createdAt,desc' };
 
-  readonly columns: TableColumn<WalletTransaction>[] = [
-    { key: 'createdAt', header: 'Date', sortable: true },
+  readonly columns: TableColumn<RechargeAttempt>[] = [
+    { key: 'createdAt', header: 'Started', sortable: true },
     { key: 'branchName', header: 'Branch' },
     { key: 'transactionNo', header: 'Transaction No', sortable: true },
-    { key: 'subTransactionType', header: 'Mode', width: '110px' },
+    { key: 'mode', header: 'Mode', width: '110px' },
     { key: 'amount', header: 'Amount', sortable: true, align: 'left' },
-    { key: 'paymentGateway', header: 'Gateway' },
-    { key: 'paymentReference', header: 'Payment Ref' },
-    { key: 'paymentStatus', header: 'Status', width: '110px' },
-    { key: 'createdByName', header: 'Recorded By' }
+    { key: 'status', header: 'Status', sortable: true, width: '110px' },
+    { key: 'failureReason', header: 'Reason / Remarks' },
+    { key: 'gatewayOrderId', header: 'Gateway Order' },
+    { key: 'gatewayPaymentId', header: 'Payment Id' },
+    { key: 'recordedByName', header: 'Recorded By' },
+    { key: 'settledAt', header: 'Settled / Checked' },
+    { key: 'status', header: '', width: '150px' }
   ];
 
   ngOnInit(): void {
@@ -167,7 +175,8 @@ export class WalletRechargeReport implements OnInit {
   private buildQuery(size?: number): PageQuery {
     return {
       ...this.query, ...(size ? { size, page: 0 } : {}),
-      ...(this.mode() ? { subTransactionType: RECHARGE_MODE_SUB_TYPES[this.mode()!] } : {}),
+      ...(this.status() ? { status: this.status()! } : {}),
+      ...(this.mode() ? { mode: this.mode()! } : {}),
       ...(this.fromDate() ? { fromDate: this.fromDate() } : {}),
       ...(this.toDate() ? { toDate: this.toDate() } : {})
     };
@@ -175,41 +184,56 @@ export class WalletRechargeReport implements OnInit {
 
   private load(): void {
     this.loading.set(true);
-    this.service.rechargeReport(this.buildQuery()).subscribe({
+    this.service.rechargeAttempts(this.buildQuery()).subscribe({
       next: (p) => { this.page.set(p); this.loading.set(false); },
       error: () => this.loading.set(false)
     });
   }
 
+  reload() { this.load(); }
+
+  /** Asks the gateway about one pending attempt right now, then reports what became of it. */
+  check(a: RechargeAttempt): void {
+    this.checkingId.set(a.id);
+    this.service.checkRechargeAttempt(a.id).subscribe({
+      next: (r) => {
+        this.checkingId.set(null);
+        this.page.update((p) => ({ ...p, content: p.content.map((x) => (x.id === r.id ? r : x)) }));
+        if (r.status === 'SUCCESS') this.notify.success(`Payment received — ${this.money(r.amount)} credited to the wallet.`);
+        else if (r.status === 'FAILED') this.notify.error(r.failureReason ?? 'The payment failed.');
+        else this.notify.info('Still pending — the gateway has no completed payment for it yet.');
+      },
+      error: (e) => { this.checkingId.set(null); this.notify.error(e?.error?.message ?? 'Could not check the payment.'); }
+    });
+  }
   onSearch(t: string) { this.query = { ...this.query, search: t || undefined, page: 0 }; this.load(); }
   onPage(i: number) { this.query = { ...this.query, page: i }; this.load(); }
   onSort(s: SortState) { this.sort.set(s); this.query = { ...this.query, sort: `${s.active},${s.direction}`, page: 0 }; this.load(); }
   onMode(m: RechargeMode | null) { this.mode.set(m); this.query = { ...this.query, page: 0 }; this.load(); }
+  onStatus(s: RechargeAttemptStatus | null) { this.status.set(s); this.query = { ...this.query, page: 0 }; this.load(); }
   onFrom(e: Event) { this.fromDate.set((e.target as HTMLInputElement).value); this.query = { ...this.query, page: 0 }; this.load(); }
   onTo(e: Event) { this.toDate.set((e.target as HTMLInputElement).value); this.query = { ...this.query, page: 0 }; this.load(); }
 
-  modeOf(sub: WalletTransaction['subTransactionType']): RechargeMode | null { return rechargeModeOf(sub); }
-  pretty(v: string): string { return prettyToken(v); }
+  label(s: RechargeAttemptStatus): string { return s.charAt(0) + s.slice(1).toLowerCase(); }
   money(n: number): string { return formatMoney(n); }
 
   exportCsv(): void {
     this.exporting.set(true);
-    this.service.rechargeReport(this.buildQuery(200)).subscribe({
+    this.service.rechargeAttempts(this.buildQuery(200)).subscribe({
       next: (p) => { this.download(p.content); this.exporting.set(false); },
       error: () => { this.exporting.set(false); this.notify.error('Export failed.'); }
     });
   }
 
-  private download(rows: WalletTransaction[]): void {
-    const header = ['createdAt', 'branchCode', 'branchName', 'transactionNo', 'mode', 'amount',
-      'paymentGateway', 'paymentReference', 'paymentStatus', 'recordedBy'];
-    const lines = rows.map((t) => [
-      t.createdAt, t.branchCode ?? '', t.branchName ?? '', t.transactionNo,
-      this.modeOf(t.subTransactionType) ?? '', t.amount,
-      t.paymentGateway ?? '', t.paymentReference ?? '', t.paymentStatus ?? '', t.createdByName ?? ''
+  private download(rows: RechargeAttempt[]): void {
+    const header = ['createdAt', 'branchCode', 'branchName', 'transactionNo', 'mode', 'amount', 'status',
+      'failureReason', 'gatewayOrderId', 'gatewayPaymentId', 'settledAt', 'lastCheckedAt', 'recordedBy'];
+    const lines = rows.map((a) => [
+      a.createdAt, a.branchCode ?? '', a.branchName ?? '', a.transactionNo, a.mode, a.amount, a.status,
+      a.failureReason ?? '', a.gatewayOrderId ?? '', a.gatewayPaymentId ?? '', a.settledAt ?? '', a.lastCheckedAt ?? '', a.recordedByName ?? ''
     ]);
-    // amount is column index 5 — the one figure a recharge report totals.
+    // amount is column index 5.
     downloadCsv(`wallet-recharge-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [5]);
-    this.notify.info(`Exported ${rows.length} recharge(s).`);
+    this.notify.info(`Exported ${rows.length} attempt(s).`);
   }
 }

@@ -1,6 +1,7 @@
 package com.courier.modules.finance.application;
 
 import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.RechargeMode;
 import com.courier.modules.finance.domain.RechargeOrder;
 import com.courier.modules.finance.domain.RechargeOrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,32 @@ public class RechargeOrderTracker {
                                String currency, String gateway, String transactionNo) {
         RechargeOrder order = RechargeOrder.builder()
                 .walletId(walletId).branchId(branchId).transactionNo(transactionNo)
-                .amount(amount).currency(currency).gateway(gateway)
+                .amount(amount).currency(currency).mode(RechargeMode.ONLINE).gateway(gateway)
                 .status(PaymentStatus.PENDING).build();
         order.setCompanyId(companyId);
         return repository.save(order);
+    }
+
+    /** A manual recharge: no gateway, so the row is born {@code SUCCESS}. Joins the caller's
+     *  transaction — the recharge row and the ledger entry it leads to commit together. */
+    @Transactional
+    public RechargeOrder recordManual(UUID companyId, UUID walletId, UUID branchId, BigDecimal amount,
+                                      String currency, String transactionNo, String remarks) {
+        RechargeOrder order = RechargeOrder.builder()
+                .walletId(walletId).branchId(branchId).transactionNo(transactionNo)
+                .amount(amount).currency(currency).mode(RechargeMode.MANUAL).gateway("MANUAL")
+                .status(PaymentStatus.SUCCESS).remarks(remarks).settledAt(Instant.now()).build();
+        order.setCompanyId(companyId);
+        return repository.save(order);
+    }
+
+    /** Points a recharge at the ledger entry it created. */
+    @Transactional
+    public void linkLedger(UUID id, UUID ledgerTransactionId) {
+        repository.findById(id).ifPresent(o -> {
+            o.setLedgerTransactionId(ledgerTransactionId);
+            repository.save(o);
+        });
     }
 
     /** Step 2 — the gateway accepted the order. */

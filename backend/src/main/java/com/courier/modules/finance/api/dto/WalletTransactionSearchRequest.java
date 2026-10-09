@@ -34,7 +34,6 @@ public record WalletTransactionSearchRequest(
         @Schema(description = "CR and/or DR") Set<TransactionType> transactionType,
         @Schema(description = "Match any of these reasons") Set<SubTransactionType> subTransactionType,
         Set<ReferenceType> referenceType,
-        Set<PaymentStatus> paymentStatus,
 
         @Size(max = 100) String referenceId,
         @Size(max = 40) String transactionNo,
@@ -52,7 +51,7 @@ public record WalletTransactionSearchRequest(
 ) {
 
         public static WalletTransactionSearchRequest empty() {
-                return new WalletTransactionSearchRequest(null, null, null, null, null,
+                return new WalletTransactionSearchRequest(null, null, null, null,
                         null, null, null, null, null, null, null, null);
         }
 }

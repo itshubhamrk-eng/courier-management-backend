@@ -60,17 +60,6 @@ public interface WalletService {
                                                Pageable pageable);
 
     /**
-     * The recharge report: every {@code WRC} (Razorpay) and {@code MCR} (manual credit)
-     * entry across every branch of the caller's company, in one paged, filtered statement.
-     * Same criteria shape as {@link #searchTransactions}; a {@code subTransactionTypes}
-     * filter narrows further within {WRC, MCR} but cannot escape it. {@code branchId} null
-     * walks every branch; given, narrows to that one. {@code COMPANY_ADMIN}/
-     * {@code FINANCE_USER} only, same as {@link #companySummary}.
-     */
-    Page<WalletTransaction> searchRecharges(UUID branchId, WalletTransactionCriteria criteria,
-                                            Pageable pageable);
-
-    /**
      * Step one of a recharge: fixes the amount at the gateway and returns an order for the
      * browser. Credits nothing.
      */
@@ -96,6 +85,7 @@ public interface WalletService {
      */
     org.springframework.data.domain.Page<com.courier.modules.finance.domain.RechargeOrder> searchRechargeAttempts(
             UUID branchId, com.courier.modules.finance.domain.PaymentStatus status,
+            com.courier.modules.finance.domain.RechargeMode mode,
             java.time.LocalDate fromDate, java.time.LocalDate toDate, String search,
             org.springframework.data.domain.Pageable pageable);
 

@@ -117,11 +117,14 @@ export interface RechargeAttempt {
   branchName: string | null;
   amount: number;
   currency: string;
+  mode: RechargeMode;
   gateway: string;
   gatewayOrderId: string | null;
   gatewayPaymentId: string | null;
   status: RechargeAttemptStatus;
   failureReason: string | null;
+  remarks: string | null;
+  recordedByName: string | null;
   ledgerTransactionId: string | null;
   lastCheckedAt: string | null;
   settledAt: string | null;
@@ -150,7 +153,6 @@ export interface WalletTransaction {
   remarks?: string | null;
   paymentGateway?: string | null;
   paymentReference?: string | null;
-  paymentStatus?: PaymentStatus | null;
   createdBy?: string | null;
   createdByName?: string | null;
   createdAt: string;
@@ -258,7 +260,6 @@ export interface WalletTransactionSearchRequest {
   transactionType?: TransactionType[];
   subTransactionType?: SubTransactionType[];
   referenceType?: ReferenceType[];
-  paymentStatus?: PaymentStatus[];
   referenceId?: string;
   transactionNo?: string;
   paymentReference?: string;

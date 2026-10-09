@@ -8,6 +8,23 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-09 — One recharge table for online AND manual; wallet ledger has no status (V103)
+
+- **`wallet_transactions.payment_status` is dropped.** The ledger only holds money that moved; `WalletTransaction.paymentStatus`/`isSettled`, the
+  "is null or = SUCCESS" clauses in `WalletTransactionRepository`, the `paymentStatus` search filter/sort/response field, the Payment Status
+  column + filter + receipt line on the frontend are gone.
+- **`wallet_recharge_orders` now holds every recharge** (`mode` ONLINE|MANUAL, `remarks`, `recordedBy` from `created_by`). Manual credit
+  (`SubTransactionType.MCR`) writes a recharge row (born `SUCCESS`) first, then the ledger entry, then links them
+  (`RechargeOrderTracker.recordManual` / `linkLedger`); other credit reasons (commission, adjustment...) are not recharges. Online: row
+  `PENDING` -> `SUCCESS` -> ledger entry, as in V102.
+- **V103 backfills** every existing `WRC`/`MCR` ledger row as a `SUCCESS` recharge row (so the report keeps its history), then drops the column.
+- **Recharge Report = the recharge table.** `GET /branch-wallet/recharge-report` (replaces the old ledger-based one and the short-lived
+  `/recharge-attempts`; `mode`/`status`/`branchId`/date/search filters) and `POST /branch-wallet/recharge-report/{id}/check`. One page with
+  Mode (All/Razorpay/Manual) and Status (All/Pending/Success/Failed) tabs; the "credited vs attempts" switch is gone.
+- Verified live on :4200 / :8100: online ₹20 on LOADTEST01 (test mode) `PENDING` -> `SUCCESS` + `WRC` ledger entry; manual ₹1 on Kolhapur ->
+  `MANUAL`/`SUCCESS` row linked to its `MCR` entry, commission credit made no recharge row; Transactions page has no status column.
+  `mvn test` 1130/1130. Not yet deployed.
+
 ## 2026-10-09 — Online recharge: record first, gateway second, scheduler for the unanswered (V102)
 
 - **`wallet_recharge_orders` (V102)** — one row per Razorpay recharge attempt, created *before* the gateway is called with our own

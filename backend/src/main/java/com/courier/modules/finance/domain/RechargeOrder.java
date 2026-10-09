@@ -61,8 +61,17 @@ public class RechargeOrder extends CompanyOwnedEntity {
     @Column(name = "currency", nullable = false, updatable = false, length = 3)
     private String currency;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "mode", nullable = false, updatable = false, length = 10)
+    private RechargeMode mode;
+
     @Column(name = "gateway", nullable = false, updatable = false, length = 30)
     private String gateway;
+
+    @Setter
+    @Column(name = "remarks", length = 500)
+    private String remarks;
 
     @Setter
     @Column(name = "gateway_order_id", length = 100)

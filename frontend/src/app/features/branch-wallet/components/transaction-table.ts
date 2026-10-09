@@ -32,16 +32,10 @@ import { WalletTransaction, formatMoney, prettyToken } from '@core/models/wallet
         </td>
         <td class="mono">{{ money(t.balanceAfter) }}</td>
         <td>{{ t.referenceId || '—' }}</td>
-        <td>
-          @if (t.paymentStatus) { <app-status-badge [value]="t.paymentStatus" [label]="pretty(t.paymentStatus)" /> }
-          @else { <span class="dash">—</span> }
-        </td>
         <td class="col-actions">
-          @if (!t.paymentStatus || t.paymentStatus === 'SUCCESS') {
-            <button class="rcpt" (click)="receipt.emit(t)" aria-label="Download receipt" title="Download receipt">
-              <mat-icon>receipt_long</mat-icon>
-            </button>
-          }
+          <button class="rcpt" (click)="receipt.emit(t)" aria-label="Download receipt" title="Download receipt">
+            <mat-icon>receipt_long</mat-icon>
+          </button>
         </td>
       </ng-template>
     </app-table>
@@ -78,7 +72,6 @@ export class TransactionTable {
     { key: 'amount', header: 'Amount', sortable: true, align: 'left' },
     { key: 'balanceAfter', header: 'Balance After' },
     { key: 'referenceId', header: 'Reference' },
-    { key: 'paymentStatus', header: 'Payment Status', sortable: true, width: '130px' },
     { key: 'actions', header: '', width: '48px', align: 'right' }
   ];
 

@@ -18,7 +18,6 @@ import java.util.UUID;
  * @param transactionTypes    CR and/or DR
  * @param subTransactionTypes match any of these reasons
  * @param referenceTypes      match any of these reference kinds
- * @param paymentStatuses     match any of these payment states
  * @param referenceId   exact match on the referenced document
  * @param transactionNo exact match on the entry number
  * @param paymentReference exact match on the gateway payment id
@@ -34,7 +33,6 @@ public record WalletTransactionCriteria(
         Set<TransactionType> transactionTypes,
         Set<SubTransactionType> subTransactionTypes,
         Set<ReferenceType> referenceTypes,
-        Set<PaymentStatus> paymentStatuses,
         String referenceId,
         String transactionNo,
         String paymentReference,
@@ -46,28 +44,14 @@ public record WalletTransactionCriteria(
 ) {
 
     public static WalletTransactionCriteria none() {
-        return new WalletTransactionCriteria(null, null, null, null, null, null,
+        return new WalletTransactionCriteria(null, null, null, null, null,
                 null, null, null, null, null, null, null, null);
     }
 
     /** Pins the search to one wallet of one company. The service always calls this. */
     public WalletTransactionCriteria scopedTo(UUID enforcedWalletId, UUID enforcedCompanyId) {
         return new WalletTransactionCriteria(enforcedWalletId, enforcedCompanyId,
-                transactionTypes, subTransactionTypes, referenceTypes, paymentStatuses,
-                referenceId, transactionNo, paymentReference, from, to, minAmount, maxAmount, search);
-    }
-
-    /**
-     * Pins the search to a company — the recharge report's company-wide statement, walking
-     * every branch at once. Unlike {@link #scopedTo}, {@code enforcedWalletId} may be null
-     * (every wallet of the company); {@code enforcedSubTransactionTypes} replaces whatever
-     * the caller asked for, since the service has already narrowed it to what this report
-     * may show.
-     */
-    public WalletTransactionCriteria scopedToCompany(UUID enforcedCompanyId, UUID enforcedWalletId,
-                                                      Set<SubTransactionType> enforcedSubTransactionTypes) {
-        return new WalletTransactionCriteria(enforcedWalletId, enforcedCompanyId,
-                transactionTypes, enforcedSubTransactionTypes, referenceTypes, paymentStatuses,
+                transactionTypes, subTransactionTypes, referenceTypes,
                 referenceId, transactionNo, paymentReference, from, to, minAmount, maxAmount, search);
     }
 }

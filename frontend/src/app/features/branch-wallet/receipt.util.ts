@@ -34,7 +34,6 @@ export function downloadReceipt(
     ['Reason', txn.subTransactionTypeLabel || subTypeLabel(txn.subTransactionType)],
     ['Payment Reference', txn.paymentReference || '—'],
     ['Reference', txn.referenceId || '—'],
-    ['Status', txn.paymentStatus ? prettyToken(txn.paymentStatus) : '—'],
     ['Balance After', formatMoney(txn.balanceAfter, wallet.currency)],
     ['Created By', txn.createdByName || '—']
   ];
