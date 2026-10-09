@@ -14,7 +14,12 @@ Prod (35.154.220.116) `e28868b` -> `54c3113` (3 commits: `7aa0e3f`, `c3ded4e`, `
 (agent SSH is classifier-blocked): `git merge --ff-only origin/main` (tree was clean), `docker compose build backend`, `build frontend`,
 `up -d --force-recreate backend frontend`. Backend and frontend Healthy; mysql/redis untouched. Flyway: `V99 company to pay charge`
 applied, "now at version v99". No ERROR in backend logs. **Every company now has `to_pay_charge` = 50** (set 0 in Settings to disable).
-Not yet seen live in the browser: To-Pay booking showing the charge, `AWB-002` scan/track.
+
+**Verified live on prod** 2026-10-09 (Chrome, vendor.amazinglpl.com). Settings page shows To-Pay Charge = 50. Booking preview via
+COMPANY_ADMIN `ashwin` -> Branches -> TEST-PUNE -> "Login as Branch" (no password; plain `ashwin` has no branch so booking is disabled):
+pincode 411001, 15 kg. PAID: freight 105, docket 10, GST 20.70, net 135, no To-Pay row. TO_PAY: To-Pay Charge 50.00, GST 29.70 (+9 = 18%
+of 50), round off 0.30, net 195. Nothing saved; impersonation exited. Not verified on prod: TBB/COD getting 0, `AWB-002` scan/track,
+reprint totals on a To-Pay shipment, edit-shipment path.
 
 ---
 
