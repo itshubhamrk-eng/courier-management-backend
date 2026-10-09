@@ -8,6 +8,13 @@ All notable changes to this project. Format based on
 
 ---
 
+## Deployed 2026-10-09 — branch-scoped load sheets, cancelled-order charts, number reuse, admin Rate/KG to prod
+
+Prod (35.154.220.116) -> `83b169b` (`d035e47`, `83b169b`). Run by the user over SSH: `git merge --ff-only origin/main`,
+`docker compose build backend` / `frontend`, `up -d --force-recreate backend frontend`. Backend and frontend Healthy; mysql/redis untouched.
+Flyway applied `V100 released shipment numbers` and `V101 shipment charges rate per kg override`, "now at version v101". Backend started
+in 45s, no ERROR in logs. **Not yet verified in the prod UI** (Indapur THC list, admin Rate/KG + Calculate, cancelled orders in charts).
+
 ## 2026-10-09 — Branch-scoped load sheets, cancelled orders out of charts, number reuse, admin Rate/KG
 
 Verified live on :4200 (backend :8100 restarted with the new code) and via API on a throwaway :8082.
