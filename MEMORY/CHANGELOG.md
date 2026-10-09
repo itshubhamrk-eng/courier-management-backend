@@ -22,7 +22,7 @@ All notable changes to this project. Format based on
   Razorpay dashboard webhook alongside `payment.captured`.
 - **`RechargeReconciliationJob`** (every 2 min, 90 s initial delay): picks `PENDING` orders older than 2 min, per company's own gateway
   asks Razorpay `GET /orders/{id}/payments` (`PaymentGatewayPort.fetchOrderPayments`) and settles a captured payment, fails an order whose
-  payments all failed, fails one with no captured payment after 30 min (10 min if no gateway order id), or leaves it for the next run
+  payments all failed, fails one with no captured payment after 10 min (also 10 min if no gateway order id), or leaves it for the next run
   (gateway outage). Not yet deployed.
 - **Recharge Attempts report.** `GET /branch-wallet/recharge-attempts` (status/branch/date/search filters; COMPANY_ADMIN/FINANCE_USER see every
   branch, anyone else only their own) + Finance > "Recharge Attempts" page (`/finance/branch-wallet/recharge-attempts`): All/Pending/Success/

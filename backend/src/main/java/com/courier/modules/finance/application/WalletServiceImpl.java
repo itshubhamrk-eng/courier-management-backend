@@ -538,7 +538,7 @@ public class WalletServiceImpl implements WalletService {
 
     /** A PENDING recharge older than this with no captured payment is given up on (a late
      *  capture is still settled by the webhook). */
-    private static final java.time.Duration RECHARGE_PAYMENT_WINDOW = java.time.Duration.ofMinutes(30);
+    private static final java.time.Duration RECHARGE_PAYMENT_WINDOW = java.time.Duration.ofMinutes(10);
     /** An attempt that never got a gateway order id (crash between the two steps). */
     private static final java.time.Duration RECHARGE_ORDER_CREATE_WINDOW = java.time.Duration.ofMinutes(10);
 
@@ -586,7 +586,7 @@ public class WalletServiceImpl implements WalletService {
             return;
         }
         if (age.compareTo(RECHARGE_PAYMENT_WINDOW) > 0) {
-            rechargeOrders.markFailed(order.getId(), "No payment was captured within 30 minutes.");
+            rechargeOrders.markFailed(order.getId(), "No payment was captured within 10 minutes.");
             return;
         }
         rechargeOrders.touch(order.getId());

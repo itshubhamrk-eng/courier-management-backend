@@ -498,15 +498,15 @@ class WalletServiceImplTest {
         verify(rechargeOrders).touch(young.getId());
         verify(rechargeOrders, never()).markFailed(eq(young.getId()), any());
 
-        RechargeOrder old = pendingOrder("order_1", java.time.Duration.ofMinutes(45));
+        RechargeOrder old = pendingOrder("order_1", java.time.Duration.ofMinutes(15));
         service.reconcileRecharge(old.getId());
-        verify(rechargeOrders).markFailed(eq(old.getId()), org.mockito.ArgumentMatchers.contains("30 minutes"));
+        verify(rechargeOrders).markFailed(eq(old.getId()), org.mockito.ArgumentMatchers.contains("10 minutes"));
     }
 
     @Test
     @DisplayName("a gateway outage during reconciliation leaves the order pending")
     void reconcileGatewayDown() {
-        RechargeOrder o = pendingOrder("order_1", java.time.Duration.ofMinutes(45));
+        RechargeOrder o = pendingOrder("order_1", java.time.Duration.ofMinutes(15));
         when(paymentGateway.fetchOrderPayments("order_1"))
                 .thenThrow(new BusinessRuleException("The payment gateway could not be reached."));
 
