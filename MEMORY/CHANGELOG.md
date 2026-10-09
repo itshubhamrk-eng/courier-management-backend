@@ -8,6 +8,16 @@ All notable changes to this project. Format based on
 
 ---
 
+## Deployed 2026-10-09 — AWB-002 label ids + To-Pay charge to prod
+
+Prod (35.154.220.116) `e28868b` -> `54c3113` (3 commits: `7aa0e3f`, `c3ded4e`, `54c3113`). Run by the user over SSH
+(agent SSH is classifier-blocked): `git merge --ff-only origin/main` (tree was clean), `docker compose build backend`, `build frontend`,
+`up -d --force-recreate backend frontend`. Backend and frontend Healthy; mysql/redis untouched. Flyway: `V99 company to pay charge`
+applied, "now at version v99". No ERROR in backend logs. **Every company now has `to_pay_charge` = 50** (set 0 in Settings to disable).
+Not yet seen live in the browser: To-Pay booking showing the charge, `AWB-002` scan/track.
+
+---
+
 ## Added 2026-10-02 — Company-level To-Pay charge, added automatically on To-Pay bookings
 
 Direct request: To-Pay bookings carry a flat charge (50), configured per company, not editable at booking, GST applies.
