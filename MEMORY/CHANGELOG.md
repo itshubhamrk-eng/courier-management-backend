@@ -53,6 +53,14 @@ All notable changes to this project. Format based on
   (`company_razorpay_config`), overriding the `rzp_test_` key in `.env` — a recharge started on :4200/:8082 opens a real live order and
   Razorpay checkout redirects to the real bank. Never complete one while testing; unpaid orders just expire and the scheduler fails them.
 
+## Deployed 2026-10-09 — recharge flow (V102, V103), recharge report, shipment-list scoping to prod
+
+Prod (35.154.220.116) `83b169b` -> `1ead08b` (9 commits). Run by the user over SSH: `mysqldump` of `courier_db` first
+(`~/courier_db_before_v103_2026-10-09.sql`, 112 MB — V103 drops `wallet_transactions.payment_status`), `git merge --ff-only origin/main`
+(tree was clean), `docker compose build backend` / `frontend`, `up -d --force-recreate backend frontend`. Backend and frontend Healthy;
+mysql/redis untouched. Flyway applied `V102 wallet recharge orders` and `V103 recharge table holds all recharges`, "now at version v103".
+Backend started in 46 s, no ERROR in logs. Still to do on the Razorpay dashboard: add the `payment.failed` event to the webhook.
+
 ## 2026-10-09 — Branch revenue chart + shipment list scoped to the caller's branch
 
 - `DashboardServiceImpl.charts`: Revenue Trend now branch-scoped for a caller with an own branch
