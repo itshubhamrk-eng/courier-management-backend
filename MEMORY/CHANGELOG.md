@@ -24,6 +24,8 @@ All notable changes to this project. Format based on
 - Verified live on :4200 / :8100: online ₹20 on LOADTEST01 (test mode) `PENDING` -> `SUCCESS` + `WRC` ledger entry; manual ₹1 on Kolhapur ->
   `MANUAL`/`SUCCESS` row linked to its `MCR` entry, commission credit made no recharge row; Transactions page has no status column.
   `mvn test` 1130/1130. Not yet deployed.
+- **Branch side:** Finance > Recharge Report is now also in the BRANCH_MANAGER menu/route; the backend (`searchRechargeAttempts`) forces a non-admin
+  caller to their own branch (a `branchId` for another branch is ignored), so a branch only sees its own recharges.
 
 ## 2026-10-09 — Online recharge: record first, gateway second, scheduler for the unanswered (V102)
 

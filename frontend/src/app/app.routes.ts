@@ -23,7 +23,8 @@ const CUSTOMER_READERS = [
 const WALLET_RECHARGERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.FINANCE_USER];
 // Mirrors WalletServiceImpl.FINANCE_READERS on searchRecharges/companySummary — narrower
 // than WALLET_VIEWERS, since this report spans every branch, not just the caller's own.
-const WALLET_RECHARGE_REPORT_READERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER];
+// Branch manager reads it too — the backend narrows their rows to their own branch.
+const WALLET_RECHARGE_REPORT_READERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER, AppRole.BRANCH_MANAGER];
 // Shipment Booking: the counter desk's own job. Mirrors ShipmentServiceImpl's WRITERS
 // gate (COMPANY_ADMIN, BRANCH_MANAGER, OPERATOR); BOOKING_OPERATOR is the company-role
 // side of that same JWT-role gap the "authorise on permissions" capstone still owns.

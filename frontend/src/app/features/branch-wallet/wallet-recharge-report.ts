@@ -15,7 +15,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 import { BranchWalletService } from './branch-wallet.service';
 
-const VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER];
+const VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER, AppRole.BRANCH_MANAGER];
 
 const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
   { value: null, label: 'All modes' }, { value: 'ONLINE', label: 'Razorpay' }, { value: 'MANUAL', label: 'Manual' }
@@ -30,7 +30,8 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
  * Wallet Recharge Report — every recharge, online (Razorpay) and manual, across every branch,
  * with its status: `PENDING` (waiting on the gateway / the scheduler), `SUCCESS` (the wallet
  * was credited — only then does a wallet transaction exist) or `FAILED` (with the reason).
- * `COMPANY_ADMIN`/`FINANCE_USER`, same gate as `GET /branch-wallet/recharge-report`.
+ * `COMPANY_ADMIN`/`FINANCE_USER` see every branch; a branch manager sees only their own branch
+ * (the backend scopes the rows — `GET /branch-wallet/recharge-report`).
  */
 @Component({
   selector: 'app-wallet-recharge-report',
