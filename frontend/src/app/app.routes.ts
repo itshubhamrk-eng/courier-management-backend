@@ -595,11 +595,7 @@ export const routes: Routes = [
         canActivate: [roleGuard], data: { roles: WALLET_RECHARGE_REPORT_READERS },
         loadComponent: () => import('@features/branch-wallet/wallet-recharge-report').then((m) => m.WalletRechargeReport)
       },
-      {
-        path: 'finance/branch-wallet/recharge-attempts', title: 'Recharge Attempts',
-        canActivate: [roleGuard], data: { roles: WALLET_RECHARGE_REPORT_READERS },
-        loadComponent: () => import('@features/branch-wallet/wallet-recharge-attempts').then((m) => m.WalletRechargeAttempts)
-      },
+      { path: 'finance/branch-wallet/recharge-attempts', redirectTo: 'finance/branch-wallet/recharge-report', pathMatch: 'full' },
       // Follow-up Management. 'new' before ':id', and ':id/edit' before the bare ':id'
       // detail route is unaffected since it's a distinct trailing segment — same
       // convention every other module here uses.

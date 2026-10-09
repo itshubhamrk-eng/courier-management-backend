@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
@@ -37,7 +37,7 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
     <div class="page">
       <header class="page__head">
         <div>
-          <h1 class="text-h1">Recharge Attempts</h1>
+          @if (!embedded()) { <h1 class="text-h1">Recharge Attempts</h1> }
           <p class="text-caption">Online recharges by outcome — {{ page().totalElements }} attempts. Pending ones are re-checked with the gateway every 2 minutes.</p>
         </div>
         <div class="page__actions">
@@ -120,6 +120,9 @@ export class WalletRechargeAttempts implements OnInit {
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
 
+  /** True when shown inside the Recharge Report, which owns the title, breadcrumb and access check. */
+  readonly embedded = input(false);
+
   readonly tabs = STATUS_TABS;
   readonly loading = signal(true);
   readonly exporting = signal(false);
@@ -146,6 +149,7 @@ export class WalletRechargeAttempts implements OnInit {
   ];
 
   ngOnInit(): void {
+    if (this.embedded()) { this.load(); return; }
     if (!this.perms.canAccess({ roles: VIEWERS, permissions: ['WALLET_READ', 'WALLET_SEARCH'] })) {
       this.router.navigate(['/unauthorized']); return;
     }

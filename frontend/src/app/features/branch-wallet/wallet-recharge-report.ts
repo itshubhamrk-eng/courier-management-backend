@@ -16,6 +16,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 import { BranchWalletService } from './branch-wallet.service';
+import { WalletRechargeAttempts } from './wallet-recharge-attempts';
 
 const VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.FINANCE_USER];
 
@@ -33,9 +34,20 @@ const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
   selector: 'app-wallet-recharge-report',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, UiTable, UiPagination, UiSearch, UiButton, StatusBadge],
+  imports: [DatePipe, UiTable, UiPagination, UiSearch, UiButton, StatusBadge, WalletRechargeAttempts],
   template: `
     <div class="page">
+      <div class="views" role="tablist">
+        <button type="button" role="tab" [attr.aria-selected]="view() === 'credited'"
+                [class.tab--active]="view() === 'credited'" (click)="view.set('credited')">Recharges (credited)</button>
+        <button type="button" role="tab" [attr.aria-selected]="view() === 'attempts'"
+                [class.tab--active]="view() === 'attempts'" (click)="view.set('attempts')">Online attempts — Pending / Failed / Success</button>
+      </div>
+
+      @if (view() === 'attempts') {
+        <h1 class="text-h1">Wallet Recharge Report</h1>
+        <app-wallet-recharge-attempts [embedded]="true" />
+      } @else {
       <header class="page__head">
         <div>
           <h1 class="text-h1">Wallet Recharge Report</h1>
@@ -87,9 +99,13 @@ const MODE_TABS: { value: RechargeMode | null; label: string }[] = [
       </app-table>
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
+      }
     </div>
   `,
   styles: [`
+    .views { display:inline-flex; background:var(--surface-muted); border-radius:var(--r-pill); padding:3px; gap:2px; margin-bottom:16px; }
+    .views button { border:0; background:transparent; padding:8px 18px; border-radius:var(--r-pill);
+      font:600 13px var(--font-sans); color:var(--content-muted); cursor:pointer; }
     .toolbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:4px 0 16px; }
     .tabs { display:inline-flex; background:var(--surface-muted); border-radius:var(--r-pill); padding:3px; gap:2px; }
     .tabs button { border:0; background:transparent; padding:7px 16px; border-radius:var(--r-pill);
@@ -114,6 +130,8 @@ export class WalletRechargeReport implements OnInit {
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
 
+  /** `credited` = ledger recharges (WRC/MCR); `attempts` = every online attempt incl. pending and failed. */
+  readonly view = signal<'credited' | 'attempts'>('credited');
   readonly tabs = MODE_TABS;
   readonly loading = signal(true);
   readonly exporting = signal(false);

@@ -195,7 +195,6 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'pricing', title: 'Pricing (Soon)', icon: 'sell', order: 4,
     children: [
-      { id: 'wallet-recharge-attempts', title: 'Recharge Attempts', icon: 'pending_actions', route: '/finance/branch-wallet/recharge-attempts', permission: 'WALLET_SEARCH', roles: FINANCE },
       // No `permission` key: aspirational, unbuilt feature — no RATE module exists in
       // the catalogue (Rate Master's own rights are RATE_MASTER_*, a different module).
       { id: 'rate-cards', title: 'Rate Cards (Soon)', icon: 'payments', route: '/pricing/rate-cards', roles: COMPANY_ONLY },
