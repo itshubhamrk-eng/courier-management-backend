@@ -2,6 +2,7 @@ package com.courier.modules.finance.api;
 
 import com.courier.modules.finance.api.dto.CreditRequest;
 import com.courier.modules.finance.api.dto.DebitRequest;
+import com.courier.modules.finance.api.dto.RechargeAttemptResponse;
 import com.courier.modules.finance.api.dto.RechargeOrderResponse;
 import com.courier.modules.finance.api.dto.RechargeRequest;
 import com.courier.modules.finance.api.dto.WalletResponse;
@@ -10,6 +11,8 @@ import com.courier.modules.finance.api.dto.WalletTransactionResponse;
 import com.courier.modules.finance.api.dto.WalletTransactionSearchRequest;
 import com.courier.modules.finance.application.WalletService;
 import com.courier.modules.finance.application.payment.PaymentGatewayPort;
+import com.courier.modules.finance.domain.PaymentStatus;
+import com.courier.modules.finance.domain.RechargeOrder;
 import com.courier.modules.finance.domain.Wallet;
 import com.courier.modules.finance.domain.WalletTransaction;
 import com.courier.shared.api.ApiResponse;
@@ -20,6 +23,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
@@ -27,12 +31,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -147,6 +154,27 @@ public class BranchWalletController {
         Page<WalletTransaction> page = service.searchRecharges(
                 branchId, mapper.toCriteria(search), sanitise(pageable));
         return ApiResponse.success(PageResponse.from(page, mapper::toRechargeReportRow));
+    }
+
+    @GetMapping("/recharge-attempts")
+    @Operation(summary = "Online recharge attempts",
+            description = """
+                    Every Razorpay recharge attempt — `PENDING`, `SUCCESS` and `FAILED` — with the
+                    failure reason and when the scheduler last checked it. The recharge report
+                    lists only credited recharges. Company admins/finance users see all
+                    branches (`branchId` narrows to one); anyone else sees their own branch.
+                    """)
+    public ApiResponse<PageResponse<RechargeAttemptResponse>> rechargeAttempts(
+            @RequestParam(required = false) UUID branchId,
+            @RequestParam(required = false) PaymentStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) @Size(max = 100) String search,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt",
+                    direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<RechargeOrder> page = service.searchRechargeAttempts(
+                branchId, status, fromDate, toDate, search, sanitise(pageable));
+        return ApiResponse.success(PageResponse.from(page, mapper::toAttemptResponse));
     }
 
     @PostMapping("/recharge/order")

@@ -106,6 +106,28 @@ export interface WalletSummary {
 /** A ledger entry — mirrors backend `WalletTransactionResponse`. `balanceBefore` /
  *  `balanceAfter` are the wallet's available balance around this entry, as recorded at
  *  the time; they are facts, not recomputations. */
+export type RechargeAttemptStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
+
+/** One online (Razorpay) recharge attempt — see `GET /branch-wallet/recharge-attempts`. */
+export interface RechargeAttempt {
+  id: string;
+  transactionNo: string;
+  branchId: string;
+  branchCode: string | null;
+  branchName: string | null;
+  amount: number;
+  currency: string;
+  gateway: string;
+  gatewayOrderId: string | null;
+  gatewayPaymentId: string | null;
+  status: RechargeAttemptStatus;
+  failureReason: string | null;
+  ledgerTransactionId: string | null;
+  lastCheckedAt: string | null;
+  settledAt: string | null;
+  createdAt: string;
+}
+
 export interface WalletTransaction {
   id: string;
   companyId: string;

@@ -288,6 +288,44 @@ public class WalletServiceImpl implements WalletService {
         return values != null && !values.isEmpty();
     }
 
+    // ------------------------------------------------------- recharge attempts
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(COMPANY_USERS_ONLY)
+    public Page<RechargeOrder> searchRechargeAttempts(UUID branchId, PaymentStatus status,
+                                                      java.time.LocalDate fromDate, java.time.LocalDate toDate,
+                                                      String search, Pageable pageable) {
+        UUID companyId = requireCompany();
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        boolean companyWide = isAdmin(caller) || caller.hasRole(
+                com.courier.modules.company.domain.DefaultRoleCatalog.FINANCE_USER);
+        UUID scopedBranch = companyWide ? branchId
+                : ownBranch(caller, companyId).orElseThrow(() -> new BusinessRuleException(
+                        "You are not assigned to a branch, so there is no wallet to report on."));
+        if (companyWide && scopedBranch != null) {
+            requireBranchExists(scopedBranch, companyId);
+        }
+        Instant from = fromDate == null ? null : fromDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant to = toDate == null ? null : toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        String like = search == null || search.isBlank() ? null : "%" + search.trim().toLowerCase() + "%";
+
+        return rechargeOrderRepository.findAll((root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> p = new java.util.ArrayList<>();
+            p.add(cb.equal(root.get("companyId"), companyId));
+            if (scopedBranch != null) p.add(cb.equal(root.get("branchId"), scopedBranch));
+            if (status != null) p.add(cb.equal(root.get("status"), status));
+            if (from != null) p.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+            if (to != null) p.add(cb.lessThan(root.get("createdAt"), to));
+            if (like != null) {
+                p.add(cb.or(cb.like(cb.lower(root.get("transactionNo")), like),
+                        cb.like(cb.lower(root.get("gatewayOrderId")), like),
+                        cb.like(cb.lower(root.get("gatewayPaymentId")), like)));
+            }
+            return cb.and(p.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        }, pageable);
+    }
+
     // ----------------------------------------------------------------- recharge
 
     @Override

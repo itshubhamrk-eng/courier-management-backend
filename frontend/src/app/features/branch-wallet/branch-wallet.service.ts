@@ -4,7 +4,7 @@ import { API } from '@core/config/api-endpoints';
 import { PageQuery } from '@core/models/page.model';
 import {
   WalletResponse, WalletSummary, WalletTransaction,
-  RechargeRequest, RechargeOrderResponse, CreditRequest, DebitRequest,
+  RechargeAttempt, RechargeRequest, RechargeOrderResponse, CreditRequest, DebitRequest,
   TopupRequest, CreateTopupRequestRequest, DecideTopupRequestRequest
 } from '@core/models/wallet.model';
 
@@ -45,6 +45,11 @@ export class BranchWalletService {
    *  every branch, one row each carrying its branch. `COMPANY_ADMIN`/`FINANCE_USER` only. */
   rechargeReport(query: PageQuery) {
     return this.api.page<WalletTransaction>(`${this.base}/recharge-report`, query);
+  }
+
+  /** Every online recharge attempt (PENDING / SUCCESS / FAILED) — the recharge report lists only credited ones. */
+  rechargeAttempts(query: PageQuery) {
+    return this.api.page<RechargeAttempt>(`${this.base}/recharge-attempts`, query);
   }
 
   // ---- recharge ---------------------------------------------------------------

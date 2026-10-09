@@ -2,6 +2,7 @@ package com.courier.modules.finance.domain;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,7 +11,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface RechargeOrderRepository extends JpaRepository<RechargeOrder, UUID> {
+public interface RechargeOrderRepository extends JpaRepository<RechargeOrder, UUID>,
+        JpaSpecificationExecutor<RechargeOrder> {
 
     @Query("select r from RechargeOrder r where r.gatewayOrderId = :orderId and r.companyId = :companyId")
     Optional<RechargeOrder> findByGatewayOrderIdWithinCompany(@Param("orderId") String orderId,

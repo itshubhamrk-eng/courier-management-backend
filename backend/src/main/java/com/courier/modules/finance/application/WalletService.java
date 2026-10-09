@@ -88,6 +88,17 @@ public interface WalletService {
      * attempt {@code FAILED} (never downgrades a {@code SUCCESS}). No authenticated user —
      * same caller contract as {@link #settleFromWebhook}.
      */
+    /**
+     * Report of online recharge attempts — {@code PENDING}, {@code SUCCESS} and {@code FAILED}
+     * (the recharge report itself lists only the credited ones). Company admins and finance
+     * users see every branch (optionally one via {@code branchId}); anyone else sees only
+     * their own branch.
+     */
+    org.springframework.data.domain.Page<com.courier.modules.finance.domain.RechargeOrder> searchRechargeAttempts(
+            UUID branchId, com.courier.modules.finance.domain.PaymentStatus status,
+            java.time.LocalDate fromDate, java.time.LocalDate toDate, String search,
+            org.springframework.data.domain.Pageable pageable);
+
     void markRechargeFailed(UUID companyId, String gatewayOrderId, String reason);
 
     /**

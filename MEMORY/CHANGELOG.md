@@ -24,6 +24,12 @@ All notable changes to this project. Format based on
   asks Razorpay `GET /orders/{id}/payments` (`PaymentGatewayPort.fetchOrderPayments`) and settles a captured payment, fails an order whose
   payments all failed, fails one with no captured payment after 30 min (10 min if no gateway order id), or leaves it for the next run
   (gateway outage). Not yet deployed.
+- **Recharge Attempts report.** `GET /branch-wallet/recharge-attempts` (status/branch/date/search filters; COMPANY_ADMIN/FINANCE_USER see every
+  branch, anyone else only their own) + Finance > "Recharge Attempts" page (`/finance/branch-wallet/recharge-attempts`): All/Pending/Success/
+  Failed tabs, failure reason, gateway order/payment ids, settled/last-checked time, CSV export. The existing Recharge Report still lists
+  credited recharges only. **Gotcha:** the local dev DB mirrors prod, where AMAZING_LOGISTICS has its own Razorpay account in LIVE mode
+  (`company_razorpay_config`), overriding the `rzp_test_` key in `.env` — a recharge started on :4200/:8082 opens a real live order and
+  Razorpay checkout redirects to the real bank. Never complete one while testing; unpaid orders just expire and the scheduler fails them.
 
 ## 2026-10-09 — Branch revenue chart + shipment list scoped to the caller's branch
 
