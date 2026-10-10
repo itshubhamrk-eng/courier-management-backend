@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-10 — Print: ToPay amount on Customer + POD copies, copy order Customer/POD/Driver/Office
+
+- **Frontend (`consignment-print.util.ts`, `ambox-consignment-print.util.ts`):** ToPay shipments now show the amount on both the Customer (Consignor) copy and the Delivery (P.O.D.) copy; Driver/Office stay blank. Paid unchanged (Customer copy only).
+- Copy print order is now Customer, POD, Driver, Office in both layouts.
+- Verified locally on :4200 against a real ToPay shipment (Delivery Receipt + Print 2).
+
 ## 2026-10-10 — Shipment page shows every Loading Sheet / THC and the DRS, with dates
 
 - **Backend:** new `GET /shipments/{id}/delivery-run` (`ShipmentDrsResponse`) from the shipment's `DeliveryAssignment` row; null data until Out For Delivery.

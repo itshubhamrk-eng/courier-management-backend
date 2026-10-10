@@ -258,10 +258,10 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   // the amount block for ToPay regardless of label.
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
-  // Paid: amount only on the Customer copy. ToPay: amount only on the Delivery (POD) copy.
+  // Paid: amount only on the Customer copy. ToPay: amount on the Customer and Delivery (POD) copies.
   const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
     isPaid ? (label === 'Customer Copy' ? 'paid' : 'omitted') :
-    isToPay ? (label === 'Delivery Copy' ? 'collect' : 'omitted') :
+    isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' ? 'collect' : 'omitted') :
     label === 'Delivery Copy' ? 'collect' :
     'normal';
   const collectTotal = isPaid ? 0 : total;
@@ -434,9 +434,9 @@ export function renderConsignmentHtml(data: ConsignmentPrintData, autoPrint = tr
   }
 </style></head><body>
   ${copy(data, 'Customer Copy')}
-  ${copy(data, 'Office Copy')}
-  ${copy(data, 'Driver Copy')}
   ${copy(data, 'Delivery Copy')}
+  ${copy(data, 'Driver Copy')}
+  ${copy(data, 'Office Copy')}
   ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 50);</script>' : ''}
 </body></html>`;
 }

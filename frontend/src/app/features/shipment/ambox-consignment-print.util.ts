@@ -28,7 +28,7 @@ function rsPaise(value: number): [string, string] {
 // set (Consignor Copy here is that same customer-facing copy) — no separate Consignee
 // Copy, since the consignee only ever sees the goods plus the P.O.D. copy at delivery.
 type CopyLabel = 'CONSIGNOR COPY' | 'OFFICE COPY' | 'DRIVER COPY' | 'P.O.D. COPY';
-const COPY_LABELS: CopyLabel[] = ['CONSIGNOR COPY', 'OFFICE COPY', 'DRIVER COPY', 'P.O.D. COPY'];
+const COPY_LABELS: CopyLabel[] = ['CONSIGNOR COPY', 'P.O.D. COPY', 'DRIVER COPY', 'OFFICE COPY'];
 
 function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
@@ -47,8 +47,8 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
 
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
-  // Paid: amounts only on the Consignor (customer) copy. ToPay: only on the P.O.D. copy.
-  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' : true;
+  // Paid: amounts only on the Consignor (customer) copy. ToPay: on the Consignor and P.O.D. copies.
+  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' || label === 'CONSIGNOR COPY' : true;
 
   const rows: Array<[string, number]> = [
     ['FREIGHT', d.charges.freight],
