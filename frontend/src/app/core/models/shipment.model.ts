@@ -97,6 +97,8 @@ export interface Shipment {
   /** The government-issued E-Way Bill number itself (distinct from `invoiceNumber`) —
    *  null until Part-A has actually succeeded. The THC's own E-WAY BILL NO column. */
   ewayBillNumber?: string | null;
+  /** Package count — the THC's own QTY column. */
+  numberOfPackages?: number | null;
 }
 
 /** One row of a bulk-track result — mirrors backend `BulkTrackRowResponse`. `shipment` is
@@ -353,6 +355,21 @@ export interface ShipmentStatusHistoryEntry {
   vehicleId?: string | null;
   changedBy?: string | null;
   changedAt: string;
+}
+
+/** GET /shipments/{id}/delivery-run — mirrors `ShipmentDrsResponse`. */
+export interface ShipmentDrs {
+  drsNumber?: string | null;
+  deliveryBranchId?: string | null;
+  deliveryUserId: string;
+  vehicleId?: string | null;
+  fuelCost?: number | null;
+  deliveryCharge?: number | null;
+  status: string;
+  assignedAt: string;
+  deliveredAt?: string | null;
+  receiverName?: string | null;
+  deliveryRemarks?: string | null;
 }
 
 /** One uploaded document reference — GET/POST /shipments/{id}/documents. */

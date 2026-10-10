@@ -44,19 +44,16 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     ['Unloading Delivery Charges', 0],
     ['Reschedule Fine', 0]
   ];
-  const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
-    isToPay ? 'omitted' :
-    label === 'Driver Copy' ? (isPaid ? 'omitted' : 'normal') :
+  // Paid: amount only on the Customer copy. ToPay: amount only on the Delivery (POD) copy.
+  const amountMode: 'normal' | 'paid' | 'collect' | 'hidden' =
+    isPaid ? (label === 'Customer Copy' ? 'paid' : 'hidden') :
+    isToPay ? (label === 'Delivery Copy' ? 'collect' : 'hidden') :
+    label === 'Driver Copy' ? 'normal' :
     label === 'Delivery Copy' ? 'collect' :
-    isPaid ? 'paid' : 'normal';
+    'normal';
   const collectTotal = isPaid ? 0 : total;
 
-  const amountSection = amountMode === 'omitted' ? `
-        <table class="desc">
-          <tr><th>Description</th><th>Amount</th></tr>
-          ${taxRowsHtml}
-          <tr class="total"><td>Net Total</td><td>&#8377; ${total.toFixed(2)}</td></tr>
-        </table>` : amountMode === 'paid' ? `
+  const amountSection = amountMode === 'hidden' ? '' : amountMode === 'paid' ? `
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>
           ${taxRowsHtml}

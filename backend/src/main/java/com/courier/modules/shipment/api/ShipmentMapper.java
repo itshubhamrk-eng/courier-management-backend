@@ -213,7 +213,7 @@ public class ShipmentMapper {
                 charge == null ? null : charge.getBranchCommissionOnOtherAmount(),
                 charge == null ? null : charge.getCompanyCommissionOnBasicFreight(),
                 s.getStatus(), deliveredAt, s.getCreatedAt(), s.getVersion(), invoiceNumber, receivedAt,
-                ewayBillNumber);
+                ewayBillNumber, s.getNumberOfPackages());
     }
 
     public ShipmentItemResponse toResponse(ShipmentItem i) {

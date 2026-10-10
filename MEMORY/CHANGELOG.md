@@ -8,6 +8,16 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-10 — Shipment page shows every Loading Sheet / THC and the DRS, with dates
+
+- **Backend:** new `GET /shipments/{id}/delivery-run` (`ShipmentDrsResponse`) from the shipment's `DeliveryAssignment` row; null data until Out For Delivery.
+- **Frontend (`shipment-view.ts`):** the single-manifest THC card is replaced by a "Loading Sheet / THC" card listing *every* manifest named in the
+  shipment's status history (a hub-routed shipment has several) with Created / Dispatched / Received dates, vehicle, driver; plus a "DRS" card
+  (DRS no., created, delivery person, vehicle, delivered date, receiver). A Load Sheet and its THC are the same `Manifest`.
+- Verified on a throwaway :8082 backend against real `courier_db`; no migration.
+
+---
+
 ## 2026-10-09 — One recharge table for online AND manual; wallet ledger has no status (V103)
 
 - **`wallet_transactions.payment_status` is dropped.** The ledger only holds money that moved; `WalletTransaction.paymentStatus`/`isSettled`, the

@@ -353,6 +353,21 @@ public class ShipmentController {
         return ApiResponse.success(steps);
     }
 
+    @GetMapping("/{id}/delivery-run")
+    @Operation(summary = "Fetch the DRS this shipment is on",
+            description = "Null data when the shipment has not been put Out For Delivery yet.")
+    public ApiResponse<com.courier.modules.shipment.api.dto.ShipmentDrsResponse> getDeliveryRun(
+            @PathVariable UUID id) {
+        var d = shipmentService.getDeliveryAssignment(id);
+        if (d == null) {
+            return ApiResponse.<com.courier.modules.shipment.api.dto.ShipmentDrsResponse>success(null, null);
+        }
+        return ApiResponse.success(new com.courier.modules.shipment.api.dto.ShipmentDrsResponse(
+                d.getDrsNumber(), d.getDeliveryBranchId(), d.getDeliveryUserId(), d.getVehicleId(),
+                d.getFuelCost(), d.getDeliveryCharge(), d.getStatus().name(),
+                d.getAssignedAt(), d.getDeliveredAt(), d.getReceiverName(), d.getDeliveryRemarks()));
+    }
+
     @GetMapping("/{id}/items")
     @Operation(summary = "Fetch a shipment's item grid")
     public ApiResponse<List<ShipmentItemResponse>> getItems(@PathVariable UUID id) {

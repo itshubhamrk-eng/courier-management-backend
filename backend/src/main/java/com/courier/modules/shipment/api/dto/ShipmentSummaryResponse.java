@@ -42,6 +42,8 @@ public record ShipmentSummaryResponse(
         /** The government-issued E-Way Bill number itself (distinct from {@link
          *  #invoiceNumber}) — null until Part-A has actually succeeded. The THC's own
          *  E-WAY BILL NO column. */
-        String ewayBillNumber
+        String ewayBillNumber,
+        /** Package count — the THC's own QTY column. */
+        Integer numberOfPackages
 ) {
 }

@@ -17,7 +17,7 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { CompanyProfileService } from '@features/company/company-profile.service';
-import { ShipmentResponse, ShipmentCharge, TimelineStep, CANCELLABLE_STATUSES, Manifest, ShipmentEwayBillInfo } from '@core/models/shipment.model';
+import { ShipmentResponse, ShipmentCharge, TimelineStep, ShipmentDrs, ShipmentStatusHistoryEntry, CANCELLABLE_STATUSES, Manifest, ShipmentEwayBillInfo } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
@@ -38,6 +38,15 @@ import { VehicleService } from '@features/manifest/vehicle.service';
 import { ShipmentMovementService } from '@features/shipment-movement/shipment-movement.service';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
+interface MovementDoc {
+  manifest: Manifest;
+  createdAt: string | null;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  vehicle: string | null;
+  driver: { name: string; mobile: string } | null;
+}
+
 const TIMELINE_ICONS: Record<string, string> = {
   BOOKED: 'add_box', MANIFEST_CREATED: 'qr_code_scanner',
   DISPATCHED: 'outbound', IN_SCAN: 'move_to_inbox', OUT_FOR_DELIVERY: 'directions_run',
@@ -156,27 +165,71 @@ const TIMELINE_ICONS: Record<string, string> = {
           </app-card>
         </div>
 
-        @if (shipment()!.manifestId) {
-          <app-card title="Trip Hire Challan (THC)">
-            @if (loadingManifest()) {
-              <app-loader [minHeight]="100" caption="Loading…" />
-            } @else if (manifest(); as m) {
-              <dl class="kv">
-                <dt>THC No.</dt><dd>{{ m.manifestNumber }}</dd>
-                <dt>Status</dt><dd>{{ m.status }}</dd>
-                @if (vehicleLabel()) { <dt>Vehicle</dt><dd>{{ vehicleLabel() }}</dd> }
-                @if (driverInfo(); as d) { <dt>Driver</dt><dd>{{ d.name }} · {{ d.mobile }}</dd> }
-                @if (m.departureTime || m.dispatchedAt) {
-                  <dt>Dispatched</dt><dd>{{ (m.departureTime ?? m.dispatchedAt) | date: 'medium' }}</dd>
-                }
-              </dl>
-              <a class="sv__link" [routerLink]="['/movement/trip-hire-challan']" [queryParams]="{ manifestNumber: m.manifestNumber }">
-                <mat-icon>outbound</mat-icon> View THC</a>
-            } @else {
-              <p class="empty">THC not yet raised for this manifest.</p>
-            }
-          </app-card>
-        }
+        <app-card title="Loading Sheet / THC" subtitle="Every load sheet this shipment has travelled on">
+          @if (loadingMovement()) {
+            <app-loader [minHeight]="100" caption="Loading…" />
+          } @else if (!movementDocs().length) {
+            <p class="empty">Not on a loading sheet yet.</p>
+          } @else {
+            <div class="mt-wrap">
+              <table class="mt">
+                <thead>
+                  <tr>
+                    <th>Loading Sheet / THC No.</th><th>Status</th><th>Created</th><th>Dispatched</th>
+                    <th>Received</th><th>Vehicle</th><th>Driver</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of movementDocs(); track d.manifest.id) {
+                    <tr>
+                      <td class="mt__strong">{{ d.manifest.manifestNumber }}</td>
+                      <td><span class="tag">{{ d.manifest.status }}</span></td>
+                      <td>{{ d.createdAt | date: 'dd MMM yyyy, h:mm a' }}</td>
+                      <td>{{ d.dispatchedAt ? (d.dispatchedAt | date: 'dd MMM yyyy, h:mm a') : '—' }}</td>
+                      <td>{{ d.receivedAt ? (d.receivedAt | date: 'dd MMM yyyy, h:mm a') : 'Pending' }}</td>
+                      <td>{{ d.vehicle || '—' }}</td>
+                      <td>{{ d.driver ? d.driver.name + (d.driver.mobile !== '—' ? ' · ' + d.driver.mobile : '') : '—' }}</td>
+                      <td>
+                        <a class="sv__link" [routerLink]="['/movement/trip-hire-challan']" [queryParams]="{ manifestNumber: d.manifest.manifestNumber }">
+                          <mat-icon>outbound</mat-icon> THC</a>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </app-card>
+
+        <app-card title="DRS (Delivery Run Sheet)">
+          @if (loadingMovement()) {
+            <app-loader [minHeight]="100" caption="Loading…" />
+          } @else if (drs(); as r) {
+            <div class="mt-wrap">
+              <table class="mt">
+                <thead>
+                  <tr>
+                    <th>DRS No.</th><th>Status</th><th>Created</th><th>Delivered</th>
+                    <th>Delivery Person</th><th>Vehicle</th><th>Received By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mt__strong">{{ r.drsNumber || '—' }}</td>
+                    <td><span class="tag">{{ r.status }}</span></td>
+                    <td>{{ r.assignedAt | date: 'dd MMM yyyy, h:mm a' }}</td>
+                    <td>{{ r.deliveredAt ? (r.deliveredAt | date: 'dd MMM yyyy, h:mm a') : 'Pending' }}</td>
+                    <td>{{ drsUser() ? drsUser()!.name + (drsUser()!.mobile !== '—' ? ' · ' + drsUser()!.mobile : '') : '—' }}</td>
+                    <td>{{ drsVehicle() || '—' }}</td>
+                    <td>{{ r.receiverName || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="empty">Not out for delivery yet.</p>
+          }
+        </app-card>
 
         <div class="sv__grid2">
           <app-card title="Tickets" [subtitle]="tickets().length + ' raised for this shipment'">
@@ -335,6 +388,14 @@ const TIMELINE_ICONS: Record<string, string> = {
     }
   `,
   styles: [`
+    .mt-wrap { overflow-x:auto; }
+    .mt { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
+    .mt th { text-align:left; padding:10px 12px; font-weight:600; font-size:12px; color:var(--content-muted);
+      border-bottom:1px solid var(--surface-border); white-space:nowrap; }
+    .mt td { padding:12px; border-bottom:1px solid var(--surface-border); color:var(--content-fg); white-space:nowrap; }
+    .mt tbody tr:last-child td { border-bottom:0; }
+    .mt__strong { font-weight:600; }
+    .mt .tag { margin-left:0; background:var(--brand-100); color:var(--brand-700); }
     .sv { display:flex; flex-direction:column; gap:16px; }
     .sv__actions { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
     .sv__link { display:inline-flex; align-items:center; gap:6px; font:600 13px var(--font-sans); color:var(--content-fg);
@@ -424,10 +485,11 @@ export class ShipmentView implements OnInit {
   readonly tickets = signal<Ticket[]>([]);
   readonly followUps = signal<FollowUp[]>([]);
 
-  readonly loadingManifest = signal(false);
-  readonly manifest = signal<Manifest | null>(null);
-  readonly vehicleLabel = signal<string | null>(null);
-  readonly driverInfo = signal<{ name: string; mobile: string } | null>(null);
+  readonly loadingMovement = signal(false);
+  readonly movementDocs = signal<MovementDoc[]>([]);
+  readonly drs = signal<ShipmentDrs | null>(null);
+  readonly drsUser = signal<{ name: string; mobile: string } | null>(null);
+  readonly drsVehicle = signal<string | null>(null);
 
   private readonly branchOptions = signal<SelectOption[]>([]);
   private readonly serviceTypeOptions = signal<SelectOption[]>([]);
@@ -502,7 +564,7 @@ export class ShipmentView implements OnInit {
         this.loading.set(false);
         this.loadDetails();
         this.loadRelated();
-        if (s.manifestId) this.loadManifest(s.manifestId);
+        this.loadMovement(s.manifestId ?? null);
       },
       error: () => { this.shipment.set(null); this.loading.set(false); }
     });
@@ -539,26 +601,52 @@ export class ShipmentView implements OnInit {
     });
   }
 
-  private loadManifest(manifestId: string): void {
-    this.loadingManifest.set(true);
-    this.manifestService.get(manifestId).subscribe({
-      next: (m) => {
-        this.manifest.set(m);
-        this.loadingManifest.set(false);
-        if (m.vehicleId) {
-          this.vehicleService.get(m.vehicleId).subscribe({
-            next: (v) => this.vehicleLabel.set(v.vehicleNumber),
-            error: () => this.vehicleLabel.set(null)
-          });
-        }
-        if (m.driverUserId) {
-          this.movementService.userDirectory().subscribe({
-            next: (dir) => this.driverInfo.set(dir.get(m.driverUserId!) ?? null),
-            error: () => this.driverInfo.set(null)
-          });
-        }
-      },
-      error: () => { this.manifest.set(null); this.loadingManifest.set(false); }
+  /** Loading Sheet / THC history (every manifest named in the status log, plus the
+   *  current one) and the DRS row. A Load Sheet and its THC are the same `Manifest`. */
+  private loadMovement(currentManifestId: string | null): void {
+    this.loadingMovement.set(true);
+    forkJoin({
+      history: this.service.history(this.id).pipe(catchError(() => of([] as ShipmentStatusHistoryEntry[]))),
+      drs: this.service.deliveryRun(this.id).pipe(catchError(() => of(null))),
+      dir: this.movementService.userDirectory().pipe(catchError(() => of(new Map<string, { name: string; mobile: string }>())))
+    }).subscribe(({ history, drs, dir }) => {
+      const ids: string[] = [];
+      for (const h of history) if (h.manifestId && !ids.includes(h.manifestId)) ids.push(h.manifestId);
+      if (currentManifestId && !ids.includes(currentManifestId)) ids.push(currentManifestId);
+
+      const vehicleIds = new Set<string>();
+      if (drs?.vehicleId) vehicleIds.add(drs.vehicleId);
+      this.drs.set(drs);
+      this.drsUser.set(drs ? dir.get(drs.deliveryUserId) ?? null : null);
+
+      const manifests$ = ids.length
+        ? forkJoin(ids.map((id) => this.manifestService.get(id).pipe(catchError(() => of(null)))))
+        : of([] as (Manifest | null)[]);
+      manifests$.subscribe((list) => {
+        const manifests = list.filter((m): m is Manifest => !!m);
+        manifests.forEach((m) => m.vehicleId && vehicleIds.add(m.vehicleId));
+        const vehicles$ = vehicleIds.size
+          ? forkJoin([...vehicleIds].map((vid) => this.vehicleService.get(vid)
+              .pipe(map((v) => [vid, v.vehicleNumber] as const), catchError(() => of([vid, null] as const)))))
+          : of([] as (readonly [string, string | null])[]);
+        vehicles$.subscribe((pairs) => {
+          const vNames = new Map(pairs);
+          const at = (m: Manifest, status: string, last = false): string | null => {
+            const rows = history.filter((h) => h.manifestId === m.id && h.status === status);
+            return rows.length ? rows[last ? rows.length - 1 : 0].changedAt : null;
+          };
+          this.movementDocs.set(manifests.map((m) => ({
+            manifest: m,
+            createdAt: at(m, 'MANIFEST_CREATED') ?? m.createdAt ?? null,
+            dispatchedAt: at(m, 'DISPATCHED') ?? m.departureTime ?? m.dispatchedAt ?? null,
+            receivedAt: at(m, 'IN_SCAN', true),
+            vehicle: m.vehicleId ? vNames.get(m.vehicleId) ?? null : null,
+            driver: m.driverUserId ? dir.get(m.driverUserId) ?? null : null
+          })));
+          this.drsVehicle.set(drs?.vehicleId ? vNames.get(drs.vehicleId) ?? null : null);
+          this.loadingMovement.set(false);
+        });
+      });
     });
   }
 

@@ -5,7 +5,7 @@ import { PageQuery } from '@core/models/page.model';
 import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
-  PricingRequest, PricingResponse, TimelineStep, ShipmentSearchRequest, ShipmentSummaryStats,
+  PricingRequest, PricingResponse, TimelineStep, ShipmentDrs, ShipmentSearchRequest, ShipmentSummaryStats,
   BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse
 } from '@core/models/shipment.model';
 
@@ -53,6 +53,8 @@ export class ShipmentService {
   }
   items(id: string) { return this.api.get<ShipmentItem[]>(`${API.shipments}/${id}/items`); }
   charges(id: string) { return this.api.get<ShipmentCharge>(`${API.shipments}/${id}/charges`); }
+  /** The DRS row for this shipment — null until it is Out For Delivery. */
+  deliveryRun(id: string) { return this.api.get<ShipmentDrs | null>(`${API.shipments}/${id}/delivery-run`); }
   history(id: string) { return this.api.get<ShipmentStatusHistoryEntry[]>(`${API.shipments}/${id}/history`); }
   documents(id: string) { return this.api.get<ShipmentDocument[]>(`${API.shipments}/${id}/documents`); }
   timeline(id: string) { return this.api.get<TimelineStep[]>(`${API.shipments}/${id}/timeline`); }

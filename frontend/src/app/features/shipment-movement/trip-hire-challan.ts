@@ -666,6 +666,8 @@ export class TripHireChallan implements OnInit, OnDestroy {
   private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
     const topayIds = this.topayModeIds();
     const topayFreight = (s: Shipment): number | null => topayIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
+    const qtyOf = (s: Shipment) => s.numberOfPackages ?? 0;
+    const totalQty = shipments.reduce((sum, s) => sum + qtyOf(s), 0);
     const totalWeight = shipments.reduce((sum, s) => sum + (s.chargeableWeight ?? 0), 0);
     const totalFreight = shipments.reduce((sum, s) => sum + (topayFreight(s) ?? 0), 0);
     const bookingDate = (s: Shipment) => s.bookingDate ? this.esc(new Date(s.bookingDate).toLocaleDateString('en-GB')) : '—';
@@ -679,6 +681,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
       <td>${this.esc(s.fromCity) || '—'}</td>
       <td>${this.esc(s.toCity) || '—'}</td>
       <td class="center">${bookingDate(s)}</td>
+      <td class="right">${qtyOf(s)}</td>
       <td class="right">${s.chargeableWeight}</td>
       <td class="right">${topayFreight(s) ?? ''}</td>
     </tr>`).join('');
@@ -722,6 +725,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
         td.right, th.right { text-align: right; }
         .c-sr { width: 30px; }
         .c-date { width: 75px; }
+        .c-qty { width: 45px; }
         .c-weight, .c-freight { width: 75px; }
         .total-row td { font-weight: bold; min-height: 22px; }
         .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
@@ -779,12 +783,14 @@ export class TripHireChallan implements OnInit, OnDestroy {
             <th>FROM CITY</th>
             <th>TO CITY</th>
             <th class="c-date">BOOKING<br>DATE</th>
+            <th class="c-qty">QTY</th>
             <th class="c-weight">WEIGHT</th>
             <th class="c-freight">TO PAY<br>FREIGHT</th>
           </tr></thead>
-          <tbody>${rows || '<tr><td colspan="10" class="center">No shipments</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="11" class="center">No shipments</td></tr>'}</tbody>
           <tfoot><tr class="total-row">
             <td colspan="8" class="right">Total</td>
+            <td class="right">${totalQty}</td>
             <td class="right">${totalWeight}</td>
             <td class="right">${totalFreight}</td>
           </tr></tfoot>

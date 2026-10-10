@@ -47,6 +47,8 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
 
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
+  // Paid: amounts only on the Consignor (customer) copy. ToPay: only on the P.O.D. copy.
+  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' : true;
 
   const rows: Array<[string, number]> = [
     ['FREIGHT', d.charges.freight],
@@ -60,12 +62,13 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   ];
 
   const amtRow = (v: number) => {
+    if (!showAmount) return `<div class="rp"><div class="rs pad"></div><div class="ps pad"></div></div>`;
     const [rs, ps] = rsPaise(v);
     return `<div class="rp"><div class="rs pad">${rs}</div><div class="ps pad">${ps}</div></div>`;
   };
-  const [totRs, totPs] = rsPaise(subtotal);
-  const [taxRs, taxPs] = rsPaise(tax);
-  const [grdRs, grdPs] = rsPaise(total);
+  const [totRs, totPs] = showAmount ? rsPaise(subtotal) : ['', ''];
+  const [taxRs, taxPs] = showAmount ? rsPaise(tax) : ['', ''];
+  const [grdRs, grdPs] = showAmount ? rsPaise(total) : ['', ''];
 
   return `
   <div class="sheet">
@@ -141,7 +144,7 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
                 <div class="h">PAID</div>
                 <div class="payline"><span class="t">CASH / CHEQUE NO.</span><span class="u">—</span></div>
                 <div class="payline"><span class="t">DATED</span><span class="u">${esc(d.bookingDate)}</span></div>
-                <div class="payline"><span class="t">FOR Rs.</span><span class="u">${isPaid ? total.toFixed(2) : '—'}</span></div>
+                <div class="payline"><span class="t">FOR Rs.</span><span class="u">${isPaid && showAmount ? total.toFixed(2) : '—'}</span></div>
               </div>
               <div class="credit">
                 <div class="h">CREDIT</div>
@@ -185,8 +188,8 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
             <div class="awv val"><div>${actualWeight != null ? (actualWeight % 1 === 0 ? actualWeight.toFixed(0) : actualWeight.toFixed(3)) : '—'}</div><div>${volumetricWeight != null ? volumetricWeight.toFixed(2) : '—'}</div></div>
             <div class="dod"><div>D.O.D.</div><div>C.O.D.</div></div>
             <div class="dodv"><div>—</div><div>—</div></div>
-            <div class="topay"><span class="t">TO PAY</span><span class="b pad">${isToPay ? subtotal.toFixed(2) : ''}</span></div>
-            <div class="amtline"><span class="t">AMOUNT</span><span class="u">${isPaid ? total.toFixed(2) : ''}</span></div>
+            <div class="topay"><span class="t">TO PAY</span><span class="b pad">${isToPay && showAmount ? subtotal.toFixed(2) : ''}</span></div>
+            <div class="amtline"><span class="t">AMOUNT</span><span class="u">${isPaid && showAmount ? total.toFixed(2) : ''}</span></div>
             <div class="tpsc">TO PAY SERVICE CHARGES<br>AS APPLICABLE</div>
           </div>
           <div class="chgcol">
