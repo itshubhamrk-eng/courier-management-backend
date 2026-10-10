@@ -23,8 +23,7 @@ import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
-import { printConsignmentCopies, companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
-import { printAmboxCopies } from './ambox-consignment-print.util';
+import { companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
 import { printPerformaBillCopies } from './performa-bill-print.util';
 import { ShipmentLabelsDialog } from './shipment-labels-dialog';
 import { ShipmentLabelData } from './shipment-label-print.util';
@@ -86,8 +85,6 @@ const TIMELINE_ICONS: Record<string, string> = {
           <span class="sv__spacer"></span>
           <app-button variant="stroked" icon="label" (pressed)="printLabels()">Print Labels</app-button>
           @if (charge(); as c) {
-            <app-button variant="stroked" icon="print" (pressed)="print(c)">Delivery Receipt</app-button>
-            <app-button variant="stroked" icon="print" (pressed)="print2(c)">Print 2</app-button>
             <app-button variant="stroked" icon="print" (pressed)="print3(c)">Booking Receipt</app-button>
           }
           @if (can().update && shipment()!.status === 'BOOKED') {
@@ -739,14 +736,6 @@ export class ShipmentView implements OnInit {
       };
       this.matDialog.open(ShipmentLabelsDialog, { data, width: '560px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
     });
-  }
-
-  print(c: ShipmentCharge): void {
-    this.buildPrintData(c).subscribe((data) => printConsignmentCopies(data));
-  }
-
-  print2(c: ShipmentCharge): void {
-    this.buildPrintData(c).subscribe((data) => printAmboxCopies(data));
   }
 
   print3(c: ShipmentCharge): void {

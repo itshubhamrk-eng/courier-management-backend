@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-10 — Booking Receipt shows ToPay amount; Delivery Receipt / Print 2 buttons removed
+
+- **Frontend (`performa-bill-print.util.ts`):** Booking Receipt on ToPay orders now shows the ToPay amount on the Customer and Delivery (POD) copies; Driver/Office stay blank. Copy order is Customer, Delivery, Driver, Office.
+- **Frontend (`shipment-view.ts`):** removed the Delivery Receipt and Print 2 buttons (and `print`/`print2`) from the shipment page; Print Labels, Booking Receipt, Edit, Cancel remain. `consignment-print.util.ts` / `ambox-consignment-print.util.ts` now have no callers.
+- Verified on :4200 against a real ToPay shipment.
+
 ## 2026-10-10 — Print: ToPay amount on Customer + POD copies, copy order Customer/POD/Driver/Office
 
 - **Frontend (`consignment-print.util.ts`, `ambox-consignment-print.util.ts`):** ToPay shipments now show the amount on both the Customer (Consignor) copy and the Delivery (P.O.D.) copy; Driver/Office stay blank. Paid unchanged (Customer copy only).

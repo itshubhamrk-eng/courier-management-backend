@@ -16,7 +16,7 @@ const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 type CopyLabel = 'Customer Copy' | 'Office Copy' | 'Driver Copy' | 'Delivery Copy';
-const COPY_LABELS: CopyLabel[] = ['Customer Copy', 'Office Copy', 'Driver Copy', 'Delivery Copy'];
+const COPY_LABELS: CopyLabel[] = ['Customer Copy', 'Delivery Copy', 'Driver Copy', 'Office Copy'];
 
 function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const weight = d.chargeableWeight % 1 === 0 ? d.chargeableWeight.toFixed(0) : d.chargeableWeight.toFixed(3);
@@ -44,10 +44,10 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     ['Unloading Delivery Charges', 0],
     ['Reschedule Fine', 0]
   ];
-  // Paid: amount only on the Customer copy. ToPay: amount only on the Delivery (POD) copy.
+  // Paid: amount only on the Customer copy. ToPay: amount on the Customer and Delivery (POD) copies.
   const amountMode: 'normal' | 'paid' | 'collect' | 'hidden' =
     isPaid ? (label === 'Customer Copy' ? 'paid' : 'hidden') :
-    isToPay ? (label === 'Delivery Copy' ? 'collect' : 'hidden') :
+    isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' ? 'collect' : 'hidden') :
     label === 'Driver Copy' ? 'normal' :
     label === 'Delivery Copy' ? 'collect' :
     'normal';
