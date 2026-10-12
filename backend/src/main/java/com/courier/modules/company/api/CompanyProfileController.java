@@ -3,6 +3,7 @@ package com.courier.modules.company.api;
 import com.courier.modules.company.api.dto.CompanyProfileResponse;
 import com.courier.modules.company.domain.Company;
 import com.courier.modules.company.domain.CompanyRepository;
+import com.courier.modules.company.domain.CompanySettingsRepository;
 import com.courier.shared.api.ApiResponse;
 import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
@@ -33,6 +34,7 @@ import java.util.UUID;
 public class CompanyProfileController {
 
     private final CompanyRepository companyRepository;
+    private final CompanySettingsRepository settingsRepository;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -47,6 +49,14 @@ public class CompanyProfileController {
         Company company = companyRepository.findByCompanyId(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company", companyId));
 
+        // Settings page edits supportMobile/website; they override the onboarding values.
+        var settings = settingsRepository.findByCompanyId(companyId).orElse(null);
+        // Letterhead contact is always the Settings support mobile, never the onboarding company mobile.
+        String mobile = settings != null && settings.getSupportMobile() != null
+                && !settings.getSupportMobile().isBlank() ? settings.getSupportMobile() : null;
+        String website = settings != null && settings.getWebsite() != null
+                && !settings.getWebsite().isBlank() ? settings.getWebsite() : company.getWebsite();
+
         return ApiResponse.success(new CompanyProfileResponse(
                 company.getCompanyName(),
                 company.getLogo(),
@@ -56,7 +66,7 @@ public class CompanyProfileController {
                 company.getState(),
                 company.getPostalCode(),
                 company.getGstNumber(),
-                company.getMobile(),
-                company.getWebsite()));
+                mobile,
+                website));
     }
 }
