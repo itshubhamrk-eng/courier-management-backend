@@ -45,14 +45,14 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
       </header>
 
-      <app-card title="Create Loading Sheet" subtitle="Pick a hub (or a destination), select the booked shipments, then create the sheet.">
-        @if (atHub()) {
+      <app-card title="Create Loading Sheet" subtitle="Send to a hub or to a branch, select the booked shipments, then create the sheet.">
         <div class="mode-toggle">
-          <app-button [variant]="mode() === 'hub' ? 'primary' : 'stroked'" (pressed)="setMode('hub')">To Hub</app-button>
-          <app-button [variant]="mode() === 'city' ? 'primary' : 'stroked'" (pressed)="setMode('city')">By Destination City</app-button>
-          <app-button [variant]="mode() === 'lane' ? 'primary' : 'stroked'" (pressed)="setMode('lane')">By Delivery Branch (crossing hub)</app-button>
+          <app-button [variant]="mode() === 'hub' ? 'primary' : 'stroked'" (pressed)="setMode('hub')">Send to Hub</app-button>
+          <app-button [variant]="mode() === 'branch' ? 'primary' : 'stroked'" (pressed)="setMode('branch')">Send to Branch</app-button>
+          @if (atHub()) {
+            <app-button [variant]="mode() === 'lane' ? 'primary' : 'stroked'" (pressed)="setMode('lane')">By Delivery Branch (crossing hub)</app-button>
+          }
         </div>
-        }
         <form [formGroup]="createForm" (ngSubmit)="createManifest()" class="df">
           @if (mode() === 'hub') {
             <app-autocomplete [control]="c('deliveryBranchId')" label="Hub" [options]="hubOptions()" placeholder="Search hub…" />
@@ -60,21 +60,16 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
             @else if (!assignedHubId()) { <p class="text-caption">No hub is assigned to your branch — pick one here, or assign one under Masters › Assign Hub to Branch.</p> }
             @else if (!assignedHubUsable()) { <p class="text-caption">Your branch's assigned hub is inactive — pick another hub here, or reassign under Masters › Assign Hub to Branch.</p> }
             <p class="text-caption">Pick a hub, then select the shipments to send. They go to the hub first; the hub scans in the THC, then creates a Load Sheet or DRS from there.</p>
-          } @else if (mode() === 'city') {
-            <app-select [control]="c('destinationCity')" label="Destination City" [options]="destinationCities()" placeholder="Select destination city…" />
-            @if (!loadingCities() && !destinationCities().length) {
-              <p class="empty">No BOOKED shipment from your branch is awaiting a delivery branch yet.</p>
-            }
-            @if (c('destinationCity').value) {
-              <app-autocomplete [control]="c('deliveryBranchId')" label="Assign Delivery Branch" [options]="assignableBranchOptions()" placeholder="Search branch…" />
-            }
+          } @else if (mode() === 'branch') {
+            <app-autocomplete [control]="c('deliveryBranchId')" label="Branch" [options]="assignableBranchOptions()" placeholder="Search branch…" />
+            <p class="text-caption">Pick a branch, then select the shipments currently at your branch to send to it.</p>
           } @else {
             <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search branch…" />
             @if (!loadingBranches() && !branchOptions().length) {
               <p class="empty">No branch has a BOOKED shipment from your branch right now.</p>
             }
           }
-          @if ((mode() === 'city' && cityModeReady()) || (mode() !== 'city' && c('deliveryBranchId').value)) {
+          @if (c('deliveryBranchId').value) {
             @if (bookedShipments().length) {
               <div>
                 <span class="text-caption">Booked shipments on this lane — select the ones to manifest</span>
@@ -99,7 +94,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
                 </div>
               </div>
             } @else {
-              <p class="empty">{{ mode() === 'hub' ? 'No shipment at your branch is waiting to be sent to a hub.' : 'No BOOKED shipments on this lane yet.' }}</p>
+              <p class="empty">{{ mode() === 'lane' ? 'No BOOKED shipments on this lane yet.' : 'No shipment at your branch is waiting to be sent.' }}</p>
             }
           }
           <div class="df__bar">
@@ -171,12 +166,9 @@ export class LoadingSheet implements OnInit {
    *  "To Pay Freight" definition THC's own print uses; see TripHireChallan.topayModeIds. */
   readonly topayModeIds = signal<Set<string>>(new Set());
 
-  /** 'hub' (default) = pick a hub, then the shipments; 'city' = destination city then a final
-   *  delivery branch; 'lane' = the old branch-first flow, still needed for a crossing hub's own
+  /** 'hub' (default) = pick a hub, then the shipments; 'branch' = pick a branch, then the shipments; 'lane' = the old branch-first flow, still needed for a crossing hub's own
    *  shipments (already carrying a real next-stop branch) or any legacy shipment. */
-  readonly mode = signal<'hub' | 'city' | 'lane'>('hub');
-  readonly destinationCities = signal<SelectOption[]>([]);
-  readonly loadingCities = signal(true);
+  readonly mode = signal<'hub' | 'branch' | 'lane'>('hub');
   readonly assignedHubId = signal<string | null>(null);
   readonly hubIds = signal<Set<string>>(new Set());
   protected readonly hubOptions = computed<SelectOption[]>(() =>
@@ -204,31 +196,18 @@ export class LoadingSheet implements OnInit {
   readonly sortControl = new FormControl<string>('createdAt,desc');
 
   readonly createForm: FormGroup = this.fb.group({
-    destinationCity: [null as string | null],
     deliveryBranchId: [null as string | null],
     shipmentIds: [[] as string[], Validators.required]
   });
-
-  /** City mode: a destination city and a delivery branch must both be picked before the
-   *  shipment picker shows. Not a signal — reactive forms already trigger this OnPush
-   *  component's own change detection on every value change. */
-  protected cityModeReady(): boolean {
-    return !!this.c('destinationCity').value && !!this.c('deliveryBranchId').value;
-  }
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
     // Listeners first: the branch directory is cached, so its callback can fire synchronously and
     // preselect the assigned hub — a listener registered after that would miss the change and the
     // shipment list would never load.
-    this.createForm.get('destinationCity')!.valueChanges.subscribe((city) => {
-      if (this.mode() !== 'city') return;
-      this.createForm.get('deliveryBranchId')!.setValue(null);
-      this.loadBookedByCity(city);
-    });
     this.createForm.get('deliveryBranchId')!.valueChanges.subscribe((id) => {
       if (this.mode() === 'lane') this.loadBooked(id);
-      else if (this.mode() === 'hub') this.loadBookedForHub(id);
+      else this.loadBookedForHub(id);
     });
     this.masterData.branchDirectory().subscribe((list) => {
       this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
@@ -238,7 +217,6 @@ export class LoadingSheet implements OnInit {
       this.applyAssignedHub();
       this.loadEligibleDeliveryBranches();
     });
-    this.loadDestinationCities();
     this.filterBranchControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.sortControl.valueChanges.subscribe(() => this.loadOpenManifests());
     this.masterData.list(MASTER_DEFINITIONS['payment-modes'], { page: 0, size: 100, status: 'ACTIVE' }).subscribe((p) =>
@@ -255,18 +233,16 @@ export class LoadingSheet implements OnInit {
   onShipmentRemoved(): void {
     this.loadOpenManifests();
     this.loadEligibleDeliveryBranches();
-    this.loadDestinationCities();
   }
 
-  protected setMode(mode: 'hub' | 'city' | 'lane'): void {
+  protected setMode(mode: 'hub' | 'branch' | 'lane'): void {
     this.mode.set(mode);
-    this.createForm.reset({ destinationCity: null, deliveryBranchId: null, shipmentIds: [] });
+    this.createForm.reset({ deliveryBranchId: null, shipmentIds: [] });
     this.bookedShipments.set([]);
     this.applyAssignedHub();
   }
 
-  /** Ordinary branches only ever send to a hub, so their form is just the hub picker. A hub
-   *  also has to route onward to a branch (or another hub), so it keeps the other modes. */
+  /** Every branch can send to a hub or to a branch; only a hub also gets the crossing-lane mode. */
   protected atHub(): boolean { return !!this.myBranchId && this.hubIds().has(this.myBranchId); }
 
   protected assignedHubUsable(): boolean {
@@ -315,7 +291,7 @@ export class LoadingSheet implements OnInit {
     this.loadingBranches.set(true);
     this.shipmentService.list({
       page: 0, size: 200, currentLocationId: this.myBranchId,
-      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
+      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string, flowType: 'STANDARD'
     }).subscribe({
       next: (p) => {
         const names = this.branchNames();
@@ -332,41 +308,12 @@ export class LoadingSheet implements OnInit {
     });
   }
 
-  /** Destination City lists every distinct city among this branch's own BOOKED/
-   *  READY_FOR_MANIFEST shipments that have no delivery branch resolved yet — the normal
-   *  case since a shipment no longer gets one at booking. */
-  private loadDestinationCities(): void {
-    if (!this.myBranchId) { this.loadingCities.set(false); return; }
-    this.loadingCities.set(true);
-    this.manifestService.eligibleDestinations(this.myBranchId).subscribe({
-      next: (cities) => {
-        this.destinationCities.set(cities.map((city) => ({ value: city, label: city })));
-        this.loadingCities.set(false);
-      },
-      error: () => { this.destinationCities.set([]); this.loadingCities.set(false); }
-    });
-  }
-
-  /** The shipment picker for a chosen destination city — every shipment at this branch,
-   *  going to that city, with no delivery branch resolved yet. */
-  private loadBookedByCity(destinationCity: string | null): void {
-    this.bookedShipments.set([]);
-    this.createForm.get('shipmentIds')!.setValue([]);
-    if (!destinationCity || !this.myBranchId) return;
-    this.shipmentService.list({
-      page: 0, size: 100, currentLocationId: this.myBranchId, toCity: destinationCity,
-      unassignedDeliveryBranch: true, status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
-    }).subscribe({
-      next: (p) => this.bookedShipments.set(p.content),
-      error: () => this.bookedShipments.set([])
-    });
-  }
-
   loadOpenManifests(): void {
     this.loadingManifests.set(true);
     this.manifestService.list({
       page: 0, size: 50, status: 'CREATED', sort: this.sortControl.value || 'createdAt,desc',
-      deliveryBranchId: this.filterBranchControl.value ?? undefined
+      deliveryBranchId: this.filterBranchControl.value ?? undefined,
+      flowType: 'STANDARD'
     }).subscribe({
       next: (p) => { this.openManifests.set(p.content); this.loadingManifests.set(false); },
       error: () => { this.openManifests.set([]); this.loadingManifests.set(false); }
@@ -381,7 +328,7 @@ export class LoadingSheet implements OnInit {
     if (!hubId || !this.myBranchId) return;
     this.shipmentService.list({
       page: 0, size: 100, currentLocationId: this.myBranchId, unassignedDeliveryBranch: true,
-      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
+      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string, flowType: 'STANDARD'
     }).subscribe({
       next: (p) => this.bookedShipments.set(p.content),
       error: () => this.bookedShipments.set([])
@@ -397,7 +344,7 @@ export class LoadingSheet implements OnInit {
     // an option, or a crossing shipment picked as "eligible" here would vanish from the list.
     this.shipmentService.list({
       page: 0, size: 100, currentLocationId: this.myBranchId, nextLocationId: deliveryBranchId,
-      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string
+      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string, flowType: 'STANDARD'
     }).subscribe({
       next: (p) => this.bookedShipments.set(p.content),
       error: () => this.bookedShipments.set([])
@@ -408,10 +355,6 @@ export class LoadingSheet implements OnInit {
     if (this.createForm.invalid || !this.myBranchId) { this.createForm.markAllAsTouched(); return; }
     const v = this.createForm.getRawValue();
     const mode = this.mode();
-    if (mode === 'city' && !v.destinationCity) {
-      this.notify.error('Pick a destination city first.');
-      return;
-    }
     if (!v.deliveryBranchId) {
       this.notify.error(mode === 'hub' ? 'Pick a hub first.' : 'Pick a delivery branch first.');
       return;
@@ -421,7 +364,7 @@ export class LoadingSheet implements OnInit {
       bookingBranchId: this.myBranchId,
       deliveryBranchId: v.deliveryBranchId,
       deliveryMode: 'BRANCH_DELIVERY',
-      destinationCity: mode === 'city' ? v.destinationCity : null,
+      destinationCity: null,
       shipmentIds: v.shipmentIds,
       hubTransfer: mode === 'hub'
     }).subscribe({
@@ -431,7 +374,6 @@ export class LoadingSheet implements OnInit {
         this.setMode(mode);
         this.loadOpenManifests();
         this.loadEligibleDeliveryBranches();
-        this.loadDestinationCities();
       },
       error: (e: HttpErrorResponse) => { this.creating.set(false); this.notify.error(e.error?.message ?? 'Could not create the manifest.'); }
     });

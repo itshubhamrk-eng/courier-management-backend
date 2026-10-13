@@ -414,13 +414,17 @@ export class Delivery implements OnInit {
     this.loading.set(true);
     const filter = this.statusControl.value ?? 'ALL';
     const statuses = filter === 'ALL' ? LIST_STATUSES : [filter as ShipmentStatus];
-    forkJoin(statuses.map((status) =>
-      this.shipmentService.list(this.directMode()
-        ? { page: 0, size: 100, unassignedDeliveryBranch: true, status }
-        : { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status })
-    )).subscribe({
+    // A hub's DRS shipments never get a delivery branch, so besides the ones addressed to this
+    // branch, also list those physically here with none assigned — otherwise a hub (or a branch
+    // that made a DRS for a hub-sorted shipment) could never capture their POD.
+    const requests = statuses.flatMap((status) => this.directMode()
+      ? [this.shipmentService.list({ page: 0, size: 100, unassignedDeliveryBranch: true, status })]
+      : [this.shipmentService.list({ page: 0, size: 100, deliveryBranchId: this.myBranchId!, status }),
+         this.shipmentService.list({ page: 0, size: 100, currentLocationId: this.myBranchId!, unassignedDeliveryBranch: true, status })]);
+    forkJoin(requests).subscribe({
       next: (pages) => {
-        const list = pages.flatMap((p) => p.content);
+        const seen = new Set<string>();
+        const list = pages.flatMap((p) => p.content).filter((s) => !seen.has(s.id) && !!seen.add(s.id));
         this.shipments.set(list);
         this.loading.set(false);
         if (this.pendingTrackingNumber) {

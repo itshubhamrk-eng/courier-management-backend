@@ -1,6 +1,7 @@
 package com.courier.modules.manifest.application.command;
 
 import com.courier.modules.manifest.domain.DeliveryMode;
+import com.courier.modules.shipment.domain.FlowType;
 
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import java.util.UUID;
  * {@code BRANCH_DELIVERY}. {@code hubTransfer} marks a Load Sheet whose {@code deliveryBranchId}
  * is a HUB (a stop en route, not the final delivery branch): shipments get only their
  * next stop set, and the hub assigns the real delivery branch from its own Load Sheet.
+ * {@code flowType} {@link FlowType#MSRTC} marks a branch-to-branch MSRTC manifest.
  */
 public record CreateManifestCommand(
         UUID bookingBranchId,
@@ -24,10 +26,19 @@ public record CreateManifestCommand(
         String destinationCity,
         List<UUID> shipmentIds,
         String remarks,
-        boolean hubTransfer
+        boolean hubTransfer,
+        FlowType flowType
 ) {
     public CreateManifestCommand(UUID bookingBranchId, UUID deliveryBranchId, DeliveryMode deliveryMode,
                                  String destinationCity, List<UUID> shipmentIds, String remarks) {
-        this(bookingBranchId, deliveryBranchId, deliveryMode, destinationCity, shipmentIds, remarks, false);
+        this(bookingBranchId, deliveryBranchId, deliveryMode, destinationCity, shipmentIds, remarks, false,
+                FlowType.STANDARD);
+    }
+
+    public CreateManifestCommand(UUID bookingBranchId, UUID deliveryBranchId, DeliveryMode deliveryMode,
+                                 String destinationCity, List<UUID> shipmentIds, String remarks,
+                                 boolean hubTransfer) {
+        this(bookingBranchId, deliveryBranchId, deliveryMode, destinationCity, shipmentIds, remarks, hubTransfer,
+                FlowType.STANDARD);
     }
 }

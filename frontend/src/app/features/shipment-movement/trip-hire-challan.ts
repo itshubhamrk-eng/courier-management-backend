@@ -14,7 +14,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
-import { Manifest, DispatchManifestResponse, Shipment } from '@core/models/shipment.model';
+import { FlowType, Manifest, DispatchManifestResponse, Shipment } from '@core/models/shipment.model';
 import { ManifestService } from '@features/manifest/manifest.service';
 import { VehicleService } from '@features/manifest/vehicle.service';
 import { MasterDataService } from '@features/masters/master-data.service';
@@ -71,7 +71,7 @@ import { SettingsService } from '@features/settings/settings.service';
       <header class="page__head" data-tour="thc-head">
         <div class="page__head-row">
           <app-truck-illustration class="page__head-ill" [size]="52" />
-          <div><h1 class="text-h1">Trip Hire Challan (THC)</h1>
+          <div><h1 class="text-h1">{{ isMsrtc ? 'Finalize Manifest' : 'Trip Hire Challan (THC)' }}</h1>
           <p class="text-caption">Assign a vehicle and driver, then send the manifest out.</p></div>
         </div>
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
@@ -85,7 +85,7 @@ import { SettingsService } from '@features/settings/settings.service';
           </div>
         </app-card>
 
-        <h2 class="text-h2 section-title">Loading Sheet Created</h2>
+        <h2 class="text-h2 section-title">{{ isMsrtc ? 'Manifest Created' : 'Loading Sheet Created' }}</h2>
         @if (loadingManifests()) {
           <app-loader [minHeight]="120" caption="Loading…" />
         } @else if (!openManifests().length) {
@@ -280,6 +280,9 @@ export class TripHireChallan implements OnInit, OnDestroy {
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  /** MSRTC's Finalize Manifest reuses this screen; the route says which flow's manifests it lists. */
+  protected readonly flowType: FlowType = this.route.snapshot.data['flowType'] === 'MSRTC' ? 'MSRTC' : 'STANDARD';
+  protected readonly isMsrtc = this.flowType === 'MSRTC';
   private readonly manifestService = inject(ManifestService);
   private readonly vehicleService = inject(VehicleService);
   private readonly masterData = inject(MasterDataService);
@@ -366,7 +369,9 @@ export class TripHireChallan implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Operations' }, { label: 'Trip Hire Challan (THC)' }]);
+    this.breadcrumb.set(this.isMsrtc
+      ? [{ label: 'MSRTC' }, { label: 'Finalize Manifest' }]
+      : [{ label: 'Operations' }, { label: 'Trip Hire Challan (THC)' }]);
     this.vehicleService.list(true).subscribe((v) =>
       this.vehicleOptions.set(v.map((x) => ({ value: x.id, label: x.vehicleNumber }))));
     this.movementService.userOptions().subscribe((u) =>
@@ -407,9 +412,9 @@ export class TripHireChallan implements OnInit, OnDestroy {
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
 
   /** A branch-bound user only ever sees their own branch's load sheets; branch-less admins see all. */
-  private branchScope(): { bookingBranchId?: string } {
+  private branchScope(): { bookingBranchId?: string; flowType: FlowType } {
     const branchId = this.auth.user()?.branchId;
-    return branchId ? { bookingBranchId: branchId } : {};
+    return branchId ? { bookingBranchId: branchId, flowType: this.flowType } : { flowType: this.flowType };
   }
 
   loadOpenManifests(): void {

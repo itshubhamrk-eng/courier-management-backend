@@ -62,7 +62,7 @@ public class ShipmentMapper {
                 r.destinationAreaId(), r.ratePerKgOverride(),
                 r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
                 r.appointmentDeliveryCharge(), r.insuranceApplicable(),
-                r.deliveryType(), r.doorDeliveryCharge());
+                r.deliveryType(), r.doorDeliveryCharge(), r.flowType(), r.deliveryBranchId());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {
@@ -109,7 +109,7 @@ public class ShipmentMapper {
                 safe.currentLocationId(), safe.nextLocationId(),
                 safe.manifestId(), safe.bookingDateFrom(), safe.bookingDateTo(),
                 safe.deliveredDateFrom(), safe.deliveredDateTo(), safe.paymentModeId(), safe.search(),
-                safe.toCity(), safe.unassignedDeliveryBranch());
+                safe.toCity(), safe.unassignedDeliveryBranch(), safe.flowType());
     }
 
     public ShipmentService.AddDocumentCommand toCommand(AddShipmentDocumentRequest r) {

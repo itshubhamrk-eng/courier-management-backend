@@ -1,6 +1,7 @@
 package com.courier.modules.shipment.api.dto;
 
 import com.courier.modules.shipment.domain.DeliveryType;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.ShipmentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -127,6 +128,11 @@ public record CreateShipmentRequest(
         DeliveryType deliveryType,
         @Schema(description = "Optional, defaults to zero, meaningful only when deliveryType "
                 + "is DOOR. Deliberately never taxed with GST, unlike otherCharges.")
-        @DecimalMin(value = "0") BigDecimal doorDeliveryCharge
+        @DecimalMin(value = "0") BigDecimal doorDeliveryCharge,
+        @Schema(description = "Omit (or STANDARD) for the normal booking flow. MSRTC books straight "
+                + "to deliveryBranchId, which is then required.")
+        FlowType flowType,
+        @Schema(description = "Required when flowType is MSRTC; ignored otherwise.")
+        UUID deliveryBranchId
 ) {
 }

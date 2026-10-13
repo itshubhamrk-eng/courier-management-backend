@@ -172,7 +172,7 @@ export class HubDashboard implements OnInit {
       next: (p) => { this.atHub.set(p.content); this.atHubTotal.set(p.totalElements); },
       error: () => { this.atHub.set([]); this.atHubTotal.set(0); }
     });
-    this.manifestService.list({ page: 0, size: 50, status: 'CREATED', sort: 'createdAt,desc' }).subscribe({
+    this.manifestService.list({ page: 0, size: 50, status: 'CREATED', sort: 'createdAt,desc', flowType: 'STANDARD' }).subscribe({
       next: (p) => this.openSheets.set(p.content.filter((m) => m.bookingBranchId === hub)),
       error: () => this.openSheets.set([])
     });

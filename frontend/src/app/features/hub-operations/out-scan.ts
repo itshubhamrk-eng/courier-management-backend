@@ -123,7 +123,8 @@ export class HubOutScan implements OnInit {
     if (!this.myBranchId) return;
     this.loadingManifests.set(true);
     this.manifestService.list({
-      page: 0, size: 50, status: 'CREATED', bookingBranchId: this.myBranchId, sort: 'createdAt,desc'
+      page: 0, size: 50, status: 'CREATED', bookingBranchId: this.myBranchId, sort: 'createdAt,desc',
+      flowType: 'STANDARD'
     }).subscribe({
       next: (p) => { this.openManifests.set(p.content); this.loadingManifests.set(false); },
       error: () => { this.openManifests.set([]); this.loadingManifests.set(false); }

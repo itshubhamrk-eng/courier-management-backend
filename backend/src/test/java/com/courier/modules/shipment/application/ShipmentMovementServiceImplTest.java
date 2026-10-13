@@ -127,7 +127,7 @@ class ShipmentMovementServiceImplTest {
                 branchShipmentSequenceRepository, releasedShipmentNumberRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
-                userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
+                userService, branchService, org.mockito.Mockito.mock(com.courier.modules.shipment.domain.BranchLookupPort.class), customerService, crossingService, ticketService, ticketCategoryService,
                 ewayBillService, freightCalculationService,
                 applicableChargesCalculator, auditService, eventPublisher, fileStoragePort,
                 shipmentAssetRepository, deliveryDispatchOtpRepository, passwordEncoder, companySettingsService,
@@ -252,19 +252,22 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
-    @DisplayName("attachToManifest refuses an unassigned shipment when the manifest has no destination city")
-    void attachRefusesWhenManifestHasNoDestinationCity() {
+    @DisplayName("attachToManifest sends an unassigned shipment straight to the chosen branch "
+            + "when the manifest names no destination city")
+    void attachWithNoDestinationCityAssignsChosenBranch() {
         Shipment shipment = shipment(ShipmentStatus.BOOKED);
         shipment.setDeliveryBranchId(null);
         shipment.setNextLocationId(null);
-        shipment.setToCity("Pune");
+        shipment.setToCity("Mumbai");
         when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
                 .thenReturn(Optional.of(shipment));
 
-        assertThatThrownBy(() -> service.attachToManifest(
-                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("destination city");
+        Shipment result = service.attachToManifest(
+                shipment.getId(), MANIFEST, BOOKING_BRANCH, DELIVERY_BRANCH, null);
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.MANIFEST_CREATED);
+        assertThat(result.getDeliveryBranchId()).isEqualTo(DELIVERY_BRANCH);
+        assertThat(result.getNextLocationId()).isEqualTo(DELIVERY_BRANCH);
     }
 
     @Test

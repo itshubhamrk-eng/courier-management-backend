@@ -41,6 +41,7 @@ import com.courier.modules.shipment.domain.ReleasedShipmentNumberRepository;
 import com.courier.modules.shipment.domain.CompanyDrsSequenceRepository;
 import com.courier.modules.shipment.domain.CompanyShipmentSequenceRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.DeliveryAssignmentRepository;
 import com.courier.modules.shipment.domain.DeliveryAssignmentStatus;
 import com.courier.modules.shipment.domain.DeliveryDispatchOtp;
@@ -181,6 +182,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final WalletService walletService;
     private final com.courier.modules.company.application.UserService userService;
     private final com.courier.modules.company.application.BranchService branchService;
+    private final com.courier.modules.shipment.domain.BranchLookupPort branchLookup;
     private final CustomerService customerService;
     private final CrossingService crossingService;
     private final TicketService ticketService;
@@ -228,6 +230,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         UUID firstCrossingBranch = crossing ? command.crossingBranchIds().get(0) : null;
 
         com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
+
+        // MSRTC books straight to a delivery branch picked (or resolved from the pincode) at
+        // the counter, so it is the one flow that writes deliveryBranchId at booking. STANDARD
+        // is untouched: its delivery branch is still assigned later, by Load Sheet.
+        FlowType flowType = command.flowType() == null ? FlowType.STANDARD : command.flowType();
+        UUID msrtcDeliveryBranchId = null;
+        if (flowType == FlowType.MSRTC) {
+            msrtcDeliveryBranchId = requireMsrtcDeliveryBranch(companyId, command.bookingBranchId(),
+                    command.deliveryBranchId(), crossing);
+        }
 
         String manualShipmentNumber = command.manualShipmentNumber() == null
                 ? null : command.manualShipmentNumber().trim();
@@ -295,11 +307,13 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .trackingNumber(nextTrackingNumber(companyId))
                 .bookingDate(bookingDate)
                 .bookingBranchId(command.bookingBranchId())
-                .deliveryBranchId(null)
+                .flowType(flowType)
+                .deliveryBranchId(msrtcDeliveryBranchId)
                 .fromCity(bookingBranch.getCity())
                 .toCity(freightCalc.destinationCityName())
                 .currentLocationId(command.bookingBranchId())
-                .nextLocationId(crossing ? firstCrossingBranch : null)
+                .nextLocationId(flowType == FlowType.MSRTC ? msrtcDeliveryBranchId
+                        : (crossing ? firstCrossingBranch : null))
                 .pickupPincode(command.pickupPincode())
                 .deliveryPincode(command.deliveryPincode())
                 .destinationAreaId(command.destinationAreaId())
@@ -1065,6 +1079,21 @@ public class ShipmentServiceImpl implements ShipmentService {
     // ============================================================= Shipment Movement (V19)
 
     @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(WRITERS)
+    public void requireFlowType(Collection<UUID> shipmentIds, FlowType flowType) {
+        UUID companyId = requireCompany();
+        for (UUID shipmentId : shipmentIds) {
+            Shipment shipment = loadOrThrow(shipmentId, companyId);
+            if (shipment.getFlowType() != flowType) {
+                throw new BusinessRuleException(
+                        "Shipment %s is a %s shipment — it cannot go on a %s manifest.".formatted(
+                                shipment.getShipmentNumber(), shipment.getFlowType(), flowType));
+            }
+        }
+    }
+
+    @Override
     @Transactional
     @PreAuthorize(WRITERS)
     public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
@@ -1102,13 +1131,10 @@ public class ShipmentServiceImpl implements ShipmentService {
                 throw new BusinessRuleException(
                         "Shipment %s is not at this branch.".formatted(shipment.getShipmentNumber()));
             }
-            // A hub Load Sheet carries mixed destinations — the hub sorts them onward — so
-            // the city match only applies to a sheet going straight to a delivery branch.
-            if (!hubTransfer) {
-                if (manifestDestinationCity == null || manifestDestinationCity.isBlank()) {
-                    throw new BusinessRuleException(
-                            "This Load Sheet has no destination city — pick one before adding shipments.");
-                }
+            // A hub Load Sheet carries mixed destinations — the hub sorts them onward — and a
+            // branch Load Sheet with no destination city is a direct "send these to this branch"
+            // pick, so the city match only applies when the sheet names a destination city.
+            if (!hubTransfer && manifestDestinationCity != null && !manifestDestinationCity.isBlank()) {
                 if (shipment.getToCity() == null
                         || !shipment.getToCity().trim().equalsIgnoreCase(manifestDestinationCity.trim())) {
                     throw new BusinessRuleException(
@@ -2054,6 +2080,27 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     // ------------------------------------------------------------- cross-module
+
+    /** MSRTC's booking-time delivery branch: mandatory, a different branch from the booking
+     *  one, and never combined with Crossing (MSRTC only moves branch to branch). */
+    private UUID requireMsrtcDeliveryBranch(UUID companyId, UUID bookingBranchId, UUID deliveryBranchId,
+                                            boolean crossing) {
+        if (crossing) {
+            throw new BusinessRuleException("An MSRTC shipment goes branch to branch — Crossing is not available.");
+        }
+        if (deliveryBranchId == null) {
+            throw new BusinessRuleException("An MSRTC shipment needs a delivery branch.");
+        }
+        if (deliveryBranchId.equals(bookingBranchId)) {
+            throw new BusinessRuleException("The delivery branch must be a different branch from the booking branch.");
+        }
+        // Through the company-wide lookup, not BranchService.getById: that one is scoped to
+        // the caller's own branch, and a branch desk must be able to book to another branch.
+        return branchLookup.findBranch(deliveryBranchId, companyId)
+                .filter(com.courier.modules.shipment.domain.BranchLookupPort.BranchRef::active)
+                .orElseThrow(() -> new BusinessRuleException("The delivery branch was not found or is inactive."))
+                .branchId();
+    }
 
     /**
      * Route validation, serviceability and rate matching are all the Pricing Engine's own

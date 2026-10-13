@@ -7,6 +7,7 @@ import com.courier.modules.shipment.domain.BranchCommissionSummary;
 import com.courier.modules.shipment.domain.BranchPerformanceSummary;
 import com.courier.modules.shipment.domain.VendorAuditRow;
 import com.courier.modules.shipment.domain.DeliveryAssignment;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentAsset;
 import com.courier.modules.shipment.domain.ShipmentCriteria;
@@ -268,6 +269,10 @@ public interface ShipmentService {
     // only module that needs to call the other (manifest -> shipment): a shipment already
     // knows nothing about manifests except its own manifestId, so there is no reverse
     // arrow, and no service-to-service Spring circular dependency between the two modules.
+
+    /** Refuses unless every shipment belongs to {@code flowType} — a manifest only ever
+     *  carries shipments of its own flow (STANDARD vs MSRTC never mix). */
+    void requireFlowType(Collection<UUID> shipmentIds, FlowType flowType);
 
     /**
      * Called only by {@code ManifestServiceImpl.create} — attaches a {@code BOOKED}

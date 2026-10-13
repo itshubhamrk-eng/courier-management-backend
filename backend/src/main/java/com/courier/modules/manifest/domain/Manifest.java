@@ -1,5 +1,6 @@
 package com.courier.modules.manifest.domain;
 
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.shared.domain.CompanyOwnedEntity;
 import com.courier.shared.exception.BusinessRuleException;
 import jakarta.persistence.Column;
@@ -72,6 +73,13 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "delivery_mode", nullable = false, length = 30, updatable = false)
     @Builder.Default
     private DeliveryMode deliveryMode = DeliveryMode.BRANCH_DELIVERY;
+
+    /** {@link FlowType#STANDARD} for every manifest before {@code V104}. An MSRTC manifest
+     *  only carries MSRTC shipments and always goes branch to branch. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "flow_type", nullable = false, length = 20, updatable = false)
+    @Builder.Default
+    private FlowType flowType = FlowType.STANDARD;
 
     /** The destination city this Load Sheet was created for — drives which BOOKED
      *  shipments (no delivery branch resolved yet, see {@code Shipment.deliveryBranchId})

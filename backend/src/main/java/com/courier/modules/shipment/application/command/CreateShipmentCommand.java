@@ -2,6 +2,7 @@ package com.courier.modules.shipment.application.command;
 
 import com.courier.modules.ewaybill.application.command.EwayBillDataCommand;
 import com.courier.modules.shipment.domain.DeliveryType;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.ShipmentType;
 
 import java.math.BigDecimal;
@@ -61,6 +62,10 @@ import java.util.UUID;
  * @param doorDeliveryCharge optional, defaults to zero, meaningful only when {@code
  *                          deliveryType} is {@code DOOR} — deliberately never taxed with
  *                          GST, unlike {@code otherCharges}
+ * @param flowType          null means {@link FlowType#STANDARD}; {@link FlowType#MSRTC}
+ *                          books straight to {@code deliveryBranchId}
+ * @param deliveryBranchId  required for {@link FlowType#MSRTC}, ignored for STANDARD (whose
+ *                          delivery branch is assigned later, by Load Sheet)
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
@@ -102,6 +107,30 @@ public record CreateShipmentCommand(
         BigDecimal appointmentDeliveryCharge,
         Boolean insuranceApplicable,
         DeliveryType deliveryType,
-        BigDecimal doorDeliveryCharge
+        BigDecimal doorDeliveryCharge,
+        FlowType flowType,
+        UUID deliveryBranchId
 ) {
+    /** The original shape, before MSRTC: a STANDARD booking with no delivery branch. */
+    public CreateShipmentCommand(
+            UUID bookingBranchId, String manualShipmentNumber, String pickupPincode, String deliveryPincode,
+            String senderName, String senderAddress, String senderContact,
+            String receiverName, String receiverAddress, String receiverContact,
+            UUID serviceTypeId, UUID packageTypeId, UUID paymentModeId, ShipmentType shipmentType,
+            LocalDate bookingDate, BigDecimal declaredValue, Integer numberOfPackages, String remarks,
+            BigDecimal otherCharges, BigDecimal odaCharge, BigDecimal freightFactorOverride,
+            List<ShipmentItemCommand> items, BigDecimal actualWeight, BigDecimal length, BigDecimal width,
+            BigDecimal height, Boolean crossing, List<UUID> crossingBranchIds, BigDecimal crossingCharge,
+            BigDecimal invoiceValue, EwayBillDataCommand ewayBill, UUID destinationAreaId,
+            BigDecimal ratePerKgOverride, Boolean appointmentDelivery, LocalDate appointmentDate,
+            String appointmentTimeSlot, BigDecimal appointmentDeliveryCharge, Boolean insuranceApplicable,
+            DeliveryType deliveryType, BigDecimal doorDeliveryCharge) {
+        this(bookingBranchId, manualShipmentNumber, pickupPincode, deliveryPincode, senderName, senderAddress,
+                senderContact, receiverName, receiverAddress, receiverContact, serviceTypeId, packageTypeId,
+                paymentModeId, shipmentType, bookingDate, declaredValue, numberOfPackages, remarks, otherCharges,
+                odaCharge, freightFactorOverride, items, actualWeight, length, width, height, crossing,
+                crossingBranchIds, crossingCharge, invoiceValue, ewayBill, destinationAreaId, ratePerKgOverride,
+                appointmentDelivery, appointmentDate, appointmentTimeSlot, appointmentDeliveryCharge,
+                insuranceApplicable, deliveryType, doorDeliveryCharge, null, null);
+    }
 }

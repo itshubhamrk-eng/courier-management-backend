@@ -469,8 +469,15 @@ export interface ShipmentFields {
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
+/** STANDARD is the original booking / Load Sheet / THC flow; MSRTC books straight to a
+ *  delivery branch and moves branch to branch only. */
+export type FlowType = 'STANDARD' | 'MSRTC';
+
 export interface CreateShipmentRequest extends ShipmentFields {
   bookingBranchId: string;
+  /** Omit for the normal flow. MSRTC requires `deliveryBranchId`. */
+  flowType?: FlowType;
+  deliveryBranchId?: string | null;
   /** Optional — enter a specific shipment number instead of the auto-generated
    *  "<BRANCH_CODE>-<serial>" one. Must be unique within the company; booking is
    *  refused with a 422 if it's already in use. */
@@ -721,6 +728,8 @@ export interface CreateManifestRequest {
   /** true when `deliveryBranchId` is a HUB this Load Sheet goes to first; the hub assigns
    *  the shipments' real delivery branch from its own Load Sheet. */
   hubTransfer?: boolean;
+  /** Omit for a Load Sheet. MSRTC makes a branch-to-branch MSRTC manifest. */
+  flowType?: FlowType;
 }
 
 /** GET /manifests/summary — the THC Report summary row. Mirrors backend
@@ -738,6 +747,8 @@ export interface ManifestSearchRequest {
   bookingBranchId?: string;
   deliveryBranchId?: string;
   search?: string;
+  /** Only manifests of this flow; omit for both. */
+  flowType?: FlowType;
 }
 
 export type VehicleType = 'BIKE' | 'SCOOTER' | 'AUTO' | 'VAN' | 'PICKUP' | 'TRUCK' | 'TEMPO' | 'OTHER';

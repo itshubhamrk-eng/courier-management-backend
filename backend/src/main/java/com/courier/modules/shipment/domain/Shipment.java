@@ -265,6 +265,13 @@ public class Shipment extends CompanyOwnedEntity {
     @Builder.Default
     private DeliveryType deliveryType = DeliveryType.DOOR;
 
+    /** {@link FlowType#STANDARD} for every shipment before {@code V104}; {@link FlowType#MSRTC}
+     *  shipments carry a delivery branch from booking and only join MSRTC manifests. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "flow_type", nullable = false, length = 20, updatable = false)
+    @Builder.Default
+    private FlowType flowType = FlowType.STANDARD;
+
     // ---------------------------------------------------------------- behaviour
 
     public boolean isEditable() {

@@ -25,6 +25,7 @@ import com.courier.modules.manifest.domain.ManifestSummaryStats;
 import com.courier.modules.manifest.domain.Vehicle;
 import com.courier.shared.activity.application.ActivityContext;
 import com.courier.modules.shipment.application.ShipmentService;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
@@ -116,6 +117,19 @@ public class ManifestServiceImpl implements ManifestService {
         if (command.shipmentIds() == null || command.shipmentIds().isEmpty()) {
             throw new BusinessRuleException("A manifest needs at least one shipment.");
         }
+        FlowType flowType = command.flowType() == null ? FlowType.STANDARD : command.flowType();
+        if (flowType == FlowType.MSRTC) {
+            // MSRTC only ever moves branch to branch: a real delivery branch, no hub stop,
+            // no Direct Company Delivery.
+            if (deliveryMode != DeliveryMode.BRANCH_DELIVERY || command.hubTransfer()) {
+                throw new BusinessRuleException("An MSRTC manifest goes branch to branch only.");
+            }
+            if (command.bookingBranchId().equals(command.deliveryBranchId())) {
+                throw new BusinessRuleException("The delivery branch must be a different branch from the booking branch.");
+            }
+        }
+        // STANDARD and MSRTC shipments never share a manifest, in either direction.
+        shipmentService.requireFlowType(command.shipmentIds(), flowType);
         if (command.hubTransfer()) {
             if (deliveryMode != DeliveryMode.BRANCH_DELIVERY) {
                 throw new BusinessRuleException("A hub Load Sheet cannot use Direct Company Delivery.");
@@ -133,6 +147,7 @@ public class ManifestServiceImpl implements ManifestService {
                 .bookingBranchId(command.bookingBranchId())
                 .deliveryBranchId(command.deliveryBranchId())
                 .deliveryMode(deliveryMode)
+                .flowType(flowType)
                 .destinationCity(command.destinationCity())
                 .remarks(command.remarks())
                 .build();

@@ -425,6 +425,24 @@ export const routes: Routes = [
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
+      // MSRTC (V104): same booking / Trip Hire Challan screens, flowType MSRTC via route data;
+      // Create Manifest is its own branch-to-branch screen.
+      {
+        path: 'msrtc/shipments/new', title: 'MSRTC Shipment Booking', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS, flowType: 'MSRTC' },
+        loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
+      },
+      {
+        path: 'msrtc/create-manifest', title: 'Create Manifest', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        loadComponent: () => import('@features/msrtc/msrtc-create-manifest').then((m) => m.MsrtcCreateManifest)
+      },
+      {
+        path: 'msrtc/in-scan', title: 'In Scan Manifest', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS, flowType: 'MSRTC' },
+        loadComponent: () => import('@features/shipment-movement/in-scan').then((m) => m.InScan)
+      },
+      {
+        path: 'msrtc/finalize-manifest', title: 'Finalize Manifest', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS, flowType: 'MSRTC' },
+        loadComponent: () => import('@features/shipment-movement/trip-hire-challan').then((m) => m.TripHireChallan)
+      },
       {
         path: 'shipments/:id', title: 'Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/shipment/shipment-view').then((m) => m.ShipmentView)

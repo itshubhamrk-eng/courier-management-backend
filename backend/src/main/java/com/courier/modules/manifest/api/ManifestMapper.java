@@ -11,6 +11,7 @@ import com.courier.modules.manifest.application.command.CreateManifestCommand;
 import com.courier.modules.manifest.application.command.CreateVehicleCommand;
 import com.courier.modules.manifest.application.command.UpdateVehicleCommand;
 import com.courier.modules.manifest.domain.DeliveryMode;
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.manifest.domain.Manifest;
 import com.courier.modules.manifest.domain.ManifestCriteria;
 import com.courier.modules.manifest.domain.ManifestShipmentAggregate;
@@ -24,12 +25,13 @@ public class ManifestMapper {
     public CreateManifestCommand toCommand(CreateManifestRequest r) {
         return new CreateManifestCommand(r.bookingBranchId(), r.deliveryBranchId(),
                 r.deliveryMode() == null ? DeliveryMode.BRANCH_DELIVERY : r.deliveryMode(),
-                r.destinationCity(), r.shipmentIds(), r.remarks(), Boolean.TRUE.equals(r.hubTransfer()));
+                r.destinationCity(), r.shipmentIds(), r.remarks(), Boolean.TRUE.equals(r.hubTransfer()),
+                r.flowType() == null ? FlowType.STANDARD : r.flowType());
     }
 
     public ManifestCriteria toCriteria(ManifestSearchRequest r) {
         ManifestSearchRequest safe = r == null ? ManifestSearchRequest.empty() : r;
-        return new ManifestCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(), safe.search());
+        return new ManifestCriteria(safe.status(), safe.bookingBranchId(), safe.deliveryBranchId(), safe.search(), safe.flowType());
     }
 
     public ManifestResponse toResponse(Manifest m, ManifestShipmentAggregate aggregate) {

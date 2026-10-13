@@ -3,7 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, forkJoin, merge, of, switchMap } from 'rxjs';
 import { AuthService } from '@core/auth/auth.service';
@@ -65,7 +65,7 @@ type FreightOutcome =
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
-        <div><h1 class="text-h1">New Shipment</h1><p class="text-caption">Fill in the booking — the summary prices it as you go, or speak it.</p></div>
+        <div><h1 class="text-h1">{{ isMsrtc ? 'MSRTC Shipment Booking' : 'New Shipment' }}</h1><p class="text-caption">Fill in the booking — the summary prices it as you go, or speak it.</p></div>
         <div class="page__head-actions">
           <app-voice-mic-button (transcriptReady)="onVoiceTranscript($event)" (error)="onVoiceError($event)" />
           <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
@@ -81,8 +81,25 @@ type FreightOutcome =
             <div class="grid3">
               <label class="fld"><span class="fld__l">Booking Date</span>
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
+              @if (isMsrtc) {
+                <div class="fld">
+                  <span class="fld__l">Destination By</span>
+                  <div class="dest-mode">
+                    <label class="chk"><input type="radio" name="destMode" [checked]="destMode() === 'PINCODE'" (change)="setDestMode('PINCODE')" /><span>Pincode</span></label>
+                    <label class="chk"><input type="radio" name="destMode" [checked]="destMode() === 'BRANCH'" (change)="setDestMode('BRANCH')" /><span>To Branch</span></label>
+                  </div>
+                </div>
+                @if (destMode() === 'BRANCH') {
+                  <app-select [control]="c('msrtcDeliveryBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Select the delivery branch" />
+                } @else {
+                  <div class="fld">
+                    <span class="fld__l">Delivery Branch</span>
+                    <span class="fld__i fld__i--hint">{{ pincodeBranchLabel() }}</span>
+                  </div>
+                }
+              }
               <label class="fld"><span class="fld__l">Destination Pincode</span>
-                <input class="fld__i" [formControl]="c('destinationPincode')" placeholder="e.g. 411001" maxlength="10" /></label>
+                <input class="fld__i" [formControl]="c('destinationPincode')" [readonly]="isMsrtc && destMode() === 'BRANCH'" placeholder="e.g. 411001" maxlength="10" /></label>
               <div class="fld">
                 <span class="fld__l">Destination Area</span>
                 @if (destinationAreaLoading()) {
@@ -107,10 +124,12 @@ type FreightOutcome =
                 <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
             </div>
             <div class="spacer"></div>
+            @if (!isMsrtc) {
             <label class="chk">
               <input type="checkbox" [formControl]="c('crossing')" />
               <span>Route through a crossing branch/hub</span>
             </label>
+            }
             @if (c('crossing').value) {
               <div class="crossing-hops">
                 @for (ctrl of crossingBranchArray.controls; track $index) {
@@ -446,7 +465,7 @@ type FreightOutcome =
               <app-button icon="check" [loading]="submitting()"
                 [disabled]="!pricing() || pricingLoading() || !freightCalc() || freightCalcLoading()
                   || form.invalid || ewayBillReason() !== null || appointmentDeliveryReason() !== null
-                  || !c('declaredValue').value"
+                  || !c('declaredValue').value || (isMsrtc && !msrtcDeliveryBranchId())"
                 (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
@@ -501,6 +520,7 @@ type FreightOutcome =
     .party--sender .party__title { color:var(--info); }
     .party--receiver .party__title { color:var(--brand-600); }
     .fld { display:flex; flex-direction:column; gap:4px; }
+    .dest-mode { display:flex; gap:20px; padding-top:6px; }
     .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
     .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
     .radio-row { display:flex; gap:16px; align-items:center; }
@@ -572,6 +592,30 @@ export class ShipmentCreate implements OnInit {
    *  desk books from its own branch, not a chosen one. `null` for a user with no branch
    *  of their own (e.g. COMPANY_ADMIN), handled as a hard stop, not a silent fallback. */
   private readonly myBranchId = this.auth.user()?.branchId ?? null;
+  private readonly route = inject(ActivatedRoute);
+  /** The MSRTC Shipment Booking route reuses this screen; everything MSRTC-only below is
+   *  gated on this, so the standard booking behaves exactly as before. */
+  protected readonly isMsrtc = this.route.snapshot.data['flowType'] === 'MSRTC';
+  /** MSRTC only: how the destination is chosen — a pincode (its mapped branch is looked up)
+   *  or a branch picked directly (its own pincode drives pricing). */
+  protected readonly destMode = signal<'PINCODE' | 'BRANCH'>('PINCODE');
+  /** MSRTC only: the branch mapped to the typed destination pincode, if any. */
+  protected readonly pincodeBranch = signal<{ id: string; name: string } | null>(null);
+  private readonly pincodeBranchLookup = signal<'idle' | 'loading' | 'none'>('idle');
+  private branchPostalCodes = new Map<string, string>();
+  /** MSRTC only: the branch picked in "To Branch" mode (mirrors the form control as a signal). */
+  private readonly msrtcPickedBranch = signal<string | null>(null);
+  /** MSRTC only: the delivery branch this booking will carry, whichever way it was chosen. */
+  protected readonly msrtcDeliveryBranchId = computed(() =>
+    this.destMode() === 'BRANCH' ? this.msrtcPickedBranch() : (this.pincodeBranch()?.id ?? null));
+  protected readonly pincodeBranchLabel = computed(() => {
+    const b = this.pincodeBranch();
+    if (b) return b.name;
+    const state = this.pincodeBranchLookup();
+    if (state === 'loading') return 'Looking up…';
+    if (state === 'none') return 'No branch is mapped to this pincode — choose "To Branch" instead';
+    return 'Enter a destination pincode';
+  });
 
   /** Crossing Branch picker options — excludes the caller's own branch, see `ngOnInit`. */
   protected readonly branchOptions = signal<SelectOption[]>([]);
@@ -747,6 +791,7 @@ export class ShipmentCreate implements OnInit {
 
   protected readonly form: FormGroup = this.fb.group({
     bookingBranchId: [this.myBranchId, Validators.required],
+    msrtcDeliveryBranchId: [null as string | null],
     manualShipmentNumber: ['', Validators.maxLength(30)],
     pickupPincode: ['', Validators.maxLength(10)],
     deliveryPincode: ['', Validators.maxLength(10)],
@@ -848,6 +893,9 @@ export class ShipmentCreate implements OnInit {
       this.branchOptions.set(o.filter((opt) => opt.value !== this.myBranchId));
     });
     this.masters.branchDirectory().subscribe((list) => {
+      if (this.isMsrtc) {
+        this.branchPostalCodes = new Map(list.filter((b) => !!b.postalCode).map((b) => [b.id, b.postalCode]));
+      }
       const mine = list.find((b) => b.id === this.myBranchId);
       if (mine?.postalCode && !this.form.get('pickupPincode')?.value) {
         this.form.get('pickupPincode')?.setValue(mine.postalCode);
@@ -855,6 +903,17 @@ export class ShipmentCreate implements OnInit {
       if (mine?.gstPercentage != null) this.myBranchGstPercentage.set(mine.gstPercentage);
       if (mine?.city) this.myBranchCity.set(mine.city);
     });
+    // MSRTC "To Branch" mode: the picked branch's own pincode becomes the destination
+    // pincode, which then runs the same area lookup + pricing the pincode mode does.
+    if (this.isMsrtc) {
+      this.c('msrtcDeliveryBranchId').valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id: string | null) => {
+        this.msrtcPickedBranch.set(id);
+        if (this.destMode() !== 'BRANCH') return;
+        const postal = id ? this.branchPostalCodes.get(id) : undefined;
+        if (id && !postal) this.notify.error('That branch has no pincode on file — pick another branch or use Pincode.');
+        this.c('destinationPincode').setValue(postal ?? '');
+      });
+    }
     // Destination Pincode -> its own Areas (master_pincode_areas, 0.32.2) -> picking one
     // resolves District Level Freight's District/ODA off that exact link rather than the
     // pincode's legacy single area — see MasterDistrictFreightCoverageDirectory
@@ -868,6 +927,7 @@ export class ShipmentCreate implements OnInit {
       debounceTime(400),
       distinctUntilChanged(),
       switchMap((code) => {
+        if (this.isMsrtc) { this.pincodeBranch.set(null); this.pincodeBranchLookup.set('idle'); }
         this.destinationAreaOptions.set([]);
         this.destinationAreaError.set(null);
         this.c('destinationAreaId').setValue(null, { emitEvent: false });
@@ -877,6 +937,7 @@ export class ShipmentCreate implements OnInit {
           switchMap((page) => {
             const match = page.content.find((r) => r.code === code);
             if (!match) return of(null);
+            if (this.isMsrtc) this.lookupPincodeBranch(match.id);
             return this.masters.pincodeAreas(match.id);
           }),
           catchError(() => of(null))
@@ -1288,7 +1349,27 @@ export class ShipmentCreate implements OnInit {
     this.form.get('numberOfPackages')?.setValue(count, { emitEvent: false });
   }
 
-  protected cancel(): void { this.router.navigate(['/shipments']); }
+  protected setDestMode(mode: 'PINCODE' | 'BRANCH'): void {
+    if (this.destMode() === mode) return;
+    this.destMode.set(mode);
+    this.msrtcPickedBranch.set(null);
+    this.pincodeBranch.set(null);
+    this.pincodeBranchLookup.set('idle');
+    this.c('msrtcDeliveryBranchId').setValue(null, { emitEvent: false });
+    this.c('destinationPincode').setValue('');
+  }
+
+  /** MSRTC pincode mode: the branch mapped to this pincode (one branch per pincode). */
+  private lookupPincodeBranch(pincodeId: string): void {
+    if (this.destMode() !== 'PINCODE') return;
+    this.pincodeBranchLookup.set('loading');
+    this.masters.branchForPincode(pincodeId).pipe(catchError(() => of(undefined))).subscribe((b) => {
+      this.pincodeBranch.set(b ? { id: b.id, name: b.branchName } : null);
+      this.pincodeBranchLookup.set(b ? 'idle' : 'none');
+    });
+  }
+
+  protected cancel(): void { this.router.navigate([this.isMsrtc ? '/msrtc/shipments/new' : '/shipments']); }
 
   protected onImageFile(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -1529,6 +1610,10 @@ export class ShipmentCreate implements OnInit {
     const f = this.freightCalc();
     if (!p || !f || this.form.invalid || this.ewayBillReason() !== null) return;
     const v = this.form.getRawValue();
+    if (this.isMsrtc && !this.msrtcDeliveryBranchId()) {
+      this.notify.error('Choose the delivery branch (or a pincode that has a branch mapped).');
+      return;
+    }
     if (!v.declaredValue || v.declaredValue <= 0) {
       this.notify.error('Declared Value is required — enter a Value for at least one item.');
       return;
@@ -1558,6 +1643,7 @@ export class ShipmentCreate implements OnInit {
       insuranceApplicable: v.insuranceApplicable || null,
       deliveryType: v.deliveryType,
       doorDeliveryCharge: v.deliveryType === 'DOOR' ? (this.doorDeliveryCharge() || null) : null,
+      ...(this.isMsrtc ? { flowType: 'MSRTC' as const, deliveryBranchId: this.msrtcDeliveryBranchId() } : {}),
       ewayBill: this.ewayBillOpen() && v.ewayBillInvoiceNumber?.trim() ? {
         invoiceNumber: v.ewayBillInvoiceNumber?.trim() || '',
         invoiceDate: v.ewayBillInvoiceDate || today(),

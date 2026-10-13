@@ -103,6 +103,7 @@ class ShipmentServiceImplTest {
     @Mock private com.courier.modules.shipment.domain.CompanyDrsSequenceRepository companyDrsSequenceRepository;
     @Mock private com.courier.modules.company.application.UserService userService;
     @Mock private com.courier.modules.company.application.BranchService branchService;
+    @Mock private com.courier.modules.shipment.domain.BranchLookupPort branchLookup;
     @Mock private com.courier.modules.customer.application.CustomerService customerService;
     @Mock private com.courier.modules.crossing.application.CrossingService crossingService;
     @Mock private com.courier.modules.support.application.TicketService ticketService;
@@ -137,7 +138,7 @@ class ShipmentServiceImplTest {
                 branchShipmentSequenceRepository, releasedShipmentNumberRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
-                userService, branchService, customerService, crossingService, ticketService, ticketCategoryService,
+                userService, branchService, branchLookup, customerService, crossingService, ticketService, ticketCategoryService,
                 ewayBillService, freightCalculationService,
                 applicableChargesCalculator, auditService, eventPublisher, fileStoragePort, shipmentAssetRepository,
                 deliveryDispatchOtpRepository, passwordEncoder, companySettingsService, communicationSettingService,
@@ -896,6 +897,52 @@ class ShipmentServiceImplTest {
                 CALLER, COMPANY, "admin@legacy.test", Set.of(role), "jti");
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
+    }
+
+    private static CreateShipmentCommand msrtcCommand(java.util.UUID deliveryBranchId, boolean crossing) {
+        return new CreateShipmentCommand(
+                BOOKING_BRANCH, null, PICKUP_PINCODE, DELIVERY_PINCODE,
+                "Asha Shah", "221B Baker Street, Pune", "9876543210",
+                "Rahul Verma", "12 MG Road, Mumbai", "9876500000",
+                SERVICE_TYPE, PACKAGE_TYPE, PAYMENT_MODE,
+                null, LocalDate.of(2026, 7, 30), new BigDecimal("1000"), 1, "handle with care", null, null, null,
+                List.of(new ShipmentItemCommand("Box", 1, new BigDecimal("5.000"),
+                        null, null, null, null, false, false)),
+                null, null, null, null, crossing,
+                crossing ? List.of(java.util.UUID.randomUUID()) : null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
+                com.courier.modules.shipment.domain.FlowType.MSRTC, deliveryBranchId);
+    }
+
+    @Test
+    @DisplayName("an MSRTC booking is written straight to its delivery branch, as MSRTC")
+    void msrtcBookingCarriesDeliveryBranch() {
+        java.util.UUID to = java.util.UUID.randomUUID();
+        when(branchLookup.findBranch(to, COMPANY)).thenReturn(java.util.Optional.of(
+                new com.courier.modules.shipment.domain.BranchLookupPort.BranchRef(to, "SAT", "Satara", true)));
+
+        Shipment created = service.create(msrtcCommand(to, false));
+
+        assertThat(created.getFlowType()).isEqualTo(com.courier.modules.shipment.domain.FlowType.MSRTC);
+        assertThat(created.getDeliveryBranchId()).isEqualTo(to);
+        assertThat(created.getNextLocationId()).isEqualTo(to);
+    }
+
+    @Test
+    @DisplayName("an MSRTC booking is refused without a delivery branch, to itself, to an unknown "
+            + "branch, or with crossing")
+    void msrtcBookingRules() {
+        java.util.UUID unknown = java.util.UUID.randomUUID();
+        when(branchLookup.findBranch(unknown, COMPANY)).thenReturn(java.util.Optional.empty());
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.courier.shared.exception.BusinessRuleException.class,
+                () -> service.create(msrtcCommand(null, false)));
+        org.junit.jupiter.api.Assertions.assertThrows(com.courier.shared.exception.BusinessRuleException.class,
+                () -> service.create(msrtcCommand(BOOKING_BRANCH, false)));
+        org.junit.jupiter.api.Assertions.assertThrows(com.courier.shared.exception.BusinessRuleException.class,
+                () -> service.create(msrtcCommand(unknown, false)));
+        org.junit.jupiter.api.Assertions.assertThrows(com.courier.shared.exception.BusinessRuleException.class,
+                () -> service.create(msrtcCommand(java.util.UUID.randomUUID(), true)));
     }
 
     private static CreateShipmentCommand command() {

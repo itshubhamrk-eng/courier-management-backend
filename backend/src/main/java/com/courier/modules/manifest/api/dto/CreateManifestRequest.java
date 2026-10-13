@@ -1,6 +1,7 @@
 package com.courier.modules.manifest.api.dto;
 
 import com.courier.modules.manifest.domain.DeliveryMode;
+import com.courier.modules.shipment.domain.FlowType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +29,9 @@ public record CreateManifestRequest(
         @Size(max = 500) String remarks,
         @Schema(description = "true when deliveryBranchId is a HUB this Load Sheet is going to "
                 + "first — shipments keep no delivery branch; the hub assigns it later")
-        Boolean hubTransfer
+        Boolean hubTransfer,
+        @Schema(description = "Omit (or STANDARD) for a Load Sheet. MSRTC makes a branch-to-branch "
+                + "MSRTC manifest: deliveryBranchId is required and only MSRTC shipments may be added")
+        FlowType flowType
 ) {
 }

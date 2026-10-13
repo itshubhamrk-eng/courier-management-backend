@@ -243,6 +243,21 @@ export const NAVIGATION: NavNode[] = [
   // at a hub. In Scan, Load Sheet and Dispatch reuse the Shipment Movement screens above
   // wholesale, routed again under their own path; Dashboard, Shipments At Hub, Out Scan
   // and Exceptions are the genuinely new screens. See MEMORY/modules/hub-operations.md.
+  // MSRTC: the same shipment/manifest tables as Operations, flagged flowType MSRTC. Books
+  // straight to a delivery branch (picked directly, or resolved from the pincode) and only
+  // ever moves branch to branch. Reuses Operations' permission codes, so no new grants.
+  {
+    id: 'msrtc', title: 'MSRTC', icon: 'directions_bus', order: 5.2, roles: [...OPS_BOOKING, AppRole.DELIVERY_OPERATOR],
+    children: [
+      { id: 'msrtc-booking', title: 'MSRTC Shipment Booking', icon: 'add_box', route: '/msrtc/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
+      { id: 'msrtc-create-manifest', title: 'Create Manifest', icon: 'qr_code_scanner', route: '/msrtc/create-manifest', permission: 'MANIFEST_CREATE', roles: OPS_BOOKING },
+      { id: 'msrtc-finalize-manifest', title: 'Finalize Manifest', icon: 'outbound', route: '/msrtc/finalize-manifest', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
+      // Branch B receives what branch A dispatched; in-scanned shipments then show up in
+      // Pending Delivery / Generate DRS / Delivery like any other.
+      { id: 'msrtc-in-scan', title: 'In Scan Manifest', icon: 'move_to_inbox', route: '/msrtc/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK }
+    ]
+  },
+
   {
     id: 'hub-operations', title: 'Hub Operations', icon: 'hub', order: 5.5, roles: HUB_OPS,
     children: [

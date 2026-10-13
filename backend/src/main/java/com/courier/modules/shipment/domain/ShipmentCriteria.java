@@ -38,6 +38,7 @@ import java.util.UUID;
  * @param unassignedDeliveryBranch when true, only shipments with no {@code deliveryBranchId}
  *                         resolved yet — Load Sheet's own eligibility filter, paired with
  *                         {@code toCity}
+ * @param flowType         only shipments of this flow; null means both
  */
 public record ShipmentCriteria(
         Set<ShipmentStatus> statuses,
@@ -53,11 +54,23 @@ public record ShipmentCriteria(
         UUID paymentModeId,
         String search,
         String toCity,
-        Boolean unassignedDeliveryBranch
+        Boolean unassignedDeliveryBranch,
+        FlowType flowType
 ) {
+    /** The original shape, before MSRTC: no flow filter. */
+    public ShipmentCriteria(Set<ShipmentStatus> statuses, UUID bookingBranchId, UUID deliveryBranchId,
+                            UUID currentLocationId, UUID nextLocationId, UUID manifestId,
+                            LocalDate bookingDateFrom, LocalDate bookingDateTo, LocalDate deliveredDateFrom,
+                            LocalDate deliveredDateTo, UUID paymentModeId, String search, String toCity,
+                            Boolean unassignedDeliveryBranch) {
+        this(statuses, bookingBranchId, deliveryBranchId, currentLocationId, nextLocationId, manifestId,
+                bookingDateFrom, bookingDateTo, deliveredDateFrom, deliveredDateTo, paymentModeId, search,
+                toCity, unassignedDeliveryBranch, null);
+    }
+
 
     public static ShipmentCriteria none() {
         return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null);
+                null, null, null);
     }
 }

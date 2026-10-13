@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, e
 import { ActingBranchService } from '@core/services/acting-branch.service';
 import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
@@ -14,7 +14,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
-import { Manifest, MovementOutcome, Shipment } from '@core/models/shipment.model';
+import { FlowType, Manifest, MovementOutcome, Shipment } from '@core/models/shipment.model';
 import { ManifestService } from '@features/manifest/manifest.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '@features/shipment/shipment.service';
@@ -49,7 +49,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
       <header class="page__head" data-tour="in-scan-head">
         <div class="page__head-row">
           <app-scanner-illustration class="page__head-ill" [size]="52" />
-          <div><h1 class="text-h1">In Scan</h1>
+          <div><h1 class="text-h1">{{ isMsrtc ? 'In Scan Manifest' : 'In Scan' }}</h1>
           <p class="text-caption">Receive shipments dispatched to {{ myBranchLabel() }}.</p></div>
         </div>
         <app-act-as-branch />
@@ -196,6 +196,9 @@ export class InScan implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
+  /** MSRTC's In Scan Manifest reuses this screen; the route says which flow's manifests it lists. */
+  protected readonly flowType: FlowType = inject(ActivatedRoute).snapshot.data['flowType'] === 'MSRTC' ? 'MSRTC' : 'STANDARD';
+  protected readonly isMsrtc = this.flowType === 'MSRTC';
   private readonly auth = inject(AuthService);
   private readonly movementService = inject(ShipmentMovementService);
   private readonly manifestService = inject(ManifestService);
@@ -245,7 +248,9 @@ export class InScan implements OnInit {
   }
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Operations' }, { label: 'In Scan' }]);
+    this.breadcrumb.set(this.isMsrtc
+      ? [{ label: 'MSRTC' }, { label: 'In Scan Manifest' }]
+      : [{ label: 'Operations' }, { label: 'In Scan' }]);
     this.masterData.branchDirectory().subscribe((list) => {
       this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
@@ -261,7 +266,8 @@ export class InScan implements OnInit {
     if (!this.myBranchId) return;
     this.loadingManifests.set(true);
     this.manifestService.list({
-      page: 0, size: 50, status: 'DISPATCHED', deliveryBranchId: this.myBranchId, sort: 'dispatchedAt,desc'
+      page: 0, size: 50, status: 'DISPATCHED', deliveryBranchId: this.myBranchId, sort: 'dispatchedAt,desc',
+      flowType: this.flowType
     }).subscribe({
       next: (p) => { this.pendingManifests.set(p.content); this.loadingManifests.set(false); },
       error: () => { this.pendingManifests.set([]); this.loadingManifests.set(false); }

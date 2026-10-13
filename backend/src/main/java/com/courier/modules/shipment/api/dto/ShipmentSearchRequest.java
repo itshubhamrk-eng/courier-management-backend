@@ -1,5 +1,6 @@
 package com.courier.modules.shipment.api.dto;
 
+import com.courier.modules.shipment.domain.FlowType;
 import com.courier.modules.shipment.domain.ShipmentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
@@ -38,10 +39,12 @@ public record ShipmentSearchRequest(
         String toCity,
         @Schema(description = "Load Sheet's own eligibility filter — true for only shipments "
                 + "with no delivery branch resolved yet")
-        Boolean unassignedDeliveryBranch
+        Boolean unassignedDeliveryBranch,
+        @Schema(description = "Only shipments of this flow (STANDARD or MSRTC); omit for both")
+        FlowType flowType
 ) {
     public static ShipmentSearchRequest empty() {
         return new ShipmentSearchRequest(null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null);
+                null, null, null);
     }
 }

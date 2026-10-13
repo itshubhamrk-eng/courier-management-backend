@@ -28,6 +28,9 @@ public final class ManifestSpecifications {
             if (safe.deliveryBranchId() != null) {
                 predicates.add(cb.equal(root.get("deliveryBranchId"), safe.deliveryBranchId()));
             }
+            if (safe.flowType() != null) {
+                predicates.add(cb.equal(root.get("flowType"), safe.flowType()));
+            }
             if (safe.search() != null && !safe.search().isBlank()) {
                 String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
                 predicates.add(cb.like(cb.lower(root.get("manifestNumber")), pattern, LIKE_ESCAPE));
