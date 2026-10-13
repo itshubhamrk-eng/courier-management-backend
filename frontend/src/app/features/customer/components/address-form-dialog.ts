@@ -6,7 +6,7 @@ import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { NotificationService } from '@core/services/notification.service';
-import { AddressType, ADDRESS_TYPES, CustomerAddress } from '@core/models/customer.model';
+import { AddressType, AddressUsage, ADDRESS_TYPES, ADDRESS_USAGES, CustomerAddress } from '@core/models/customer.model';
 import { CustomerService, GeographyOption } from '../customer.service';
 
 export interface AddressFormData {
@@ -18,6 +18,9 @@ export interface AddressFormData {
 const TYPE_OPTS: SelectOption[] = ADDRESS_TYPES.map((t) => ({
   value: t, label: t.charAt(0) + t.slice(1).toLowerCase()
 }));
+
+const USAGE_LABELS: Record<AddressUsage, string> = { PICKUP: 'Pickup', DELIVERY: 'Delivery', BOTH: 'Pickup & Delivery' };
+const USAGE_OPTS: SelectOption[] = ADDRESS_USAGES.map((u) => ({ value: u, label: USAGE_LABELS[u] }));
 
 function toOptions(rows: GeographyOption[]): SelectOption[] {
   return rows.map((r) => ({ value: r.id, label: r.label }));
@@ -39,7 +42,10 @@ function toOptions(rows: GeographyOption[]): SelectOption[] {
     <div class="afd">
       <h2 class="text-h2">{{ isEdit() ? 'Edit address' : 'Add address' }}</h2>
       <form [formGroup]="form" (ngSubmit)="save()" class="afd__form">
-        <app-select [control]="c('addressType')" label="Address Type" [options]="types" />
+        <div class="grid">
+          <app-select [control]="c('addressType')" label="Address Type" [options]="types" />
+          <app-select [control]="c('addressUsage')" label="Used For" [options]="usages" />
+        </div>
 
         <div class="grid">
           <app-select [control]="c('countryId')" label="Country" [options]="countryOpts()"
@@ -100,6 +106,7 @@ export class AddressFormDialog {
   private readonly notify = inject(NotificationService);
 
   protected readonly types = TYPE_OPTS;
+  protected readonly usages = USAGE_OPTS;
   protected readonly isEdit = computed(() => !!this.data.address);
   readonly busy = signal(false);
 
@@ -119,6 +126,7 @@ export class AddressFormDialog {
 
   protected readonly form: FormGroup = this.fb.group({
     addressType: ['HOME' as AddressType, Validators.required],
+    addressUsage: ['BOTH' as AddressUsage, Validators.required],
     countryId: [null as string | null],
     stateId: [null as string | null],
     districtId: [null as string | null],
@@ -146,7 +154,7 @@ export class AddressFormDialog {
     const a = this.data.address;
     if (a) {
       this.form.patchValue({
-        addressType: a.addressType, countryId: a.countryId ?? null, stateId: a.stateId ?? null,
+        addressType: a.addressType, addressUsage: a.addressUsage ?? 'BOTH', countryId: a.countryId ?? null, stateId: a.stateId ?? null,
         districtId: a.districtId ?? null, cityId: a.cityId ?? null, areaId: a.areaId ?? null,
         pincodeId: a.pincodeId ?? null, addressLine1: a.addressLine1, addressLine2: a.addressLine2 ?? '',
         landmark: a.landmark ?? '', latitude: a.latitude != null ? String(a.latitude) : '',
@@ -192,6 +200,7 @@ export class AddressFormDialog {
 
     const body = {
       addressType: v.addressType as AddressType,
+      addressUsage: v.addressUsage as AddressUsage,
       countryId: v.countryId || null, stateId: v.stateId || null, districtId: v.districtId || null,
       cityId: v.cityId || null, areaId: v.areaId || null, pincodeId: v.pincodeId || null,
       addressLine1: v.addressLine1.trim(), addressLine2: trim(v.addressLine2), landmark: trim(v.landmark),

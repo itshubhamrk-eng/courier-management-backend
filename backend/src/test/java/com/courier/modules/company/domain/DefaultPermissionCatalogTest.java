@@ -42,10 +42,13 @@ class DefaultPermissionCatalogTest {
         // new CHARGE module: CREATE/READ/UPDATE/DELETE/SEARCH/IMPORT/EXPORT/ACTIVATE/
         // DEACTIVATE, the same MASTER shape ROUTE_MASTER already has), and V71 a further 8
         // (the new DEPARTMENT module: CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/ACTIVATE/
-        // DEACTIVATE, the same shape BRANCH already has). All generated from this matrix.
+        // DEACTIVATE, the same shape BRANCH already has), and V106 a further 18 (the new
+        // PRICING_ZONE and CUSTOMER_RATE modules, 9 MASTER-shaped rights each), and V110 a further 7 (the new
+        // CUSTOMER_BILLING module: CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/PRINT). All generated
+        // from this matrix.
         // If someone adds a module or action here without a follow-up migration, this is
         // the tripwire.
-        assertThat(DefaultPermissionCatalog.size()).isEqualTo(253);
+        assertThat(DefaultPermissionCatalog.size()).isEqualTo(278);
     }
 
     @Test

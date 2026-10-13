@@ -24,6 +24,11 @@ export const API = {
   userMenuPermissions: (userId: string) => `/users/${userId}/menu-permissions`,
   branches: '/branches',
   customers: '/customers',
+  /** Business Customer pricing: a customer's zones (districts/cities) and per-zone rate cards. */
+  pricingZones: '/pricing-zones',
+  customerRates: '/customer-rates',
+  businessDashboard: '/business-customers/dashboard',
+  customerInvoices: '/customer-invoices',
   rates: '/rates',
   /** Charge & Charge Settings — standalone pricing/commission configuration, scoped to
    *  one Service Type per charge. Not yet wired into Shipment Booking. */

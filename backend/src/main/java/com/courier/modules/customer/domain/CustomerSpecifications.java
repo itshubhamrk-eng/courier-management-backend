@@ -32,6 +32,12 @@ public final class CustomerSpecifications {
             if (safe.statuses() != null && !safe.statuses().isEmpty()) {
                 predicates.add(root.get("status").in(safe.statuses()));
             }
+            if (safe.paymentModes() != null && !safe.paymentModes().isEmpty()) {
+                predicates.add(root.get("defaultPaymentMode").in(safe.paymentModes()));
+            }
+            if (safe.billingFrequencies() != null && !safe.billingFrequencies().isEmpty()) {
+                predicates.add(root.get("billingFrequency").in(safe.billingFrequencies()));
+            }
             if (hasText(safe.search())) {
                 String pattern = "%" + escapeLike(safe.search().trim().toLowerCase()) + "%";
                 predicates.add(cb.or(
@@ -39,6 +45,8 @@ public final class CustomerSpecifications {
                         cb.like(cb.lower(root.get("firstName")), pattern, LIKE_ESCAPE),
                         cb.like(cb.lower(root.get("lastName")), pattern, LIKE_ESCAPE),
                         cb.like(cb.lower(root.get("companyName")), pattern, LIKE_ESCAPE),
+                        cb.like(cb.lower(root.get("contactPerson")), pattern, LIKE_ESCAPE),
+                        cb.like(cb.lower(root.get("gstNumber")), pattern, LIKE_ESCAPE),
                         cb.like(cb.lower(root.get("mobile")), pattern, LIKE_ESCAPE),
                         cb.like(cb.lower(root.get("email")), pattern, LIKE_ESCAPE)));
             }

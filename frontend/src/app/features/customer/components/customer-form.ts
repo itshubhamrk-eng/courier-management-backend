@@ -9,9 +9,12 @@ import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import {
-  CustomerResponse, CustomerType, CUSTOMER_TYPES, CreateCustomerRequest, UpdateCustomerRequest
+  BILLING_FREQUENCIES, BILLING_FREQUENCY_LABELS, BillingFrequency, CUSTOMER_PAYMENT_MODES, CUSTOMER_TYPES,
+  CreateCustomerRequest, CustomerPaymentMode, CustomerResponse, CustomerType, PAYMENT_MODE_LABELS,
+  UpdateCustomerRequest
 } from '@core/models/customer.model';
 
+const PINCODE = /^[0-9]{6}$/;
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_ -]{1,48}[A-Za-z0-9]$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[+]?[0-9 \-]{7,20}$/;
@@ -21,6 +24,9 @@ const PAN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const TYPE_OPTS: SelectOption[] = CUSTOMER_TYPES.map((t) => ({
   value: t, label: t.charAt(0) + t.slice(1).toLowerCase()
 }));
+
+const PAYMENT_OPTS: SelectOption[] = CUSTOMER_PAYMENT_MODES.map((m) => ({ value: m, label: PAYMENT_MODE_LABELS[m] }));
+const FREQUENCY_OPTS: SelectOption[] = BILLING_FREQUENCIES.map((m) => ({ value: m, label: BILLING_FREQUENCY_LABELS[m] }));
 
 /** Checked on the trimmed value, same reasoning as BranchForm's `emailish`. */
 function emailish(control: AbstractControl): ValidationErrors | null {
@@ -87,6 +93,25 @@ function upperPattern(pattern: RegExp) {
         </div>
       </app-card>
 
+      <app-card title="Payment &amp; Billing" subtitle="Default payment mode (a booking can still override it) and how often this customer is invoiced.">
+        <div class="grid">
+          <app-input [control]="c('contactPerson')" label="Contact Person" placeholder="Asha Shah" [maxLength]="150" />
+          <div></div>
+          <app-select [control]="c('defaultPaymentMode')" label="Payment Mode" [options]="paymentModes" />
+          <app-select [control]="c('billingFrequency')" label="Billing Frequency" [options]="frequencies" />
+        </div>
+      </app-card>
+
+      <app-card title="Billing Address" subtitle="Where invoices are addressed. Pickup and delivery addresses are added after the customer is created.">
+        <div class="grid">
+          <app-input [control]="c('billingAddressLine1')" label="Address Line 1" [maxLength]="255" />
+          <app-input [control]="c('billingAddressLine2')" label="Address Line 2" [maxLength]="255" />
+          <app-input [control]="c('billingCity')" label="City" [maxLength]="100" />
+          <app-input [control]="c('billingState')" label="State" [maxLength]="100" />
+          <app-input [control]="c('billingPincode')" label="Pincode" [maxLength]="6" placeholder="411001" />
+        </div>
+      </app-card>
+
       <app-card title="Communication Preferences" subtitle="Which channels this customer may be notified on — off by request, on by default.">
         <div class="cform__prefs">
           <mat-checkbox [formControl]="c('whatsappEnabled')">WhatsApp</mat-checkbox>
@@ -133,11 +158,15 @@ export class CustomerForm {
   readonly mode = input<'create' | 'edit'>('create');
   readonly customer = input<CustomerResponse | null>(null);
   readonly saving = input(false);
+  /** Pre-selected type when creating (the Business Customer menu starts at BUSINESS). */
+  readonly initialType = input<CustomerType>('INDIVIDUAL');
 
   readonly saved = output<CreateCustomerRequest | UpdateCustomerRequest>();
   readonly cancelled = output<void>();
 
   protected readonly types = TYPE_OPTS;
+  protected readonly paymentModes = PAYMENT_OPTS;
+  protected readonly frequencies = FREQUENCY_OPTS;
   protected readonly isCreate = computed(() => this.mode() === 'create');
   private readonly hydrated = signal(false);
 
@@ -148,6 +177,12 @@ export class CustomerForm {
   constructor() {
     effect(() => { const c = this.customer(); if (c && this.mode() === 'edit') this.hydrate(c); });
     this.form.get('customerType')!.valueChanges.subscribe((v) => this.typeValue.set(v));
+    effect(() => {
+      const t = this.initialType();
+      if (this.mode() === 'create' && this.form.get('customerType')!.pristine) {
+        this.form.get('customerType')!.setValue(t);
+      }
+    });
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
@@ -159,7 +194,11 @@ export class CustomerForm {
       firstName: cust.firstName, middleName: cust.middleName ?? '', lastName: cust.lastName,
       mobile: cust.mobile, alternateMobile: cust.alternateMobile ?? '', email: cust.email ?? '',
       gstNumber: cust.gstNumber ?? '', panNumber: cust.panNumber ?? '',
-      whatsappEnabled: cust.whatsappEnabled, smsEnabled: cust.smsEnabled, emailEnabled: cust.emailEnabled
+      whatsappEnabled: cust.whatsappEnabled, smsEnabled: cust.smsEnabled, emailEnabled: cust.emailEnabled,
+      contactPerson: cust.contactPerson ?? '',
+      defaultPaymentMode: cust.defaultPaymentMode ?? 'PAID', billingFrequency: cust.billingFrequency ?? 'MONTHLY',
+      billingAddressLine1: cust.billingAddressLine1 ?? '', billingAddressLine2: cust.billingAddressLine2 ?? '',
+      billingCity: cust.billingCity ?? '', billingState: cust.billingState ?? '', billingPincode: cust.billingPincode ?? ''
     }, { emitEvent: true });
     this.typeValue.set(cust.customerType);
     this.form.markAsPristine();
@@ -181,7 +220,15 @@ export class CustomerForm {
       panNumber: ['', [upperPattern(PAN), Validators.maxLength(10)]],
       whatsappEnabled: [true],
       smsEnabled: [true],
-      emailEnabled: [true]
+      emailEnabled: [true],
+      contactPerson: ['', Validators.maxLength(150)],
+      defaultPaymentMode: ['PAID' as CustomerPaymentMode, Validators.required],
+      billingFrequency: ['MONTHLY' as BillingFrequency, Validators.required],
+      billingAddressLine1: ['', Validators.maxLength(255)],
+      billingAddressLine2: ['', Validators.maxLength(255)],
+      billingCity: ['', Validators.maxLength(100)],
+      billingState: ['', Validators.maxLength(100)],
+      billingPincode: ['', Validators.pattern(PINCODE)]
     });
   }
 
@@ -201,7 +248,12 @@ export class CustomerForm {
       firstName: v.firstName.trim(), middleName: trim(v.middleName), lastName: v.lastName.trim(),
       mobile: v.mobile.trim(), alternateMobile: trim(v.alternateMobile), email: trim(v.email),
       gstNumber: upper(v.gstNumber), panNumber: upper(v.panNumber),
-      whatsappEnabled: !!v.whatsappEnabled, smsEnabled: !!v.smsEnabled, emailEnabled: !!v.emailEnabled
+      whatsappEnabled: !!v.whatsappEnabled, smsEnabled: !!v.smsEnabled, emailEnabled: !!v.emailEnabled,
+      contactPerson: trim(v.contactPerson),
+      defaultPaymentMode: v.defaultPaymentMode as CustomerPaymentMode,
+      billingFrequency: v.billingFrequency as BillingFrequency,
+      billingAddressLine1: trim(v.billingAddressLine1), billingAddressLine2: trim(v.billingAddressLine2),
+      billingCity: trim(v.billingCity), billingState: trim(v.billingState), billingPincode: trim(v.billingPincode)
     };
 
     if (this.isCreate()) {

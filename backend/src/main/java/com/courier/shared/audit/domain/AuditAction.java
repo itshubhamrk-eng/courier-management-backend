@@ -119,6 +119,25 @@ public enum AuditAction {
     CUSTOMER_ADDRESS_UPDATED,
     CUSTOMER_ADDRESS_DELETED,
 
+    // --- business customer pricing: zones, their locations, and the per-zone rate card.
+    PRICING_ZONE_CREATED,
+    PRICING_ZONE_UPDATED,
+    PRICING_ZONE_ACTIVATED,
+    PRICING_ZONE_DEACTIVATED,
+    PRICING_ZONE_DELETED,
+    PRICING_ZONE_LOCATION_ADDED,
+    PRICING_ZONE_LOCATION_REMOVED,
+    CUSTOMER_RATE_SAVED,
+    CUSTOMER_RATE_ACTIVATED,
+    CUSTOMER_RATE_DEACTIVATED,
+    CUSTOMER_INVOICE_GENERATED,
+    CUSTOMER_INVOICE_PAYMENT_RECORDED,
+    CUSTOMER_INVOICE_CANCELLED,
+    CUSTOMER_INVOICE_APPROVED,
+    CUSTOMER_INVOICE_EMAILED,
+    CUSTOMER_INVOICE_PAYMENT_REVERSED,
+    CUSTOMER_INVOICE_PROOF_ATTACHED,
+
     // --- rate master (Phase 4 remainder, COMPANY_ADMIN). RATE_CALCULATED is deliberately
     // absent: a quote reads the rate card and moves nothing, and every other CALCULATE
     // right in the catalogue (see PermissionAction) is unaudited for the same reason.

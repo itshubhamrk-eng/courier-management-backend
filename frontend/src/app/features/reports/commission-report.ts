@@ -4,96 +4,74 @@ import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { AuthService } from '@core/auth/auth.service';
-import { BranchCommissionSummary, Shipment, ShipmentSearchRequest } from '@core/models/shipment.model';
-import { Page, PageQuery, emptyPage } from '@core/models/page.model';
-import { SortState, TableColumn } from '@shared/components/ui-table/ui-table';
-import { UiTable } from '@shared/components/ui-table/ui-table';
+import { BranchCommissionSummary } from '@core/models/shipment.model';
+import { TableColumn, UiTable } from '@shared/components/ui-table/ui-table';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
-import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiButton } from '@shared/components/ui-button/ui-button';
-import { UiDrawer } from '@shared/components/ui-drawer/ui-drawer';
 import { MasterDataService } from '@features/masters/master-data.service';
-import { ShipmentFilter } from '../shipment/components/shipment-filter';
 import { ShipmentService } from '../shipment/shipment.service';
 import { excludingCancelled } from './non-cancelled.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
+import { currentMonth, monthLabel, monthRange } from './commission-month.util';
 
 /**
- * Commission Report — an overall total (summed client-side over
- * `GET /shipments/commission-summary`'s branch rows — see `ShipmentServiceImpl
- * .commissionSummary`) plus the per-shipment breakdown underneath, same filter/branch-lock/
- * pagination shape as Booking Report. Admin (no own branch) sees the total across every
- * branch; a branch role's own `bookingBranchId` lock (same as every other report) narrows
- * both the total and the detail table to its own shipments — no separate "admin vs branch"
- * code path, the existing lock does both jobs.
+ * Commission Report — month-wise list of branches with the commission each earned
+ * (`GET /shipments/commission-summary` over the month's booking dates). Clicking a branch
+ * opens `CommissionBranchDetail` with that branch's summary and shipment list. A branch role
+ * keeps its own `bookingBranchId` lock, so it sees only its own row.
  */
 @Component({
   selector: 'app-commission-report',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, UiTable, UiPagination, UiButton, UiDrawer, ShipmentFilter],
+  imports: [DecimalPipe, UiTable, UiButton],
   template: `
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Commission Report</h1>
-          <p class="text-caption">Commission earned {{ myBranchId ? 'by your branch' : 'across every branch' }}.</p></div>
+          <p class="text-caption">Commission for {{ label() }} {{ myBranchId ? 'for your branch' : 'by branch' }}. Click a branch for its shipments.</p></div>
         <div class="page__actions">
-          <app-button variant="stroked" icon="filter_list" (pressed)="filterOpen.set(true)">
-            Filters@if (activeFilters()) { <span class="fbadge">{{ activeFilters() }}</span> }
-          </app-button>
-          <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportSummaryCsv()">Export</app-button>
+          <label class="month">Month
+            <input type="month" [value]="month()" [max]="maxMonth" (change)="onMonth($any($event.target).value)" />
+          </label>
+          <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
         </div>
       </header>
 
       <div class="stats">
-        <div class="stat"><span class="stat__l">Shipments</span><span class="stat__v">{{ summaryLoading() ? '—' : totals().shipmentCount }}</span></div>
-        <div class="stat"><span class="stat__l">Amount</span><span class="stat__v">{{ summaryLoading() ? '—' : ('₹' + (totals().totalNetAmount | number: '1.2-2')) }}</span></div>
-        <div class="stat"><span class="stat__l">Commission on Basic Freight</span><span class="stat__v">{{ summaryLoading() ? '—' : ('₹' + (totals().commissionOnBasicFreight | number: '1.2-2')) }}</span></div>
-        <div class="stat"><span class="stat__l">Branch Commission on Other Amount</span><span class="stat__v">{{ summaryLoading() ? '—' : ('₹' + (totals().branchCommissionOnOtherAmount | number: '1.2-2')) }}</span></div>
-        <div class="stat"><span class="stat__l">Company Commission on Basic Freight</span><span class="stat__v">{{ summaryLoading() ? '—' : ('₹' + (totals().companyCommissionOnBasicFreight | number: '1.2-2')) }}</span></div>
-        <div class="stat"><span class="stat__l">Total Commission</span><span class="stat__v">{{ summaryLoading() ? '—' : ('₹' + (totals().totalCommission | number: '1.2-2')) }}</span></div>
+        <div class="stat"><span class="stat__l">Branches</span><span class="stat__v">{{ loading() ? '—' : rows().length }}</span></div>
+        <div class="stat"><span class="stat__l">Shipments</span><span class="stat__v">{{ loading() ? '—' : totals().shipmentCount }}</span></div>
+        <div class="stat"><span class="stat__l">Amount</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().totalNetAmount | number: '1.2-2')) }}</span></div>
+        <div class="stat"><span class="stat__l">Total Commission</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().totalCommission | number: '1.2-2')) }}</span></div>
       </div>
 
-      <section class="block">
-        <h2 class="text-h3">Shipment-wise Breakdown</h2>
-        <app-table [columns]="detailColumns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
-                   [startIndex]="page().page * page().size"
-                   emptyTitle="No shipments" emptyHint="Nothing matches this filter yet."
-                   (sortChange)="onSort($event)" (rowClick)="view($event)">
-          <ng-template #row let-s>
-            <td><span class="mono">{{ s.shipmentNumber }}</span></td>
-            <td><span class="mono awb">{{ s.trackingNumber }}</span></td>
-            <td>{{ s.bookingDate }}</td>
-            <td>{{ branchLabel(s.bookingBranchId) }}</td>
-            <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
-            <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
-            <td class="num">{{ s.branchCommissionOnOtherAmount != null ? ('₹' + (s.branchCommissionOnOtherAmount | number: '1.2-2')) : '—' }}</td>
-            <td class="num">{{ s.companyCommissionOnBasicFreight != null ? ('₹' + (s.companyCommissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
-            <td class="num strong">{{ s.totalCommission != null ? ('₹' + (s.totalCommission | number: '1.2-2')) : '—' }}</td>
-          </ng-template>
-        </app-table>
-        <app-pagination [page]="page()" (pageChange)="onPage($event)" />
-      </section>
-
-      <app-drawer [open]="filterOpen()" title="Advanced filters" subtitle="Narrow the commission report." (closed)="filterOpen.set(false)">
-        <app-shipment-filter mode="booking" [excludeCancelled]="true" [lockBookingBranch]="!!myBranchId" (changed)="onFilter($event)" />
-      </app-drawer>
+      <app-table [columns]="columns" [rows]="rows()" [loading]="loading()"
+                 emptyTitle="No commission" emptyHint="No shipments booked in this month."
+                 (rowClick)="open($event)">
+        <ng-template #row let-r>
+          <td><span class="branch">{{ branchLabel(r.bookingBranchId) }}</span></td>
+          <td class="num">{{ r.shipmentCount }}</td>
+          <td class="num">₹{{ r.totalNetAmount | number: '1.2-2' }}</td>
+          <td class="num">₹{{ r.commissionOnBasicFreight | number: '1.2-2' }}</td>
+          <td class="num">₹{{ r.branchCommissionOnOtherAmount | number: '1.2-2' }}</td>
+          <td class="num">₹{{ r.companyCommissionOnBasicFreight | number: '1.2-2' }}</td>
+          <td class="num strong">₹{{ r.totalCommission | number: '1.2-2' }}</td>
+        </ng-template>
+      </app-table>
     </div>
   `,
   styles: [`
     .page__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
-    .page__actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .fbadge { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 5px; margin-left:2px;
-      background:var(--brand-600); color:#fff; border-radius:999px; font:700 11px var(--font-sans); }
+    .page__actions { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+    .month { display:flex; flex-direction:column; gap:2px; font:500 12px var(--font-sans); color:var(--content-muted); }
+    .month input { padding:7px 10px; border:1px solid var(--surface-border); border-radius:var(--r-field);
+      background:var(--surface); color:var(--content-fg); font:500 14px var(--font-sans); }
     .stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
     .stat { display:flex; flex-direction:column; gap:4px; padding:12px 18px; min-width:150px;
       background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); }
     .stat__l { font:500 12px var(--font-sans); color:var(--content-muted); }
     .stat__v { font:700 20px var(--font-sans); color:var(--content-fg); }
-    .block { margin-bottom:24px; }
-    .block h2 { margin: 0 0 10px; }
-    .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
-    .awb { color:var(--brand-600); }
+    .branch { font-weight:600; color:var(--brand-600); }
     .num { text-align:right; }
     .strong { font-weight:700; }
   `]
@@ -107,114 +85,79 @@ export class CommissionReport implements OnInit {
   private readonly auth = inject(AuthService);
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
+  protected readonly maxMonth = currentMonth();
 
+  protected readonly month = signal(currentMonth());
+  protected readonly label = computed(() => monthLabel(this.month()));
   protected readonly branchOptions = signal<SelectOption[]>([]);
   protected readonly loading = signal(true);
-  protected readonly summaryLoading = signal(true);
   protected readonly exporting = signal(false);
-  protected readonly filterOpen = signal(false);
-  protected readonly page = signal<Page<Shipment>>(emptyPage<Shipment>());
-  protected readonly sort = signal<SortState | null>({ active: 'bookingDate', direction: 'desc' });
-  protected readonly summary = signal<BranchCommissionSummary[]>([]);
-  /** The single total this report now leads with — summed client-side over every branch
-   *  row `commissionSummary` returned (already filtered/branch-locked server-side). */
-  protected readonly totals = computed(() => this.summary().reduce((t, r) => ({
+  protected readonly rows = signal<BranchCommissionSummary[]>([]);
+  protected readonly totals = computed(() => this.rows().reduce((t, r) => ({
     shipmentCount: t.shipmentCount + r.shipmentCount,
     totalNetAmount: t.totalNetAmount + r.totalNetAmount,
-    commissionOnBasicFreight: t.commissionOnBasicFreight + r.commissionOnBasicFreight,
-    branchCommissionOnOtherAmount: t.branchCommissionOnOtherAmount + r.branchCommissionOnOtherAmount,
-    companyCommissionOnBasicFreight: t.companyCommissionOnBasicFreight + r.companyCommissionOnBasicFreight,
     totalCommission: t.totalCommission + r.totalCommission
-  }), {
-    shipmentCount: 0, totalNetAmount: 0, commissionOnBasicFreight: 0,
-    branchCommissionOnOtherAmount: 0, companyCommissionOnBasicFreight: 0, totalCommission: 0
-  }));
+  }), { shipmentCount: 0, totalNetAmount: 0, totalCommission: 0 }));
 
-  protected readonly detailColumns: TableColumn<Shipment>[] = [
-    { key: 'shipmentNumber', header: 'Shipment No.', sortable: true },
-    { key: 'trackingNumber', header: 'AWB' },
-    { key: 'bookingDate', header: 'Booking Date', sortable: true },
-    { key: 'bookingBranchId', header: 'Booking Branch' },
-    { key: 'netAmount', header: 'Amount', align: 'right' },
+  protected readonly columns: TableColumn<BranchCommissionSummary>[] = [
+    { key: 'bookingBranchId', header: 'Branch' },
+    { key: 'shipmentCount', header: 'Shipments', align: 'right' },
+    { key: 'totalNetAmount', header: 'Amount', align: 'right' },
     { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },
     { key: 'branchCommissionOnOtherAmount', header: 'Branch Commission on Other Amount', align: 'right' },
     { key: 'companyCommissionOnBasicFreight', header: 'Company Commission on Basic Freight', align: 'right' },
     { key: 'totalCommission', header: 'Total Commission', align: 'right' }
   ];
 
-  private query: PageQuery = { page: 0, size: 20, sort: 'bookingDate,desc' };
-  private readonly filters = signal<ShipmentSearchRequest>({});
-  protected readonly activeFilters = computed(() =>
-    Object.values(this.filters()).filter((v) => v != null && (!Array.isArray(v) || v.length)).length);
-
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Reports' }, { label: 'Commission Report' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
     this.load();
-    this.loadSummary();
   }
 
-  /** Shared by the detail list and the branch summary, same branch-lock every report uses. */
-  private filterRequest(): ShipmentSearchRequest {
-    const f = this.filters();
+  private request() {
+    const { from, to } = monthRange(this.month());
     return {
-      status: excludingCancelled(f.status),
-      bookingBranchId: this.myBranchId ?? f.bookingBranchId,
-      bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo
-    };
-  }
-
-  private buildQuery(size?: number): PageQuery {
-    const f = this.filterRequest();
-    return {
-      ...this.query, ...(size ? { size, page: 0 } : {}),
-      status: f.status as unknown as string,
-      bookingBranchId: f.bookingBranchId, bookingDateFrom: f.bookingDateFrom, bookingDateTo: f.bookingDateTo
+      status: excludingCancelled(undefined),
+      bookingBranchId: this.myBranchId ?? undefined,
+      bookingDateFrom: from, bookingDateTo: to
     };
   }
 
   private load(): void {
     this.loading.set(true);
-    this.service.list(this.buildQuery()).subscribe({
-      next: (p) => { this.page.set(p); this.loading.set(false); },
+    this.service.commissionSummary(this.request()).subscribe({
+      next: (rows) => { this.rows.set(rows); this.loading.set(false); },
       error: () => this.loading.set(false)
     });
   }
 
-  private loadSummary(): void {
-    this.summaryLoading.set(true);
-    this.service.commissionSummary(this.filterRequest()).subscribe({
-      next: (rows) => { this.summary.set(rows); this.summaryLoading.set(false); },
-      error: () => this.summaryLoading.set(false)
-    });
+  protected onMonth(value: string): void {
+    if (!value) { return; }
+    this.month.set(value);
+    this.load();
   }
 
-  onPage(i: number) { this.query = { ...this.query, page: i }; this.load(); }
-  onSort(s: SortState) { this.sort.set(s); this.query = { ...this.query, sort: `${s.active},${s.direction}`, page: 0 }; this.load(); }
-  onFilter(f: ShipmentSearchRequest) {
-    this.filters.set(f); this.query = { ...this.query, page: 0 }; this.filterOpen.set(false);
-    this.load(); this.loadSummary();
+  protected open(r: BranchCommissionSummary): void {
+    this.router.navigate(['/reports/commissions', r.bookingBranchId], { queryParams: { month: this.month() } });
   }
-
-  view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
   protected branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
 
-  exportSummaryCsv(): void {
+  protected exportCsv(): void {
     this.exporting.set(true);
-    this.service.commissionSummary(this.filterRequest()).subscribe({
-      next: (rows) => { this.download(rows); this.exporting.set(false); },
+    this.service.commissionSummary(this.request()).subscribe({
+      next: (rows) => {
+        const header = ['branch', 'shipmentCount', 'totalNetAmount', 'commissionOnBasicFreight',
+          'branchCommissionOnOtherAmount', 'companyCommissionOnBasicFreight', 'totalCommission'];
+        const lines = rows.map((r) => [this.branchLabel(r.bookingBranchId), r.shipmentCount,
+          r.totalNetAmount, r.commissionOnBasicFreight, r.branchCommissionOnOtherAmount,
+          r.companyCommissionOnBasicFreight, r.totalCommission]);
+        downloadCsv(`commission-report-${this.month()}.csv`, header, lines, [1, 2, 3, 4, 5, 6]);
+        this.notify.info(`Exported ${rows.length} branch row(s).`);
+        this.exporting.set(false);
+      },
       error: () => { this.exporting.set(false); this.notify.error('Export failed.'); }
     });
-  }
-
-  private download(rows: BranchCommissionSummary[]): void {
-    const header = ['branch', 'shipmentCount', 'totalNetAmount', 'commissionOnBasicFreight',
-      'branchCommissionOnOtherAmount', 'companyCommissionOnBasicFreight', 'totalCommission'];
-    const lines = rows.map((r) => [this.branchLabel(r.bookingBranchId), r.shipmentCount,
-      r.totalNetAmount, r.commissionOnBasicFreight, r.branchCommissionOnOtherAmount,
-      r.companyCommissionOnBasicFreight, r.totalCommission]);
-    downloadCsv(`commission-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [1, 2, 3, 4, 5, 6]);
-    this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }

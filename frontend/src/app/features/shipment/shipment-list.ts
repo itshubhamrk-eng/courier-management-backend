@@ -49,7 +49,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_
         </div>
       </header>
 
-      <app-shipment-table [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
+      <app-shipment-table [showCompanyCommission]="!myBranchId" [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
         [startIndex]="page().page * page().size"
                           [branchOptions]="branchOptions()" [paymentModeOptions]="paymentModeOptions()"
                           (sortChange)="onSort($event)" (action)="onAction($event)" />
@@ -165,17 +165,19 @@ export class ShipmentList implements OnInit {
   private branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
 
   private download(rows: Shipment[]): void {
+    const withCompany = !this.myBranchId;
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
       'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount',
       'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
-      'companyCommissionOnBasicFreight', 'status'];
+      ...(withCompany ? ['companyCommissionOnBasicFreight'] : []), 'status'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
       r.chargeableWeight, r.netAmount ?? '',
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
-      r.companyCommissionOnBasicFreight ?? '', r.status]);
-    downloadCsv(`shipments-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [9, 10, 11, 12, 13, 14]);
+      ...(withCompany ? [r.companyCommissionOnBasicFreight ?? ''] : []), r.status]);
+    downloadCsv(`shipments-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
+      withCompany ? [9, 10, 11, 12, 13, 14] : [9, 10, 11, 12, 13]);
     this.notify.info(`Exported ${rows.length} shipment(s).`);
   }
 }

@@ -1,5 +1,7 @@
 package com.courier.modules.customer.api.dto;
 
+import com.courier.modules.customer.domain.BillingFrequency;
+import com.courier.modules.customer.domain.CustomerPaymentMode;
 import com.courier.modules.customer.domain.CustomerStatus;
 import com.courier.modules.customer.domain.CustomerType;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -20,6 +22,9 @@ public record CustomerResponse(
         String mobile, String alternateMobile, String email,
         String gstNumber, String panNumber,
         boolean whatsappEnabled, boolean smsEnabled, boolean emailEnabled,
+        String contactPerson, CustomerPaymentMode defaultPaymentMode, BillingFrequency billingFrequency,
+        String billingAddressLine1, String billingAddressLine2, String billingCity,
+        String billingState, String billingPincode,
         CustomerStatus status,
         UUID createdBy, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
         List<CustomerAddressResponse> addresses

@@ -128,6 +128,10 @@ public final class DefaultPermissionCatalog {
         // plus the activate/deactivate pair a configuration row needs to be withdrawn
         // without deleting it.
         MATRIX.put(PermissionModule.CHARGE, MASTER);
+        MATRIX.put(PermissionModule.PRICING_ZONE, MASTER);
+        MATRIX.put(PermissionModule.CUSTOMER_RATE, MASTER);
+        MATRIX.put(PermissionModule.CUSTOMER_BILLING,
+                EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, PRINT));
         MATRIX.put(PermissionModule.ROUTE_MASTER, MASTER);
 
         // Operations.

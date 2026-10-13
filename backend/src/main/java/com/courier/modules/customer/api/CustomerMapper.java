@@ -29,7 +29,10 @@ public class CustomerMapper {
                 r.firstName(), r.middleName(), r.lastName(),
                 r.mobile(), r.alternateMobile(), r.email(),
                 r.gstNumber(), r.panNumber(),
-                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled());
+                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled(),
+                r.contactPerson(), r.defaultPaymentMode(), r.billingFrequency(),
+                r.billingAddressLine1(), r.billingAddressLine2(), r.billingCity(),
+                r.billingState(), r.billingPincode());
     }
 
     public UpdateCustomerCommand toCommand(UpdateCustomerRequest r) {
@@ -38,24 +41,28 @@ public class CustomerMapper {
                 r.firstName(), r.middleName(), r.lastName(),
                 r.mobile(), r.alternateMobile(), r.email(),
                 r.gstNumber(), r.panNumber(),
-                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled(), r.version());
+                r.whatsappEnabled(), r.smsEnabled(), r.emailEnabled(),
+                r.contactPerson(), r.defaultPaymentMode(), r.billingFrequency(),
+                r.billingAddressLine1(), r.billingAddressLine2(), r.billingCity(),
+                r.billingState(), r.billingPincode(), r.version());
     }
 
     public CustomerCriteria toCriteria(CustomerSearchRequest r) {
         CustomerSearchRequest safe = r == null ? CustomerSearchRequest.empty() : r;
-        return new CustomerCriteria(safe.customerType(), safe.status(), safe.search());
+        return new CustomerCriteria(safe.customerType(), safe.status(), safe.search(),
+                safe.paymentMode(), safe.billingFrequency());
     }
 
     public CreateCustomerAddressCommand toCommand(CreateCustomerAddressRequest r) {
         return new CreateCustomerAddressCommand(
-                r.addressType(), r.countryId(), r.stateId(), r.districtId(), r.cityId(),
+                r.addressType(), r.addressUsage(), r.countryId(), r.stateId(), r.districtId(), r.cityId(),
                 r.areaId(), r.pincodeId(), r.addressLine1(), r.addressLine2(), r.landmark(),
                 r.latitude(), r.longitude(), r.isDefaultPickup(), r.isDefaultDelivery());
     }
 
     public UpdateCustomerAddressCommand toCommand(UpdateCustomerAddressRequest r) {
         return new UpdateCustomerAddressCommand(
-                r.addressType(), r.countryId(), r.stateId(), r.districtId(), r.cityId(),
+                r.addressType(), r.addressUsage(), r.countryId(), r.stateId(), r.districtId(), r.cityId(),
                 r.areaId(), r.pincodeId(), r.addressLine1(), r.addressLine2(), r.landmark(),
                 r.latitude(), r.longitude(), r.isDefaultPickup(), r.isDefaultDelivery(), r.version());
     }
@@ -67,7 +74,10 @@ public class CustomerMapper {
                 c.displayName(),
                 c.getMobile(), c.getAlternateMobile(), c.getEmail(),
                 c.getGstNumber(), c.getPanNumber(),
-                c.isWhatsappEnabled(), c.isSmsEnabled(), c.isEmailEnabled(), c.getStatus(),
+                c.isWhatsappEnabled(), c.isSmsEnabled(), c.isEmailEnabled(),
+                c.getContactPerson(), c.getDefaultPaymentMode(), c.getBillingFrequency(),
+                c.getBillingAddressLine1(), c.getBillingAddressLine2(), c.getBillingCity(),
+                c.getBillingState(), c.getBillingPincode(), c.getStatus(),
                 c.getCreatedBy(), c.getCreatedAt(), c.getUpdatedBy(), c.getUpdatedAt(), c.getVersion(),
                 addresses.stream().map(this::toResponse).toList());
     }
@@ -75,12 +85,14 @@ public class CustomerMapper {
     public CustomerSummaryResponse toSummary(Customer c) {
         return new CustomerSummaryResponse(
                 c.getId(), c.getCustomerCode(), c.getCustomerType(), c.displayName(),
-                c.getMobile(), c.getEmail(), c.getStatus(), c.getCreatedAt(), c.getVersion());
+                c.getMobile(), c.getEmail(),
+                c.getContactPerson(), c.getDefaultPaymentMode(), c.getBillingFrequency(),
+                c.getStatus(), c.getCreatedAt(), c.getVersion());
     }
 
     public CustomerAddressResponse toResponse(CustomerAddress a) {
         return new CustomerAddressResponse(
-                a.getId(), a.getCompanyId(), a.getCustomerId(), a.getAddressType(),
+                a.getId(), a.getCompanyId(), a.getCustomerId(), a.getAddressType(), a.getAddressUsage(),
                 a.getCountryId(), a.getStateId(), a.getDistrictId(), a.getCityId(), a.getAreaId(), a.getPincodeId(),
                 a.getAddressLine1(), a.getAddressLine2(), a.getLandmark(),
                 a.getLatitude(), a.getLongitude(),

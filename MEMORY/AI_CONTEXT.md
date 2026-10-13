@@ -7,6 +7,15 @@
 
 ## Current Version
 
+`0.67.0` — **Business Customer module.** Sidebar group BUSINESS CUSTOMER (Customer / Pricing Zone / Rate),
+COMPANY_ADMIN-only. Extended `Customer` in place (contact person, default payment mode, billing frequency, billing address,
+address usage), new `modules/customerpricing` (per-customer pricing zones of districts/cities, per-zone rate card with
+per-kg slabs + docket/mathadi/pack/ODA/fuel%/FOV%), `V105`-`V107`. **Booking does not use customer zone rates yet** — the
+`/pricing-zones/resolve` and `/customer-rates/calculate` APIs are ready for that wiring. Full detail in
+`MEMORY/modules/business-customer.md` and `CHANGELOG.md` 2026-10-13.
+
+Previously current:
+
 `0.66.1` — **Hub routing from Load Sheet, hub DRS, "Act as branch / hub".** A Load Sheet can
 go to a hub (`hubTransfer`: shipment gets `nextLocationId = hub`, no `deliveryBranchId`); after hub
 In Scan the hub either makes a DRS (`READY_FOR_MANIFEST -> OUT_FOR_DELIVERY` allowed for

@@ -86,6 +86,14 @@ public class CustomerServiceImpl implements CustomerService {
                 .whatsappEnabled(command.whatsappEnabled() == null || command.whatsappEnabled())
                 .smsEnabled(command.smsEnabled() == null || command.smsEnabled())
                 .emailEnabled(command.emailEnabled() == null || command.emailEnabled())
+                .contactPerson(command.contactPerson())
+                .defaultPaymentMode(command.defaultPaymentMode())
+                .billingFrequency(command.billingFrequency())
+                .billingAddressLine1(command.billingAddressLine1())
+                .billingAddressLine2(command.billingAddressLine2())
+                .billingCity(command.billingCity())
+                .billingState(command.billingState())
+                .billingPincode(command.billingPincode())
                 .status(CustomerStatus.ACTIVE)
                 .build();
 
@@ -129,7 +137,8 @@ public class CustomerServiceImpl implements CustomerService {
         }
         return new CreateCustomerCommand(null, CustomerType.INDIVIDUAL, null,
                 firstName, null, lastName, mobile, null, null, null, null,
-                null, null, null);
+                null, null, null,
+                null, null, null, null, null, null, null, null);
     }
 
     /** Retries on collision, same shape as {@code WalletServiceImpl.nextWalletNumber()}. */
@@ -172,6 +181,14 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setWhatsappEnabled(command.whatsappEnabled());
         customer.setSmsEnabled(command.smsEnabled());
         customer.setEmailEnabled(command.emailEnabled());
+        customer.setContactPerson(command.contactPerson());
+        customer.setDefaultPaymentMode(command.defaultPaymentMode());
+        customer.setBillingFrequency(command.billingFrequency());
+        customer.setBillingAddressLine1(command.billingAddressLine1());
+        customer.setBillingAddressLine2(command.billingAddressLine2());
+        customer.setBillingCity(command.billingCity());
+        customer.setBillingState(command.billingState());
+        customer.setBillingPincode(command.billingPincode());
 
         customer.applyInvariants();
         Customer saved = repository.save(customer);
@@ -289,6 +306,12 @@ public class CustomerServiceImpl implements CustomerService {
         v.put("email", c.getEmail());
         v.put("gstNumber", c.getGstNumber());
         v.put("panNumber", c.getPanNumber());
+        v.put("contactPerson", c.getContactPerson());
+        v.put("defaultPaymentMode", c.getDefaultPaymentMode() == null ? null : c.getDefaultPaymentMode().name());
+        v.put("billingFrequency", c.getBillingFrequency() == null ? null : c.getBillingFrequency().name());
+        v.put("billingAddress", String.join(", ",
+                java.util.stream.Stream.of(c.getBillingAddressLine1(), c.getBillingAddressLine2(), c.getBillingCity(),
+                        c.getBillingState(), c.getBillingPincode()).filter(java.util.Objects::nonNull).toList()));
         return v;
     }
 

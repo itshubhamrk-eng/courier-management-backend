@@ -62,6 +62,11 @@ public class CustomerAddress extends CompanyOwnedEntity {
     @Builder.Default
     private AddressType addressType = AddressType.HOME;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "address_usage", nullable = false, length = 10)
+    @Builder.Default
+    private AddressUsage addressUsage = AddressUsage.BOTH;
+
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "country_id", columnDefinition = "BINARY(16)")
     private UUID countryId;

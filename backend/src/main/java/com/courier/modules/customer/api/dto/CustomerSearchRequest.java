@@ -1,5 +1,7 @@
 package com.courier.modules.customer.api.dto;
 
+import com.courier.modules.customer.domain.BillingFrequency;
+import com.courier.modules.customer.domain.CustomerPaymentMode;
 import com.courier.modules.customer.domain.CustomerStatus;
 import com.courier.modules.customer.domain.CustomerType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,11 +14,13 @@ import java.util.Set;
 public record CustomerSearchRequest(
         Set<CustomerType> customerType,
         Set<CustomerStatus> status,
+        Set<CustomerPaymentMode> paymentMode,
+        Set<BillingFrequency> billingFrequency,
         @Size(max = 100)
         @Schema(description = "Free text over code, name, company name, mobile and email")
         String search
 ) {
     public static CustomerSearchRequest empty() {
-        return new CustomerSearchRequest(null, null, null);
+        return new CustomerSearchRequest(null, null, null, null, null);
     }
 }

@@ -13,12 +13,13 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { CompanyProfileService } from '@features/company/company-profile.service';
 import { MASTER_DEFINITIONS } from '@features/masters/master.config';
 import { CustomerService } from '@features/customer/customer.service';
+import { BusinessCustomerService } from '@features/business-customer/business-customer.service';
 import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
-import { Customer } from '@core/models/customer.model';
+import { Customer, CustomerAddress } from '@core/models/customer.model';
 import {
   ShipmentItemRequest, CreateShipmentRequest, PricingResponse, DeliveryType, DELIVERY_TYPES
 } from '@core/models/shipment.model';
@@ -65,7 +66,7 @@ type FreightOutcome =
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
-        <div><h1 class="text-h1">{{ isMsrtc ? 'MSRTC Shipment Booking' : 'New Shipment' }}</h1><p class="text-caption">Fill in the booking — the summary prices it as you go, or speak it.</p></div>
+        <div><h1 class="text-h1">{{ isMsrtc ? 'MSRTC Shipment Booking' : isBusinessBooking ? 'Business Customer Booking' : 'New Shipment' }}</h1><p class="text-caption">{{ isBusinessBooking && !selectedBusinessCustomer() ? 'Select the business customer first — the booking form opens once you do.' : 'Fill in the booking — the summary prices it as you go, or speak it.' }}</p></div>
         <div class="page__head-actions">
           <app-voice-mic-button (transcriptReady)="onVoiceTranscript($event)" (error)="onVoiceError($event)" />
           <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
@@ -75,6 +76,21 @@ type FreightOutcome =
         <p class="voice-banner">{{ vs }}</p>
       }
 
+      @if (isBusinessBooking) {
+        <app-card title="Business Customer" subtitle="Choose who this booking is for. The consignor and payment mode are filled from the customer.">
+          <div class="bizbook__panel">
+            <app-autocomplete [control]="businessCustomerCtl" label="Business Customer" [options]="businessCustomerOptions()"
+              placeholder="Search business customer by name or code…" />
+            @if (businessPickupOptions().length > 1) {
+              <app-select [control]="businessPickupCtl" label="Pickup Address" [options]="businessPickupOptions()" placeholder="Select a pickup address" />
+            }
+            @if (selectedBusinessCustomer() && !businessPickupOptions().length) {
+              <p class="hint">This customer has no pickup address on file — type the sender's address below.</p>
+            }
+          </div>
+        </app-card>
+      }
+      @if (!isBusinessBooking || selectedBusinessCustomer()) {
       <div class="lr">
         <div class="lr__main">
           <app-card title="Booking Details" [subtitle]="'Booking from ' + myBranchLabel()">
@@ -212,6 +228,26 @@ type FreightOutcome =
           </app-card>
 
           <app-card title="Parties">
+            @if (!isBusinessBooking) {
+            <label class="chk bizbook">
+              <input type="checkbox" [checked]="businessMode()" (change)="toggleBusinessMode($any($event.target).checked)" />
+              <span>Business Customer booking</span>
+            </label>
+            @if (businessMode()) {
+              <div class="bizbook__panel">
+                <app-autocomplete [control]="businessCustomerCtl" label="Business Customer" [options]="businessCustomerOptions()"
+                  placeholder="Search business customer by name or code…" />
+                @if (businessPickupOptions().length > 1) {
+                  <app-select [control]="businessPickupCtl" label="Pickup Address" [options]="businessPickupOptions()" placeholder="Select a pickup address" />
+                }
+                @if (selectedBusinessCustomer() && !businessPickupOptions().length) {
+                  <p class="hint">This customer has no pickup address on file — type the sender's address below.</p>
+                }
+                <p class="hint">Fills the Consignor from the customer and defaults the payment mode to the customer's. Everything else stays the same.</p>
+              </div>
+              <div class="spacer"></div>
+            }
+            }
             <div class="parties">
               <div class="party party--sender">
                 <div class="party__title">Consignor (Sender)</div>
@@ -471,6 +507,7 @@ type FreightOutcome =
           </div>
         </aside>
       </div>
+      }
     </div>
   `,
   styles: [`
@@ -521,6 +558,10 @@ type FreightOutcome =
     .party--receiver .party__title { color:var(--brand-600); }
     .fld { display:flex; flex-direction:column; gap:4px; }
     .dest-mode { display:flex; gap:20px; padding-top:6px; }
+    .bizbook { margin-bottom:12px; font-weight:600; }
+    .bizbook__panel { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; align-items:start; }
+    .bizbook__panel .hint { grid-column:1 / -1; }
+    @media (max-width:760px){ .bizbook__panel { grid-template-columns:1fr; } }
     .chk { display:flex; gap:10px; align-items:flex-start; font:400 14px var(--font-sans); color:var(--content-fg); cursor:pointer; }
     .chk input { margin-top:3px; width:16px; height:16px; accent-color:var(--brand-600); }
     .radio-row { display:flex; gap:16px; align-items:center; }
@@ -577,6 +618,7 @@ export class ShipmentCreate implements OnInit {
   private readonly ewayBillService = inject(EwayBillService);
   private readonly freightCalculationService = inject(FreightCalculationService);
   private readonly customers = inject(CustomerService);
+  private readonly businessCustomerService = inject(BusinessCustomerService);
   private readonly masters = inject(MasterDataService);
   private readonly companyProfile = inject(CompanyProfileService);
   private readonly breadcrumb = inject(BreadcrumbService);
@@ -596,6 +638,8 @@ export class ShipmentCreate implements OnInit {
   /** The MSRTC Shipment Booking route reuses this screen; everything MSRTC-only below is
    *  gated on this, so the standard booking behaves exactly as before. */
   protected readonly isMsrtc = this.route.snapshot.data['flowType'] === 'MSRTC';
+  /** Operations > Business Customer Booking: the customer is chosen first, then the normal booking form opens. */
+  protected readonly isBusinessBooking = this.route.snapshot.data['businessBooking'] === true;
   /** MSRTC only: how the destination is chosen — a pincode (its mapped branch is looked up)
    *  or a branch picked directly (its own pincode drives pricing). */
   protected readonly destMode = signal<'PINCODE' | 'BRANCH'>('PINCODE');
@@ -779,6 +823,16 @@ export class ShipmentCreate implements OnInit {
    *  `receiverName`/`receiverContact` without joining Shipment to Customer at booking time; the
    *  picked customer's plain values are copied into the free-text fields exactly like manual
    *  typing, nothing here becomes a foreign key. */
+  /** Business Customer booking: pick a business customer to fill the consignor and payment
+   *  mode. Purely a convenience — like `pickCustomer`, no customer id is stored on the shipment. */
+  protected readonly businessMode = signal(false);
+  protected readonly businessCustomerOptions = signal<SelectOption[]>([]);
+  protected readonly businessPickupOptions = signal<SelectOption[]>([]);
+  protected readonly businessCustomerCtl = new FormControl<string>('', { nonNullable: true });
+  /** The autocomplete control holds the typed text until an option is chosen; this is set only to a real customer id. */
+  protected readonly selectedBusinessCustomer = signal('');
+  protected readonly businessPickupCtl = new FormControl<string>('', { nonNullable: true });
+  private businessPickupAddresses: CustomerAddress[] = [];
   protected readonly senderSuggestions = signal<Customer[]>([]);
   protected readonly receiverSuggestions = signal<Customer[]>([]);
   /** Which field within the party currently owns the dropdown — `null` closes it. Both
@@ -849,7 +903,9 @@ export class ShipmentCreate implements OnInit {
   protected readonly crossingBranchOptions = computed(() => this.branchOptions());
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
+    this.breadcrumb.set(this.isBusinessBooking
+      ? [{ label: 'Operations' }, { label: 'Business Customer Booking' }]
+      : [{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
     this.settings.get().subscribe((d) => {
       const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number } })?.shipment;
       if (shipment?.defaultChargeableWeightKg != null) {
@@ -1013,6 +1069,8 @@ export class ShipmentCreate implements OnInit {
     });
     merge(this.c('serviceTypeId').valueChanges, this.c('bookingDate').valueChanges)
       .subscribe(() => this.updateDeliveryPreview());
+    this.initBusinessBooking();
+    if (this.isBusinessBooking) this.toggleBusinessMode(true);
     this.masters.options('payment-modes').subscribe((o) => {
       this.paymentModeOptions.set(o);
       const paid = o.find((opt) => opt.label.endsWith('(PAID)'));
@@ -1100,6 +1158,68 @@ export class ShipmentCreate implements OnInit {
    *  suggestions list is non-empty, so an empty focus shows nothing until a search resolves. */
   protected openSuggest(party: 'sender' | 'receiver', field: 'name' | 'contact'): void {
     (party === 'sender' ? this.senderSuggestOpen : this.receiverSuggestOpen).set(field);
+  }
+
+  protected toggleBusinessMode(on: boolean): void {
+    this.businessMode.set(on);
+    if (!on) {
+      this.businessCustomerCtl.setValue('');
+      this.selectedBusinessCustomer.set('');
+      this.businessPickupCtl.setValue('', { emitEvent: false });
+      this.businessPickupOptions.set([]);
+      this.businessPickupAddresses = [];
+      return;
+    }
+    if (!this.businessCustomerOptions().length) {
+      this.businessCustomerService.businessCustomers().subscribe({
+        next: (p) => this.businessCustomerOptions.set(
+          p.content.map((c) => ({ value: c.id, label: `${c.displayName} (${c.customerCode})` }))),
+        error: () => this.notify.error('Could not load business customers.')
+      });
+    }
+  }
+
+  /** Wires the two business pickers once, from the constructor-time subscriptions block. */
+  private initBusinessBooking(): void {
+    this.businessCustomerCtl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((raw) => {
+      const id = this.businessCustomerOptions().some((o) => o.value === raw) ? raw : '';
+      if (id === this.selectedBusinessCustomer()) return;
+      this.selectedBusinessCustomer.set(id);
+      this.businessPickupOptions.set([]);
+      this.businessPickupAddresses = [];
+      this.businessPickupCtl.setValue('', { emitEvent: false });
+      if (!id) return;
+      this.customers.get(id).subscribe({
+        next: (cust) => {
+          this.c('senderName').setValue(cust.displayName);
+          this.c('senderContact').setValue(cust.mobile);
+          // The payment-mode master has no CREDIT row: a credit customer is "To Be Billed" (TBB).
+          const codes = ({ CREDIT: ['TBB'], TOPAY: ['TOPAY', 'TO_PAY'], PAID: ['PAID'] } as Record<string, string[]>)[cust.defaultPaymentMode ?? ''] ?? [];
+          const mode = this.paymentModeOptions().find((o) => codes.some((code) => o.label.toUpperCase().endsWith(`(${code})`)));
+          if (mode) this.c('paymentModeId').setValue(mode.value);
+          this.businessPickupAddresses = cust.addresses
+            .filter((a) => a.status === 'ACTIVE' && (a.addressUsage === 'PICKUP' || a.addressUsage === 'BOTH' || !a.addressUsage));
+          this.businessPickupOptions.set(this.businessPickupAddresses.map((a) => ({ value: a.id, label: this.addressText(a) })));
+          const preferred = this.businessPickupAddresses.find((a) => a.isDefaultPickup) ?? this.businessPickupAddresses[0];
+          if (preferred) { this.businessPickupCtl.setValue(preferred.id, { emitEvent: false }); this.applyPickupAddress(preferred); }
+          else this.c('senderAddress').setValue(this.billingText(cust));
+        },
+        error: () => this.notify.error('Could not load that customer.')
+      });
+    });
+    this.businessPickupCtl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => {
+      const a = this.businessPickupAddresses.find((x) => x.id === id);
+      if (a) this.applyPickupAddress(a);
+    });
+  }
+
+  private applyPickupAddress(a: CustomerAddress): void { this.c('senderAddress').setValue(this.addressText(a)); }
+  private addressText(a: CustomerAddress): string {
+    return [a.addressLine1, a.addressLine2, a.landmark].filter((x) => !!x).join(', ');
+  }
+  private billingText(c: { billingAddressLine1?: string | null; billingAddressLine2?: string | null; billingCity?: string | null;
+    billingState?: string | null; billingPincode?: string | null }): string {
+    return [c.billingAddressLine1, c.billingAddressLine2, c.billingCity, c.billingState, c.billingPincode].filter((x) => !!x).join(', ');
   }
 
   /** Copies the picked customer's plain name/mobile into the party's free-text fields —
@@ -1369,7 +1489,7 @@ export class ShipmentCreate implements OnInit {
     });
   }
 
-  protected cancel(): void { this.router.navigate([this.isMsrtc ? '/msrtc/shipments/new' : '/shipments']); }
+  protected cancel(): void { this.router.navigate([this.isMsrtc ? '/msrtc/shipments/new' : this.isBusinessBooking ? '/business-customer/booking' : '/shipments']); }
 
   protected onImageFile(event: Event): void {
     const input = event.target as HTMLInputElement;

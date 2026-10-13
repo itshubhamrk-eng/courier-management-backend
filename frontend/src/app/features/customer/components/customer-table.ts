@@ -3,7 +3,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { UiTable, TableColumn, SortState } from '@shared/components/ui-table/ui-table';
 import { CustomerStatusBadge } from './customer-status-badge';
-import { Customer } from '@core/models/customer.model';
+import {
+  BILLING_FREQUENCY_LABELS, BillingFrequency, Customer, CustomerPaymentMode, PAYMENT_MODE_LABELS
+} from '@core/models/customer.model';
 
 /** Which row actions the caller may see. Drives the kebab menu; the list computes it. */
 export interface CustomerPerms { update: boolean; lifecycle: boolean; }
@@ -26,6 +28,8 @@ export type CustomerAction = 'view' | 'edit' | 'activate' | 'deactivate';
         <td>{{ pretty(c.customerType) }}</td>
         <td>{{ c.mobile }}</td>
         <td>{{ c.email || '—' }}</td>
+        <td>{{ c.defaultPaymentMode ? paymentLabel(c.defaultPaymentMode) : '—' }}</td>
+        <td>{{ c.billingFrequency ? frequencyLabel(c.billingFrequency) : '—' }}</td>
         <td><app-customer-status-badge [status]="c.status" /></td>
         <td class="col-actions" (click)="$event.stopPropagation()">
           <button class="kebab" [matMenuTriggerFor]="menu" aria-label="Actions"><mat-icon>more_vert</mat-icon></button>
@@ -70,10 +74,14 @@ export class CustomerTable {
     { key: 'customerType', header: 'Type', sortable: true },
     { key: 'mobile', header: 'Mobile', sortable: true },
     { key: 'email', header: 'Email' },
+    { key: 'defaultPaymentMode', header: 'Payment' },
+    { key: 'billingFrequency', header: 'Billing' },
     { key: 'status', header: 'Status', sortable: true, width: '120px' },
     { key: 'actions', header: '', width: '56px', align: 'right' }
   ];
 
   act(type: CustomerAction, customer: Customer): void { this.action.emit({ type, customer }); }
+  paymentLabel(v: CustomerPaymentMode): string { return PAYMENT_MODE_LABELS[v] ?? v; }
+  frequencyLabel(v: BillingFrequency): string { return BILLING_FREQUENCY_LABELS[v] ?? v; }
   pretty(v: string): string { return (v || '').charAt(0) + (v || '').slice(1).toLowerCase(); }
 }

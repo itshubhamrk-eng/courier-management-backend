@@ -255,6 +255,46 @@ export const routes: Routes = [
         path: 'customers/:id/edit', title: 'Edit Customer', canActivate: [roleGuard], data: { roles: CUSTOMER_WRITERS },
         loadComponent: () => import('@features/customer/customer-edit').then((m) => m.CustomerEdit)
       },
+      // Business Customer — COMPANY_ADMIN-only back-office setup: the customer list (the
+      // same CustomerList pinned to BUSINESS customers), each customer's pricing zones, and
+      // the per-zone rate cards. Literal segments ('new') before the ':id' parameters.
+      {
+        path: 'business-customer/dashboard', title: 'Business Customer Dashboard', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/business-dashboard').then((m) => m.BusinessDashboardPage)
+      },
+      {
+        path: 'business-customer/billing', title: 'Business Customer Billing', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-billing/billing-list').then((m) => m.BillingList)
+      },
+      {
+        path: 'business-customer/billing/:id', title: 'Customer Invoice', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-billing/billing-invoice').then((m) => m.BillingInvoice)
+      },
+      {
+        path: 'business-customer/customers', title: 'Business Customers', canActivate: [roleGuard],
+        data: { roles: COMPANY_ONLY, businessOnly: true },
+        loadComponent: () => import('@features/customer/customer-list').then((m) => m.CustomerList)
+      },
+      {
+        path: 'business-customer/pricing-zones', title: 'Pricing Zones', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/pricing-zone-list').then((m) => m.PricingZoneList)
+      },
+      {
+        path: 'business-customer/pricing-zones/new', title: 'New Pricing Zone', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/pricing-zone-form').then((m) => m.PricingZoneForm)
+      },
+      {
+        path: 'business-customer/pricing-zones/:id', title: 'Pricing Zone', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/pricing-zone-form').then((m) => m.PricingZoneForm)
+      },
+      {
+        path: 'business-customer/rates', title: 'Customer Rates', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/customer-rate-list').then((m) => m.CustomerRateList)
+      },
+      {
+        path: 'business-customer/rates/:zoneId', title: 'Customer Rate', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/business-customer/customer-rate-edit').then((m) => m.CustomerRateEdit)
+      },
       // Rate Master — company rate cards. Reads (list/view/calculator) are
       // isAuthenticated() on the backend, so no roles restriction admits every signed-in
       // company user, same as Customers; create/update is COMPANY_ADMIN only, mirroring
@@ -381,6 +421,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/commission-report').then((m) => m.CommissionReport)
       },
       {
+        path: 'reports/commissions/:branchId', title: 'Branch Commission', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/commission-branch-detail').then((m) => m.CommissionBranchDetail)
+      },
+      {
         path: 'reports/drs', title: 'DRS Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/reports/drs-report').then((m) => m.DrsReport)
       },
@@ -423,6 +467,12 @@ export const routes: Routes = [
       },
       {
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
+        loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
+      },
+      // Business Customer Booking: the same booking screen, but the customer is chosen first
+      // (route data businessBooking) and fills the consignor + payment mode.
+      {
+        path: 'business-customer/booking', title: 'Business Customer Booking', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS, businessBooking: true },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
       // MSRTC (V104): same booking / Trip Hire Challan screens, flowType MSRTC via route data;

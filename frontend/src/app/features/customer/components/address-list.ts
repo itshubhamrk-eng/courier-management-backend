@@ -27,6 +27,7 @@ export type AddressAction = 'edit' | 'delete';
             <div class="al__body">
               <div class="al__head">
                 <strong>{{ pretty(a.addressType) }}</strong>
+                <span class="chip chip--usage">{{ usageLabel(a.addressUsage) }}</span>
                 @if (a.isDefaultPickup) { <span class="chip chip--pickup">Default Pickup</span> }
                 @if (a.isDefaultDelivery) { <span class="chip chip--delivery">Default Delivery</span> }
                 <app-customer-status-badge [status]="a.status" />
@@ -59,6 +60,7 @@ export type AddressAction = 'edit' | 'delete';
     .al__head strong { font:600 14px var(--font-sans); color:var(--content-fg); }
     .al__lines { margin:4px 0 0; font:400 13px var(--font-sans); color:var(--content-muted); }
     .chip { font:600 10px var(--font-sans); padding:2px 8px; border-radius:999px; }
+    .chip--usage { background:var(--surface-muted); color:var(--content-muted); }
     .chip--pickup { background:var(--brand-50); color:var(--brand-700); }
     .chip--delivery { background:var(--success-bg); color:var(--success); }
     .al__actions { flex:0 0 auto; }
@@ -77,5 +79,6 @@ export class AddressList {
   icon(type: string): string {
     return type === 'OFFICE' ? 'business' : type === 'WAREHOUSE' ? 'warehouse' : 'home';
   }
+  usageLabel(v: string | null | undefined): string { return v === 'PICKUP' ? 'Pickup' : v === 'DELIVERY' ? 'Delivery' : 'Pickup & Delivery'; }
   pretty(v: string): string { return (v || '').charAt(0) + (v || '').slice(1).toLowerCase(); }
 }

@@ -8,9 +8,35 @@
 export type CustomerType = 'INDIVIDUAL' | 'BUSINESS';
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE';
 export type AddressType = 'HOME' | 'OFFICE' | 'WAREHOUSE';
+export type AddressUsage = 'PICKUP' | 'DELIVERY' | 'BOTH';
+/** Default payment mode of a customer — separate from the master-data PaymentMode. */
+export type CustomerPaymentMode = 'CREDIT' | 'PAID' | 'TOPAY';
+/** Invoice cycle. `FIFTEEN_DAYS` is the backend's name for "15DAYS" (enum constants can't start with a digit). */
+export type BillingFrequency = 'WEEKLY' | 'FIFTEEN_DAYS' | 'MONTHLY';
 
 export const CUSTOMER_TYPES: CustomerType[] = ['INDIVIDUAL', 'BUSINESS'];
 export const ADDRESS_TYPES: AddressType[] = ['HOME', 'OFFICE', 'WAREHOUSE'];
+export const ADDRESS_USAGES: AddressUsage[] = ['PICKUP', 'DELIVERY', 'BOTH'];
+export const CUSTOMER_PAYMENT_MODES: CustomerPaymentMode[] = ['CREDIT', 'PAID', 'TOPAY'];
+export const BILLING_FREQUENCIES: BillingFrequency[] = ['WEEKLY', 'FIFTEEN_DAYS', 'MONTHLY'];
+export const BILLING_FREQUENCY_LABELS: Record<BillingFrequency, string> = {
+  WEEKLY: 'Weekly', FIFTEEN_DAYS: '15 Days', MONTHLY: 'Monthly'
+};
+export const PAYMENT_MODE_LABELS: Record<CustomerPaymentMode, string> = {
+  CREDIT: 'Credit', PAID: 'Paid', TOPAY: 'To Pay'
+};
+
+/** Business fields shared by the create/update request and the full response. */
+export interface CustomerBusinessFields {
+  contactPerson?: string | null;
+  defaultPaymentMode?: CustomerPaymentMode | null;
+  billingFrequency?: BillingFrequency | null;
+  billingAddressLine1?: string | null;
+  billingAddressLine2?: string | null;
+  billingCity?: string | null;
+  billingState?: string | null;
+  billingPincode?: string | null;
+}
 
 /** List projection — mirrors backend `CustomerSummaryResponse` (GET /customers). */
 export interface Customer {
@@ -20,6 +46,9 @@ export interface Customer {
   displayName: string;
   mobile: string;
   email?: string | null;
+  contactPerson?: string | null;
+  defaultPaymentMode?: CustomerPaymentMode | null;
+  billingFrequency?: BillingFrequency | null;
   status: CustomerStatus;
   createdDate?: string | null;
   version: number;
@@ -31,6 +60,7 @@ export interface CustomerAddress {
   companyId: string;
   customerId: string;
   addressType: AddressType;
+  addressUsage: AddressUsage;
   countryId?: string | null;
   stateId?: string | null;
   districtId?: string | null;
@@ -53,7 +83,7 @@ export interface CustomerAddress {
 }
 
 /** Full representation, with every address on file — mirrors backend `CustomerResponse`. */
-export interface CustomerResponse {
+export interface CustomerResponse extends CustomerBusinessFields {
   id: string;
   companyId: string;
   customerCode: string;
@@ -88,7 +118,7 @@ export interface CustomerResponse {
  * starts ACTIVE). GST is mandatory only when `customerType` is `BUSINESS` — enforced
  * server-side because it depends on another field.
  */
-export interface CreateCustomerRequest {
+export interface CreateCustomerRequest extends CustomerBusinessFields {
   customerCode?: string | null;
   customerType: CustomerType;
   companyName?: string | null;
@@ -111,7 +141,7 @@ export interface CreateCustomerRequest {
  * of the editable fields; carries `version`. `customerCode` is immutable and omitted;
  * `status` has its own lifecycle endpoints.
  */
-export interface UpdateCustomerRequest {
+export interface UpdateCustomerRequest extends CustomerBusinessFields {
   customerType: CustomerType;
   companyName?: string | null;
   firstName: string;
@@ -132,12 +162,16 @@ export interface UpdateCustomerRequest {
 export interface CustomerSearchRequest {
   customerType?: CustomerType[];
   status?: CustomerStatus[];
+  paymentMode?: CustomerPaymentMode[];
+  billingFrequency?: BillingFrequency[];
   search?: string;
 }
 
 /** Body of POST /customers/{id}/addresses — mirrors backend `CreateCustomerAddressRequest`. */
 export interface CreateCustomerAddressRequest {
   addressType: AddressType;
+  /** Defaults to BOTH server-side when omitted. */
+  addressUsage?: AddressUsage;
   countryId?: string | null;
   stateId?: string | null;
   districtId?: string | null;

@@ -8,7 +8,9 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
-import { CustomerAddress, CustomerResponse } from '@core/models/customer.model';
+import {
+  BILLING_FREQUENCY_LABELS, BillingFrequency, CustomerAddress, CustomerPaymentMode, CustomerResponse, PAYMENT_MODE_LABELS
+} from '@core/models/customer.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -67,6 +69,15 @@ const ADDRESS_DELETERS = [AppRole.COMPANY_ADMIN];
             </dl>
           </app-card>
 
+          <app-card title="Business Details">
+            <dl class="kv">
+              <dt>Contact Person</dt><dd>{{ customer()!.contactPerson || '—' }}</dd>
+              <dt>Payment Mode</dt><dd>{{ paymentLabel(customer()!.defaultPaymentMode) }}</dd>
+              <dt>Billing Frequency</dt><dd>{{ frequencyLabel(customer()!.billingFrequency) }}</dd>
+              <dt>Billing Address</dt><dd>{{ billingAddress() || '—' }}</dd>
+            </dl>
+          </app-card>
+
           <app-card title="Tax Details">
             <dl class="kv">
               <dt>GST Number</dt><dd class="mono">{{ customer()!.gstNumber || '—' }}</dd>
@@ -114,6 +125,13 @@ const ADDRESS_DELETERS = [AppRole.COMPANY_ADMIN];
   `]
 })
 export class CustomerView implements OnInit {
+  protected paymentLabel(v: CustomerPaymentMode | null | undefined): string { return v ? PAYMENT_MODE_LABELS[v] : '—'; }
+  protected frequencyLabel(v: BillingFrequency | null | undefined): string { return v ? BILLING_FREQUENCY_LABELS[v] : '—'; }
+  protected billingAddress(): string {
+    const c = this.customer();
+    return c ? [c.billingAddressLine1, c.billingAddressLine2, c.billingCity, c.billingState, c.billingPincode]
+      .filter((p) => !!p).join(', ') : '';
+  }
   private readonly service = inject(CustomerService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);

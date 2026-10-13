@@ -105,6 +105,11 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  # The login JWT carries every effective permission code, so a COMPANY_ADMIN token is ~7.5 KB and
+  # grows with each new permission module. Tomcat's 8 KB default for the whole request header block
+  # then answers 400 (empty body, nothing in the app log) on any request with a longer URL — found
+  # when GET /customer-invoices/{id} 400'd while the shorter list URL worked.
+  max-http-request-header-size: 32KB
   error:
     # Errors are rendered by GlobalExceptionHandler; the servlet container must not
     # leak its own stack-trace page.

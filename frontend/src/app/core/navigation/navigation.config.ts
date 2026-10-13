@@ -123,6 +123,20 @@ export const NAVIGATION: NavNode[] = [
     // branch), not Customers.
   },
 
+  // Business Customer: business accounts, the pricing zones (district/city groups) each is
+  // priced by, and the per-zone rate cards. COMPANY_ADMIN-only back-office setup, same tier
+  // as Masters/Charges. Separate from Rate Master, which is the company-wide route rate card.
+  {
+    id: 'business-customer', title: 'Business Customer', icon: 'business_center', order: 2.6,
+    children: [
+      { id: 'business-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/business-customer/dashboard', permission: 'CUSTOMER_READ', roles: COMPANY_ONLY },
+      { id: 'business-customers', title: 'Customer', icon: 'contacts', route: '/business-customer/customers', permission: 'CUSTOMER_READ', roles: COMPANY_ONLY },
+      { id: 'pricing-zones', title: 'Pricing Zone', icon: 'map', route: '/business-customer/pricing-zones', permission: 'PRICING_ZONE_READ', roles: COMPANY_ONLY },
+      { id: 'customer-rates', title: 'Rate', icon: 'request_quote', route: '/business-customer/rates', permission: 'CUSTOMER_RATE_READ', roles: COMPANY_ONLY },
+      { id: 'business-billing', title: 'Billing', icon: 'receipt_long', route: '/business-customer/billing', permission: 'CUSTOMER_BILLING_READ', roles: COMPANY_ONLY }
+    ]
+  },
+
   {
     id: 'rate-master', title: 'Rate Master', icon: 'price_change', order: 2.7,
     children: [
@@ -214,6 +228,8 @@ export const NAVIGATION: NavNode[] = [
       // branch (OPS_DELIVERY_DESK) — see MEMORY/modules/shipment-movement.md.
       // 'sorting' has no module behind it yet and stays aspirational.
       { id: 'booking', title: 'Shipment Booking', icon: 'add_box', route: '/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
+      // Same booking screen, customer picked first — see ShipmentCreate.isBusinessBooking.
+      { id: 'business-booking', title: 'Business Customer Booking', icon: 'business_center', route: '/business-customer/booking', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       { id: 'shipment-search', title: 'Shipment Search', icon: 'search', route: '/shipments', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
       { id: 'track', title: 'Track Shipment', icon: 'my_location', route: '/track', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
       { id: 'manifest', title: 'Loading Sheet', icon: 'qr_code_scanner', route: '/movement/loading-sheet', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },

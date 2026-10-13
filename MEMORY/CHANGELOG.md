@@ -8,6 +8,119 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-13 — Customer invoice print uses the shipment-print masthead
+
+- `billing-invoice.ts` now opens the sheet with the shared `renderPrintHeader` (same header as the consignment note / THC / DRS): company logo, company name, address, GSTIN, phone, website, and an
+  identity box "Invoice No" with a **QR code of the invoice number**. Letterhead from `CompanyProfileService` (logo falls back to the signed-in company logo). Its CSS (generic `.head`/`.logo`/`.co` names) is scoped
+  under `.inv-hdr` in a page-lifetime `<style>`, so it cannot restyle the rest of the app. The header sits inside `.inv-sheet`, so it prints with the invoice.
+- Verified on :4300 (Orbit Mart invoice BI2610-0004); browser print preview not driven (window.print). Header is borderless by request (no outline, no column dividers).
+
+## 2026-10-13 — Billing: approval + e-mail to the customer, change status, proof of payment; full-setup test run
+
+- **Approval:** every new invoice (auto or manual) starts `PENDING_APPROVAL`; **Approve & send** approves it and e-mails it to the business customer's address
+  (`InvoiceEmailSender` -> the platform `EmailProvider`: real SMTP only when `spring.mail.host` is configured, otherwise the log-only provider — nothing is delivered locally or until SMTP is set).
+  Sender = the company's Communication Center e-mail identity, else the company name + `app.billing.from-email`. A mail failure never undoes the approval — it is recorded
+  (`email_status` SENT / FAILED / NO_EMAIL) with a **Resend e-mail** action. Payments can be recorded only on an approved invoice. `V111`; pre-existing invoices are APPROVED / NOT_SENT.
+- **Change billing status:** record a payment (any amount), **Mark as paid** (whole balance), or **reverse** a payment (invoice goes back to Unpaid / Partly paid).
+- **Proof of payment:** upload an image/PDF (<=10 MB) when recording a payment / marking paid, or attach it to an existing receipt later; stored via the shared `FileStoragePort` (S3 on dev/prod;
+  locally the "no storage configured" message surfaces and nothing is recorded). Proof links are short-lived signed URLs.
+- `billing.cycle.cron` (env `BILLING_CYCLE_CRON`) overrides the daily 01:30 schedule — used to watch the job fire.
+- **Full-setup test (local :8082/:4300):** customer Orbit Mart (Credit, Weekly) -> 3 zones (district + city precedence, individual customers refused) -> 3 rates (quote 150 kg = ₹2,025) ->
+  2 bookings through Business Customer Booking (To Be Billed, then Paid after a wallet credit — Paid debits the branch wallet) -> backdated into last week -> the scheduler fired **by itself** and issued
+  BI2610-0004 (2 bookings, ₹1,400, ₹600 prepaid) -> approved + e-mailed in the UI -> partial payment, mark-paid, reverse -> dashboard totals matched (pending ₹980). `mvn test` 1149/1149.
+- Data left in `courier_db`: customers Orbit Mart / Zenith Retail / Verify Traders, their zones/rates/invoices, shipments TEST-000018..20 + TEST-CYCLE-1, and a ₹5,000 manual credit on branch TEST-PUNE.
+
+## 2026-10-13 — Commission Report: month-wise branch list + branch detail page
+
+Direct request: list of branches with their commission for a month; click a branch for its
+commission details with shipment list and summary. Frontend-only (existing
+`GET /shipments/commission-summary` + `GET /shipments`). `commission-report.ts` rewritten: month
+picker (default current month) + one row per branch + total tiles + CSV. New
+`commission-branch-detail.ts` at `/reports/commissions/:branchId?month=YYYY-MM`: that branch's
+summary tiles plus paged shipment-wise table. Branch roles stay locked to their own branch (list
+and detail ignore the URL branch id). Shared month helpers in `commission-month.util.ts`.
+Cancelled orders excluded as in every report. `ng build` clean; not yet walked in a browser.
+
+---
+
+## 2026-10-13 — Business Customer Billing (invoices, automatic billing cycle, payments)
+
+- **Backend (`V110`, new `modules/customerbilling`):** `customer_invoices` / `customer_invoice_lines` / `customer_invoice_payments`; `CUSTOMER_BILLING` permission module
+  (CREATE=generate, UPDATE=record payment, DELETE=cancel, + READ/SEARCH/EXPORT/PRINT; catalogue 271 -> 278) with a COMPANY_ADMIN backfill and a Business Customer > Billing menu row.
+  An invoice bills EVERY non-cancelled booking of a business customer not already on a live invoice (matched on consignor mobile); Paid-at-booking shipments are listed but
+  counted `prepaid`, so balance = total - prepaid - receipts. Cancelling an invoice (only with no payments) frees its shipments.
+- **Automatic billing:** `BillingCycleJob` daily 01:30 -> `BillingCycleService`: for each ACTIVE business customer bills everything up to the last closed cycle end
+  (WEEKLY = last Sunday, FIFTEEN_DAYS = the 15th / previous month end, MONTHLY = previous month end); idempotent (an AUTO invoice for that period_to means done).
+  `POST /customer-invoices/run-cycle` runs it now for the caller's company; `POST /customer-invoices/generate` bills a customer up to a date manually.
+- **Frontend:** Business Customer > **Billing** — list (totals, filters, generate-now with an unbilled preview, run cycle), invoice page (printable via window.print,
+  payments table, record payment, cancel). Dashboard **Payment Pending** is now unpaid invoice balances + un-invoiced credit-mode bookings.
+- **Found live — JWT/header size:** the company-admin JWT is ~7.5 KB (every permission code) and Tomcat's 8 KB header-block default answered an empty 400 on any
+  longer URL (GET /customer-invoices/{id}; the shorter list URL worked). Raised `server.max-http-request-header-size` to 32KB and nginx `large_client_header_buffers`
+  to 32k. The token still grows with every new permission module — see the note in `MEMORY/modules/business-customer.md`.
+- **Verified live (:8082/:4300):** manual invoice, part payment (PARTLY_PAID), overpayment/cancel-with-payment refusals, full payment via the UI (PAID), cycle run issuing an AUTO invoice
+  for 5-11 Oct from a backdated test booking (fixture shipment TEST-CYCLE-1), idempotent second run, cancel + re-bill. `mvn test` 1144/1144.
+
+## 2026-10-13 — Business Customer Dashboard: Total Qty and Total Weight
+
+- Added **Total Qty (Packages)** (sum of `number_of_packages`) and **Total Weight (kg)** (sum of `actual_weight`, not chargeable weight) as tiles, and Qty / Weight (kg) columns per
+  customer. Same matching as the other figures: consignor mobile, cancelled excluded. Verified: TEST-000018 -> 1 package, 15 kg.
+
+## 2026-10-13 — Business Customer Dashboard: zone/rate content removed, Total Business + Payment Pending added
+
+- Dashboard no longer shows pricing zones, zone rates or the "Needs setup" list (and the API no longer returns them). Tiles: Business Customers, Active, Inactive,
+  Bookings This Month, Total Bookings, **Total Business** and **Payment Pending**; per-customer table gained Business and Pending columns.
+- **Definition (no payment records exist in the system):** amounts are `shipment_charges.net_amount` of non-cancelled bookings matched on consignor mobile;
+  **pending = bookings on To Be Billed / To Pay / COD**, Paid counts as collected. Replace with real receivables once invoicing/payments are built.
+- Verified: TEST-000018 (To Be Billed, net 480) -> Total Business ₹480, Pending ₹480.
+
+## 2026-10-13 — Business Customer Dashboard + end-to-end test run
+
+- **Backend:** `GET /api/v1/business-customers/dashboard` (`COMPANY_ADMIN`) from `BusinessCustomerDashboardServiceImpl` — native aggregates scoped explicitly to the
+  company: customer totals (active/inactive), mix by payment mode and billing frequency, zones / rated zones, customers without a zone, zones without a rate, and a
+  per-customer table (zones, rated zones, bookings this month/total, last booking). Bookings are matched on the **consignor mobile** (shipments store no customer id)
+  and exclude CANCELLED. `V109` adds the menu row.
+- **Frontend:** Business Customer > **Dashboard** (`/business-customer/dashboard`, first leaf): KPI tiles, payment/billing bars, "Needs setup" list with deep links, customer table.
+- **Live test run (local :8082/:4300):** customer "Zenith Retail Pvt Ltd" (Credit, Weekly) created through the UI form; zone 1 created through the UI (whole district + a city);
+  zones 2-3 and their rates through the API; zone 1 rate created through the UI incl. the overlapping-slab refusal; shipment TEST-000018 booked from Business Customer Booking
+  (consignor/address filled, payment mode To Be Billed, BOOKED). Dashboard figures matched.
+- Booking still prices with the existing Rate Master / district freight — zone rates not applied.
+
+## 2026-10-13 — Operations > Business Customer Booking menu (customer first, autocomplete)
+
+- **Frontend:** new Operations leaf "Business Customer Booking" (`/business-customer/booking`, `SHIPMENT_CREATE`) — the same `ShipmentCreate` screen via route
+  data `businessBooking`. The booking form stays hidden until a business customer is chosen from a type-to-search autocomplete; choosing one fills the
+  consignor + payment mode (and pickup address), as in the checkbox flow. The Parties-card checkbox is hidden on this route and still works on `/shipments/new`.
+  The autocomplete control holds typed text, so selection is tracked in `selectedBusinessCustomer` (set only for a real customer id).
+- **Backend:** `V108` adds the `business-booking` row under the Shipment Management menu group for the User Permissions tree (same `SHIPMENT` module — no new codes).
+- Verified on :4300 / :8082 as a Pune Branch user.
+
+## 2026-10-13 — Shipment Booking: "Business Customer booking" option
+
+- **Frontend (`shipment-create.ts`):** a "Business Customer booking" checkbox on the Parties card reveals a business-customer
+  picker (+ a pickup-address picker when the customer has more than one PICKUP/BOTH address). Picking a customer fills the
+  Consignor name, contact and address (default pickup address, else the first, else the billing address) and defaults the payment
+  mode: CREDIT -> To Be Billed (TBB), TOPAY -> To Pay, PAID -> Paid. Everything else in the booking flow is unchanged.
+- Like the existing customer lookup it copies plain values — no customer id is stored on the shipment, and pricing still uses the
+  existing Rate Master / district freight. **Customer zone rates are still not applied at booking** (`/customer-rates/calculate` is ready).
+- Verified on :4300 against :8082 as a Pune Branch user; no backend or migration change.
+
+## 2026-10-13 — Business Customer module (customer extension, pricing zones, zone rates)
+
+- **Backend:** `V105` extends `customers` (contact person, default payment mode CREDIT/PAID/TOPAY, billing frequency
+  WEEKLY/FIFTEEN_DAYS/MONTHLY, billing address) and `customer_addresses` (usage PICKUP/DELIVERY/BOTH); `V106` adds
+  `customer_pricing_zones`, `customer_zone_locations`, `customer_zone_rates`, `customer_zone_rate_slabs` and the
+  `PRICING_ZONE` / `CUSTOMER_RATE` permission modules + a Business Customer menu group; `V107` backfills those 18 codes into
+  every existing COMPANY_ADMIN role. New package `modules/customerpricing` (zones, locations, rate + per-kg slabs, quote);
+  new endpoints `/pricing-zones` and `/customer-rates`. Customer list filters gained paymentMode/billingFrequency.
+- **Frontend:** BUSINESS CUSTOMER menu (Customer / Pricing Zone / Rate), `features/business-customer/` (zone list + form with
+  state/district/city picker, rate list + slab editor + quote tester); customer form gained Payment & Billing and Billing
+  Address cards, address dialog gained "Used For".
+- Zones are BUSINESS-customer only; a location can sit in only one zone of a customer; whole-district vs city overlap refused.
+- **Not done:** shipment booking does not read customer zone rates yet (resolve/calculate APIs are ready). See `MEMORY/modules/business-customer.md`.
+- Verified on a throwaway :8082 backend + :4300 against real `courier_db`; `mvn test` 1138/1138. One live-only bug fixed
+  (geography lookup under the platform company flushed a dirty zone -> isolation guard 403); `ng test` has 1 pre-existing
+  unrelated failure (`reports-dashboard` nav node).
+
 ## 2026-10-10 — Booking Receipt shows ToPay amount; Delivery Receipt / Print 2 buttons removed
 
 - **Frontend (`performa-bill-print.util.ts`):** Booking Receipt on ToPay orders now shows the ToPay amount on the Customer and Delivery (POD) copies; Driver/Office stay blank. Copy order is Customer, Delivery, Driver, Office.

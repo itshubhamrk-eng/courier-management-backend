@@ -70,6 +70,9 @@ public class Customer extends CompanyOwnedEntity {
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
+    @Column(name = "contact_person", length = 150)
+    private String contactPerson;
+
     @Column(name = "mobile", nullable = false, length = 20)
     private String mobile;
 
@@ -84,6 +87,31 @@ public class Customer extends CompanyOwnedEntity {
 
     @Column(name = "pan_number", length = 10)
     private String panNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_payment_mode", nullable = false, length = 10)
+    @Builder.Default
+    private CustomerPaymentMode defaultPaymentMode = CustomerPaymentMode.PAID;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_frequency", nullable = false, length = 15)
+    @Builder.Default
+    private BillingFrequency billingFrequency = BillingFrequency.MONTHLY;
+
+    @Column(name = "billing_address_line1", length = 255)
+    private String billingAddressLine1;
+
+    @Column(name = "billing_address_line2", length = 255)
+    private String billingAddressLine2;
+
+    @Column(name = "billing_city", length = 100)
+    private String billingCity;
+
+    @Column(name = "billing_state", length = 100)
+    private String billingState;
+
+    @Column(name = "billing_pincode", length = 10)
+    private String billingPincode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -150,6 +178,18 @@ public class Customer extends CompanyOwnedEntity {
         this.middleName = trim(middleName);
         this.lastName = trim(lastName);
         this.companyName = trim(companyName);
+        this.contactPerson = trim(contactPerson);
+        this.billingAddressLine1 = trim(billingAddressLine1);
+        this.billingAddressLine2 = trim(billingAddressLine2);
+        this.billingCity = trim(billingCity);
+        this.billingState = trim(billingState);
+        this.billingPincode = trim(billingPincode);
+        if (defaultPaymentMode == null) {
+            this.defaultPaymentMode = CustomerPaymentMode.PAID;
+        }
+        if (billingFrequency == null) {
+            this.billingFrequency = BillingFrequency.MONTHLY;
+        }
         this.mobile = trim(mobile);
         this.alternateMobile = trim(alternateMobile);
         this.email = email == null ? null : email.trim().toLowerCase();

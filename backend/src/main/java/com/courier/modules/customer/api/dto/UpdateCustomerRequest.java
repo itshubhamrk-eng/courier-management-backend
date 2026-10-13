@@ -1,5 +1,7 @@
 package com.courier.modules.customer.api.dto;
 
+import com.courier.modules.customer.domain.BillingFrequency;
+import com.courier.modules.customer.domain.CustomerPaymentMode;
 import com.courier.modules.customer.domain.CustomerType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -42,6 +44,14 @@ public record UpdateCustomerRequest(
         boolean whatsappEnabled,
         boolean smsEnabled,
         boolean emailEnabled,
+        @Size(max = 150) String contactPerson,
+        @Schema(description = "Defaults to PAID when omitted") CustomerPaymentMode defaultPaymentMode,
+        @Schema(description = "Defaults to MONTHLY when omitted") BillingFrequency billingFrequency,
+        @Size(max = 255) String billingAddressLine1,
+        @Size(max = 255) String billingAddressLine2,
+        @Size(max = 100) String billingCity,
+        @Size(max = 100) String billingState,
+        @Pattern(regexp = "^$|^[0-9]{6}$", message = "must be a 6-digit pincode") String billingPincode,
 
         @NotNull @PositiveOrZero
         @Schema(description = "Version last read; a stale value returns 409") Long version

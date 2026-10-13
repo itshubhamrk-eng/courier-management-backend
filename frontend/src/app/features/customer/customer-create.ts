@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
-import { CreateCustomerRequest, UpdateCustomerRequest } from '@core/models/customer.model';
+import { CreateCustomerRequest, CustomerType, UpdateCustomerRequest } from '@core/models/customer.model';
 import { CustomerForm } from './components/customer-form';
 import { CustomerService } from './customer.service';
 
@@ -18,7 +18,7 @@ import { CustomerService } from './customer.service';
       <header class="page__head">
         <div><h1 class="text-h1">New Customer</h1><p class="text-caption">Register reusable customer master data for your company.</p></div>
       </header>
-      <app-customer-form mode="create" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
+      <app-customer-form mode="create" [initialType]="initialType" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
     </div>
   `
 })
@@ -29,6 +29,8 @@ export class CustomerCreate {
   private readonly router = inject(Router);
 
   readonly saving = signal(false);
+  protected readonly initialType: CustomerType =
+    inject(ActivatedRoute).snapshot.queryParamMap.get('type') === 'BUSINESS' ? 'BUSINESS' : 'INDIVIDUAL';
 
   constructor() {
     this.breadcrumb.set([{ label: 'Customers', route: '/customers' }, { label: 'New' }]);

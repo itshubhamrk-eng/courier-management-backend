@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
@@ -32,7 +32,7 @@ const LIFECYCLE = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Customers</h1><p class="text-caption">Reusable customer master data — {{ page().totalElements }} in all.</p></div>
+        <div><h1 class="text-h1">{{ businessOnly ? 'Business Customers' : 'Customers' }}</h1><p class="text-caption">{{ businessOnly ? 'Business accounts with pickup/delivery addresses, payment terms and zone pricing' : 'Reusable customer master data' }} — {{ page().totalElements }} in all.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search code, name, mobile, email…" (changed)="onSearch($event)" />
           <app-button variant="stroked" icon="filter_list" (pressed)="filterOpen.set(true)">
@@ -65,6 +65,8 @@ export class CustomerList implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
+  /** Set by the Business Customer menu route: the list is pinned to BUSINESS customers. */
+  protected readonly businessOnly = !!inject(ActivatedRoute).snapshot.data['businessOnly'];
 
   readonly loading = signal(true);
   readonly exporting = signal(false);
@@ -85,7 +87,9 @@ export class CustomerList implements OnInit {
   readonly tablePerms = computed<CustomerPerms>(() => ({ update: this.can().update, lifecycle: this.can().lifecycle }));
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Customers' }]);
+    this.breadcrumb.set(this.businessOnly
+      ? [{ label: 'Business Customer' }, { label: 'Customer' }]
+      : [{ label: 'Customers' }]);
     this.load();
   }
 
@@ -93,8 +97,10 @@ export class CustomerList implements OnInit {
     const f = this.filters();
     return {
       ...this.query, ...(size ? { size, page: 0 } : {}),
-      customerType: f.customerType as unknown as string | undefined,
-      status: f.status as unknown as string | undefined
+      customerType: (this.businessOnly ? ['BUSINESS'] : f.customerType) as unknown as string | undefined,
+      status: f.status as unknown as string | undefined,
+      paymentMode: f.paymentMode as unknown as string | undefined,
+      billingFrequency: f.billingFrequency as unknown as string | undefined
     };
   }
 
@@ -111,7 +117,7 @@ export class CustomerList implements OnInit {
   onSort(s: SortState) { this.sort.set(s); this.query = { ...this.query, sort: `${s.active},${s.direction}`, page: 0 }; this.load(); }
   onFilter(f: CustomerSearchRequest) { this.filters.set(f); this.query = { ...this.query, page: 0 }; this.filterOpen.set(false); this.load(); }
 
-  create() { this.router.navigate(['/customers/new']); }
+  create() { this.router.navigate(['/customers/new'], this.businessOnly ? { queryParams: { type: 'BUSINESS' } } : {}); }
 
   onAction({ type, customer }: { type: CustomerAction; customer: Customer }): void {
     switch (type) {
@@ -138,8 +144,9 @@ export class CustomerList implements OnInit {
   }
 
   private download(rows: Customer[]): void {
-    const header = ['customerCode', 'displayName', 'customerType', 'mobile', 'email', 'status'];
-    const lines = rows.map((r) => [r.customerCode, r.displayName, r.customerType, r.mobile, r.email, r.status]);
+    const header = ['customerCode', 'displayName', 'customerType', 'contactPerson', 'mobile', 'email', 'paymentMode', 'billingFrequency', 'status'];
+    const lines = rows.map((r) => [r.customerCode, r.displayName, r.customerType, r.contactPerson, r.mobile, r.email,
+      r.defaultPaymentMode, r.billingFrequency, r.status]);
     downloadCsv(`customers-${new Date().toISOString().slice(0, 10)}.csv`, header, lines);
     this.notify.info(`Exported ${rows.length} customer(s).`);
   }

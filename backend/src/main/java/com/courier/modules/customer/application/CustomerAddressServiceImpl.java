@@ -2,6 +2,7 @@ package com.courier.modules.customer.application;
 
 import com.courier.modules.customer.application.command.CreateCustomerAddressCommand;
 import com.courier.modules.customer.application.command.UpdateCustomerAddressCommand;
+import com.courier.modules.customer.domain.AddressUsage;
 import com.courier.modules.customer.domain.Customer;
 import com.courier.modules.customer.domain.CustomerAddress;
 import com.courier.modules.customer.domain.CustomerAddressRepository;
@@ -74,6 +75,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
         CustomerAddress address = CustomerAddress.builder()
                 .customerId(customer.getId())
                 .addressType(command.addressType())
+                .addressUsage(command.addressUsage() == null ? AddressUsage.BOTH : command.addressUsage())
                 .countryId(command.countryId())
                 .stateId(command.stateId())
                 .districtId(command.districtId())
@@ -122,6 +124,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
                 command.cityId(), command.areaId(), command.pincodeId());
 
         address.setAddressType(command.addressType());
+        address.setAddressUsage(command.addressUsage() == null ? AddressUsage.BOTH : command.addressUsage());
         address.setCountryId(command.countryId());
         address.setStateId(command.stateId());
         address.setDistrictId(command.districtId());

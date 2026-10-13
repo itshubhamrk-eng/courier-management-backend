@@ -13,10 +13,16 @@ import java.util.Set;
 public record CustomerCriteria(
         Set<CustomerType> customerTypes,
         Set<CustomerStatus> statuses,
-        String search
+        String search,
+        Set<CustomerPaymentMode> paymentModes,
+        Set<BillingFrequency> billingFrequencies
 ) {
 
+    public CustomerCriteria(Set<CustomerType> customerTypes, Set<CustomerStatus> statuses, String search) {
+        this(customerTypes, statuses, search, null, null);
+    }
+
     public static CustomerCriteria none() {
-        return new CustomerCriteria(null, null, null);
+        return new CustomerCriteria(null, null, null, null, null);
     }
 }

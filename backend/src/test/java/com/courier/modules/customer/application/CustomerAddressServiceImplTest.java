@@ -120,7 +120,7 @@ class CustomerAddressServiceImplTest {
         when(pincodeService.getById(badPincode)).thenThrow(new ResourceNotFoundException("Pincode", badPincode));
 
         CreateCustomerAddressCommand command = new CreateCustomerAddressCommand(
-                AddressType.HOME, null, null, null, null, null, badPincode,
+                AddressType.HOME, null, null, null, null, null, null, badPincode,
                 "MG Road", null, null, null, null, false, false);
 
         assertThatThrownBy(() -> service.create(customer.getId(), command))
@@ -170,7 +170,7 @@ class CustomerAddressServiceImplTest {
         CustomerAddress created = service.create(customer.getId(), addressCommand("MG Road", pincode, false, false));
 
         UpdateCustomerAddressCommand update = new UpdateCustomerAddressCommand(
-                AddressType.OFFICE, null, null, null, null, null, pincode,
+                AddressType.OFFICE, null, null, null, null, null, null, pincode,
                 "MG Road", null, null, null, null, false, false, created.getVersion());
 
         CustomerAddress updated = service.update(customer.getId(), created.getId(), update);
@@ -193,7 +193,7 @@ class CustomerAddressServiceImplTest {
         when(customerRepository.findByIdWithinCompany(other.getId(), COMPANY)).thenReturn(Optional.of(other));
 
         UpdateCustomerAddressCommand update = new UpdateCustomerAddressCommand(
-                AddressType.OFFICE, null, null, null, null, null, pincode,
+                AddressType.OFFICE, null, null, null, null, null, null, pincode,
                 "MG Road", null, null, null, null, false, false, created.getVersion());
 
         assertThatThrownBy(() -> service.update(other.getId(), created.getId(), update))
@@ -212,7 +212,7 @@ class CustomerAddressServiceImplTest {
     private static CreateCustomerAddressCommand addressCommand(String line1, UUID pincodeId,
                                                                 boolean defaultPickup, boolean defaultDelivery) {
         return new CreateCustomerAddressCommand(
-                AddressType.HOME, null, null, null, null, null, pincodeId,
+                AddressType.HOME, null, null, null, null, null, null, pincodeId,
                 line1, null, null, null, null, defaultPickup, defaultDelivery);
     }
 }

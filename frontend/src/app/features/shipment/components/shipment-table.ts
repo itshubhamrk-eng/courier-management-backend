@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,7 +17,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, UiTable, ShipmentStatusBadge, MatMenuModule, MatIconModule],
   template: `
-    <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
+    <app-table [columns]="visibleColumns()" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
                emptyTitle="No shipments" emptyHint="Book your first shipment to get started."
                emptyIllustration="package"
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
@@ -39,7 +39,9 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.branchCommissionOnOtherAmount != null ? ('₹' + (s.branchCommissionOnOtherAmount | number: '1.2-2')) : '—' }}</td>
-        <td class="num">{{ s.companyCommissionOnBasicFreight != null ? ('₹' + (s.companyCommissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
+        @if (showCompanyCommission()) {
+          <td class="num">{{ s.companyCommissionOnBasicFreight != null ? ('₹' + (s.companyCommissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
+        }
         <td class="num">{{ s.totalCommission != null ? ('₹' + (s.totalCommission | number: '1.2-2')) : '—' }}</td>
         <td><app-shipment-status-badge [status]="s.status" /></td>
         <td class="col-actions" (click)="$event.stopPropagation()">
@@ -79,6 +81,9 @@ export class ShipmentTable {
   readonly branchOptions = input<SelectOption[]>([]);
   readonly paymentModeOptions = input<SelectOption[]>([]);
 
+  /** Branch logins don't see the company's own commission. */
+  readonly showCompanyCommission = input(true);
+
   readonly sortChange = output<SortState>();
   readonly action = output<{ type: ShipmentAction; shipment: Shipment }>();
 
@@ -105,6 +110,10 @@ export class ShipmentTable {
     { key: 'status', header: 'Status', sortable: true, width: '160px' },
     { key: 'actions', header: '', width: '56px', align: 'right' }
   ];
+
+  readonly visibleColumns = computed(() => this.showCompanyCommission()
+    ? this.columns
+    : this.columns.filter((c) => c.key !== 'companyCommissionOnBasicFreight'));
 
   act(type: ShipmentAction, shipment: Shipment): void { this.action.emit({ type, shipment }); }
   isEditable(s: Shipment): boolean { return s.status === 'BOOKED'; }

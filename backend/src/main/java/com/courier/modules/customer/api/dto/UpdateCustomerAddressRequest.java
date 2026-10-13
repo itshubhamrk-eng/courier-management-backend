@@ -1,6 +1,7 @@
 package com.courier.modules.customer.api.dto;
 
 import com.courier.modules.customer.domain.AddressType;
+import com.courier.modules.customer.domain.AddressUsage;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public record UpdateCustomerAddressRequest(
 
         @NotNull AddressType addressType,
+        @Schema(description = "Defaults to BOTH when omitted") AddressUsage addressUsage,
 
         UUID countryId, UUID stateId, UUID districtId, UUID cityId, UUID areaId, UUID pincodeId,
 
