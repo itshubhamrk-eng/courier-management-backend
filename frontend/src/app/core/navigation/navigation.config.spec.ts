@@ -65,7 +65,7 @@ describe('NAVIGATION — branch staff visibility', () => {
   it('every branch staff role reads the branch and shipment reports', () => {
     for (const role of [AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR,
       AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS]) {
-      expect(leaf('reports-dashboard').roles).toContain(role);
+      expect(leaf('booking-report').roles).toContain(role);
       expect(leaf('branch-reports').roles).toContain(role);
     }
   });
