@@ -3,12 +3,20 @@ import { NavigationEnd, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
 import { PermissionService } from '../auth/permission.service';
+import { PartnerContextService } from '../auth/partner-context.service';
 import { storage } from '../utils/storage.util';
 import { NAVIGATION } from './navigation.config';
 import { NavNode } from './navigation.model';
 
 const COLLAPSE_KEY = 'cs.sidebar.collapsed';
 const EXPAND_KEY = 'cs.sidebar.expanded';
+
+/** A Pickup-Delivery Partner only collects and delivers: these top-level groups, and inside
+ *  Operations only the booking + delivery-desk leaves, are all its sidebar shows. */
+const PARTNER_GROUPS = new Set(['dashboard', 'pdp-management', 'operations', 'finance', 'reports']);
+const PARTNER_OPERATIONS = new Set([
+  'booking', 'shipment-search', 'track', 'receive', 'pending-delivery', 'out-for-delivery', 'delivery'
+]);
 
 /**
  * The dynamic navigation. Filters the authored (or API-supplied) tree by permission, prunes
@@ -19,6 +27,7 @@ const EXPAND_KEY = 'cs.sidebar.expanded';
 export class NavigationService {
   private readonly perm = inject(PermissionService);
   private readonly router = inject(Router);
+  private readonly partner = inject(PartnerContextService);
 
   /** Desktop rail collapsed to icons — remembered across sessions. */
   readonly collapsed = signal<boolean>(storage.get(COLLAPSE_KEY) === '1');
@@ -74,12 +83,15 @@ export class NavigationService {
   resetMenu(): void { this.override.set(null); }
 
   // ── filtering ─────────────────────────────────────────────────────────────
-  private filter(nodes: NavNode[]): NavNode[] {
+  private filter(nodes: NavNode[], parentId?: string): NavNode[] {
+    const partner = this.partner.isPartner();
     return [...nodes]
+      .filter((n) => !partner || (parentId === undefined ? PARTNER_GROUPS.has(n.id)
+        : parentId !== 'operations' || PARTNER_OPERATIONS.has(n.id)))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((n): NavNode | null => {
         if (n.children?.length) {
-          const kids = this.filter(n.children);
+          const kids = this.filter(n.children, n.id);
           return kids.length ? { ...n, children: kids, visible: true } : null; // prune empty parent
         }
         return this.canSee(n) ? { ...n, visible: true } : null;

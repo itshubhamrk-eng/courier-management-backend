@@ -27,6 +27,10 @@ export const API = {
   /** Business Customer pricing: a customer's zones (districts/cities) and per-zone rate cards. */
   pricingZones: '/pricing-zones',
   customerRates: '/customer-rates',
+  pdpRates: '/pdp-rates',
+  pickups: '/pickups',
+  pdpEarnings: '/pdp-earnings',
+  pdpStatements: '/pdp-statements',
   businessDashboard: '/business-customers/dashboard',
   customerInvoices: '/customer-invoices',
   rates: '/rates',

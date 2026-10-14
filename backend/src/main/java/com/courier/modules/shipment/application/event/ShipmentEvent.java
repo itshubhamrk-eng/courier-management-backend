@@ -212,6 +212,24 @@ public sealed interface ShipmentEvent {
     }
 
     /**
+     * A shipment delivered by a Pickup-Delivery Partner is DELIVERED with its POD approved — the
+     * moment the partner's delivery rate card applies. Published instead of the branch
+     * delivery-commission events (a partner is paid from its rate card, not the branch commission
+     * fields). Handled synchronously by the pdp module, which accrues an earning; nothing here
+     * moves money. {@code weightKg} is the shipment's chargeable weight (actual if absent).
+     */
+    record PartnerDeliveryEarned(
+            UUID shipmentId,
+            UUID companyId,
+            UUID partnerBranchId,
+            String shipmentNumber,
+            String deliveryPincode,
+            java.math.BigDecimal weightKg,
+            Instant occurredAt
+    ) implements ShipmentEvent {
+    }
+
+    /**
      * Carries {@code shipmentNumber} — unlike its five siblings above — because {@code
      * ShipmentCancellationWalletListener} needs it to look up every wallet entry filed
      * against this shipment ({@code referenceId}) and reverse them.

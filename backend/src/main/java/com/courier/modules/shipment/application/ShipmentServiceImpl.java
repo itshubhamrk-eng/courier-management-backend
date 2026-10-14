@@ -1617,6 +1617,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     .formatted(shipment.getShipmentNumber(), shipment.getStatus())
                     + "can be delivered.");
         }
+        requirePodForPartnerDelivery(shipment, companyId, command);
         DeliveryAssignment assignment = deliveryAssignmentRepository
                 .findByShipmentIdWithinCompany(shipmentId, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("DeliveryAssignment", shipmentId));
@@ -1810,6 +1811,19 @@ public class ShipmentServiceImpl implements ShipmentService {
             int totalQty = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
                     .mapToInt(ShipmentItem::getQuantity).sum();
             com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
+            if (deliveryBranch.getBranchType() == com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER) {
+                // A partner is paid from its own delivery rate card (pdp module), not the branch
+                // DRS / delivery-weight commission fields — publish for it and skip those two.
+                eventPublisher.publishEvent(new ShipmentEvent.PartnerDeliveryEarned(
+                        shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
+                        shipment.getDeliveryPincode(),
+                        shipment.getChargeableWeight() != null && shipment.getChargeableWeight().signum() > 0
+                                ? shipment.getChargeableWeight() : shipment.getActualWeight(),
+                        Instant.now()));
+                shipment.setCommissionCredited(true);
+                shipmentRepository.save(shipment);
+                return;
+            }
             BigDecimal drsCharge = deliveryBranch.getDrsChargePerQty().multiply(BigDecimal.valueOf(totalQty));
             if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
                 eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(
@@ -1833,6 +1847,28 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         shipment.setCommissionCredited(true);
         shipmentRepository.save(shipment);
+    }
+
+    /**
+     * A Pickup-Delivery Partner may only mark a shipment delivered with a POD photo on file —
+     * sent with this call, or already captured (POD Auto Verification stores it before
+     * "Complete Delivery"). Every other delivery branch keeps POD optional at this step.
+     */
+    private void requirePodForPartnerDelivery(Shipment shipment, UUID companyId, DeliverCommand command) {
+        if (shipment.getDeliveryBranchId() == null) {
+            return;
+        }
+        com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
+        if (deliveryBranch.getBranchType() != com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER) {
+            return;
+        }
+        boolean photoOnFile = command.photoUrl() != null && !command.photoUrl().isBlank()
+                || shipmentAssetRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
+                        .anyMatch(a -> a.getAssetType() == ShipmentAssetType.POD && "PHOTO".equals(a.getKind()));
+        if (!photoOnFile) {
+            throw new BusinessRuleException("A POD photo is required before a Pickup-Delivery Partner can mark "
+                    + "shipment %s delivered. Upload the POD first.".formatted(shipment.getShipmentNumber()));
+        }
     }
 
     @Override

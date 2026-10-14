@@ -288,6 +288,50 @@ export const routes: Routes = [
         loadComponent: () => import('@features/business-customer/pricing-zone-form').then((m) => m.PricingZoneForm)
       },
       {
+        path: 'pdp/partners', title: 'Pickup Delivery Partners', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/pdp/partner-list').then((m) => m.PartnerList)
+      },
+      {
+        path: 'pdp/pickups', title: 'Pickup Requests', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/pickup-list').then((m) => m.PickupList)
+      },
+      {
+        path: 'pdp/pickups/new', title: 'New Pickup Request', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/pdp/pickup-form').then((m) => m.PickupForm)
+      },
+      {
+        path: 'pdp/pickups/:id', title: 'Edit Pickup Request', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/pdp/pickup-form').then((m) => m.PickupForm)
+      },
+      {
+        path: 'pdp/deliveries', title: 'Partner Deliveries', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/partner-deliveries').then((m) => m.PartnerDeliveries)
+      },
+      {
+        path: 'pdp/earnings', title: 'Partner Earnings', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/partner-earnings').then((m) => m.PartnerEarnings)
+      },
+      {
+        path: 'pdp/billing', title: 'Partner Billing', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/partner-billing-list').then((m) => m.PartnerBillingList)
+      },
+      {
+        path: 'pdp/billing/:id', title: 'Partner Statement', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/partner-statement').then((m) => m.PartnerStatement)
+      },
+      {
+        path: 'pdp/rates', title: 'Partner Rates', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/pdp/partner-rate-list').then((m) => m.PartnerRateList)
+      },
+      {
+        path: 'pdp/my-rates', title: 'My Rates', canActivate: [roleGuard], data: { roles: [AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/partner-rate-edit').then((m) => m.PartnerRateEdit)
+      },
+      {
+        path: 'pdp/rates/:branchId', title: 'Partner Rate Cards', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/pdp/partner-rate-edit').then((m) => m.PartnerRateEdit)
+      },
+      {
         path: 'business-customer/rates', title: 'Customer Rates', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/business-customer/customer-rate-list').then((m) => m.CustomerRateList)
       },

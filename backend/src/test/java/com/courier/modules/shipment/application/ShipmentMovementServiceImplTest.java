@@ -706,6 +706,59 @@ class ShipmentMovementServiceImplTest {
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.CodCollectedAtDelivery.class));
     }
 
+    private Shipment partnerDelivery(boolean podApproved) {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setPodApproved(podApproved);
+        shipment.setDeliveryPincode("411001");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY)).thenReturn(Optional.of(shipment));
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(true));
+        when(branchService.getById(shipment.getDeliveryBranchId())).thenReturn(Branch.builder()
+                .branchCode("PDP-1").branchType(com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER).build());
+        return shipment;
+    }
+
+    @Test
+    @DisplayName("a Pickup-Delivery Partner cannot mark a shipment delivered without a POD photo")
+    void partnerDeliveryRequiresPod() {
+        Shipment shipment = partnerDelivery(false);
+
+        assertThatThrownBy(() -> service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", null, null, null, null)))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("POD photo is required");
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.OUT_FOR_DELIVERY);
+    }
+
+    @Test
+    @DisplayName("a partner delivery with a POD photo and an approved POD earns via the partner event, "
+            + "not the branch DRS / weight commission")
+    void partnerDeliveryPublishesPartnerEarning() {
+        Shipment shipment = partnerDelivery(true);
+
+        Shipment delivered = service.deliver(shipment.getId(),
+                new ShipmentService.DeliverCommand("Rahul Verma", null, null, null, "https://pod/photo.jpg"));
+
+        assertThat(delivered.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+        verify(eventPublisher).publishEvent(any(ShipmentEvent.PartnerDeliveryEarned.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
+        assertThat(delivered.isCommissionCredited()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a partner delivery whose POD is not approved yet earns nothing until approval")
+    void partnerDeliveryWaitsForPodApproval() {
+        Shipment shipment = partnerDelivery(false);
+
+        service.deliver(shipment.getId(), new ShipmentService.DeliverCommand("Rahul Verma", null, null, null, "https://pod/photo.jpg"));
+
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.PartnerDeliveryEarned.class));
+    }
+
     @Test
     @DisplayName("delivering a Direct Company Delivery shipment (no delivery branch) publishes none "
             + "of the delivery-branch-attributed money — no DRS charge, no weight commission, no COD debit")

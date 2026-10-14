@@ -169,6 +169,11 @@ public final class DefaultPermissionCatalog {
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ASSIGN, ACTIVATE, DEACTIVATE));
         MATRIX.put(PermissionModule.VENDOR,
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE));
+        MATRIX.put(PermissionModule.PDP,
+                EnumSet.of(CREATE, READ, UPDATE, SEARCH, EXPORT, ACTIVATE, DEACTIVATE));
+        MATRIX.put(PermissionModule.PDP_RATE, MASTER);
+        MATRIX.put(PermissionModule.PDP_BILLING,
+                EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, PRINT));
 
         // Money. Nothing here may be deleted — financial records are corrected by
         // further records, never removed.

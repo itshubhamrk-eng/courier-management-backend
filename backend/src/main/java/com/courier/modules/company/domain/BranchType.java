@@ -17,6 +17,7 @@ public enum BranchType {
     /** Aggregation/sorting point serving a cluster of branches. */
     HUB,
 
-    /** Third-party vendor. */
-    VENDOR
+    /** Pickup-Delivery Partner (PDP) — a third-party partner that only collects (pickup) and delivers.
+     *  Paid from its own pickup / delivery rate cards, not from the branch commission fields. */
+    PICKUP_DELIVERY_PARTNER
 }

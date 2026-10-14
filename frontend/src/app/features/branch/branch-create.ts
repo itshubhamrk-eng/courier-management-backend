@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
-import { BranchResponse, CreateBranchRequest, UpdateBranchRequest } from '@core/models/branch.model';
+import { BRANCH_TYPES, BranchResponse, BranchType, CreateBranchRequest, UpdateBranchRequest } from '@core/models/branch.model';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { BranchForm } from './components/branch-form';
 import { BranchCredentialsDialog } from './components/branch-credentials-dialog';
@@ -31,7 +31,7 @@ import { BranchService, Lookup } from './branch.service';
       @if (loading()) {
         <app-loader [minHeight]="280" caption="Loading…" />
       } @else {
-        <app-branch-form mode="create" [managers]="managers()" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
+        <app-branch-form mode="create" [presetType]="presetType" [managers]="managers()" [saving]="saving()" (saved)="save($event)" (cancelled)="cancel()" />
       }
     </div>
   `
@@ -43,6 +43,11 @@ export class BranchCreate implements OnInit {
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
+
+  /** `?type=PICKUP_DELIVERY_PARTNER` (from Partner Management) preselects the type. */
+  protected readonly presetType: BranchType | null = (BRANCH_TYPES as string[]).includes(this.route.snapshot.queryParamMap.get('type') ?? '')
+    ? (this.route.snapshot.queryParamMap.get('type') as BranchType) : null;
 
   readonly loading = signal(true);
   readonly saving = signal(false);

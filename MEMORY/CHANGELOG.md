@@ -8,6 +8,68 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-14 — PDP billing frequency + scheduled statements
+
+Added per-partner Weekly / 15-day / Monthly (default Monthly) via `pdp_billing_settings` (V121). Daily `PdpBillingCycleJob` drafts a statement when a partner's cycle closes with unbilled earnings; manual and scheduled generate both reject overlapping periods. New: `GET /pdp-statements/schedule`, `PUT /pdp-billing-frequency/{branchId}`, `POST /pdp-statements/generate-due`; Partner Billing gets a "Billing schedule" card. Unit tests `PdpBillingCycleTest` + existing PDP tests pass.
+
+---
+
+## 2026-10-14 — PDP: earning reversal on shipment cancel
+
+- `PdpShipmentEventListener` (synchronous) handles `ShipmentEvent.Cancelled`: `PdpEarningService.reverseForShipment`. An unbilled pickup/delivery earning becomes `REVERSED` (excluded from billing); one already on a statement stays on it and a **negative adjustment earning** (`REV-<ref>`, status ACCRUED, source = the original earning id so the unique key makes it idempotent) is accrued, so the NEXT statement nets it out. `PickupRequestRepository.findByShipment` finds the pickup behind a shipment.
+- Verified by `PdpBillingServicesTest` (unbilled reversed with no adjustment; billed gets -40 once, second call a no-op). **Not exercised live**: the only partner fixture shipment is already DELIVERED and cannot be cancelled; a live cancel of a pickup-booked shipment is still untested. `mvn test` green.
+- Still not built: GST/TDS on statements (no decision from the user; statements are pre-tax).
+
+---
+
+## 2026-10-14 — PDP: auto-suggest partner by pincode
+
+- `GET /pickups/{id}/suggested-partner` (admin): the active, pickup-enabled Pickup-Delivery Partner mapped to the pickup's pincode in Pincode Branch Mapping (null if none or not a PDP). The Assign dialog preselects it ("Preselected: the partner mapped to pincode ..."); assignment stays a manual confirm.
+- Verified live on :8083: mapped 411038 to partner PDP_TEST_02 -> suggestion returned its id; an unmapped pincode returned null. `PickupServiceImplTest` 11/11.
+
+---
+
+## 2026-10-14 — PDP module, phase 3: earnings, billing statements, mandatory POD, partner login
+
+- `V117`: `pdp_earnings` (accrued only, snapshot of every pricing input, unique per job) + `pdp_statements` + menu rows. **Nothing in the PDP module ever posts to a wallet.**
+- Earnings: a PICKUP earning when a pickup reaches BOOKED (`PickupServiceImpl.linkShipment`), a DELIVERY earning when a partner-delivered shipment is DELIVERED **and** POD approved (the V59 gate). Priced by `PdpRateService.quote` (unscoped, internal; `calculate` is the scoped HTTP one) with district + ODA resolved from the pincode through `PincodeCoverageLookupPort`. No live rate card = an `UNRATED` earning (amount 0), never a failure; an admin adds the card and re-prices (`POST /pdp-earnings/{id}/reprice`).
+- Shipment module (additive only): `ShipmentEvent.PartnerDeliveryEarned`; `creditDeliveryCommissionsIfEligible` publishes it instead of the branch DRS / delivery-weight commissions when the delivery branch is a PDP; `deliver()` refuses a partner delivery with no POD photo (sent with the call or already on file). Listener `PdpShipmentEventListener` is synchronous (same transaction).
+- Statements: generate bills every ACCRUED unbilled earning of a partner in a period (PS-yyyyMMdd-NNNN), DRAFT -> APPROVED -> PAID (manual marks), delete a draft releases its earnings. Statement screen with pickup + delivery sections, Export CSV, Print.
+- Partner login (a partner's own BRANCH_MANAGER): earnings, statements (approved/paid only), rate cards, pickups are all server-scoped to its own branch (404 for others); partner cannot generate/approve/pay/reprice/create rates/pickups (403). Sidebar narrows to Dashboard, PDP group, Operations (booking + delivery desk only), Finance, Reports via `PartnerContextService`. PDP group for a partner: Pickup Requests, My Rates, Partner Deliveries, Partner Earnings, Partner Billing.
+- Booking prefill: "Book shipment" now carries name, mobile, address, pincode, collected weight and parcels into the booking screen.
+- Bugs found only by running it live and fixed: (1) pincode lookup rebinds the company filter and Hibernate auto-flush wrote the caller's dirty pickup under the wrong company -> `earnings.flush()` before the lookup; (2) a handled "no rate card" error still marked the caller's transaction rollback-only through the `@Transactional` proxy -> `noRollbackFor` on `quote`/`calculate`; (3) partner reads of other partners' branches threw inside a nested transaction -> partner reads are scoped to its own branch.
+- Verified live on :8083/:4300 against courier_db: partner login + scoped menu; pickup assigned, accepted, started, collected (UI); partner booked the shipment in the UI (PDP_TEST_02-000001, PAID, priced from the partner's own District Level Freight rows, wallet debited, no commission entries); link-back with no pickup card -> UNRATED, then card added -> re-priced 14 kg x 3.5 = 49; delivery refused without POD, delivered with photoUrl, POD-approved delivery earned 15 kg x 6 + 12 mathadi + 40 ODA = 142 and no DRS/weight commission posted; statement PS-...-0002 = 191 (49 + 142), approved, shown to the partner. `mvn test` 1188/1188.
+- **Not verified live / known limits:** POD *file upload* (no storage backend locally; a photoUrl-only delivery has no PodVerification row so only an admin company-upload can approve it — real flow uses the Delivery screen's upload, S3 on dev/prod); the Load Sheet -> In Scan hand-off to a partner was shortcut with a DB seed on the fixture shipment (the DRS and deliver calls were real); no auto-assign by pincode; reversal lines and GST/TDS on statements not built; prod not deployed. Pre-existing unrelated failing frontend spec: `navigation.config.spec.ts` "every branch staff role reads the branch and shipment reports" (fails on a clean tree too).
+- Needed to run a partner: its own District Level Freight rows (customer freight) + wallet float + pickup/delivery rate cards. Fixtures left in dev DB: PDP_TEST_01/02, their rate cards, DLF rows for 02 -> Osmanabad, 5 test pickups, 1 shipment, 2 statements. Run on :8083 (my own throwaway; :8082 belongs to another session).
+
+---
+
+## 2026-10-14 — PDP module, phase 2: Pickup Requests
+
+- `V116`: `pickup_requests` (+ menu item "Pickup Requests" under the PDP group, existing `PICKUP_*` permissions). Backend `com.courier.modules.pickup`, `/api/v1/pickups`.
+- Lifecycle `REQUESTED -> ASSIGNED -> ACCEPTED -> OUT_FOR_PICKUP -> PICKED_UP -> BOOKED`; a partner reject returns it to `REQUESTED` (partner cleared, reason kept), a failed visit is terminal `FAILED`, cancel only before collection. Numbering `PU-yyyyMMdd-NNNN` per company per day. Only an active `PICKUP_DELIVERY_PARTNER` branch with `allowPickup` can be assigned.
+- Access: create/edit/assign/cancel are COMPANY_ADMIN only (live test found a partner's own BRANCH_MANAGER could create pickups under the first draft; tightened before release). The assigned partner's branch (or an admin) accepts/rejects/starts/completes/fails/links; a branch-bound caller only ever lists/gets its own partner's pickups (404 otherwise).
+- Booking link-back is decoupled: `PATCH /pickups/{id}/shipment` is called by the booking screen. `shipment-create.ts` reads `?pickupId=&pincode=`, prefills From Pincode and links the shipment after booking. Nothing in the shipment module changed.
+- Frontend `features/pdp/`: Pickup Requests list (status chips with counts, search, per-status actions, assign/collected dialogs, reason prompts), New/Edit form, route `/pdp/pickups*`.
+- Verified: `mvn test` PickupServiceImplTest 10/10; live on throwaway :8083 against courier_db: full flow create, assign, accept, start, complete, with skip-state and cancel-after-collect refused; partner 2 sees only its own, gets 404 on another partner's pickup, is refused on its start, 403 on create/assign. Pickup list + status chips rendered on :4300, "Book shipment" opens booking with From Pincode prefilled. **Not verified:** the booking-then-link-back round trip end to end (the admin account has no branch, so it cannot book; the link endpoint is unit-tested only).
+- Fixtures left in dev DB: partner PDP_TEST_02 (login pdp-test-02@amazing-logistics.local), 5 test pickups (one junk row "x" from the pre-fix permission test).
+- Next (phase 3): earnings accrual, mandatory POD on PDP delivery, Partner Billing statement.
+
+---
+
+## 2026-10-14 — Pickup-Delivery Partner (PDP) module, phase 1: branch type + rate cards
+
+Direct request: legacy "Vendor Mgmt" rebuilt as **Pickup-Delivery Partner Management** — a Branch of a new type that only collects (pickup) and delivers, paid from its OWN pickup and delivery rate cards. Full plan in `MEMORY/modules/pdp.md`. **Phase 1 only (below); pickup requests, earnings, billing statement, mandatory-POD gate are NOT built yet.**
+
+- `BranchType.VENDOR` replaced by `PICKUP_DELIVERY_PARTNER` (no row was ever VENDOR). New permission modules `PDP`, `PDP_RATE`, `PDP_BILLING` (23 codes, catalogue 278 -> 301); the unused `VENDOR` module is left alone.
+- `V115` (V114 was taken by a concurrent session's payment-mode migration): `pdp_rate_cards` + `pdp_rate_slabs`, permission rows, COMPANY_ADMIN backfill, new top-level menu "Pickup Delivery Partner Management" (Partners, Partner Rates).
+- Backend `com.courier.modules.pdp`: `PdpRateService` (create/update/get/search/activate/deactivate/delete/calculate), `/api/v1/pdp-rates`. Card = (partner branch, `PICKUP|DELIVERY`, district or all, min chargeable weight, per-kg slabs [min,max), validity). Delivery-only: mathadi, ODA, return fee. Pay = max(actual, card minimum) x covering slab rate. District card beats the all-districts card; no card = clear error, never a fallback to branch commission fields. One active card per (partner, type, district) per period. Writes COMPANY_ADMIN.
+- Frontend: `features/pdp/` (Partners list = filtered Branch list; Partner Rates list; per-partner Pickup/Delivery tabs with slab editor + quote tester), routes `/pdp/*`, nav group, Create Branch honours `?type=` preset.
+- Verified: `mvn test` PdpRateServiceImplTest 10/10 + catalogue/branch tests green, `ng build`; live on :8082 against courier_db: created partner PDP_TEST_01 through POST /branches, pickup 6 kg -> min 10 x 4 = 40, delivery 80 kg + ODA -> 465, duplicate card / overlapping slabs / non-PDP branch all refused. Test partner + 2 cards left in dev DB as fixtures.
+- Not done: Pickup module (requests, assign, accept, convert to booking), earnings accrual, Partner Billing statements, mandatory POD for PDP delivery, PDP roles, rider logins. Decisions still open: reversal adjustment lines, GST/TDS on statements, failed-pickup fee semantics.
+
+---
+
 ## 2026-10-14 — Business Customer zone rates now price the booking
 
 - `V113`: `shipments.business_customer_id` (nullable, no FK). Stored on create from `CreateShipmentRequest.businessCustomerId`; edit and Rate/KG recalculation re-derive from the stored id.

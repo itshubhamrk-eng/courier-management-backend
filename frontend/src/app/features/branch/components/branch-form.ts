@@ -26,7 +26,7 @@ const PAN = /^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const TYPE_LABELS: Record<BranchType, string> = {
-  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', VENDOR: 'Vendor'
+  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', PICKUP_DELIVERY_PARTNER: 'Pickup-Delivery Partner (PDP)'
 };
 const TYPE_OPTS: SelectOption[] = BRANCH_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
 const DAY_OPTS: SelectOption[] = DAYS.map((d) => ({ value: d, label: d }));
@@ -240,6 +240,8 @@ export class BranchForm {
   readonly branch = input<BranchResponse | null>(null);
   readonly managers = input<Lookup[]>([]);
   readonly saving = input(false);
+  /** Create mode: preselects (and the caller may rely on) a branch type, e.g. Pickup-Delivery Partner. */
+  readonly presetType = input<BranchType | null>(null);
 
   readonly saved = output<CreateBranchRequest | UpdateBranchRequest>();
   readonly cancelled = output<void>();
@@ -290,6 +292,7 @@ export class BranchForm {
       });
     }
     effect(() => { const b = this.branch(); if (b && this.mode() === 'edit') this.hydrate(b); });
+    effect(() => { const t = this.presetType(); if (t && this.mode() === 'create') this.form.get('branchType')?.setValue(t); });
   }
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }

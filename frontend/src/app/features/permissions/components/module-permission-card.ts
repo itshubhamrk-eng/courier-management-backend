@@ -137,7 +137,7 @@ const MODULE_ICONS: Record<string, string> = {
   BRANCH: 'store', HUB: 'hub', CUSTOMER: 'person', ADDRESS: 'place', PINCODE: 'pin_drop',
   RATE_MASTER: 'payments', ROUTE_MASTER: 'route', SHIPMENT: 'local_shipping', TRACKING: 'my_location',
   MANIFEST: 'receipt_long', PICKUP: 'inventory_2', DELIVERY: 'moving', DRIVER: 'directions_car',
-  VEHICLE: 'directions_bus', VENDOR: 'handshake', WALLET: 'account_balance_wallet', PAYMENT: 'credit_card',
+  VEHICLE: 'directions_bus', VENDOR: 'handshake', PDP: 'handshake', PDP_RATE: 'request_quote', PDP_BILLING: 'receipt_long', WALLET: 'account_balance_wallet', PAYMENT: 'credit_card',
   INVOICE: 'description', REPORT: 'assessment', DASHBOARD: 'dashboard', SETTINGS: 'settings',
   NOTIFICATION: 'notifications', AUDIT: 'fact_check'
 };

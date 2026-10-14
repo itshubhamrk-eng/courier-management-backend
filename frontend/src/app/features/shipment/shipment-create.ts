@@ -29,6 +29,7 @@ import { ChargeSummary } from './components/charge-summary';
 import { VoiceMicButton } from './components/voice-mic-button';
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
+import { PickupService } from '@features/pdp/pickup.service';
 import { FreightCalculationService } from './freight-calculation.service';
 import { companyAddressLine } from './consignment-print.util';
 import { printPerformaBillCopies } from './performa-bill-print.util';
@@ -636,6 +637,9 @@ export class ShipmentCreate implements OnInit {
    *  of their own (e.g. COMPANY_ADMIN), handled as a hard stop, not a silent fallback. */
   private readonly myBranchId = this.auth.user()?.branchId ?? null;
   private readonly route = inject(ActivatedRoute);
+  private readonly pickupService = inject(PickupService);
+  /** `?pickupId=` — this booking is for a collected Pickup Request; it is linked back once booked. */
+  private readonly pickupId = this.route.snapshot.queryParamMap.get('pickupId');
   /** The MSRTC Shipment Booking route reuses this screen; everything MSRTC-only below is
    *  gated on this, so the standard booking behaves exactly as before. */
   protected readonly isMsrtc = this.route.snapshot.data['flowType'] === 'MSRTC';
@@ -907,6 +911,19 @@ export class ShipmentCreate implements OnInit {
   protected readonly crossingBranchOptions = computed(() => this.branchOptions());
 
   ngOnInit(): void {
+    if (this.pickupId) {
+      // Booking for a collected Pickup Request: prefill the consignor, pincode and what was actually collected.
+      const q = this.route.snapshot.queryParamMap;
+      this.form.patchValue({
+        pickupPincode: q.get('pincode') ?? '', senderName: q.get('name') ?? '',
+        senderContact: q.get('mobile') ?? '', senderAddress: q.get('address') ?? ''
+      });
+      const weight = Number(q.get('weight'));
+      if (weight > 0) {
+        this.voiceItems.set([{ itemName: 'Package', quantity: Number(q.get('parcels')) || 1, weight, lengthCm: null,
+          widthCm: null, heightCm: null, declaredValue: null, fragile: false, dangerousGoods: false }]);
+      }
+    }
     this.breadcrumb.set(this.isBusinessBooking
       ? [{ label: 'Operations' }, { label: 'Business Customer Booking' }]
       : [{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
@@ -1810,6 +1827,11 @@ export class ShipmentCreate implements OnInit {
           });
         }
         this.notify.success(`Shipment ${s.shipmentNumber} booked — AWB ${s.trackingNumber}.`);
+        if (this.pickupId) {
+          this.pickupService.linkShipment(this.pickupId, { shipmentId: s.id, shipmentNo: s.shipmentNumber }).subscribe({
+            error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but the pickup request could not be linked to it.`)
+          });
+        }
         forkJoin({
           company: this.companyProfile.get().pipe(catchError(() => of(null))),
           bookingGeo: v.pickupPincode

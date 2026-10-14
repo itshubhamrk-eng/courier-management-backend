@@ -6,7 +6,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { BranchSearchRequest, BranchStatus, BranchType, BRANCH_TYPES } from '@core/models/branch.model';
 
 const TYPE_LABELS: Record<BranchType, string> = {
-  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', VENDOR: 'Vendor'
+  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', PICKUP_DELIVERY_PARTNER: 'Pickup-Delivery Partner (PDP)'
 };
 const TYPES: SelectOption[] = BRANCH_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
 const STATUSES: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }];

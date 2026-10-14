@@ -8,9 +8,9 @@
 export type BranchStatus = 'ACTIVE' | 'INACTIVE';
 
 /** The branch classification — the backend's stand-in for "vendor type". 4 values. */
-export type BranchType = 'CP' | 'BRANCH' | 'HUB' | 'VENDOR';
+export type BranchType = 'CP' | 'BRANCH' | 'HUB' | 'PICKUP_DELIVERY_PARTNER';
 
-export const BRANCH_TYPES: BranchType[] = ['CP', 'BRANCH', 'HUB', 'VENDOR'];
+export const BRANCH_TYPES: BranchType[] = ['CP', 'BRANCH', 'HUB', 'PICKUP_DELIVERY_PARTNER'];
 
 /**
  * List projection — mirrors backend `BranchSummaryResponse` (GET /branches). Compact: it
