@@ -1,5 +1,8 @@
 package com.courier.modules.districtfreight.application;
 
+import com.courier.modules.customerpricing.application.PricingZoneService;
+import com.courier.modules.customerpricing.application.PricingZoneView;
+import com.courier.modules.customerpricing.application.ZoneRateService;
 import com.courier.modules.districtfreight.domain.BranchLookupPort;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreight;
@@ -52,6 +55,8 @@ class FreightCalculationServiceImplTest {
     @Mock private DistrictLevelFreightRepository repository;
     @Mock private BranchLookupPort branchLookup;
     @Mock private PincodeCoverageLookupPort coverageLookup;
+    @Mock private PricingZoneService zoneService;
+    @Mock private ZoneRateService zoneRateService;
 
     private FreightCalculationServiceImpl service;
 
@@ -59,14 +64,15 @@ class FreightCalculationServiceImplTest {
             new BranchLookupPort.BranchRef(BRANCH, "ICHALKARANJI", "Ichalkaranji", true);
     private static final PincodeCoverageLookupPort.CoverageRef SERVICEABLE_NON_ODA =
             new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, false,
-                    DISTRICT, "PUNE", "Pune", true, "Pune");
+                    DISTRICT, "PUNE", "Pune", true, "Pune", null);
     private static final PincodeCoverageLookupPort.CoverageRef SERVICEABLE_ODA =
             new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, true,
-                    DISTRICT, "PUNE", "Pune", true, "Pune");
+                    DISTRICT, "PUNE", "Pune", true, "Pune", null);
 
     @BeforeEach
     void setUp() {
-        service = new FreightCalculationServiceImpl(repository, branchLookup, coverageLookup);
+        service = new FreightCalculationServiceImpl(repository, branchLookup, coverageLookup,
+                zoneService, zoneRateService);
         CompanyContext.setCompanyId(COMPANY);
         AuthenticatedUser principal = new AuthenticatedUser(
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
@@ -287,7 +293,7 @@ class FreightCalculationServiceImplTest {
     void notServiceableDestinationRejected() {
         PincodeCoverageLookupPort.CoverageRef notServiceable =
                 new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, false, false,
-                        DISTRICT, "PUNE", "Pune", true, "Pune");
+                        DISTRICT, "PUNE", "Pune", true, "Pune", null);
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(notServiceable));
 
         assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
@@ -302,7 +308,7 @@ class FreightCalculationServiceImplTest {
         UUID otherDistrict = UUID.randomUUID();
         PincodeCoverageLookupPort.CoverageRef thisPincode =
                 new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, false,
-                        DISTRICT, "PUNE", "Pune", true, "Pune");
+                        DISTRICT, "PUNE", "Pune", true, "Pune", null);
         // A different pincode elsewhere resolving to a different district must never be consulted —
         // findByPincode is only ever stubbed for DESTINATION_PINCODE, so any lookup by another code
         // would return an unstubbed (empty) result and fail this test with a different exception.
@@ -327,5 +333,63 @@ class FreightCalculationServiceImplTest {
         assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("inactive");
+    }
+
+    private static final UUID CUSTOMER = UUID.randomUUID();
+    private static final UUID CITY = UUID.randomUUID();
+
+    private PincodeCoverageLookupPort.CoverageRef withCity() {
+        return new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, true,
+                DISTRICT, "PUNE", "Pune", true, "Pune", CITY);
+    }
+
+    @Test
+    @DisplayName("a business customer whose zone covers the destination is priced from the zone rate card, not District Level Freight")
+    void customerZonePricesFreight() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(withCity()));
+        when(zoneService.resolve(CUSTOMER, DISTRICT, CITY)).thenReturn(Optional.of(
+                new PricingZoneView(null, "Acme", java.util.List.of(), true)));
+        when(zoneRateService.calculate(any())).thenReturn(new ZoneRateService.Quote(UUID.randomUUID(), "Zone A",
+                new BigDecimal("20"), new BigDecimal("20"), new BigDecimal("6.00"), new BigDecimal("120.00"),
+                new BigDecimal("50.00"), new BigDecimal("30.00"), new BigDecimal("10.00"), new BigDecimal("80.00"),
+                new BigDecimal("12.00"), new BigDecimal("5.00"), new BigDecimal("307.00")));
+
+        FreightCalculationResult r = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"),
+                CUSTOMER, new BigDecimal("1000"));
+
+        assertThat(r.customerZoneName()).isEqualTo("Zone A");
+        assertThat(r.ratePerKg()).isEqualByComparingTo("6.00");
+        assertThat(r.baseFreight()).isEqualByComparingTo("120.00");
+        assertThat(r.odaCharge()).isEqualByComparingTo("80.00");
+        assertThat(r.customerExtraCharges()).isEqualByComparingTo("107.00");
+        verify(repository, never()).findByCompanyIdAndBranchIdAndDistrictId(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a business customer with no zone for the destination falls back to District Level Freight")
+    void customerWithoutZoneFallsBack() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(withCity()));
+        when(zoneService.resolve(CUSTOMER, DISTRICT, CITY)).thenReturn(Optional.empty());
+        when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
+                .thenReturn(Optional.of(row()));
+
+        FreightCalculationResult r = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"),
+                CUSTOMER, null);
+
+        assertThat(r.customerZoneName()).isNull();
+        assertThat(r.baseFreight()).isEqualByComparingTo("170.00");
+        assertThat(r.customerExtraCharges()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("an ordinary booking never consults customer zones")
+    void ordinaryBookingSkipsZones() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(withCity()));
+        when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
+                .thenReturn(Optional.of(row()));
+
+        service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
+
+        org.mockito.Mockito.verifyNoInteractions(zoneService, zoneRateService);
     }
 }

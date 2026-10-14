@@ -87,11 +87,15 @@ Approval + e-mail (V111): invoices start PENDING_APPROVAL; approving e-mails the
 **Gotcha:** the JWT carries all permission codes (~7.5 KB for a company admin) — raise-the-limit fix is in `application.yml` + `nginx.conf`, but adding permission modules keeps growing the
 token; the real fix is to stop putting every code in the JWT.
 
+## Booking pricing (2026-10-14, V113)
+
+Wired into `FreightCalculationServiceImpl` (District Level Freight's seam), not `PricingEngine`: that is where booking freight/ODA actually come from. `shipments.business_customer_id` stores the picked customer.
+Zone covers destination -> freight = chargeable (max(actual, zone min)) x slab rate, ODA from zone; no zone -> District Level Freight as before. Zone docket/mathadi/pack/fuel%/FOV% = `customerExtraCharges`,
+carried as Other Charges (server minimum, operator may raise; screen prefills). Booking screen sends customer + declared value to `/district-level-freight/calculate`. Billing still matches by consignor mobile.
+
 ## Not done / follow-ups
 
-- **Shipment booking does not use customer zone rates yet.** `resolve` + `calculate` exist so the
-  booking screen can pick the zone/rate; wiring it into `PricingEngine` (customer zone first,
-  fall back to Rate Master / district freight when the customer has no zone) is the next step.
+- ~~Shipment booking does not use customer zone rates~~ — done 2026-10-14, see "Booking pricing" above.
 - The pre-existing legacy-site data (77 customers, 71 rate cards at sumansoftwares.com) is not imported.
 - No bulk import/export for zones or rates; no "copy zone" action.
 - Dev fixtures in `courier_db`: business customer "Verify Traders Pvt Ltd" (3 addresses),

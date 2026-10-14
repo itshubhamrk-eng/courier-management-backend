@@ -265,8 +265,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         // is validated. See `FreightCalculationServiceImpl` for the full sequence.
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
                 command.bookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
-                weight.chargeableWeight());
+                weight.chargeableWeight(), command.businessCustomerId(), command.declaredValue());
         requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
+        requireCustomerExtraCharges(command.otherCharges(), freightCalc);
 
         // Delivery Branch is no longer picked, decided, or even resolved at booking —
         // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
@@ -317,6 +318,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .pickupPincode(command.pickupPincode())
                 .deliveryPincode(command.deliveryPincode())
                 .destinationAreaId(command.destinationAreaId())
+                .businessCustomerId(command.businessCustomerId())
                 .senderName(command.senderName())
                 .senderAddress(command.senderAddress())
                 .senderContact(command.senderContact())
@@ -430,9 +432,10 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
                 shipment.getBookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
-                weight.chargeableWeight());
+                weight.chargeableWeight(), shipment.getBusinessCustomerId(), command.declaredValue());
         if (!chargesPinned) {
             requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
+            requireCustomerExtraCharges(command.otherCharges(), freightCalc);
         }
 
         // No delivery branch to resolve any more — pricing runs with none, same as
@@ -583,7 +586,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         List<ShipmentItem> items = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
                 shipment.getBookingBranchId(), shipment.getDeliveryPincode(), shipment.getDestinationAreaId(),
-                shipment.getChargeableWeight());
+                shipment.getChargeableWeight(), shipment.getBusinessCustomerId(), shipment.getDeclaredValue());
         PricingResult priced = priceIt(shipment.getBookingBranchId(), null,
                 shipment.getPickupPincode(), shipment.getDeliveryPincode(), shipment.getServiceTypeId(),
                 shipment.getPackageTypeId(), shipment.getPaymentModeId(), shipment.getChargeableWeight(),
@@ -2289,6 +2292,21 @@ public class ShipmentServiceImpl implements ShipmentService {
                     "Rate/KG cannot be lowered below the calculated rate of %s/KG for %s -> %s."
                             .formatted(freightCalc.ratePerKg().toPlainString(), freightCalc.bookingBranchCode(),
                                     freightCalc.districtName()));
+        }
+    }
+
+    /** A Business Customer zone's docket/mathadi/pack/fuel/FOV lines ride as Other Charges —
+     *  the operator may raise them, never go below the rate card. No-op for District Level Freight. */
+    private void requireCustomerExtraCharges(BigDecimal otherCharges, FreightCalculationResult freightCalc) {
+        BigDecimal required = freightCalc.customerExtraCharges();
+        if (freightCalc.customerZoneName() == null || required == null || required.signum() <= 0) {
+            return;
+        }
+        BigDecimal given = otherCharges == null ? BigDecimal.ZERO : otherCharges;
+        if (given.compareTo(required) < 0) {
+            throw new BusinessRuleException(
+                    "Other Charges must be at least %s — zone '%s' rate card (docket, mathadi, pack, fuel, FOV)."
+                            .formatted(required.toPlainString(), freightCalc.customerZoneName()));
         }
     }
 

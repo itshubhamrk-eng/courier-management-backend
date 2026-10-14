@@ -94,6 +94,7 @@ public class DistrictLevelFreightMapper {
                 r.districtId(), r.districtCode(), r.districtName(), r.destinationPincode(),
                 r.destinationCityName(),
                 r.chargeableWeight(), r.weightSlabLabel(), r.ratePerKg(), r.baseFreight(),
-                r.odaApplicable(), r.odaCharge(), r.totalFreight());
+                r.odaApplicable(), r.odaCharge(), r.totalFreight(),
+                r.customerZoneName(), r.customerExtraCharges());
     }
 }

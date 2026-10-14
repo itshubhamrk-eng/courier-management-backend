@@ -20,6 +20,12 @@ public record FreightCalculationResponse(
         BigDecimal baseFreight,
         boolean odaApplicable,
         BigDecimal odaCharge,
-        BigDecimal totalFreight
+        BigDecimal totalFreight,
+        @Schema(description = "Set when a Business Customer pricing zone priced this booking instead "
+                + "of District Level Freight; weightSlabLabel then names the zone")
+        String customerZoneName,
+        @Schema(description = "Zone rate's docket + mathadi + pack + fuel + FOV — the minimum Other "
+                + "Charges for the booking. Zero when District Level Freight priced it")
+        BigDecimal customerExtraCharges
 ) {
 }

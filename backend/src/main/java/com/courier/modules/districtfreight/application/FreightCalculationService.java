@@ -29,6 +29,23 @@ public interface FreightCalculationService {
      *         not on file / not serviceable / has no resolvable district, or no District
      *         Level Freight configuration exists for this From Station + District
      */
+    default FreightCalculationResult calculate(UUID bookingBranchId, String destinationPincode,
+                                               UUID destinationAreaId, BigDecimal chargeableWeight) {
+        return calculate(bookingBranchId, destinationPincode, destinationAreaId, chargeableWeight, null, null);
+    }
+
+    /**
+     * As above, for a booking made for a Business Customer: when that customer has an ACTIVE
+     * pricing zone covering the destination (city match beating whole-district), freight and
+     * ODA come from the zone's rate card instead of District Level Freight, and the result
+     * carries the zone's docket/mathadi/pack/fuel/FOV lines as {@code customerExtraCharges}.
+     * A customer with no zone for that destination silently falls through to District Level
+     * Freight; a zone that covers it but has no usable rate/slab fails with its own message.
+     *
+     * @param businessCustomerId null for an ordinary booking
+     * @param declaredValue      basis of the zone rate's FOV %; null counts as zero
+     */
     FreightCalculationResult calculate(UUID bookingBranchId, String destinationPincode, UUID destinationAreaId,
-                                        BigDecimal chargeableWeight);
+                                        BigDecimal chargeableWeight, UUID businessCustomerId,
+                                        BigDecimal declaredValue);
 }

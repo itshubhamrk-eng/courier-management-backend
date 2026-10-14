@@ -478,6 +478,9 @@ export interface CreateShipmentRequest extends ShipmentFields {
   /** Omit for the normal flow. MSRTC requires `deliveryBranchId`. */
   flowType?: FlowType;
   deliveryBranchId?: string | null;
+  /** The Business Customer this booking is for — prices freight from their zone rate card
+   *  when one covers the destination. Omit for an ordinary booking. */
+  businessCustomerId?: string | null;
   /** Optional — enter a specific shipment number instead of the auto-generated
    *  "<BRANCH_CODE>-<serial>" one. Must be unique within the company; booking is
    *  refused with a 422 if it's already in use. */

@@ -434,6 +434,7 @@ type FreightOutcome =
                 <div class="factor-row">
                   <span class="sum__lbl">Rate / KG
                     <span class="hint">(min {{ f.ratePerKg | number: '1.2-2' }}, increase only)</span>
+                    @if (f.customerZoneName) { <span class="hint">· Customer zone {{ f.customerZoneName }}</span> }
                   </span>
                   <input class="factor-input" type="number" step="0.01" [min]="f.ratePerKg"
                          [value]="ratePerKgOverride() ?? f.ratePerKg"
@@ -831,6 +832,9 @@ export class ShipmentCreate implements OnInit {
   protected readonly businessCustomerCtl = new FormControl<string>('', { nonNullable: true });
   /** The autocomplete control holds the typed text until an option is chosen; this is set only to a real customer id. */
   protected readonly selectedBusinessCustomer = signal('');
+  /** The Business Customer zone rate's docket/mathadi/pack/fuel/FOV total currently folded into
+   *  Other Charges — tracked so a recalculation replaces it instead of stacking on it. */
+  private readonly zoneExtraCharges = signal(0);
   protected readonly businessPickupCtl = new FormControl<string>('', { nonNullable: true });
   private businessPickupAddresses: CustomerAddress[] = [];
   protected readonly senderSuggestions = signal<Customer[]>([]);
@@ -1092,6 +1096,10 @@ export class ShipmentCreate implements OnInit {
     // (it doesn't care about service type/package type/payment mode/declared value/
     // booking date); weight reschedules via {@link onWeight}.
     this.c('deliveryPincode').valueChanges.subscribe(() => this.scheduleFreightCalc());
+    // A Business Customer zone's FOV % is a share of the declared value, so it moves with it.
+    this.c('declaredValue').valueChanges.subscribe(() => {
+      if (this.selectedBusinessCustomer()) this.scheduleFreightCalc();
+    });
 
     this.freightTrigger$.pipe(
       debounceTime(500),
@@ -1102,6 +1110,7 @@ export class ShipmentCreate implements OnInit {
       if (outcome.ok) {
         this.freightCalc.set(outcome.data);
         this.freightCalcError.set(null);
+        this.applyZoneExtraCharges(outcome.data.customerExtraCharges ?? 0);
       } else {
         this.freightCalc.set(null);
         this.freightCalcError.set(outcome.message);
@@ -1168,6 +1177,7 @@ export class ShipmentCreate implements OnInit {
       this.businessPickupCtl.setValue('', { emitEvent: false });
       this.businessPickupOptions.set([]);
       this.businessPickupAddresses = [];
+      this.scheduleFreightCalc();
       return;
     }
     if (!this.businessCustomerOptions().length) {
@@ -1185,6 +1195,7 @@ export class ShipmentCreate implements OnInit {
       const id = this.businessCustomerOptions().some((o) => o.value === raw) ? raw : '';
       if (id === this.selectedBusinessCustomer()) return;
       this.selectedBusinessCustomer.set(id);
+      this.scheduleFreightCalc();
       this.businessPickupOptions.set([]);
       this.businessPickupAddresses = [];
       this.businessPickupCtl.setValue('', { emitEvent: false });
@@ -1674,6 +1685,18 @@ export class ShipmentCreate implements OnInit {
     this.pricingTrigger$.next();
   }
 
+  /** A zone-priced booking carries its rate card's non-freight lines as Other Charges (the
+   *  server refuses less). Replaces the previous zone figure, keeps anything the operator
+   *  raised above it, and clears it again when the booking stops being zone-priced. */
+  private applyZoneExtraCharges(next: number): void {
+    const prev = this.zoneExtraCharges();
+    if (next > 0 || prev > 0) {
+      const current = this.otherCharges();
+      if (current === prev || current < next) this.otherCharges.set(next);
+    }
+    this.zoneExtraCharges.set(next);
+  }
+
   private scheduleFreightCalc(): void {
     this.freightCalc.set(null);
     this.freightCalcError.set(null);
@@ -1691,7 +1714,8 @@ export class ShipmentCreate implements OnInit {
 
     return this.freightCalculationService.calculate({
       bookingBranchId: v.bookingBranchId, destinationPincode: v.deliveryPincode,
-      destinationAreaId: v.destinationAreaId, chargeableWeight: this.weight().chargeable
+      destinationAreaId: v.destinationAreaId, chargeableWeight: this.weight().chargeable,
+      businessCustomerId: this.selectedBusinessCustomer() || null, declaredValue: v.declaredValue || null
     }).pipe(
       switchMap((data) => of({ ok: true, data }) as Observable<FreightOutcome>),
       catchError((e: HttpErrorResponse) =>
@@ -1755,6 +1779,7 @@ export class ShipmentCreate implements OnInit {
       crossingCharge: v.crossingCharge || null,
       invoiceValue: v.invoiceValue || null,
       destinationAreaId: v.destinationAreaId || null,
+      businessCustomerId: this.selectedBusinessCustomer() || null,
       ratePerKgOverride: this.ratePerKgOverride(),
       appointmentDelivery: v.appointmentDelivery || null,
       appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,

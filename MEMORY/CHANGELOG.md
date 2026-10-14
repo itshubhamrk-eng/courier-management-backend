@@ -8,6 +8,18 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-14 — Business Customer zone rates now price the booking
+
+- `V113`: `shipments.business_customer_id` (nullable, no FK). Stored on create from `CreateShipmentRequest.businessCustomerId`; edit and Rate/KG recalculation re-derive from the stored id.
+- `FreightCalculationService.calculate(..., businessCustomerId, declaredValue)` (4-arg kept as a default method): if the customer has an ACTIVE zone covering the destination (city beats whole district; `CoverageRef` gained `cityId`), freight = chargeable x zone slab rate, ODA = zone ODA when the pincode is ODA; otherwise falls through to District Level Freight unchanged. A zone that covers it but has no usable rate/slab fails with the zone's own message.
+- Zone docket + mathadi + pack + fuel% + FOV% come back as `customerExtraCharges` and ride as **Other Charges**: server refuses `otherCharges` below it (operator may raise), and the booking screen prefills Other Charges with it. No new charge column, so GST/commission/net math is the existing otherCharges path.
+- `FreightCalculationResult` gained `customerZoneName` + `customerExtraCharges` (17-arg constructor kept); `/district-level-freight/calculate` takes `businessCustomerId` + `declaredValue`.
+- Frontend `shipment-create.ts`: sends the picked business customer + declared value to the freight preview, recalculates on customer/declared-value change, shows "Customer zone X" next to Rate/KG, sends `businessCustomerId` on book.
+- Verified: `mvn test` 1155/1155 (3 new zone tests), `ng build`; live on throwaway :8082 against courier_db: Zenith Retail "Goa" zone, 20 kg -> freight 360 + extras 126, 5 kg floored to 10 kg (180 + 58), other charges 100 refused with 422, 126 booked (CP-AHL-MIDC-000001: freight 360, other 126, net 520, customer id stored). Booking screen driven in Chrome on :4300 (branch user, Zenith, pincode 403001): "Customer zone Goa" label, Rate/KG 18, Other Charges prefilled 67, then 117 when item value set to 10000; booked TEST-000021 (freight 270, other 117, GST 21.15, net 420, customer id stored; UI summary matched DB). Edit and Rate/KG-recalc paths not exercised.
+- Not done: billing still matches shipments by consignor mobile, not the new customer id.
+
+---
+
 ## 2026-10-14 — Razorpay bank settlement tracking on wallet recharges
 
 - `V112`: `wallet_recharge_orders` gains `bank_settlement_id`, `bank_settlement_utr`, `bank_settled_at`, `settlement_last_checked_at`. Distinct from the existing `settled_at` (= wallet credited).

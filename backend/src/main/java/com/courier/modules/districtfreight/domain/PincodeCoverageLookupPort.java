@@ -24,7 +24,7 @@ public interface PincodeCoverageLookupPort {
      *  specific pincode actually needs shown as its "city". */
     record CoverageRef(UUID pincodeId, String pincodeCode, boolean serviceable, boolean odaApplicable,
                         UUID districtId, String districtCode, String districtName, boolean districtActive,
-                        String cityName) {
+                        String cityName, UUID cityId) {
     }
 
     /** {@code pincodeCode} is matched exactly, case-insensitively — empty when no pincode

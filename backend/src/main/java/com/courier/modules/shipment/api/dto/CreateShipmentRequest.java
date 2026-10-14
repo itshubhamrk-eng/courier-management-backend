@@ -133,6 +133,11 @@ public record CreateShipmentRequest(
                 + "to deliveryBranchId, which is then required.")
         FlowType flowType,
         @Schema(description = "Required when flowType is MSRTC; ignored otherwise.")
-        UUID deliveryBranchId
+        UUID deliveryBranchId,
+        @Schema(description = "The Business Customer this booking is for. When that customer has an "
+                + "ACTIVE pricing zone covering the destination, freight and ODA are priced from the "
+                + "zone's rate card and its docket/mathadi/pack/fuel/FOV lines become the minimum "
+                + "otherCharges. Omit for an ordinary booking.")
+        UUID businessCustomerId
 ) {
 }

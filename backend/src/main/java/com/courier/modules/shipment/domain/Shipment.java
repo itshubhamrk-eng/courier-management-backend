@@ -143,6 +143,14 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "destination_area_id", columnDefinition = "BINARY(16)")
     private UUID destinationAreaId;
 
+    /** The Business Customer this booking was made for, when it was booked through
+     *  "Business Customer booking" — freight is priced from that customer's pricing-zone
+     *  rate card when one covers the destination, and re-derived from it on edit. Null for
+     *  every ordinary booking and for shipments booked before this column existed. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "business_customer_id", columnDefinition = "BINARY(16)")
+    private UUID businessCustomerId;
+
     @Column(name = "sender_name", nullable = false, length = 150)
     private String senderName;
 

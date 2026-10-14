@@ -10,8 +10,7 @@
 `0.67.0` — **Business Customer module.** Sidebar group BUSINESS CUSTOMER (Customer / Pricing Zone / Rate),
 COMPANY_ADMIN-only. Extended `Customer` in place (contact person, default payment mode, billing frequency, billing address,
 address usage), new `modules/customerpricing` (per-customer pricing zones of districts/cities, per-zone rate card with
-per-kg slabs + docket/mathadi/pack/ODA/fuel%/FOV%), `V105`-`V107`. **Booking does not use customer zone rates yet** — the
-`/pricing-zones/resolve` and `/customer-rates/calculate` APIs are ready for that wiring. Full detail in
+per-kg slabs + docket/mathadi/pack/ODA/fuel%/FOV%), `V105`-`V107`. **Booking uses customer zone rates since 2026-10-14 (`V113`, see `MEMORY/modules/business-customer.md` "Booking pricing").** Full detail in
 `MEMORY/modules/business-customer.md` and `CHANGELOG.md` 2026-10-13.
 
 Previously current:

@@ -62,7 +62,8 @@ public class ShipmentMapper {
                 r.destinationAreaId(), r.ratePerKgOverride(),
                 r.appointmentDelivery(), r.appointmentDate(), r.appointmentTimeSlot(),
                 r.appointmentDeliveryCharge(), r.insuranceApplicable(),
-                r.deliveryType(), r.doorDeliveryCharge(), r.flowType(), r.deliveryBranchId());
+                r.deliveryType(), r.doorDeliveryCharge(), r.flowType(), r.deliveryBranchId(),
+                r.businessCustomerId());
     }
 
     public UpdateShipmentCommand toCommand(UpdateShipmentRequest r) {

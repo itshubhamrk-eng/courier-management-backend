@@ -1,5 +1,8 @@
 package com.courier.modules.districtfreight.application;
 
+import com.courier.modules.customerpricing.application.PricingZoneService;
+import com.courier.modules.customerpricing.application.PricingZoneView;
+import com.courier.modules.customerpricing.application.ZoneRateService;
 import com.courier.modules.districtfreight.domain.BranchLookupPort;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreight;
@@ -40,12 +43,15 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
     private final DistrictLevelFreightRepository repository;
     private final BranchLookupPort branchLookup;
     private final PincodeCoverageLookupPort coverageLookup;
+    private final PricingZoneService zoneService;
+    private final ZoneRateService zoneRateService;
 
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READ)
     public FreightCalculationResult calculate(UUID bookingBranchId, String destinationPincode,
-                                               UUID destinationAreaId, BigDecimal chargeableWeight) {
+                                               UUID destinationAreaId, BigDecimal chargeableWeight,
+                                               UUID businessCustomerId, BigDecimal declaredValue) {
         UUID companyId = requireCompany();
 
         if (bookingBranchId == null) {
@@ -80,6 +86,14 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
                     "District %s is inactive and cannot be used as a destination.".formatted(coverage.districtCode()));
         }
 
+        if (businessCustomerId != null) {
+            FreightCalculationResult zonePriced = priceFromCustomerZone(businessCustomerId, branch, coverage,
+                    chargeableWeight, declaredValue);
+            if (zonePriced != null) {
+                return zonePriced;
+            }
+        }
+
         DistrictLevelFreight freight = repository
                 .findByCompanyIdAndBranchIdAndDistrictId(companyId, branch.branchId(), coverage.districtId())
                 .filter(row -> row.getStatus() == DistrictFreightStatus.ACTIVE)
@@ -106,6 +120,29 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
                 branch.branchName(), coverage.districtId(), coverage.districtCode(), coverage.districtName(),
                 coverage.pincodeId(), coverage.pincodeCode(), coverage.cityName(), chargeableWeight, slab.label(),
                 slab.ratePerKg(), baseFreight, odaApplies, odaCharge, totalFreight);
+    }
+
+    /** The customer's zone rate card for this destination, or null when no ACTIVE zone of
+     *  theirs covers it (the caller then falls back to District Level Freight). */
+    private FreightCalculationResult priceFromCustomerZone(UUID customerId, BranchLookupPort.BranchRef branch,
+                                                           PincodeCoverageLookupPort.CoverageRef coverage,
+                                                           BigDecimal chargeableWeight, BigDecimal declaredValue) {
+        PricingZoneView zone = zoneService.resolve(customerId, coverage.districtId(), coverage.cityId())
+                .orElse(null);
+        if (zone == null) {
+            return null;
+        }
+        ZoneRateService.Quote quote = zoneRateService.calculate(new ZoneRateService.QuoteCommand(
+                customerId, coverage.districtId(), coverage.cityId(), chargeableWeight, declaredValue,
+                coverage.odaApplicable(), null));
+        BigDecimal oda = quote.odaCharge().setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        BigDecimal extras = quote.docketCharge().add(quote.mathadiCharge()).add(quote.packCharge())
+                .add(quote.fuelSurcharge()).add(quote.fovCharge()).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        return new FreightCalculationResult(null, branch.branchId(), branch.branchCode(), branch.branchName(),
+                coverage.districtId(), coverage.districtCode(), coverage.districtName(), coverage.pincodeId(),
+                coverage.pincodeCode(), coverage.cityName(), quote.chargeableWeight(),
+                "Zone " + quote.zoneName(), quote.ratePerKg(), quote.freight(), coverage.odaApplicable()
+                && oda.signum() > 0, oda, quote.freight().add(oda), quote.zoneName(), extras);
     }
 
     private UUID requireCompany() {
