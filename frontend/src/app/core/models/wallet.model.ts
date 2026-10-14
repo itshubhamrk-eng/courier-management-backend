@@ -128,6 +128,12 @@ export interface RechargeAttempt {
   ledgerTransactionId: string | null;
   lastCheckedAt: string | null;
   settledAt: string | null;
+  /** Razorpay payout to the bank: null for manual/failed/pending recharges. */
+  bankSettlementStatus: 'AWAITING' | 'SETTLED' | null;
+  bankSettlementId: string | null;
+  bankSettlementUtr: string | null;
+  bankSettledAt: string | null;
+  settlementLastCheckedAt: string | null;
   createdAt: string;
 }
 

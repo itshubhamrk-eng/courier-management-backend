@@ -26,4 +26,15 @@ public interface RechargeOrderRepository extends JpaRepository<RechargeOrder, UU
     List<RechargeOrder> findPendingToReconcile(@Param("createdBefore") Instant createdBefore,
                                                @Param("checkedBefore") Instant checkedBefore,
                                                Pageable pageable);
+
+    /** Settlement scheduler feed — cross-company. Credited online recharges with a payment id
+     *  that no settlement has claimed yet, credited recently enough to still be worth asking about. */
+    @Query("select r from RechargeOrder r where r.status = com.courier.modules.finance.domain.PaymentStatus.SUCCESS "
+            + "and r.mode = com.courier.modules.finance.domain.RechargeMode.ONLINE "
+            + "and r.gatewayPaymentId is not null and r.bankSettlementId is null "
+            + "and r.settledAt > :creditedAfter and r.settledAt < :creditedBefore "
+            + "order by r.settledAt asc")
+    List<RechargeOrder> findAwaitingBankSettlement(@Param("creditedAfter") Instant creditedAfter,
+                                                   @Param("creditedBefore") Instant creditedBefore,
+                                                   Pageable pageable);
 }

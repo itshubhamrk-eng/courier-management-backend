@@ -57,6 +57,24 @@ public interface PaymentGatewayPort {
     java.util.List<OrderPayment> fetchOrderPayments(String orderId);
 
     /**
+     * Payments the gateway paid out to the merchant's bank between two dates (inclusive, IST).
+     * Default empty: a gateway with no payout reporting simply never marks anything settled.
+     */
+    default java.util.List<PaymentSettlement> fetchSettlements(java.time.LocalDate from, java.time.LocalDate to) {
+        return java.util.List.of();
+    }
+
+    /**
+     * A payment that has been paid out.
+     *
+     * @param settlementId the payout batch
+     * @param utr          the bank reference of that payout, when the gateway reports one
+     * @param settledAt    when the payout was made
+     */
+    record PaymentSettlement(String paymentId, String settlementId, String utr, java.time.Instant settledAt) {
+    }
+
+    /**
      * One payment attempt on an order.
      *
      * @param status   the gateway's own status word, e.g. {@code captured}, {@code failed}

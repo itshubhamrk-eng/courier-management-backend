@@ -186,6 +186,60 @@ public class RazorpayPaymentGateway implements PaymentGatewayPort {
         return payments;
     }
 
+    private static final java.time.ZoneId IST = java.time.ZoneId.of("Asia/Kolkata");
+    private static final int RECON_PAGE = 100;
+    /** Hard stop per day so a misbehaving response can never loop forever. */
+    private static final int RECON_MAX_PAGES = 50;
+
+    /**
+     * Razorpay's settlement reconciliation report, one call per settlement day:
+     * {@code GET /settlements/recon/combined?year&month&day&count&skip}. Each {@code payment}
+     * row names the payment and the settlement (and its UTR) that paid it out.
+     */
+    @Override
+    public java.util.List<PaymentSettlement> fetchSettlements(java.time.LocalDate from, java.time.LocalDate to) {
+        java.util.List<PaymentSettlement> out = new java.util.ArrayList<>();
+        for (java.time.LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
+            for (int page = 0; page < RECON_MAX_PAGES; page++) {
+                final java.time.LocalDate d = day;
+                final int skip = page * RECON_PAGE;
+                Map<?, ?> response;
+                try {
+                    response = restClient.get()
+                            .uri(u -> u.path("/settlements/recon/combined")
+                                    .queryParam("year", d.getYear())
+                                    .queryParam("month", d.getMonthValue())
+                                    .queryParam("day", d.getDayOfMonth())
+                                    .queryParam("count", RECON_PAGE)
+                                    .queryParam("skip", skip)
+                                    .build())
+                            .retrieve().body(Map.class);
+                } catch (Exception e) {
+                    throw translateGatewayException(e, "settlement lookup", d.toString());
+                }
+                Object items = response == null ? null : response.get("items");
+                if (!(items instanceof java.util.List<?> list) || list.isEmpty()) {
+                    break;
+                }
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> row && "payment".equals(row.get("type"))
+                            && row.get("entity_id") != null && row.get("settlement_id") != null) {
+                        Object at = row.get("settled_at");
+                        out.add(new PaymentSettlement(String.valueOf(row.get("entity_id")),
+                                String.valueOf(row.get("settlement_id")),
+                                row.get("settlement_utr") == null ? null : String.valueOf(row.get("settlement_utr")),
+                                at instanceof Number n ? java.time.Instant.ofEpochSecond(n.longValue())
+                                        : d.atStartOfDay(IST).toInstant()));
+                    }
+                }
+                if (list.size() < RECON_PAGE) {
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
     /**
      * A 401/403 from Razorpay means our own key id/secret is wrong or disabled — that is
      * an operator misconfiguration, not a transient outage, and telling the caller to

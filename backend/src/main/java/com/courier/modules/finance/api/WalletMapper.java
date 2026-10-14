@@ -83,7 +83,18 @@ public class WalletMapper {
                 o.getCreatedBy() == null ? null
                         : branchDirectory.findUser(o.getCreatedBy(), o.getCompanyId())
                                 .map(BranchDirectoryPort.UserRef::displayName).orElse(null),
-                o.getLedgerTransactionId(), o.getLastCheckedAt(), o.getSettledAt(), o.getCreatedAt());
+                o.getLedgerTransactionId(), o.getLastCheckedAt(), o.getSettledAt(),
+                bankSettlementStatus(o), o.getBankSettlementId(), o.getBankSettlementUtr(),
+                o.getBankSettledAt(), o.getSettlementLastCheckedAt(), o.getCreatedAt());
+    }
+
+    /** Only a credited online recharge can be settled by the gateway; everything else has no payout to track. */
+    private static String bankSettlementStatus(com.courier.modules.finance.domain.RechargeOrder o) {
+        if (o.getMode() != com.courier.modules.finance.domain.RechargeMode.ONLINE
+                || o.getStatus() != com.courier.modules.finance.domain.PaymentStatus.SUCCESS) {
+            return null;
+        }
+        return o.isBankSettled() ? "SETTLED" : "AWAITING";
     }
 
     public WalletResponse toResponse(Wallet w) {

@@ -104,6 +104,28 @@ public class RechargeOrder extends CompanyOwnedEntity {
     @Column(name = "settled_at")
     private Instant settledAt;
 
+    /** Razorpay settlement (payout batch) this payment was paid out in; null until it is. */
+    @Setter
+    @Column(name = "bank_settlement_id", length = 100)
+    private String bankSettlementId;
+
+    /** Bank reference (UTR) of that payout — what to match against the bank statement. */
+    @Setter
+    @Column(name = "bank_settlement_utr", length = 100)
+    private String bankSettlementUtr;
+
+    @Setter
+    @Column(name = "bank_settled_at")
+    private Instant bankSettledAt;
+
+    @Setter
+    @Column(name = "settlement_last_checked_at")
+    private Instant settlementLastCheckedAt;
+
+    public boolean isBankSettled() {
+        return bankSettlementId != null;
+    }
+
     public boolean isPending() {
         return status == PaymentStatus.PENDING;
     }

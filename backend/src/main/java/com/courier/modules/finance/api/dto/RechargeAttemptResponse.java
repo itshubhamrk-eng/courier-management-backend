@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-@Schema(name = "RechargeAttemptResponse", description = "One online recharge attempt: PENDING, SUCCESS or FAILED")
+@Schema(name = "RechargeAttemptResponse", description = "One recharge attempt: PENDING, SUCCESS or FAILED. bankSettlementStatus is SETTLED / AWAITING for a credited online recharge, null otherwise")
 public record RechargeAttemptResponse(
         UUID id,
         String transactionNo,
@@ -26,6 +26,11 @@ public record RechargeAttemptResponse(
         UUID ledgerTransactionId,
         Instant lastCheckedAt,
         Instant settledAt,
+        String bankSettlementStatus,
+        String bankSettlementId,
+        String bankSettlementUtr,
+        Instant bankSettledAt,
+        Instant settlementLastCheckedAt,
         Instant createdAt
 ) {
 }

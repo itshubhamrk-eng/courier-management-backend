@@ -47,7 +47,7 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
       <header class="page__head">
         <div>
           <h1 class="text-h1">Wallet Recharge Report</h1>
-          <p class="text-caption">Every recharge by outcome — {{ page().totalElements }} entries. Pending online ones are re-checked with the gateway every 2 minutes.</p>
+          <p class="text-caption">Every recharge by outcome — {{ page().totalElements }} entries. Pending online ones are re-checked with the gateway every 2 minutes; bank settlement is checked every 3 hours.</p>
         </div>
         <div class="page__actions">
           <app-search placeholder="Search transaction no, order or payment id…" (changed)="onSearch($event)" />
@@ -106,9 +106,20 @@ const STATUS_TABS: { value: RechargeAttemptStatus | null; label: string }[] = [
             @else { <span class="dash">—</span> }
           </td>
           <td>
-            @if (a.status === 'PENDING') {
+            @if (a.bankSettlementStatus === 'SETTLED') {
+              <app-status-badge value="SETTLED" label="Settled to bank" tone="success" />
+              <div class="tc__sub">{{ a.bankSettledAt | date:'dd MMM y' }}</div>
+              <div class="tc__sub">UTR <span class="mono">{{ a.bankSettlementUtr || '—' }}</span></div>
+              <div class="tc__sub">{{ a.bankSettlementId }}</div>
+            } @else if (a.bankSettlementStatus === 'AWAITING') {
+              <app-status-badge value="AWAITING" label="Awaiting settlement" tone="warning" />
+              @if (a.settlementLastCheckedAt) { <div class="tc__sub">checked {{ a.settlementLastCheckedAt | date:'dd MMM, HH:mm' }}</div> }
+            } @else { <span class="dash">—</span> }
+          </td>
+          <td>
+            @if (a.status === 'PENDING' || a.bankSettlementStatus === 'AWAITING') {
               <app-button variant="stroked" icon="sync" [loading]="checkingId() === a.id"
-                          [disabled]="checkingId() !== null" (pressed)="check(a)">Check status</app-button>
+                          [disabled]="checkingId() !== null" (pressed)="check(a)">{{ a.status === 'PENDING' ? 'Check status' : 'Check settlement' }}</app-button>
             }
           </td>
         </ng-template>
@@ -171,6 +182,7 @@ export class WalletRechargeReport implements OnInit {
     { key: 'gatewayPaymentId', header: 'Payment Id' },
     { key: 'recordedByName', header: 'Recorded By' },
     { key: 'settledAt', header: 'Settled / Checked' },
+    { key: 'bankSettlementStatus', header: 'Bank Settlement', width: '170px' },
     { key: 'status', header: '', width: '150px' }
   ];
 
@@ -231,7 +243,10 @@ export class WalletRechargeReport implements OnInit {
       next: (r) => {
         this.checkingId.set(null);
         this.page.update((p) => ({ ...p, content: p.content.map((x) => (x.id === r.id ? r : x)) }));
-        if (r.status === 'SUCCESS') this.notify.success(`Payment received — ${this.money(r.amount)} credited to the wallet.`);
+        if (a.status === 'SUCCESS') {
+          if (r.bankSettlementStatus === 'SETTLED') this.notify.success(`Settled to bank — UTR ${r.bankSettlementUtr ?? 'not reported'}.`);
+          else this.notify.info('Not settled yet — Razorpay has not paid this out to the bank.');
+        } else if (r.status === 'SUCCESS') this.notify.success(`Payment received — ${this.money(r.amount)} credited to the wallet.`);
         else if (r.status === 'FAILED') this.notify.error(r.failureReason ?? 'The payment failed.');
         else this.notify.info('Still pending — the gateway has no completed payment for it yet.');
       },
@@ -259,10 +274,12 @@ export class WalletRechargeReport implements OnInit {
 
   private download(rows: RechargeAttempt[]): void {
     const header = ['createdAt', 'branchCode', 'branchName', 'transactionNo', 'mode', 'amount', 'status',
-      'failureReason', 'gatewayOrderId', 'gatewayPaymentId', 'settledAt', 'lastCheckedAt', 'recordedBy'];
+      'failureReason', 'gatewayOrderId', 'gatewayPaymentId', 'settledAt', 'lastCheckedAt', 'recordedBy',
+      'bankSettlementStatus', 'bankSettlementId', 'bankSettlementUtr', 'bankSettledAt'];
     const lines = rows.map((a) => [
       a.createdAt, a.branchCode ?? '', a.branchName ?? '', a.transactionNo, a.mode, a.amount, a.status,
-      a.failureReason ?? '', a.gatewayOrderId ?? '', a.gatewayPaymentId ?? '', a.settledAt ?? '', a.lastCheckedAt ?? '', a.recordedByName ?? ''
+      a.failureReason ?? '', a.gatewayOrderId ?? '', a.gatewayPaymentId ?? '', a.settledAt ?? '', a.lastCheckedAt ?? '', a.recordedByName ?? '',
+      a.bankSettlementStatus ?? '', a.bankSettlementId ?? '', a.bankSettlementUtr ?? '', a.bankSettledAt ?? ''
     ]);
     // amount is column index 5.
     downloadCsv(`wallet-recharge-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [5]);

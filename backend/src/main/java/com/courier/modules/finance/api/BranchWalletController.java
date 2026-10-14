@@ -82,6 +82,7 @@ public class BranchWalletController {
 
     private final WalletService service;
     private final WalletMapper mapper;
+    private final com.courier.modules.finance.application.RechargeSettlementSync settlementSync;
 
     @GetMapping
     @Operation(summary = "Get the wallet",
@@ -163,10 +164,17 @@ public class BranchWalletController {
             description = """
                     Asks the gateway what happened to this attempt right now — the same check the
                     scheduler runs every 2 minutes — and credits, fails or leaves it. Returns the
-                    attempt as it stands afterwards.
+                    attempt as it stands afterwards. For a credited online recharge it also asks
+                    the gateway whether the money has been settled to the bank yet.
                     """)
     public ApiResponse<RechargeAttemptResponse> checkRechargeAttempt(@PathVariable UUID id) {
-        return ApiResponse.success(mapper.toAttemptResponse(service.checkRechargeAttempt(id)));
+        RechargeOrder order = service.checkRechargeAttempt(id);
+        if (order.getStatus() == PaymentStatus.SUCCESS && !order.isBankSettled()
+                && order.getMode() == com.courier.modules.finance.domain.RechargeMode.ONLINE) {
+            settlementSync.sync(order.getCompanyId(), java.util.List.of(order.getId()));
+            order = service.checkRechargeAttempt(id);
+        }
+        return ApiResponse.success(mapper.toAttemptResponse(order));
     }
 
     @PostMapping("/recharge/order")

@@ -8,6 +8,17 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-14 — Razorpay bank settlement tracking on wallet recharges
+
+- `V112`: `wallet_recharge_orders` gains `bank_settlement_id`, `bank_settlement_utr`, `bank_settled_at`, `settlement_last_checked_at`. Distinct from the existing `settled_at` (= wallet credited).
+- `PaymentGatewayPort.fetchSettlements(from, to)` (default empty); `RazorpayPaymentGateway` implements it with `GET /settlements/recon/combined` per day (IST), paginated, `type=payment` rows only.
+- `RechargeSettlementSync` (per company, uses that company's own keys) stamps credited ONLINE recharges whose payment appears in a settlement; `RechargeSettlementJob` runs it every 3 h (45-day lookback, 6 h minimum age). Reporting only: never touches wallet/ledger.
+- `POST /branch-wallet/recharge-report/{id}/check` also checks settlement for a credited online recharge. `RechargeAttemptResponse` gained `bankSettlementStatus` (SETTLED/AWAITING/null), id, UTR, date.
+- Frontend Recharge Report: "Bank Settlement" column (Settled to bank + date + UTR, or Awaiting), "Check settlement" button, CSV columns.
+- Verified: unit tests (`RechargeSettlementSyncTest`), V112 applied, report endpoint on throwaway :8082 (manual rows unaffected), `ng build`. **Not verified against real Razorpay** (no live ONLINE payment/settlement available); the recon response shape follows Razorpay docs. Needs Razorpay settlement/recon API enabled on the account.
+
+---
+
 ## 2026-10-13 — Customer invoice print uses the shipment-print masthead
 
 - `billing-invoice.ts` now opens the sheet with the shared `renderPrintHeader` (same header as the consignment note / THC / DRS): company logo, company name, address, GSTIN, phone, website, and an
