@@ -140,6 +140,26 @@ public class ShipmentController {
         return ApiResponse.success(mapper.toResponse(shipmentService.getCharges(id)), "Rate/KG updated");
     }
 
+    @GetMapping("/{id}/payment-mode")
+    @Operation(summary = "Payment-mode switch options for a shipment",
+            description = "COMPANY_ADMIN only. The PAID/TO_PAY targets a BOOKED shipment can move to, "
+                    + "the resulting amounts, the booking wallet's balance, and whether it was switched before.")
+    public ApiResponse<com.courier.modules.shipment.api.dto.PaymentModeChangeResponse> paymentModeOptions(
+            @PathVariable UUID id) {
+        return ApiResponse.success(shipmentService.paymentModeChangeOptions(id));
+    }
+
+    @PutMapping("/{id}/payment-mode")
+    @Operation(summary = "Switch a BOOKED shipment between PAID and TO_PAY",
+            description = "COMPANY_ADMIN only, while `BOOKED`. To PAID debits the booking branch's wallet "
+                    + "(refused if short); to TO_PAY credits it back. Charges are recalculated. `version` required.")
+    public ApiResponse<com.courier.modules.shipment.api.dto.PaymentModeChangeResponse> changePaymentMode(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.courier.modules.shipment.api.dto.ChangePaymentModeRequest request) {
+        shipmentService.changePaymentMode(id, request.version(), request.paymentModeId());
+        return ApiResponse.success(shipmentService.paymentModeChangeOptions(id), "Payment mode updated");
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Fetch a shipment", description = "Includes its item grid.")
     public ApiResponse<ShipmentResponse> get(@PathVariable UUID id) {

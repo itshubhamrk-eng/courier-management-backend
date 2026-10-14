@@ -242,6 +242,13 @@ public interface WalletService {
     List<WalletTransaction> reverseForShipment(ShipmentReversalCommand command);
 
     /**
+     * Credits back ({@code SRF}) every booking debit ({@code SBK}) on this shipment that has
+     * not already been refunded — the PAID -> TO_PAY switch seam. Commission entries are
+     * left alone. Returns the credits posted; empty when the shipment was never debited.
+     */
+    List<WalletTransaction> refundBookingDebit(ShipmentReversalCommand command);
+
+    /**
      * Derived view of a wallet, assembled for the summary endpoint.
      *
      * @param branchCode      / {@code branchName} — the labels a statement needs, resolved

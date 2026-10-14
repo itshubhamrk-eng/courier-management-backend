@@ -75,6 +75,18 @@ public interface ShipmentService {
      */
     Shipment updateRatePerKg(UUID id, Long expectedVersion, java.math.BigDecimal ratePerKg);
 
+    /**
+     * {@code COMPANY_ADMIN} only: switches a still-{@code BOOKED} shipment between a
+     * collect-at-booking mode (PAID) and a collect-at-delivery one (TO_PAY). To PAID debits the
+     * booking branch's wallet for the recalculated net amount (refused if the balance is short);
+     * to TO_PAY credits back what was debited. Charges are recalculated and the shipment is
+     * flagged so Track highlights it.
+     */
+    Shipment changePaymentMode(UUID id, Long expectedVersion, UUID paymentModeId);
+
+    /** {@code COMPANY_ADMIN} only: the switch targets, their new amounts and the wallet balance. */
+    com.courier.modules.shipment.api.dto.PaymentModeChangeResponse paymentModeChangeOptions(UUID id);
+
     /** Same recalculation as {@link #updateRatePerKg}, nothing saved — the "Calculate" button. */
     ShipmentCharges previewRatePerKg(UUID id, java.math.BigDecimal ratePerKg);
 

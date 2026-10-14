@@ -20,6 +20,7 @@ import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -180,6 +181,19 @@ public class Shipment extends CompanyOwnedEntity {
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "payment_mode_id", columnDefinition = "BINARY(16)", nullable = false)
     private UUID paymentModeId;
+
+    /** Set when a company admin flipped this still-BOOKED shipment between PAID and TO_PAY:
+     *  the mode it had before the (latest) change. Null means "never changed". */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "payment_mode_changed_from_id", columnDefinition = "BINARY(16)")
+    private UUID paymentModeChangedFromId;
+
+    @Column(name = "payment_mode_changed_at")
+    private Instant paymentModeChangedAt;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "payment_mode_changed_by", columnDefinition = "BINARY(16)")
+    private UUID paymentModeChangedBy;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "shipment_type", nullable = false, length = 20)

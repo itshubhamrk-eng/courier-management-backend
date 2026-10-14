@@ -17,7 +17,7 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { CompanyProfileService } from '@features/company/company-profile.service';
-import { ShipmentResponse, ShipmentCharge, TimelineStep, ShipmentDrs, ShipmentStatusHistoryEntry, CANCELLABLE_STATUSES, Manifest, ShipmentEwayBillInfo } from '@core/models/shipment.model';
+import { ShipmentResponse, ShipmentCharge, TimelineStep, ShipmentDrs, ShipmentStatusHistoryEntry, CANCELLABLE_STATUSES, Manifest, ShipmentEwayBillInfo, PaymentModeChange, PaymentModeTarget } from '@core/models/shipment.model';
 import { TrackingCard } from './components/tracking-card';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentCommunicationCard } from '@features/communication/components/shipment-communication-card';
@@ -72,6 +72,19 @@ const TIMELINE_ICONS: Record<string, string> = {
                            [status]="shipment()!.status" [bookingDate]="shipment()!.bookingDate"
                            [expectedDeliveryDate]="shipment()!.expectedDeliveryDate ?? null"
                            [deliveredAt]="shipment()!.deliveredAt ?? null" />
+
+        @if (paymentMode(); as pm) {
+          @if (pm.changed) {
+            <div class="pm-flag" role="status">
+              <mat-icon>swap_horiz</mat-icon>
+              <div>
+                <strong>Payment mode changed by admin</strong>
+                <span>{{ pm.changedFromModeName }} → {{ pm.currentModeName }}
+                  @if (pm.changedAt) { · {{ pm.changedAt | date: 'dd MMM yyyy, h:mm a' }} }</span>
+              </div>
+            </div>
+          }
+        }
 
         <div class="sv__actions">
           <a class="sv__link" [routerLink]="['/shipments', id, 'history']"><mat-icon>history</mat-icon> History</a>
@@ -137,6 +150,18 @@ const TIMELINE_ICONS: Record<string, string> = {
               <app-loader [minHeight]="140" caption="Loading…" />
             } @else if (charge(); as c) {
               <app-charge-summary [charges]="c" />
+              @if (paymentMode(); as pm) {
+                @if (pm.changeable) {
+                  <div class="pm-edit">
+                    <span class="pm-edit__l">Payment mode: <strong>{{ pm.currentModeName }}</strong></span>
+                    @for (t of pm.targets; track t.id) {
+                      <app-button variant="stroked" icon="swap_horiz" [loading]="paymentModeSaving()"
+                                  (pressed)="changePaymentMode(pm, t)">Change to {{ t.name }}</app-button>
+                    }
+                    <span class="rate-edit__h">Pending shipments only. Switching moves the booking wallet.</span>
+                  </div>
+                }
+              }
               @if (canEditRate()) {
                 <div class="rate-edit">
                   <label class="rate-edit__l">Rate/KG
@@ -427,6 +452,12 @@ const TIMELINE_ICONS: Record<string, string> = {
     .rate-edit { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--border, #e5e7eb); }
     .rate-edit__l { display:flex; flex-direction:column; gap:4px; font:500 12px var(--font-sans); color:var(--content-fg); }
     .rate-edit__i { width:120px; padding:8px 10px; font:400 14px var(--font-sans); border:1px solid var(--border, #d1d5db); border-radius:6px; background:transparent; color:inherit; }
+    .pm-flag { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:10px; border:1px solid var(--warning, #f59e0b); background:var(--warning-bg, #fef3c7); color:var(--warning-fg, #92400e); }
+    .pm-flag mat-icon { flex:none; }
+    .pm-flag div { display:flex; flex-direction:column; gap:2px; font:400 13px var(--font-sans); }
+    .pm-flag strong { font-weight:600; }
+    .pm-edit { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--border, #e5e7eb); }
+    .pm-edit__l { font:400 14px var(--font-sans); }
     .rate-preview { margin-top:12px; padding:12px; border:1px dashed var(--border, #d1d5db); border-radius:8px; }
     .rate-preview__t { font:600 12px var(--font-sans); margin-bottom:8px; opacity:.8; }
     .rate-edit__h { font:400 12px var(--font-sans); opacity:.7; }
@@ -541,6 +572,46 @@ export class ShipmentView implements OnInit {
 
   readonly isCompanyLevel = computed(() => this.auth.hasAnyRole([AppRole.COMPANY_ADMIN]));
 
+  /** Admin-side PAID / TO_PAY switch state (null for branch users — the backend refuses them). */
+  readonly paymentMode = signal<PaymentModeChange | null>(null);
+  readonly paymentModeSaving = signal(false);
+
+  private loadPaymentMode(): void {
+    if (!this.isCompanyLevel()) { this.paymentMode.set(null); return; }
+    this.service.paymentModeChange(this.id).pipe(catchError(() => of(null)))
+      .subscribe((pm) => this.paymentMode.set(pm));
+  }
+
+  protected changePaymentMode(pm: PaymentModeChange, target: PaymentModeTarget): void {
+    const s = this.shipment();
+    if (!s) return;
+    const money = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (target.direction === 'DEBIT' && !target.sufficientBalance) {
+      this.notify.error(`Insufficient wallet balance: available ${money(pm.walletBalance)}, required ${money(target.walletAmount)}.`);
+      return;
+    }
+    const message = target.direction === 'DEBIT'
+      ? `${money(target.walletAmount)} will be debited from the booking branch wallet (available ${money(pm.walletBalance)}). Change ${pm.currentModeName} → ${target.name}?`
+      : `${money(target.walletAmount)} will be credited back to the booking branch wallet. Change ${pm.currentModeName} → ${target.name}?`;
+    this.confirmDialog.confirm({
+      title: `Change to ${target.name}`, message, confirmLabel: `Change to ${target.name}`
+    }).subscribe((ok) => {
+      if (!ok) return;
+      this.paymentModeSaving.set(true);
+      this.service.changePaymentMode(s.id, s.version, target.id).subscribe({
+        next: () => {
+          this.paymentModeSaving.set(false);
+          this.notify.success(`Payment mode changed to ${target.name}.`);
+          this.load();
+        },
+        error: (e) => {
+          this.paymentModeSaving.set(false);
+          this.notify.error(e?.error?.message ?? 'Could not change the payment mode.');
+        }
+      });
+    });
+  }
+
   id = '';
 
   ngOnInit(): void {
@@ -560,6 +631,7 @@ export class ShipmentView implements OnInit {
         this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: s.shipmentNumber }]);
         this.loading.set(false);
         this.loadDetails();
+        this.loadPaymentMode();
         this.loadRelated();
         this.loadMovement(s.manifestId ?? null);
       },

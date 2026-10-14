@@ -1002,3 +1002,27 @@ export interface DrsDetail {
   drsNumber: string | null;
   shipments: DrsShipmentRow[];
 }
+
+/** Admin-side PAID / TO_PAY switch state for one BOOKED shipment — see
+ *  `GET /shipments/{id}/payment-mode`. */
+export interface PaymentModeTarget {
+  id: string;
+  name: string;
+  /** DEBIT = switching to a collect-at-booking mode (wallet debited); CREDIT = back to To-Pay. */
+  direction: 'DEBIT' | 'CREDIT';
+  netAmount: number;
+  walletAmount: number;
+  sufficientBalance: boolean;
+}
+
+export interface PaymentModeChange {
+  currentModeId: string;
+  currentModeName: string;
+  changeable: boolean;
+  currentNetAmount: number | null;
+  walletBalance: number;
+  changed: boolean;
+  changedFromModeName: string | null;
+  changedAt: string | null;
+  targets: PaymentModeTarget[];
+}

@@ -6,7 +6,7 @@ import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentDrs, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse
+  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse, PaymentModeChange
 } from '@core/models/shipment.model';
 
 /**
@@ -71,6 +71,14 @@ export class ShipmentService {
   /** COMPANY_ADMIN only — see ShipmentController.updateRatePerKg. */
   updateRatePerKg(id: string, version: number, ratePerKg: number) {
     return this.api.put<ShipmentCharge>(`${API.shipments}/${id}/rate-per-kg`, { version, ratePerKg });
+  }
+  /** COMPANY_ADMIN only — see ShipmentController.paymentModeOptions. */
+  paymentModeChange(id: string) {
+    return this.api.get<PaymentModeChange>(`${API.shipments}/${id}/payment-mode`);
+  }
+  /** COMPANY_ADMIN only, BOOKED only — debits or credits the booking wallet. */
+  changePaymentMode(id: string, version: number, paymentModeId: string) {
+    return this.api.put<PaymentModeChange>(`${API.shipments}/${id}/payment-mode`, { version, paymentModeId });
   }
   cancel(id: string, remarks: string) {
     return this.api.post<ShipmentResponse>(

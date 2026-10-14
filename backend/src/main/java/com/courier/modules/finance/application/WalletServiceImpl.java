@@ -841,8 +841,14 @@ public class WalletServiceImpl implements WalletService {
         // row-locking rule implies, in case two entries here land on different branches.
         originals.sort(java.util.Comparator.comparing(WalletTransaction::getWalletId));
 
+        java.util.Set<UUID> alreadyRefunded = refundedBookingDebitIds(originals);
         List<WalletTransaction> reversals = new java.util.ArrayList<>();
         for (WalletTransaction original : originals) {
+            // A booking debit an admin's PAID -> TO_PAY switch already refunded must not be
+            // credited back a second time by the cancellation.
+            if (alreadyRefunded.contains(original.getId())) {
+                continue;
+            }
             // A reversal never itself gets reversed — SRF/ADJ entries this same method wrote
             // (or a manual adjustment) are not something a cancellation should undo again.
             if (original.getSubTransactionType() == SubTransactionType.SRF
@@ -861,6 +867,42 @@ public class WalletServiceImpl implements WalletService {
         }
 
         return reversals;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public List<WalletTransaction> refundBookingDebit(ShipmentReversalCommand command) {
+        UUID companyId = requireCompany();
+        List<WalletTransaction> originals = new java.util.ArrayList<>(
+                transactionRepository.findSettledByReferenceWithinCompany(
+                        ReferenceType.SHIPMENT, command.shipmentNumber(), companyId));
+        java.util.Set<UUID> alreadyRefunded = refundedBookingDebitIds(originals);
+        List<WalletTransaction> refunds = new java.util.ArrayList<>();
+        for (WalletTransaction original : originals) {
+            if (original.getSubTransactionType() == SubTransactionType.SBK
+                    && !alreadyRefunded.contains(original.getId())) {
+                refunds.add(postReversal(original, companyId, command.remarks()));
+            }
+        }
+        return refunds;
+    }
+
+    /** Booking debits ({@code SBK}) on this shipment's ledger that a refund credit
+     *  ({@code SRF}) of the same amount has already answered, matched oldest-first. */
+    private static java.util.Set<UUID> refundedBookingDebitIds(List<WalletTransaction> ledger) {
+        List<WalletTransaction> debits = ledger.stream()
+                .filter(t -> t.getSubTransactionType() == SubTransactionType.SBK).toList();
+        java.util.Set<UUID> matched = new java.util.HashSet<>();
+        for (WalletTransaction t : ledger) {
+            if (t.getSubTransactionType() != SubTransactionType.SRF) {
+                continue;
+            }
+            debits.stream()
+                    .filter(d -> !matched.contains(d.getId()) && d.getAmount().compareTo(t.getAmount()) == 0)
+                    .findFirst().ifPresent(d -> matched.add(d.getId()));
+        }
+        return matched;
     }
 
     private WalletTransaction postReversal(WalletTransaction original, UUID companyId, String remarks) {

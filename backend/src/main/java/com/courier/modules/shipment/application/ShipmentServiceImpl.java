@@ -102,6 +102,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.Comparator;
+import com.courier.modules.finance.application.command.BookingDebitCommand;
+import com.courier.modules.finance.application.command.ShipmentReversalCommand;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -583,24 +585,155 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (ratePerKg == null || ratePerKg.signum() <= 0) {
             throw new BusinessRuleException("Rate/KG must be greater than zero.");
         }
+        return recalculate(shipment, stored, companyId, shipment.getPaymentModeId(),
+                ratePerKg.setScale(2, java.math.RoundingMode.HALF_UP), stored.getToPayCharge());
+    }
+
+    /** A fresh, unsaved charge for {@code shipment} priced under {@code paymentModeId}, with an
+     *  explicit Rate/KG override (null keeps the slab rate) and To-Pay charge. */
+    private ShipmentCharge recalculate(Shipment shipment, ShipmentCharge stored, UUID companyId,
+                                       UUID paymentModeId, BigDecimal ratePerKgOverride,
+                                       BigDecimal toPayCharge) {
         List<ShipmentItem> items = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId);
         FreightCalculationResult freightCalc = freightCalculationService.calculate(
                 shipment.getBookingBranchId(), shipment.getDeliveryPincode(), shipment.getDestinationAreaId(),
                 shipment.getChargeableWeight(), shipment.getBusinessCustomerId(), shipment.getDeclaredValue());
         PricingResult priced = priceIt(shipment.getBookingBranchId(), null,
                 shipment.getPickupPincode(), shipment.getDeliveryPincode(), shipment.getServiceTypeId(),
-                shipment.getPackageTypeId(), shipment.getPaymentModeId(), shipment.getChargeableWeight(),
+                shipment.getPackageTypeId(), paymentModeId, shipment.getChargeableWeight(),
                 shipment.getDeclaredValue(), shipment.getBookingDate(), stored.getAppliedFreightFactor(),
                 shipment.getActualWeight(), totalQuantity(items));
         com.courier.modules.company.domain.Branch bookingBranch =
                 branchService.getById(shipment.getBookingBranchId());
         ShipmentCharge fresh = toCharge(priced, stored.getOtherCharges(), stored.getOdaCharge(), bookingBranch,
-                freightCalc, ratePerKg.setScale(2, java.math.RoundingMode.HALF_UP),
+                freightCalc, ratePerKgOverride,
                 stored.getAppointmentDeliveryCharge(), shipment.isInsuranceApplicable(),
-                stored.getDoorDeliveryCharge(), stored.getToPayCharge(), shipment.getInvoiceValue());
+                stored.getDoorDeliveryCharge(), toPayCharge, shipment.getInvoiceValue());
         fresh.setShipmentId(shipment.getId());
         fresh.setCompanyId(companyId);
         return fresh;
+    }
+
+    // ------------------------------------------------------- payment mode switch
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    public Shipment changePaymentMode(UUID id, Long expectedVersion, UUID paymentModeId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(id, companyId);
+        requireCurrentVersion(shipment, expectedVersion);
+        if (!shipment.isEditable()) {
+            throw new BusinessRuleException(
+                    "Payment mode can only be changed while shipment %s is BOOKED."
+                            .formatted(shipment.getShipmentNumber()));
+        }
+        PaymentMode current = paymentModeService.getById(shipment.getPaymentModeId());
+        PaymentMode target = paymentModeService.getById(paymentModeId);
+        requireSwitchable(current, target);
+
+        ShipmentCharge stored = chargeRepository.findByShipmentIdWithinCompany(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", id));
+        ShipmentCharge recalculated = recalculate(shipment, stored, companyId, target.getId(),
+                stored.getRatePerKgOverride(), toPayChargeFor(target));
+
+        BigDecimal previousNet = stored.getNetAmount();
+        String direction;
+        if (target.isCollectAtBooking()) {
+            // TO_PAY -> PAID: debit now, inside this transaction, so a short balance refuses the
+            // whole switch instead of leaving a PAID shipment undebited.
+            requireSufficientBalance(shipment.getBookingBranchId(), recalculated.getNetAmount());
+            walletService.debitForBooking(new BookingDebitCommand(shipment.getBookingBranchId(),
+                    recalculated.getNetAmount(), shipment.getShipmentNumber(),
+                    "Freight for shipment " + shipment.getShipmentNumber() + " (changed TO_PAY to PAID)"));
+            direction = "debited";
+        } else {
+            // PAID -> TO_PAY: give back exactly what the ledger says was debited.
+            walletService.refundBookingDebit(new ShipmentReversalCommand(shipment.getShipmentNumber(),
+                    "Shipment " + shipment.getShipmentNumber() + " changed PAID to TO_PAY"));
+            direction = "refunded";
+        }
+
+        copyChargeValues(recalculated, stored);
+        chargeRepository.save(stored);
+        shipment.setPaymentModeChangedFromId(current.getId());
+        shipment.setPaymentModeChangedAt(Instant.now());
+        shipment.setPaymentModeChangedBy(SecurityUtils.getCurrentUserId().orElse(null));
+        shipment.setPaymentModeId(target.getId());
+        Shipment saved = shipmentRepository.save(shipment);
+
+        log.info("Shipment {} ({}) payment mode {} -> {} by {}, wallet {}", saved.getShipmentNumber(), id,
+                current.getName(), target.getName(), currentActor(), direction);
+        auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, id,
+                Map.of("shipmentNumber", saved.getShipmentNumber(),
+                        "paymentModeFrom", current.getName(), "paymentModeTo", target.getName(),
+                        "previousNetAmount", String.valueOf(previousNet),
+                        "netAmount", stored.getNetAmount().toPlainString()));
+        return saved;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    public com.courier.modules.shipment.api.dto.PaymentModeChangeResponse paymentModeChangeOptions(UUID id) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(id, companyId);
+        PaymentMode current = paymentModeService.getById(shipment.getPaymentModeId());
+        ShipmentCharge stored = chargeRepository.findByShipmentIdWithinCompany(id, companyId).orElse(null);
+        BigDecimal balance = walletService.getForBranch(shipment.getBookingBranchId()).getAvailableBalance();
+
+        List<com.courier.modules.shipment.api.dto.PaymentModeChangeResponse.Target> targets = new ArrayList<>();
+        if (shipment.isEditable() && stored != null && (current.isCollectAtBooking() || isToPay(current))) {
+            for (PaymentMode candidate : paymentModeService.search(com.courier.modules.master.domain.MasterDataCriteria.of(
+                    companyId, java.util.Set.of(com.courier.modules.master.domain.MasterStatus.ACTIVE), null),
+                    org.springframework.data.domain.Pageable.unpaged()).getContent()) {
+                if (!candidate.isActive() || candidate.getId().equals(current.getId())
+                        || !isSwitchPair(current, candidate)) {
+                    continue;
+                }
+                ShipmentCharge fresh;
+                try {
+                    fresh = recalculate(shipment, stored, companyId, candidate.getId(),
+                            stored.getRatePerKgOverride(), toPayChargeFor(candidate));
+                } catch (BusinessRuleException e) {
+                    // Pricing config for this lane is gone since booking — the switch can't be
+                    // priced, so don't offer it (the Track page must still load).
+                    log.warn("Payment mode switch of shipment {} to {} not offered: {}",
+                            shipment.getShipmentNumber(), candidate.getName(), e.getMessage());
+                    continue;
+                }
+                boolean debit = candidate.isCollectAtBooking();
+                // A debit moves the new net; a credit moves what the ledger holds, which is the
+                // booked net for a normally-debited shipment.
+                BigDecimal walletAmount = debit ? fresh.getNetAmount() : stored.getNetAmount();
+                targets.add(new com.courier.modules.shipment.api.dto.PaymentModeChangeResponse.Target(
+                        candidate.getId(), candidate.getName(), debit ? "DEBIT" : "CREDIT",
+                        fresh.getNetAmount(), walletAmount, !debit || balance.compareTo(walletAmount) >= 0));
+            }
+        }
+        String fromName = shipment.getPaymentModeChangedFromId() == null ? null
+                : paymentModeService.getById(shipment.getPaymentModeChangedFromId()).getName();
+        return new com.courier.modules.shipment.api.dto.PaymentModeChangeResponse(
+                current.getId(), current.getName(), !targets.isEmpty(),
+                stored == null ? null : stored.getNetAmount(), balance,
+                shipment.getPaymentModeChangedAt() != null, fromName,
+                shipment.getPaymentModeChangedAt(), targets);
+    }
+
+    private static boolean isToPay(PaymentMode mode) {
+        return mode.isCollectAtDelivery() && !mode.isCashOnDelivery() && !mode.isRequiresCreditAccount();
+    }
+
+    private static boolean isSwitchPair(PaymentMode from, PaymentMode to) {
+        return (from.isCollectAtBooking() && isToPay(to)) || (isToPay(from) && to.isCollectAtBooking());
+    }
+
+    private static void requireSwitchable(PaymentMode from, PaymentMode to) {
+        if (!isSwitchPair(from, to)) {
+            throw new BusinessRuleException(
+                    "Payment mode can only be switched between PAID and TO_PAY (from %s to %s)."
+                            .formatted(from.getName(), to.getName()));
+        }
     }
 
     /** Copies every computed money/commission field of {@code from} onto the managed {@code to}. */
