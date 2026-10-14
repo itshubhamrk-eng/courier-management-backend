@@ -65,6 +65,9 @@ public class SecurityConfig {
             "/api/v1/branch-wallet/webhook/**", // Razorpay calls this with no bearer token;
                                                  // authenticity is a whole-payload HMAC, not a JWT —
                                                  // see RazorpayWebhookController
+            "/api/v1/webhooks/whatsapp",        // Meta's delivery receipts; no bearer token — authenticity is a
+                                                 // whole-body HMAC (POST) / verify token (GET), see
+                                                 // WhatsAppWebhookController
             "/actuator/health/**",
             "/actuator/info",
             "/v3/api-docs/**",

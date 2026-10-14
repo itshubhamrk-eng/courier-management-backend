@@ -239,6 +239,18 @@ app:
     # this deployment makes real outbound HTTP/SMTP calls at all.
     whatsapp:
       enabled: ${COMMUNICATION_WHATSAPP_ENABLED:false}
+      # Prefixed to a bare 10-digit customer phone before it goes to Meta (which needs the country code).
+      # Must match the language the template was approved in (Meta's own hello_world is en_US).
+      template-language: ${COMMUNICATION_WHATSAPP_TEMPLATE_LANGUAGE:en_US}
+      # Meta calls /api/v1/webhooks/whatsapp with delivery receipts. One Meta app serves the whole
+      # deployment, so these are platform-level secrets (env only, never logged, no default):
+      #   verify-token = any string you also type into Meta's "Verify token" box
+      #   app-secret   = the Meta app's "App secret" (App settings > Basic)
+      # Both unset = the endpoint answers 503 and Delivered/Read stay at 0.
+      webhook:
+        verify-token: ${COMMUNICATION_WHATSAPP_WEBHOOK_VERIFY_TOKEN:}
+        app-secret: ${COMMUNICATION_WHATSAPP_APP_SECRET:}
+      default-country-code: ${COMMUNICATION_WHATSAPP_DEFAULT_COUNTRY_CODE:91}
     sms:
       enabled: ${COMMUNICATION_SMS_ENABLED:false}
     email:

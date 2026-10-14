@@ -329,3 +329,22 @@ provider account exists in this dev environment to receive one from). A standalo
 (would give `RTO_INITIATED`/`RTO_DELIVERED` a publisher). Per-company SMTP credentials (SMTP is
 platform infrastructure here, not a per-company secret — see Providers above). The
 authorise-on-permissions capstone (this module is role-gated like every module before it).
+
+## 2026-10-14 additions
+
+Built after the original module, all in `CHANGELOG.md` 2026-10-14: real Meta send fixes; the
+daily 9:00 AM summary (`modules/communication-daily-report.md`, `V118`); template submission to
+Meta (`V119`, `MetaTemplateConverter`, `WhatsAppTemplateSubmissionService`); the template page
+with live phone preview (`features/communication/template-detail.ts`). Seeding is now additive
+(`seedMissingDefaults`), not "only when empty". Still not built: a cost/billing view (Meta's WhatsApp Manager is the source of truth).
+Template parts (category, language, header, footer, link/call buttons, sample values) and the
+per-template Sending switch landed in `V122` — see the CHANGELOG entry "Template creation".
+Delivery receipts: Meta posts them to `/api/v1/webhooks/whatsapp` (`V123`); that is the only thing that
+makes `DELIVERED` and Read real. Setup: Meta app -> WhatsApp -> Configuration -> Webhook, callback
+`https://<domain>/api/v1/webhooks/whatsapp`, verify token = `COMMUNICATION_WHATSAPP_WEBHOOK_VERIFY_TOKEN`,
+server also needs `COMMUNICATION_WHATSAPP_APP_SECRET`, subscribe to `messages`. Public https only.
+
+Also: New template page + Reset to default (`StarterTemplates`), and a WhatsApp cost estimate priced
+only from rates the company enters (`rateUtility`/`rateMarketing`/`rateAuthentication` in the WhatsApp
+channel config) — see the CHANGELOG entry "New template page, Reset to default, WhatsApp cost estimate".
+

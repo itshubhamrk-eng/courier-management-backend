@@ -19,13 +19,26 @@ public final class DefaultCommunicationTemplates {
                 String templateName, String subject, String content) {
     }
 
+    /** The one non-shipment default: the owner's morning summary, WhatsApp only. */
+    public static final Seed DAILY_SUMMARY = new Seed(CommunicationEventType.DAILY_BUSINESS_SUMMARY,
+            CommunicationChannel.WHATSAPP, "daily_business_summary", null,
+            "Daily business summary for {{companyName}} - {{reportDate}}\n\n"
+                    + "Bookings: {{bookings}}\n"
+                    + "Revenue: Rs {{revenue}}\n"
+                    + "Wallet recharges: Rs {{rechargeAmount}} ({{rechargeCount}} recharges)\n"
+                    + "Delivered: {{delivered}}\n"
+                    + "Cancelled: {{cancelled}}\n"
+                    + "COD / To-Pay settled: Rs {{codToPaySettled}}\n\n"
+                    + "Right now: {{inTransit}} in transit, {{outForDelivery}} out for delivery.\n\n"
+                    + "Have a great day!");
+
     public static List<Seed> all() {
         return List.of(
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.WHATSAPP,
-                        "Shipment Booked - WhatsApp", null,
+                        "shipment_booked", null,
                         "Hi {{customerName}}, your shipment {{shipmentNumber}} (AWB {{trackingNumber}}) "
                                 + "from {{pickupLocation}} to {{deliveryLocation}} has been booked with "
-                                + "{{companyName}}. Track it: {{trackingUrl}}"),
+                                + "{{companyName}}. Track it here: {{trackingUrl}} - thank you!"),
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.SMS,
                         "Shipment Booked - SMS", null,
                         "{{companyName}}: Shipment {{shipmentNumber}} booked, AWB {{trackingNumber}}. "
@@ -39,10 +52,10 @@ public final class DefaultCommunicationTemplates {
                                 + "<p><a href=\"{{trackingUrl}}\">Track your shipment</a></p>"),
 
                 new Seed(CommunicationEventType.SHIPMENT_DISPATCHED, CommunicationChannel.WHATSAPP,
-                        "Shipment Dispatched - WhatsApp", null,
+                        "shipment_dispatched", null,
                         "Hi {{customerName}}, your shipment {{trackingNumber}} has been dispatched from "
                                 + "{{pickupLocation}} and is on its way to {{deliveryLocation}}. "
-                                + "Track it: {{trackingUrl}}"),
+                                + "Track it here: {{trackingUrl}} - thank you!"),
                 new Seed(CommunicationEventType.SHIPMENT_DISPATCHED, CommunicationChannel.SMS,
                         "Shipment Dispatched - SMS", null,
                         "{{companyName}}: Shipment {{trackingNumber}} dispatched, heading to "
@@ -54,9 +67,9 @@ public final class DefaultCommunicationTemplates {
                                 + "{{deliveryLocation}}.</p><p><a href=\"{{trackingUrl}}\">Track your shipment</a></p>"),
 
                 new Seed(CommunicationEventType.OUT_FOR_DELIVERY, CommunicationChannel.WHATSAPP,
-                        "Out For Delivery - WhatsApp", null,
+                        "out_for_delivery", null,
                         "Hi {{receiverName}}, your shipment {{trackingNumber}} is out for delivery today. "
-                                + "Track it: {{trackingUrl}}"),
+                                + "Track it here: {{trackingUrl}} - thank you!"),
                 new Seed(CommunicationEventType.OUT_FOR_DELIVERY, CommunicationChannel.SMS,
                         "Out For Delivery - SMS", null,
                         "{{companyName}}: Shipment {{trackingNumber}} is out for delivery. "
@@ -68,7 +81,7 @@ public final class DefaultCommunicationTemplates {
                                 + "<p><a href=\"{{trackingUrl}}\">Track your shipment</a></p>"),
 
                 new Seed(CommunicationEventType.SHIPMENT_DELIVERED, CommunicationChannel.WHATSAPP,
-                        "Shipment Delivered - WhatsApp", null,
+                        "shipment_delivered", null,
                         "Hi {{receiverName}}, your shipment {{trackingNumber}} has been delivered. "
                                 + "Amount: {{amount}}. Proof of delivery: {{podUrl}}. Thank you for choosing "
                                 + "{{companyName}}!"),
@@ -81,7 +94,8 @@ public final class DefaultCommunicationTemplates {
                         "<p>Hi {{receiverName}},</p><p>Your shipment <b>{{shipmentNumber}}</b> "
                                 + "(AWB {{trackingNumber}}) has been delivered. Amount: {{amount}}.</p>"
                                 + "<p>Proof of delivery: <a href=\"{{podUrl}}\">view</a></p>"
-                                + "<p>Thank you for choosing {{companyName}}!</p>")
+                                + "<p>Thank you for choosing {{companyName}}!</p>"),
+                DAILY_SUMMARY
         );
     }
 }

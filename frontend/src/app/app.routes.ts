@@ -771,6 +771,16 @@ export const routes: Routes = [
         loadComponent: () => import('@features/communication/communication-templates').then((m) => m.CommunicationTemplates)
       },
       {
+        path: 'communication/templates/new', title: 'New Template', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_ADMIN },
+        loadComponent: () => import('@features/communication/template-new').then((m) => m.TemplateNew)
+      },
+      {
+        path: 'communication/templates/:id', title: 'Edit Template', canActivate: [roleGuard],
+        data: { roles: COMMUNICATION_ADMIN },
+        loadComponent: () => import('@features/communication/template-detail').then((m) => m.TemplateDetail)
+      },
+      {
         path: 'communication/logs', title: 'Communication Logs', canActivate: [roleGuard],
         data: { roles: COMMUNICATION_READERS },
         loadComponent: () => import('@features/communication/communication-logs').then((m) => m.CommunicationLogs)

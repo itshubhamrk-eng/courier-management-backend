@@ -7,6 +7,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { CommunicationService } from './communication.service';
+import { apiMessage } from './api-error';
 import { CommunicationChannel, CommunicationSetting } from '@core/models/communication.model';
 
 interface ChannelCard {
@@ -23,7 +24,12 @@ const CARDS: ChannelCard[] = [
     channel: 'WHATSAPP', title: 'WhatsApp', icon: 'chat',
     configFields: [
       { key: 'phoneNumberId', label: 'Phone Number ID', placeholder: '10-15 digit Meta phone number id' },
-      { key: 'businessAccountId', label: 'Business Account ID', placeholder: 'Meta WABA id' }
+      { key: 'businessAccountId', label: 'Business Account ID', placeholder: 'Meta WABA id' },
+      { key: 'rateUtility', label: 'Rate — Utility (per message)', placeholder: 'Filled by “Fetch from Meta” on the Dashboard, or type it' },
+      { key: 'rateMarketing', label: 'Rate — Marketing (per message)', placeholder: 'e.g. 0.78' },
+      { key: 'rateAuthentication', label: 'Rate — Authentication (per message)', placeholder: 'e.g. 0.115' },
+      { key: 'rateCurrency', label: 'Currency of the rates', placeholder: 'INR (default) — set automatically when rates are fetched' },
+      { key: 'dailyReportPhones', label: 'Daily report numbers', placeholder: '9876543210, 9123456780 — empty = no 9:00 AM summary' }
     ],
     secretLabel: 'Access Token', providerPlaceholder: 'META_CLOUD_API'
   },
@@ -132,6 +138,7 @@ export class ChannelSettings implements OnInit {
       enabled: [false],
       provider: ['', Validators.maxLength(50)],
       phoneNumberId: [''], businessAccountId: [''],
+      dailyReportPhones: [''], rateUtility: [''], rateMarketing: [''], rateAuthentication: [''], rateCurrency: [''],
       apiUrl: [''], senderId: [''],
       fromName: [''], fromEmail: [''],
       secret: ['']
@@ -188,7 +195,10 @@ export class ChannelSettings implements OnInit {
         this.savingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; });
         this.notify.success(`${card.title} settings saved.`);
       },
-      error: () => this.savingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; })
+      error: (e) => {
+        this.savingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; });
+        this.notify.error(apiMessage(e, `Could not save the ${card.title} settings.`));
+      }
     });
   }
 
@@ -199,7 +209,10 @@ export class ChannelSettings implements OnInit {
         this.testResults.update((m) => new Map(m).set(card.channel, result));
         this.testingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; });
       },
-      error: () => this.testingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; })
+      error: (e) => {
+        this.testingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; });
+        this.notify.error(apiMessage(e, 'Could not test the connection.'));
+      }
     });
   }
 }

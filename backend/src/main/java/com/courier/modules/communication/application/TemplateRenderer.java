@@ -48,6 +48,12 @@ public class TemplateRenderer {
         return substitute(content, variables(shipment, recipientName));
     }
 
+    /** Substitutes {@code vars} into {@code content} — for content with no shipment behind it (the
+     *  daily summary and its preview). Unknown placeholders stay verbatim, as in {@link #render}. */
+    public String renderWith(String content, Map<String, String> vars) {
+        return substitute(content, vars);
+    }
+
     public Map<String, String> variables(ShipmentSnapshot shipment, String recipientName) {
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("customerName", blank(recipientName));
@@ -62,6 +68,29 @@ public class TemplateRenderer {
         vars.put("trackingUrl", trackingUrlTemplate.replace("{trackingNumber}", blank(shipment.trackingNumber())));
         vars.put("podUrl", blank(shipment.podUrl()));
         return vars;
+    }
+
+    /**
+     * Meta's positional body parameters ({@code {{1}}..{{n}}}) for a WhatsApp template: the
+     * distinct placeholders {@code content} actually uses, in order of first appearance, each
+     * resolved against {@code vars}. A blank or unknown value becomes {@code "-"} because Meta
+     * rejects an empty text parameter.
+     */
+    public java.util.List<String> positionalParameters(String content, Map<String, String> vars) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (content == null) {
+            return out;
+        }
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        Matcher matcher = PLACEHOLDER.matcher(content);
+        while (matcher.find()) {
+            seen.add(matcher.group(1));
+        }
+        for (String key : seen) {
+            String value = vars.get(key);
+            out.add(value == null || value.isBlank() ? "-" : value);
+        }
+        return out;
     }
 
     private String substitute(String content, Map<String, String> vars) {

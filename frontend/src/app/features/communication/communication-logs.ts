@@ -15,6 +15,7 @@ import { UiTable, TableColumn } from '@shared/components/ui-table/ui-table';
 import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { CommunicationService } from './communication.service';
+import { apiMessage } from './api-error';
 
 const CHANNEL_OPTIONS: SelectOption[] = COMMUNICATION_CHANNELS.map((c) => ({ value: c, label: label(c) }));
 const EVENT_OPTIONS: SelectOption[] = COMMUNICATION_EVENT_TYPES.map((e) => ({ value: e, label: label(e) }));
@@ -131,7 +132,7 @@ export class CommunicationLogs implements OnInit {
     this.retrying.set(l.id);
     this.service.retry(l.id).subscribe({
       next: () => { this.retrying.set(null); this.notify.success('Requeued for retry.'); this.load(); },
-      error: () => this.retrying.set(null)
+      error: (e) => { this.retrying.set(null); this.notify.error(apiMessage(e, 'Could not requeue the message.')); }
     });
   }
 

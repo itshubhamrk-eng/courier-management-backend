@@ -15,4 +15,8 @@ public interface CommunicationSettingRepository extends JpaRepository<Communicat
     long countByCompanyId(UUID companyId);
 
     boolean existsByCompanyIdAndEnabledTrue(UUID companyId);
+
+    /** Cross-tenant on purpose (scheduler thread, no CompanyContext bound) — see
+     *  {@code CommunicationLogRepository.findDueForDispatch}. */
+    List<CommunicationSetting> findAllByChannelAndEnabledTrue(CommunicationChannel channel);
 }

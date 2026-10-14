@@ -16,7 +16,9 @@ public enum CommunicationEventType {
     SHIPMENT_DELIVERED,
     SHIPMENT_CANCELLED,
     RTO_INITIATED,
-    RTO_DELIVERED;
+    RTO_DELIVERED,
+    /** The 09:00 IST owner summary — not tied to a shipment; see {@code DailyReportService}. */
+    DAILY_BUSINESS_SUMMARY;
 
     /** The four events the brief seeds a default WhatsApp+SMS+Email template for. */
     public static final java.util.Set<CommunicationEventType> DEFAULT_ENABLED = java.util.Set.of(

@@ -58,4 +58,21 @@ class TemplateRendererTest {
                 CommunicationEventType.SHIPMENT_BOOKED, "Rahul");
         assertThat(rendered).isEqualTo("[][][]");
     }
+
+    @Test
+    void positionalParametersFollowOrderOfFirstAppearanceAndSkipUnusedVariables() {
+        var vars = renderer.variables(sample(), "Rahul");
+        var params = renderer.positionalParameters(
+                "Hi {{customerName}}, {{trackingNumber}} for {{customerName}} via {{companyName}}", vars);
+        assertThat(params).containsExactly("Rahul", vars.get("trackingNumber"), vars.get("companyName"));
+    }
+
+    @Test
+    void positionalParametersReplaceBlankAndUnknownWithDash() {
+        var vars = renderer.variables(sample(), "Rahul");
+        vars.put("podUrl", "");
+        assertThat(renderer.positionalParameters("{{podUrl}} {{nope}}", vars)).containsExactly("-", "-");
+        assertThat(renderer.positionalParameters("no placeholders", vars)).isEmpty();
+        assertThat(renderer.positionalParameters(null, vars)).isEmpty();
+    }
 }

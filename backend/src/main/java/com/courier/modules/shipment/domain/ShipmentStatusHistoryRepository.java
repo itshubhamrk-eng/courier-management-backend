@@ -54,4 +54,12 @@ public interface ShipmentStatusHistoryRepository extends JpaRepository<ShipmentS
      *  crossing hop) recorded at this branch within the window. */
     long countByCompanyIdAndBranchIdAndStatusInAndChangedAtBetween(
             UUID companyId, UUID branchId, Collection<ShipmentStatus> statuses, Instant from, Instant to);
+
+    /** How many shipments entered {@code status} inside {@code [from, to)} — the daily business
+     *  summary's "delivered / cancelled yesterday", read from the timeline rather than the
+     *  shipment row because neither a delivery nor a cancellation timestamp lives on it. */
+    @Query("select count(h) from ShipmentStatusHistory h where h.companyId = :companyId "
+            + "and h.status = :status and h.changedAt >= :from and h.changedAt < :to")
+    long countEnteredStatusBetween(@Param("companyId") UUID companyId, @Param("status") ShipmentStatus status,
+                                   @Param("from") Instant from, @Param("to") Instant to);
 }

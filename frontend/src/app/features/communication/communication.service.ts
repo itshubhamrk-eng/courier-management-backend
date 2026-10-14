@@ -4,9 +4,11 @@ import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import { Page, PageQuery } from '@core/models/page.model';
 import {
-  CommunicationChannel, CommunicationDashboard, CommunicationLog, CommunicationLogSearchRequest,
-  CommunicationSetting, CommunicationTemplate, CommunicationTemplatePreview,
-  ConnectionTestResult, CreateCommunicationTemplateRequest, UpdateCommunicationTemplateRequest,
+  CommunicationChannel, CommunicationDashboard, DashboardPeriod, FetchedRates, CommunicationLog, CommunicationLogSearchRequest,
+  CommunicationEventType, CommunicationSetting, CommunicationTemplate, CommunicationTemplatePreview, TemplateStarter,
+  TemplateStatus,
+  ConnectionTestResult, CreateCommunicationTemplateRequest, SubmitTemplateToMetaRequest,
+  UpdateCommunicationTemplateRequest,
   UpsertCommunicationSettingRequest
 } from '@core/models/communication.model';
 
@@ -32,6 +34,30 @@ export class CommunicationService {
 
   updateTemplate(id: string, body: UpdateCommunicationTemplateRequest) {
     return this.api.put<CommunicationTemplate>(`${API.communicationTemplates}/${id}`, body);
+  }
+
+  /** What a new template for this event + channel starts as (the seeded default, or a generated message). */
+  templateStarter(eventType: CommunicationEventType, channel: CommunicationChannel) {
+    return this.api.get<TemplateStarter>(`${API.communicationTemplates}/starter`, { eventType, channel });
+  }
+
+  /** Puts a template back to the app's default text/name and drops its Meta approval; sending on/off is kept. */
+  resetTemplateToDefault(id: string) {
+    return this.api.post<CommunicationTemplate>(`${API.communicationTemplates}/${id}/reset-to-default`, {});
+  }
+
+  /** Turns one template's sending on (ACTIVE) or off (INACTIVE) right away — touches nothing else. */
+  setTemplateStatus(id: string, status: TemplateStatus) {
+    return this.api.patch<CommunicationTemplate>(`${API.communicationTemplates}/${id}/status`, { status });
+  }
+
+  /** Files a WhatsApp template with Meta (placeholders become {{1}}..{{n}}); Meta still reviews it. */
+  submitTemplateToMeta(id: string, body: SubmitTemplateToMetaRequest = {}) {
+    return this.api.post<CommunicationTemplate>(`${API.communicationTemplates}/${id}/submit-to-meta`, body);
+  }
+
+  refreshTemplateMetaStatus(id: string) {
+    return this.api.post<CommunicationTemplate>(`${API.communicationTemplates}/${id}/refresh-meta-status`, {});
   }
 
   previewTemplate(id: string) {
@@ -76,8 +102,13 @@ export class CommunicationService {
 
   // ----------------------------------------------------------- dashboard
 
-  dashboard() {
-    return this.api.get<CommunicationDashboard>(API.communicationDashboard);
+  /** Reads what Meta actually billed (last 90 days), works out each category's price per message and saves it. */
+  fetchRates() {
+    return this.api.post<FetchedRates>(`${API.communicationDashboard}/fetch-rates`, {});
+  }
+
+  dashboard(period: DashboardPeriod = 'TODAY') {
+    return this.api.get<CommunicationDashboard>(API.communicationDashboard, { period });
   }
 }
 

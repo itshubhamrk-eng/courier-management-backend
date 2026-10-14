@@ -98,6 +98,14 @@ public class CommunicationLog extends CompanyOwnedEntity {
     @Column(name = "sent_at")
     private Instant sentAt;
 
+    /** When Meta reported the phone received it (webhook). */
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
+    /** When the recipient opened it (webhook). The status stays DELIVERED. */
+    @Column(name = "read_at")
+    private Instant readAt;
+
     public boolean isTerminal() {
         return status == CommunicationStatus.SENT || status == CommunicationStatus.DELIVERED
                 || status == CommunicationStatus.CANCELLED;

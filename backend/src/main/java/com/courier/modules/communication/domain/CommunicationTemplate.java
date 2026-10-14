@@ -68,7 +68,72 @@ public class CommunicationTemplate extends CompanyOwnedEntity {
     @Builder.Default
     private TemplateStatus status = TemplateStatus.ACTIVE;
 
+    /** UTILITY, MARKETING or AUTHENTICATION — what the template is submitted to Meta as. */
+    @Column(name = "category", nullable = false, length = 20)
+    @Builder.Default
+    private String category = "UTILITY";
+
+    /** Meta language code (en_US, en, hi, mr). The send uses this, so it must be the language the
+     *  template was approved in. */
+    @Column(name = "language", nullable = false, length = 10)
+    @Builder.Default
+    private String language = "en_US";
+
+    @Column(name = "header_text", length = 60)
+    private String headerText;
+
+    @Column(name = "footer_text", length = 60)
+    private String footerText;
+
+    /** JSON list of {@link TemplateButton}; see {@code TemplateComponentsCodec}. */
+    @Column(name = "buttons_json", columnDefinition = "TEXT")
+    private String buttonsJson;
+
+    /** JSON {variable: sample} overriding the built-in example values. */
+    @Column(name = "variable_samples_json", columnDefinition = "TEXT")
+    private String variableSamplesJson;
+
+    /** Meta's own template id — set once the app has submitted this template. */
+    @Column(name = "meta_template_id", length = 40)
+    private String metaTemplateId;
+
+    /** PENDING / APPROVED / REJECTED / PAUSED / DISABLED, as last reported by Meta; null when the
+     *  app never submitted this template (it may still exist in Meta, made by hand). */
+    @Column(name = "meta_status", length = 20)
+    private String metaStatus;
+
+    /** Meta's rejection reason, or a note from the app (e.g. the log-only provider). */
+    @Column(name = "meta_status_detail", length = 500)
+    private String metaStatusDetail;
+
+    @Column(name = "meta_category", length = 20)
+    private String metaCategory;
+
+    @Column(name = "meta_language", length = 10)
+    private String metaLanguage;
+
+    @Column(name = "meta_submitted_at")
+    private java.time.Instant metaSubmittedAt;
+
     public boolean isActive() {
         return status == TemplateStatus.ACTIVE;
+    }
+
+    public boolean hasMetaSubmission() {
+        return metaStatus != null;
+    }
+
+    /** False only when the app *knows* Meta has not approved this template. */
+    public boolean isApprovedOrUnknownAtMeta() {
+        return metaStatus == null || "APPROVED".equals(metaStatus);
+    }
+
+    public void clearMetaSubmission() {
+        metaTemplateId = null;
+        metaStatus = null;
+        metaStatusDetail = null;
+        metaCategory = null;
+        metaLanguage = null;
+        metaSubmittedAt = null;
     }
 }

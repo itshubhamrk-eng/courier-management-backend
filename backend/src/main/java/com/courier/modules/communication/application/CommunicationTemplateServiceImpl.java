@@ -8,6 +8,7 @@ import com.courier.modules.communication.domain.CommunicationTemplate;
 import com.courier.modules.communication.domain.CommunicationTemplateRepository;
 import com.courier.modules.communication.domain.DefaultCommunicationTemplates;
 import com.courier.modules.communication.domain.ShipmentSnapshot;
+import com.courier.modules.communication.domain.StarterTemplates;
 import com.courier.modules.communication.domain.TemplateStatus;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
@@ -45,13 +46,14 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     private final CommunicationTemplateRepository repository;
     private final TemplateRenderer templateRenderer;
     private final AuditService auditService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
     @Transactional
     @PreAuthorize(READERS)
     public List<CommunicationTemplate> list() {
         UUID companyId = requireCompany();
-        seedDefaultsIfEmpty(companyId);
+        seedMissingDefaults(companyId);
         return repository.findAllByCompanyIdOrderByEventTypeAscChannelAsc(companyId);
     }
 
@@ -100,9 +102,51 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
             throw new ObjectOptimisticLockingFailureException(CommunicationTemplate.class, id);
         }
 
-        template.setTemplateName(requireText(command.templateName(), "Template name"));
+        String newName = requireText(command.templateName(), "Template name");
+        String newContent = requireText(command.content(), "Content");
+
+        // Tri-state WhatsApp parts: null = leave as stored, blank/empty = clear, else replace.
+        String newCategory = command.category() == null ? template.getCategory()
+                : TemplateComponentRules.category(command.category());
+        String newLanguage = command.language() == null ? template.getLanguage()
+                : TemplateComponentRules.language(command.language());
+        String newHeader = command.headerText() == null ? template.getHeaderText()
+                : TemplateComponentRules.header(command.headerText());
+        String newFooter = command.footerText() == null ? template.getFooterText()
+                : TemplateComponentRules.footer(command.footerText());
+        String newButtonsJson = command.buttons() == null ? template.getButtonsJson()
+                : TemplateComponentsCodec.writeButtons(objectMapper, TemplateComponentRules.buttons(command.buttons()));
+        String newSamplesJson = command.variableSamples() == null ? template.getVariableSamplesJson()
+                : TemplateComponentsCodec.writeSamples(objectMapper, TemplateComponentRules.samples(command.variableSamples()));
+
+        if (template.getChannel() != CommunicationChannel.WHATSAPP
+                && (command.headerText() != null && !command.headerText().isBlank()
+                || command.footerText() != null && !command.footerText().isBlank()
+                || command.buttons() != null && !command.buttons().isEmpty())) {
+            throw new BusinessRuleException("Header, footer and buttons are WhatsApp-only.");
+        }
+
+        if (template.hasMetaSubmission() && (!newName.equals(template.getTemplateName())
+                || !newContent.equals(template.getContent())
+                || !newCategory.equals(template.getCategory())
+                || !newLanguage.equals(template.getLanguage())
+                || !Objects.equals(newHeader, template.getHeaderText())
+                || !Objects.equals(newFooter, template.getFooterText())
+                || !Objects.equals(newButtonsJson, template.getButtonsJson()))) {
+            // The Meta record describes the old template; keeping its status would let a changed
+            // template look approved. Force a fresh submission instead. (Samples only feed Meta's
+            // examples, they are not part of what gets approved, so changing them keeps it.)
+            template.clearMetaSubmission();
+        }
+        template.setTemplateName(newName);
         template.setSubject(command.subject());
-        template.setContent(requireText(command.content(), "Content"));
+        template.setContent(newContent);
+        template.setCategory(newCategory);
+        template.setLanguage(newLanguage);
+        template.setHeaderText(newHeader);
+        template.setFooterText(newFooter);
+        template.setButtonsJson(newButtonsJson);
+        template.setVariableSamplesJson(newSamplesJson);
         template.setStatus(command.status() == null ? template.getStatus() : command.status());
 
         CommunicationTemplate saved = repository.save(template);
@@ -113,10 +157,73 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     }
 
     @Override
+    @PreAuthorize(READERS)
+    public StarterTemplate starter(CommunicationEventType eventType, CommunicationChannel channel) {
+        if (eventType == null || channel == null) {
+            throw new BusinessRuleException("Event and channel are required.");
+        }
+        var seed = StarterTemplates.starter(eventType, channel);
+        return new StarterTemplate(seed.templateName(), seed.subject(), seed.content(),
+                StarterTemplates.isSeeded(eventType, channel));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public CommunicationTemplate resetToDefault(UUID id) {
+        UUID companyId = requireCompany();
+        CommunicationTemplate template = loadOrThrow(id, companyId);
+        var seed = StarterTemplates.starter(template.getEventType(), template.getChannel());
+
+        template.clearMetaSubmission();
+        template.setTemplateName(seed.templateName());
+        template.setSubject(seed.subject());
+        template.setContent(seed.content());
+        template.setCategory("UTILITY");
+        template.setLanguage("en_US");
+        template.setHeaderText(null);
+        template.setFooterText(null);
+        template.setButtonsJson(null);
+        template.setVariableSamplesJson(null);
+        CommunicationTemplate saved = repository.save(template);
+
+        log.info("Communication template {} ({} + {}) reset to its default in company {} by {}", saved.getId(),
+                saved.getEventType(), saved.getChannel(), companyId, currentActor());
+        auditService.record(AuditAction.COMMUNICATION_TEMPLATE_UPDATED, ENTITY, saved.getId(),
+                Map.of("resetToDefault", true, "status", saved.getStatus().name()));
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public CommunicationTemplate setStatus(UUID id, TemplateStatus status) {
+        if (status == null) {
+            throw new BusinessRuleException("Status is required.");
+        }
+        UUID companyId = requireCompany();
+        CommunicationTemplate template = loadOrThrow(id, companyId);
+        if (template.getStatus() == status) {
+            return template;
+        }
+        template.setStatus(status);
+        CommunicationTemplate saved = repository.save(template);
+        log.info("Communication template {} ({} + {}) switched {} in company {} by {}", saved.getId(),
+                saved.getEventType(), saved.getChannel(), status, companyId, currentActor());
+        auditService.record(AuditAction.COMMUNICATION_TEMPLATE_UPDATED, ENTITY, saved.getId(),
+                Map.of("status", status.name(), "statusSwitch", true));
+        return saved;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public RenderedPreview preview(UUID id) {
         CommunicationTemplate template = loadOrThrow(id, requireCompany());
+        if (template.getEventType() == CommunicationEventType.DAILY_BUSINESS_SUMMARY) {
+            return new RenderedPreview(null,
+                    templateRenderer.renderWith(template.getContent(), TemplateSampleValues.all()));
+        }
         ShipmentSnapshot sample = sampleShipment();
         String recipientName = template.getEventType() == CommunicationEventType.OUT_FOR_DELIVERY
                 || template.getEventType() == CommunicationEventType.SHIPMENT_DELIVERED
@@ -133,16 +240,23 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     @Transactional
     public Optional<CommunicationTemplate> findActive(UUID companyId, CommunicationEventType eventType,
                                                         CommunicationChannel channel) {
-        seedDefaultsIfEmpty(companyId);
+        seedMissingDefaults(companyId);
         return repository.findByCompanyIdAndEventTypeAndChannel(companyId, eventType, channel)
                 .filter(CommunicationTemplate::isActive);
     }
 
-    private void seedDefaultsIfEmpty(UUID companyId) {
-        if (repository.countByCompanyId(companyId) > 0) {
-            return;
+    /** Inserts every default the company doesn't have yet. Additive on purpose: a company seeded
+     *  before a default existed (the daily summary arrived after the first twelve) still gets it,
+     *  and an edited or switched-off template is never touched. */
+    private void seedMissingDefaults(UUID companyId) {
+        java.util.Set<String> have = new java.util.HashSet<>();
+        for (CommunicationTemplate existing : repository.findAllByCompanyIdOrderByEventTypeAscChannelAsc(companyId)) {
+            have.add(existing.getEventType() + "|" + existing.getChannel());
         }
         for (var seed : DefaultCommunicationTemplates.all()) {
+            if (have.contains(seed.eventType() + "|" + seed.channel())) {
+                continue;
+            }
             CommunicationTemplate template = CommunicationTemplate.builder()
                     .eventType(seed.eventType())
                     .channel(seed.channel())

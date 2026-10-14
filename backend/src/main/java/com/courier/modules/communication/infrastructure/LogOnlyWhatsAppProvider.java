@@ -29,4 +29,26 @@ public class LogOnlyWhatsAppProvider implements WhatsAppProvider {
         }
         return "*".repeat(phone.length() - 4) + phone.substring(phone.length() - 4);
     }
+
+    @Override
+    public TemplateSubmissionResult submitTemplate(TemplateSubmission submission, WhatsAppCredentials credentials) {
+        log.info("[LogOnlyWhatsAppProvider] template submit name={} lang={} category={} body={}",
+                submission.name(), submission.language(), submission.category(), submission.bodyText());
+        return new TemplateSubmissionResult("log-template-" + java.util.UUID.randomUUID(), "PENDING",
+                submission.category());
+    }
+
+    @Override
+    public TemplateStatusResult fetchTemplateStatus(String name, String language, WhatsAppCredentials credentials) {
+        // Never fabricates an approval: a log-only deployment never reached Meta, so there is
+        // nothing to approve.
+        return new TemplateStatusResult(null, "PENDING", null,
+                "Log-only provider: nothing was sent to Meta. Set COMMUNICATION_WHATSAPP_ENABLED=true.");
+    }
+
+    @Override
+    public PricingReport fetchPricing(WhatsAppCredentials credentials, java.time.Instant from, java.time.Instant to) {
+        // Nothing was ever sent to Meta, so nothing was ever billed — an empty report, not an invented one.
+        return new PricingReport(null, java.util.List.of());
+    }
 }

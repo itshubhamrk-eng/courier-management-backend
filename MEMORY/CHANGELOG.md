@@ -10,9 +10,288 @@ All notable changes to this project. Format based on
 
 ## 2026-10-14 — PDP billing frequency + scheduled statements
 
-Added per-partner Weekly / 15-day / Monthly (default Monthly) via `pdp_billing_settings` (V121). Daily `PdpBillingCycleJob` drafts a statement when a partner's cycle closes with unbilled earnings; manual and scheduled generate both reject overlapping periods. New: `GET /pdp-statements/schedule`, `PUT /pdp-billing-frequency/{branchId}`, `POST /pdp-statements/generate-due`; Partner Billing gets a "Billing schedule" card. Unit tests `PdpBillingCycleTest` + existing PDP tests pass.
+Added per-partner Weekly / 15-day / Monthly (default Monthly) via `pdp_billing_settings` (V121; V120 was taken by the communication work). Daily `PdpBillingCycleJob` drafts a statement when a partner's cycle closes with unbilled earnings; manual and scheduled generate both reject overlapping periods. New: `GET /pdp-statements/schedule`, `PUT /pdp-billing-frequency/{branchId}`, `POST /pdp-statements/generate-due`; Partner Billing gets a "Billing schedule" card. Unit tests `PdpBillingCycleTest` + existing PDP tests pass; note `CommunicationTemplateServiceImplTest` (other session) currently breaks test compile.
 
 ---
+
+## 2026-10-14 — Fetch the WhatsApp rates from Meta; stop swallowing 400/422 errors in the UI
+
+- **Fetch from Meta** (button on the dashboard's cost card, company admins only;
+  `POST /communication/dashboard/fetch-rates`): Meta publishes **no rate card through its API**, but its
+  `pricing_analytics` edge reports what it actually billed (`COST`, "approximate", in the account's
+  currency, and `VOLUME` delivered) per pricing category. The app reads the last 90 days
+  (`WhatsAppProvider.fetchPricing`), derives each category's price = billed cost / delivered messages
+  (`WhatsAppRateSyncServiceImpl.derive`), and saves it as `rateUtility` / `rateMarketing` /
+  `rateAuthentication` + `rateCurrency` in the WhatsApp channel config through the normal audited
+  `CommunicationSettingService.upsert` (token untouched, every other key kept). Only `REGULAR` pricing
+  counts (free service / entry-point messages would drag the rate to 0); `MARKETING_LITE` folds into
+  marketing; `SERVICE`, referral and international authentication are ignored. A category never billed
+  gets no rate, and with nothing billed at all it says so — **messages from Meta's test number are free**,
+  so a test-only account has nothing to fetch yet.
+- The cost estimate now carries `currency` (config `rateCurrency`, INR default) and formats in it;
+  Channel Settings has a "Currency of the rates" field (it must be a field there, or saving the page
+  would drop it).
+- **Live result:** Meta answered code 190 — the temporary access token from the API Setup page had
+  expired (it lasted only a few hours, not 24). Meta's token/permission errors now say what to do
+  (`MetaWhatsAppProvider.hintFor`: 190 = expired/invalid -> make a new token, a System User token never
+  expires; 10/200 = missing `whatsapp_business_management`). Not yet seen with a valid token: the real
+  response shape for a billed account (unit-tested against Meta's documented shape only).
+- **UI bug found and fixed:** the global `error.interceptor` deliberately shows **no toast for 400/422**
+  (screens must show their own). Every new communication screen only reset its spinner on error, so
+  refusals were silent (bad button link on Save, invalid Meta template name, expired token, ...). All
+  communication screens now show the server's own sentence via `api-error.ts` `apiMessage()`
+  (dashboard retry/fetch, template page save/submit/check/reset/switch, new template, templates-list
+  switch, Channel Settings save/test, logs retry). Rule for future screens: **an `error:` handler that
+  does not call `notify.error` hides business errors.**
+- Tests: backend full suite 1331/1331 (`WhatsAppRateSyncServiceImplTest` 9, provider pricing +6);
+  frontend communication specs 71/71 (`api-error`, money/currency, fetch-rates call).
+
+---
+
+## 2026-10-14 — New template page, Reset to default, WhatsApp cost estimate (no migration)
+
+- **New template** (`/communication/templates/new`, button on the list): there is one template per
+  event + channel, so only combinations that do not exist yet are offered (`template-catalog.ts`;
+  the daily summary is WhatsApp-only). Picking one fetches a starter from
+  `GET /communication/templates/starter?eventType=&channel=` — the seeded default where there is
+  one, otherwise a generated message (`StarterTemplates`: arrived-at-branch, cancelled, the two RTO
+  events x 3 channels) whose WhatsApp version already passes Meta's rules (valid name, no leading or
+  trailing variable). Creating sends you to the template's own page. RTO events carry a warning: the
+  app has no return-to-origin flow, nothing fires them yet.
+- **Reset to default** (`POST /communication/templates/{id}/reset-to-default`, button on the template
+  page behind a confirm): name, subject, text, UTILITY / en_US, header, footer, buttons and samples go
+  back to the starter; any Meta approval is dropped; **ACTIVE/INACTIVE is left as it was**. The list
+  shows a amber "Fix before submitting" tag (tooltip lists why) on WhatsApp templates that are not yet
+  submitted and still break a Meta rule — that is the 4 old shipment templates.
+- **Cost estimate** (dashboard card + 3 rate fields in Channel Settings -> WhatsApp:
+  `rateUtility`, `rateMarketing`, `rateAuthentication`, in rupees per message, stored in the WhatsApp
+  `config_json`): messages x the company's own rate, grouped by the template's Meta category
+  (`CommunicationLogRepository.countWhatsAppByCategory`, plus the 9 AM summary's sends under its
+  template's category). **The app deliberately ships no rates** — Meta's prices change by country and
+  date. With none entered the card shows the message counts and says where to enter them; with some
+  missing it says the total leaves them out. Basis: DELIVERED once the webhook is live (Meta bills
+  delivered messages), else SENT (an upper bound, said so on the card). Always labelled an estimate —
+  free-window utility messages are not modelled; Meta's Insights page is the bill.
+- Tests: backend full suite 1315/1315 (`StarterTemplatesTest` 6, template service +3, dashboard +7);
+  frontend communication specs 65/65 (catalog 8, cost view 6, service +2). Verified live on :4200:
+  New template (4 events offered, RTO warning, starter fills, create navigates), Reset (confirm text,
+  edited text replaced), cost card in the unpriced state, rate fields present; the API priced a
+  temporary 0.115 rate correctly and the rate was removed again.
+- Route order matters: `communication/templates/new` is declared before `communication/templates/:id`.
+- Left as test data: an `RTO_INITIATED` WhatsApp template (created through the UI; nothing fires it).
+
+---
+
+## 2026-10-14 — Communication dashboard rebuilt + Meta delivery-receipt webhook (`V123`)
+
+**Webhook** — `GET/POST /api/v1/webhooks/whatsapp` (public, in `SecurityConfig.PUBLIC_ENDPOINTS`):
+- GET = Meta's one-off ownership check; echoes `hub.challenge` only for the right verify token
+  (constant-time compare). POST = receipts, whole-body HMAC-SHA256 in `X-Hub-Signature-256` with
+  the Meta app secret. Missing secret/token -> 503, no signature -> 400, wrong -> 401. Once
+  authentic it is always 200 (Meta retries for days otherwise), except a transient DB error -> 500.
+- Env (platform-level, one Meta app serves the deployment, same shape as `RAZORPAY_WEBHOOK_SECRET`):
+  `COMMUNICATION_WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `COMMUNICATION_WHATSAPP_APP_SECRET` (both wired in
+  `application.yml` and `docker-compose.yml`). **Meta only accepts public https**, so this cannot be
+  connected on localhost; the dev EC2 (`http://100.25.82.18`) has no TLS either — prod domain only.
+- `WhatsAppReceiptService`: matches a receipt by provider message id (cross-tenant, indexed). Only ever
+  moves a row forward: delivered -> `DELIVERED` + `delivered_at`; read -> implies delivered, sets
+  `read_at` (no READ status — the dashboard counts `read_at`); failed -> `FAILED` with Meta's reason and
+  `next_retry_at` cleared (only if not delivered); sent/unknown ignored; replays harmless. Also applies
+  to `daily_report_log` (and `DailyReportLog.isSent()` now includes DELIVERED so a delivered summary is
+  never re-sent).
+- `V123`: `delivered_at`, `read_at` on `communication_log` and `daily_report_log` + indexes on
+  `provider_message_id`.
+- Live check: handshake 200/403, wrong signature 401, none 400, signed receipt turned the real test
+  message DELIVERED + read. (The times were simulated by `curl`, not Meta's — the message really did
+  arrive.)
+
+**Dashboard** (`GET /communication/dashboard?period=TODAY|YESTERDAY|LAST_7_DAYS|LAST_30_DAYS`):
+- Periods are cut at midnight **India time** (`app.communication.daily-report.zone`), not UTC as before.
+- Adds Read count, delivery/read rate (null, never 0%, when nothing sent), zero-filled per-day series,
+  recent failures (reason + Retry), the 9:00 AM summary's last run, WhatsApp template health by Meta
+  status, and `lastReceiptAt` (null = webhook never reached us).
+- Page: period tabs + Refresh, receipts banner (green "live, last one 2 min ago" / amber with the 4
+  setup steps when messages went out but no receipt ever came back), Sent / Delivered / Read / Failed /
+  Pending, trend chart (ApexCharts via `app-chart-card`), per-channel cards, Needs attention with Retry,
+  daily-summary card, template-health card. Pure helpers in `dashboard-view.ts`.
+- Old `countTodayByChannelAndStatus` kept (no caller now); new `countByChannelAndStatusBetween`.
+- Series are bucketed in Java from (createdAt, status) rows — fine at current volume; move to SQL
+  aggregation if a company sends tens of thousands a month.
+- Tests: backend full suite 1299/1299 (`WhatsAppWebhookControllerTest` 9, `WhatsAppReceiptServiceImplTest`
+  11, dashboard service +8); frontend communication specs 49/49. Verified live on :4200.
+- Migration numbering: V121 = PDP `pdp_billing_frequency`, V122 = template components, V123 = this.
+
+---
+
+## 2026-10-14 — Template creation: category, language, header, footer, buttons, samples, formatting, on/off switch (`V122`)
+
+The template page was only a body. Now a WhatsApp template carries everything Meta needs, and the
+send path honours it.
+
+- **`V122`** (`communication_template`): `category` (UTILITY default), `language` (en_US default),
+  `header_text`, `footer_text`, `buttons_json`, `variable_samples_json`. Existing rows keep
+  UTILITY / en_US. *(Numbered V122 because the PDP session took V120 then V121 for
+  `pdp_billing_frequency` while this was being built — two sessions picking "the next free number"
+  collided twice. Check `ls db/migration` immediately before writing one.)*
+- **Languages offered**: en_US, en, hi, mr (`TemplateComponentRules.LANGUAGES`). The send now uses
+  the **template's own** language (`WhatsAppMessage.languageCode`); the old deployment property
+  `app.communication.whatsapp.template-language` is only the fallback.
+- **Header / footer / buttons**: header = TEXT only, <= 60 chars, one `{{variable}}`; footer <= 60,
+  no variables; buttons = **Link** (https, may end in one `{{variable}}`, e.g.
+  `https://courier.skra.in/track/{{trackingNumber}}`) and **Call** (+country code), max 2 links +
+  1 call, label <= 25. **Quick-reply buttons and image headers are deliberately not built** — the
+  first needs an inbound webhook this app lacks, the second Meta's separate media-upload step.
+- **Samples**: per-variable override of `TemplateSampleValues`; feeds Meta's examples and the live
+  preview. Changing samples does not reset a Meta approval.
+- **Send**: `WhatsAppPayloadBuilder` builds body params + the header variable + a `button` component
+  (`sub_type url`, `index` = button position) for each link ending in a variable; used by both the
+  shipment sender and the daily summary. Meta submission sends HEADER / BODY / FOOTER / BUTTONS.
+- **Validation** on save (`TemplateComponentRules`, plain-English messages); WhatsApp-only parts are
+  refused on SMS/Email. WhatsApp parts on update are tri-state: omitted = unchanged, blank/`[]`/`{}`
+  = clear. Editing name, content, category, language, header, footer or buttons clears a Meta
+  approval (resubmit needed); the UI warns before saving.
+- **On/off switch**: `PATCH /communication/templates/{id}/status {status}` flips ACTIVE/INACTIVE
+  immediately, touching nothing else (keeps Meta approval, no version fight). Switch on every row of
+  the templates list (column "Sending") and in the page header ("Sending ON/OFF"); takes effect on
+  the next message because the send path only uses ACTIVE templates.
+- **Page**: formatting toolbar (Bold/Italic/Strike/Mono, Ctrl/⌘+B / I, toggles off), emoji picker,
+  header/footer inputs with counters, buttons editor, sample-values card, live "Before you submit"
+  checklist, phone preview shows header (bold), footer (grey) and button rows.
+- **Tests**: backend full suite 1271/1271 (`TemplateComponentRulesTest` 8, `WhatsAppPayloadBuilderTest`
+  5, converter 12, provider-template 13, submission 10, template service 15). Verified live on the
+  real API: switch on/off, saving every new part, rejection of `http://` link, restore. Frontend
+  helper spec 20 (wrap/toggle/insert, checks).
+- **Verified in the browser** (private copy on :4300, because the shared frontend build was broken by
+  an unrelated `variant="secondary"` in the PDP session's `partner-billing-list.ts`): Sending
+  switch on the list (flipped off/on, row stays closed, toast), header / footer / bold / emoji /
+  link + call buttons all rendering in the phone preview, sample-values card, live checklist
+  (correctly flags the old stock templates' name and trailing `{{trackingUrl}}`), Discard restores.
+- **Not yet done**: "New template" button (only the seeded templates can be edited today); the 4
+  existing shipment WhatsApp templates still have old names/text and need editing before Submit.
+
+---
+
+## 2026-10-14 — Template editor is a page with a live phone preview (frontend only)
+
+Communication -> Templates: a row now opens `communication/templates/:id` (`template-detail.ts`)
+instead of a pop-up (`template-edit-dialog.ts` deleted).
+
+- **Live preview**: `components/phone-preview.ts` draws the message as the recipient's phone
+  shows it — WhatsApp (iPhone, beige wallpaper, white bubble, "TODAY" chip, company logo + name
+  from `AuthService`), SMS (iMessage grey bubble), Email (mail card, HTML body via Angular's
+  sanitiser). Rebuilt on every keystroke from the unsaved form; nothing is sent to the backend
+  until Save / Submit to Meta. Toggle **Sample data / Variables** shows filled values or raw
+  `{{placeholders}}`.
+- `template-preview.ts` holds the pure helpers (sample values mirroring backend
+  `TemplateSampleValues`, `fillVariables`, `parseWhatsApp` for `*bold* _italic_ ~strike~ ```mono```
+  and links, `parsePlain`). They return segments, never HTML, so typed text cannot inject markup.
+  `daily_business_summary`-style names are not italicised (boundary-checked).
+- Page also has: Unsaved-changes tag + Discard, insert-variable chips at the caret, Meta approval
+  card (Submit to Meta / Check status, submitted time formatted), responsive (preview first on
+  narrow screens).
+- Tests: `template-preview.spec.ts` 9; communication specs 23/23. Verified live on :4200 for all
+  three channels.
+- Gotcha hit while verifying: `ng serve` without `--proxy-config` serves index.html for `/api`
+  (200, not JSON) and the UI shows "Request failed (200)" — start with `npm start`.
+
+---
+
+## 2026-10-14 — Daily business summary on WhatsApp, 9:00 AM IST (`V118`)
+
+Every morning each company's report numbers get one WhatsApp message with **yesterday's** figures.
+
+- **Config, no new settings table:** one key in the WhatsApp channel's `config_json` —
+  `dailyReportPhones` (comma/space/newline separated; empty = off) — plus a field for it on
+  Communication -> Channel Settings -> WhatsApp. The message itself is a normal template row,
+  event `DAILY_BUSINESS_SUMMARY` (WhatsApp only), seeded lazily, edited / switched off / submitted
+  to Meta in Communication -> Templates.
+- **Job:** `DailyReportJob` ticks every 10 min from 09:00 to 20:50 `Asia/Kolkata`
+  (`app.communication.daily-report.{enabled,cron,zone}`) and always reports the previous IST
+  calendar day. Ticks after the first only matter for a missed morning / failed send.
+- **Ledger:** `daily_report_log`, unique `(company_id, report_date, recipient)` — the duplicate
+  guard. FAILED rows retry up to 3 attempts, then stop.
+- **Metrics** (`DailyBusinessMetricsPort`, implemented in `dashboard.infrastructure` like
+  `ShipmentDirectoryPort`): bookings + revenue (non-cancelled, by booking date), wallet recharges
+  (`WRC` credits, amount + count), delivered / cancelled (status-history transitions inside the
+  day), COD / To-Pay settled (`COD`+`TPY` wallet entries, either direction), and two *live*
+  counts — in transit (DISPATCHED/IN_SCAN) and out for delivery — which cannot be "as of
+  yesterday". Verified against raw SQL for 2026-10-13 on AMAZING_LOGISTICS: all 8 matched.
+- **Variables** `{{companyName}} {{reportDate}} {{bookings}} {{revenue}} {{rechargeAmount}}
+  {{rechargeCount}} {{delivered}} {{cancelled}} {{codToPaySettled}} {{inTransit}}
+  {{outForDelivery}}`; which ones are sent, and in what order, is read off the template content
+  (`TemplateRenderer.positionalParameters`). Amounts use lakh grouping (`12,34,567.50`).
+- **Not done:** the template is not yet created/approved in Meta, so a real send fails until it is.
+  Message is business-initiated, so it only reaches numbers Meta allows (test number: <= 5
+  verified recipients).
+- Also fixed this session: WhatsApp `to` now gets country code 91 for bare 10-digit numbers;
+  template language is `app.communication.whatsapp.template-language` (default `en_US`).
+- Tests: `DailyReportServiceImplTest` (10), `MetaWhatsAppProviderTest` (4), `TemplateRendererTest` (+2).
+
+---
+
+## 2026-10-14 — Submit WhatsApp templates to Meta from the app (`V119`)
+
+Communication -> Templates -> a WhatsApp template -> **Submit to Meta** / **Check status**.
+
+- `POST /communication/templates/{id}/submit-to-meta` (optional `{category, language}`; defaults
+  UTILITY / `en_US`) and `POST .../refresh-meta-status`, COMPANY_ADMIN. Uses the company's own
+  Business Account ID + token from Channel Settings (no new credentials).
+- `MetaTemplateConverter` turns `{{customerName}}` into Meta's `{{1}}..{{n}}` in order of first
+  appearance — the order the sender already uses — and attaches a sample per variable
+  (`TemplateSampleValues`). Local checks with plain-English errors: name must be
+  `[a-z0-9_]+`, body <= 1024 chars, must not start or end with a variable, no unknown variables.
+- `communication_template` gained `meta_template_id/status/status_detail/category/language/
+  submitted_at`. Editing a submitted template's **name or content clears them** (must resubmit);
+  toggling ACTIVE/INACTIVE does not. A template the app *knows* is not APPROVED fails sends with a
+  clear message; a never-submitted template (made by hand in WhatsApp Manager) sends as before —
+  "Check status" adopts its Meta state.
+- Provider: `WhatsAppProvider.submitTemplate` / `fetchTemplateStatus`; Meta errors surface as
+  Meta's own `error_user_msg` as a 422. **Live find:** Graph API answered a GET with content type
+  `text/javascript`, which Spring's JSON converter refuses — all Meta responses are now read as
+  text and parsed by hand.
+- Seeding is now **additive** (`seedMissingDefaults`): a company seeded before a default existed
+  still gets it, and edited templates are never touched. Stock WhatsApp shipment templates now end
+  with "- thank you!" so they pass Meta's no-trailing-variable rule (existing companies keep their
+  old text — edit before submitting).
+- Not yet done: the real submission of `daily_business_summary` for AMAZING_LOGISTICS (verified the
+  read path live — Meta answers "no such template"); the 4 shipment templates.
+- Tests: `MetaTemplateConverterTest` 9, `MetaWhatsAppProviderTemplateTest` 9,
+  `WhatsAppTemplateSubmissionServiceImplTest` 9, `CommunicationTemplateServiceImplTest` +5,
+  frontend `communication.service.spec` +3.
+
+---
+
+## 2026-10-14 — WhatsApp: Meta-compatible template send
+
+`MetaWhatsAppProvider` could never have succeeded against real Meta: `CommunicationSendServiceImpl`
+sent all 11 template variables positionally regardless of the template, blank values went out as
+empty text params (Meta rejects them), and the seeded WhatsApp `templateName`s were display
+strings ("Shipment Booked - WhatsApp") rather than valid Meta names.
+
+- `TemplateRenderer.positionalParameters(content, vars)`: only the placeholders the template
+  content uses, in order of first appearance, blank/unknown -> `"-"`. WhatsApp send now uses it.
+- Seeded WhatsApp template names are now `shipment_booked` / `shipment_dispatched` /
+  `out_for_delivery` / `shipment_delivered`. **Already-seeded companies keep the old names** —
+  edit the template name in Communication -> Templates to match the Meta-approved name.
+- Language is still hardcoded `en`. Meta test number `+1 555 665 8448`, app `Skra Courier`
+  (SKRA TECH portfolio) created for dev testing; business verification still pending.
+- Tests: `TemplateRendererTest` +2.
+
+---
+
+## 2026-10-14 — Admin PAID <-> TO_PAY switch on BOOKED shipments
+
+COMPANY_ADMIN only (shipment view, the page Track opens; branch users get 403). `GET/PUT
+/shipments/{id}/payment-mode`. Only while `BOOKED`, only between a collect-at-booking mode (PAID) and a plain
+To-Pay mode (not COD/TBB). Charges are recalculated (To-Pay charge added/removed, Rate/KG override kept).
+TO_PAY -> PAID: balance check, then `debitForBooking` synchronously in the same transaction (short balance
+refuses the whole switch). PAID -> TO_PAY: new `WalletService.refundBookingDebit` credits back (`SRF`) exactly the
+un-refunded `SBK` debits on the ledger. `reverseForShipment` (cancel) now skips `SBK` debits already answered by an
+`SRF`, so cancel after a switch never double-refunds. `V114` adds `payment_mode_changed_from_id/_at/_by` on shipments;
+frontend shows a "Payment mode changed by admin" banner plus a confirm popup (amount + wallet balance). No
+`shipment_status_history` row is written (a BOOKED->BOOKED row made the timeline's "Booked" time jump). Switch targets
+whose lane pricing config no longer exists are not offered (GET stays loadable). Verified live on :8082: debit, refund,
+short-balance refusal, stale-version conflict, cancel nets once, branch user 403, UI popup + banner.
 
 ## 2026-10-14 — PDP: earning reversal on shipment cancel
 

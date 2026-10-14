@@ -18,6 +18,7 @@ import com.courier.modules.communication.domain.CommunicationLog;
 import com.courier.modules.communication.domain.CommunicationLogCriteria;
 import com.courier.modules.communication.domain.CommunicationSetting;
 import com.courier.modules.communication.domain.CommunicationTemplate;
+import com.courier.modules.communication.application.TemplateComponentsCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -38,7 +39,8 @@ public class CommunicationMapper {
 
     public UpdateCommunicationTemplateCommand toCommand(UpdateCommunicationTemplateRequest r) {
         return new UpdateCommunicationTemplateCommand(r.templateName(), r.subject(), r.content(), r.status(),
-                r.version());
+                r.version(), r.category(), r.language(), r.headerText(), r.footerText(), r.buttons(),
+                r.variableSamples());
     }
 
     public UpsertCommunicationSettingCommand toCommand(CommunicationChannel channel,
@@ -54,7 +56,11 @@ public class CommunicationMapper {
 
     public CommunicationTemplateResponse toResponse(CommunicationTemplate t) {
         return new CommunicationTemplateResponse(t.getId(), t.getEventType(), t.getChannel(), t.getTemplateName(),
-                t.getSubject(), t.getContent(), t.getStatus(), t.getCreatedAt(), t.getUpdatedAt(), t.getVersion());
+                t.getSubject(), t.getContent(), t.getStatus(), t.getCreatedAt(), t.getUpdatedAt(), t.getVersion(),
+                t.getMetaTemplateId(), t.getMetaStatus(), t.getMetaStatusDetail(), t.getMetaCategory(),
+                t.getMetaLanguage(), t.getMetaSubmittedAt(), t.getCategory(), t.getLanguage(), t.getHeaderText(),
+                t.getFooterText(), TemplateComponentsCodec.readButtons(objectMapper, t.getButtonsJson()),
+                TemplateComponentsCodec.readSamples(objectMapper, t.getVariableSamplesJson()));
     }
 
     public CommunicationSettingResponse toResponse(CommunicationSetting s) {
@@ -75,6 +81,25 @@ public class CommunicationMapper {
         s.channels().forEach((channel, stats) -> channels.put(channel, new CommunicationDashboardResponse.ChannelStats(
                 stats.sent(), stats.delivered(), stats.failed(), stats.pending(), stats.cancelled())));
         return new CommunicationDashboardResponse(s.totalSent(), s.totalDelivered(), s.totalFailed(),
-                s.totalPending(), channels);
+                s.totalPending(), channels, s.period().name(), s.from(), s.to(), s.totalRead(),
+                s.deliveryRatePercent(), s.readRatePercent(),
+                s.daily().stream().map(d -> new CommunicationDashboardResponse.DayPoint(
+                        d.date(), d.sent(), d.delivered(), d.failed())).toList(),
+                s.recentFailures().stream().map(f -> new CommunicationDashboardResponse.FailureRow(
+                        f.id(), f.shipmentId(), f.eventType(), f.channel(), f.recipient(), f.errorMessage(),
+                        f.attemptCount(), f.at())).toList(),
+                s.dailyReport() == null ? null : new CommunicationDashboardResponse.DailyReportStatus(
+                        s.dailyReport().configured(), s.dailyReport().recipients(), s.dailyReport().lastDate(),
+                        s.dailyReport().lastStatus(), s.dailyReport().lastSentAt(), s.dailyReport().lastDeliveredAt(),
+                        s.dailyReport().lastReadAt(), s.dailyReport().lastError()),
+                s.templates() == null ? null : new CommunicationDashboardResponse.TemplateHealth(
+                        s.templates().approved(), s.templates().pending(), s.templates().rejected(),
+                        s.templates().notSubmitted(), s.templates().switchedOff(), s.templates().total()),
+                s.lastReceiptAt(),
+                s.whatsAppCost() == null ? null : new CommunicationDashboardResponse.WhatsAppCost(
+                        s.whatsAppCost().basis(), s.whatsAppCost().anyRateSet(), s.whatsAppCost().ratesComplete(),
+                        s.whatsAppCost().lines().stream().map(l -> new CommunicationDashboardResponse.CostLine(
+                                l.category(), l.messages(), l.rate(), l.amount())).toList(),
+                        s.whatsAppCost().total(), s.whatsAppCost().currency()));
     }
 }

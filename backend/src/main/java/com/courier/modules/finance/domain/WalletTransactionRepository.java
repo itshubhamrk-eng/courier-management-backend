@@ -162,4 +162,39 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
                                                     @Param("companyId") UUID companyId,
                                                     @Param("subType") SubTransactionType subType,
                                                     org.springframework.data.domain.Pageable pageable);
+
+    // ------------------------------------------------------- daily business summary
+    // Company-wide (every wallet of the company, branch wallets included), window is
+    // [from, to). Explicit companyId like the dashboard queries above — called from a
+    // scheduler thread. sum returns null over no rows; callers normalise to zero.
+
+    @Query("""
+            select sum(t.amount) from WalletTransaction t
+            where t.companyId = :companyId and t.transactionType = :type
+              and t.subTransactionType in :subTypes
+              and t.createdAt >= :from and t.createdAt < :to
+            """)
+    BigDecimal sumForCompanyBetween(@Param("companyId") UUID companyId, @Param("type") TransactionType type,
+                                    @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
+                                    @Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("""
+            select count(t) from WalletTransaction t
+            where t.companyId = :companyId and t.transactionType = :type
+              and t.subTransactionType in :subTypes
+              and t.createdAt >= :from and t.createdAt < :to
+            """)
+    long countForCompanyBetween(@Param("companyId") UUID companyId, @Param("type") TransactionType type,
+                                @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
+                                @Param("from") Instant from, @Param("to") Instant to);
+
+    /** Either direction — COD/TPY entries can legitimately be a credit or a debit. */
+    @Query("""
+            select sum(t.amount) from WalletTransaction t
+            where t.companyId = :companyId and t.subTransactionType in :subTypes
+              and t.createdAt >= :from and t.createdAt < :to
+            """)
+    BigDecimal sumAnyDirectionForCompanyBetween(@Param("companyId") UUID companyId,
+                                                @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
+                                                @Param("from") Instant from, @Param("to") Instant to);
 }

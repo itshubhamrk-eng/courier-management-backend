@@ -2,6 +2,7 @@ package com.courier.modules.communication.infrastructure;
 
 import com.courier.modules.communication.application.provider.WhatsAppProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,9 +25,11 @@ public class WhatsAppProviderConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "app.communication.whatsapp", name = "enabled", havingValue = "true")
-    public WhatsAppProvider metaWhatsAppProvider(RestClient.Builder builder) {
+    public WhatsAppProvider metaWhatsAppProvider(RestClient.Builder builder,
+            @Value("${app.communication.whatsapp.default-country-code:91}") String defaultCountryCode,
+            @Value("${app.communication.whatsapp.template-language:en_US}") String templateLanguage) {
         log.info("WhatsApp provider: Meta Cloud API (per-company credentials)");
-        return new MetaWhatsAppProvider(builder);
+        return new MetaWhatsAppProvider(builder, defaultCountryCode, templateLanguage);
     }
 
     @Bean

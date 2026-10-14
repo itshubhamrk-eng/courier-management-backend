@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -117,11 +116,16 @@ public class CommunicationSendServiceImpl implements CommunicationSendService {
 
         return switch (logRow.getChannel()) {
             case WHATSAPP -> {
+                if (!template.isApprovedOrUnknownAtMeta()) {
+                    throw new ProviderSendException("WhatsApp template \"" + template.getTemplateName()
+                            + "\" is " + template.getMetaStatus() + " at Meta, not approved — "
+                            + "check its status in Communication > Templates.");
+                }
                 Map<String, String> vars = templateRenderer.variables(shipment, recipientName);
                 WhatsAppProvider.WhatsAppCredentials credentials = new WhatsAppProvider.WhatsAppCredentials(
                         config.get("phoneNumberId"), config.get("businessAccountId"), setting.getSecret());
-                yield whatsAppProvider.send(new WhatsAppProvider.WhatsAppMessage(
-                        logRow.getRecipient(), template.getTemplateName(), List.copyOf(vars.values())), credentials);
+                yield whatsAppProvider.send(WhatsAppPayloadBuilder.build(logRow.getRecipient(), template,
+                        templateRenderer, vars, objectMapper), credentials);
             }
             case SMS -> {
                 SmsProvider.SmsCredentials credentials = new SmsProvider.SmsCredentials(
