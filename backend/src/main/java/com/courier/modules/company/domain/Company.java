@@ -76,6 +76,15 @@ public class Company extends BaseEntity {
     @Column(name = "company_id", columnDefinition = "BINARY(16)", nullable = false, updatable = false)
     private UUID companyId;
 
+    /**
+     * The company's id on the OCCPL SaaS platform, when it was provisioned from there.
+     * Null for companies created inside this app. Never used for tenancy — that is
+     * {@link #companyId}.
+     */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "external_company_id", columnDefinition = "BINARY(16)")
+    private UUID externalCompanyId;
+
     /** Stable machine key, uppercased on write, immutable after creation. */
     @Column(name = "company_code", nullable = false, updatable = false, length = 50)
     private String companyCode;
