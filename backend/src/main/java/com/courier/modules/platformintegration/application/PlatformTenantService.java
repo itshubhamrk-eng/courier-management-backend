@@ -16,7 +16,15 @@ public interface PlatformTenantService {
      * @param adminEmail   becomes the first company administrator and the company contact
      */
     record ProvisionCommand(String companyCode, String companyName, String adminEmail,
-                            String adminFirstName, String adminLastName, String mobile) {
+                            String adminFirstName, String adminLastName, String mobile, Profile profile) {
+    }
+
+    /** Optional details the platform holds for the company; any may be null. */
+    record Profile(String country, String website, String addressLine1, String addressLine2, String city,
+                   String state, String postalCode, String gstNumber, String panNumber, String logoUrl,
+                   String faviconUrl, String supportEmail, String supportPhone) {
+        static final Profile EMPTY = new Profile(null, null, null, null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     record Result(UUID companyId, boolean created) {

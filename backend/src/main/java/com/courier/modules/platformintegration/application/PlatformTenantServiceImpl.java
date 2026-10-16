@@ -64,10 +64,15 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
             }
             UUID planId = planService.getByCode(properties.defaultPlanCode()).getId();
 
+            Profile p = command.profile() == null ? Profile.EMPTY : command.profile();
             CompanyService.CreatedCompany created = companyService.create(new CreateCompanyCommand(
                     command.companyCode(), command.companyName(), null, null, planId,
-                    command.adminEmail(), mobile, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null,
+                    command.adminEmail(), mobile, null, p.website(), p.gstNumber(), p.panNumber(), null,
+                    // Logo and favicon links from the platform are signed and expire within a day, and the
+                    // courier columns hold plain URLs of up to 500 characters: not stored here.
+                    null, null,
+                    p.addressLine1(), p.addressLine2(), p.country(), p.state(), p.city(), p.postalCode(),
+                    null, null, null, null, null,
                     "Provisioned by OCCPL platform " + externalCompanyId, null,
                     command.adminEmail(), command.adminFirstName(), command.adminLastName(), mobile));
 

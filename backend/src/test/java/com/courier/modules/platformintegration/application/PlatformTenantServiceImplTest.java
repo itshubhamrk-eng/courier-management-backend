@@ -54,7 +54,7 @@ class PlatformTenantServiceImplTest {
     }
 
     private static PlatformTenantService.ProvisionCommand command(String email, String mobile) {
-        return new PlatformTenantService.ProvisionCommand("ACME", "Acme Industries", email, "Asha", "Rao", mobile);
+        return new PlatformTenantService.ProvisionCommand("ACME", "Acme Industries", email, "Asha", "Rao", mobile, null);
     }
 
     @Test
@@ -84,6 +84,29 @@ class PlatformTenantServiceImplTest {
         assertThat(cmd.getValue().companyCode()).isEqualTo("ACME");
         // The synthetic principal must not leak past the call.
         assertThat(SecurityUtils.getCurrentUser()).isEmpty();
+    }
+
+    @Test
+    void passesTheProfileOnToTheNewCompany() {
+        SubscriptionPlan plan = SubscriptionPlan.builder().build();
+        plan.setId(UUID.randomUUID());
+        when(planService.getByCode("STARTER")).thenReturn(plan);
+        when(companyRepository.findByExternalCompanyId(EXTERNAL)).thenReturn(Optional.empty());
+        Company company = Company.builder().companyId(UUID.randomUUID()).build();
+        when(companyService.create(any())).thenReturn(
+                new CompanyService.CreatedCompany(company, UUID.randomUUID(), "a@b.test", "x", true, 1, 1));
+
+        service.provision(EXTERNAL, new PlatformTenantService.ProvisionCommand("ACME", "Acme", "a@b.test", "Asha", null,
+                "+919999999999", new PlatformTenantService.Profile("IN", "https://acme.test", "1 Main Rd", null, "Pune",
+                        "MH", "411001", "27ABCDE1234F1Z5", "ABCDE1234F", "https://files/logo", null, null, null)));
+
+        ArgumentCaptor<CreateCompanyCommand> cmd = ArgumentCaptor.forClass(CreateCompanyCommand.class);
+        verify(companyService).create(cmd.capture());
+        assertThat(cmd.getValue().gstNumber()).isEqualTo("27ABCDE1234F1Z5");
+        assertThat(cmd.getValue().panNumber()).isEqualTo("ABCDE1234F");
+        assertThat(cmd.getValue().city()).isEqualTo("Pune");
+        assertThat(cmd.getValue().website()).isEqualTo("https://acme.test");
+        assertThat(cmd.getValue().logo()).isNull();
     }
 
     @Test

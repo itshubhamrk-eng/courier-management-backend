@@ -39,7 +39,11 @@ public class ProvisioningController {
                                    @Size(max = 150) String companyName,
                                    @Size(max = 255) String adminEmail,
                                    @Size(max = 200) String adminName,
-                                   @Size(max = 20) String adminPhone) {
+                                   @Size(max = 20) String adminPhone,
+                                   String country, String website, String addressLine1, String addressLine2,
+                                   String city, String state, String postalCode, String gstNumber,
+                                   String panNumber, String logoUrl, String faviconUrl,
+                                   String supportEmail, String supportPhone) {
     }
 
     @PutMapping
@@ -55,7 +59,11 @@ public class ProvisioningController {
         String last = space < 0 ? null : name.substring(space + 1).trim();
         PlatformTenantService.Result result = service.provision(companyId,
                 new PlatformTenantService.ProvisionCommand(request.companyCode(), request.companyName(),
-                        request.adminEmail(), first.isEmpty() ? null : first, last, request.adminPhone()));
+                        request.adminEmail(), first.isEmpty() ? null : first, last, request.adminPhone(),
+                        new PlatformTenantService.Profile(request.country(), request.website(), request.addressLine1(),
+                                request.addressLine2(), request.city(), request.state(), request.postalCode(),
+                                request.gstNumber(), request.panNumber(), request.logoUrl(), request.faviconUrl(),
+                                request.supportEmail(), request.supportPhone())));
         return ResponseEntity.ok(Map.of(
                 "companyId", companyId.toString(),
                 "status", "PROVISIONED",
