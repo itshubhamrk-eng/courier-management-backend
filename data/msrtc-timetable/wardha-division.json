@@ -1,0 +1,575 @@
+{
+ "source": "msrtc.maharashtra.gov.in Timetabel.aspx, Wardha division PDF (scanned, 9 pages), read by eye 2026-10-16. NOT verified. Only 3 boards transcribed (Ashti, Pulgaon, Jam [Shivai routes only]); Wardha, Selu, Jam main sheet, Hinganghat, Deoli skipped (dense/blurred/destination-tagged times).",
+ "division": "Wardha",
+ "boards": {
+  "MSRTC-WARD-S009": {
+   "rows": [
+    {
+     "placeName": "वरुड (वरुड मार्गे)",
+     "major": false,
+     "departures": [
+      "06:35",
+      "07:00",
+      "07:50",
+      "08:30",
+      "08:50",
+      "09:05",
+      "10:00",
+      "10:20",
+      "11:00",
+      "11:30",
+      "11:35",
+      "13:30",
+      "14:00",
+      "14:05",
+      "15:00",
+      "15:30",
+      "15:40",
+      "16:05",
+      "17:05",
+      "17:30",
+      "18:00",
+      "18:50"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मोर्शी (अंतोरा मार्गे)",
+     "major": false,
+     "departures": [
+      "07:00",
+      "09:45",
+      "11:45",
+      "14:00",
+      "15:20"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वर्धा",
+     "major": false,
+     "departures": [
+      "06:55",
+      "07:35",
+      "07:50",
+      "09:10",
+      "10:25",
+      "10:55",
+      "12:15",
+      "13:30",
+      "16:15",
+      "17:25"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हिंगणघाट",
+     "major": false,
+     "departures": [
+      "15:15",
+      "16:25"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मोर्शी (येनाडा, देलवाडी मार्गे)",
+     "major": false,
+     "departures": [
+      "08:20",
+      "10:25",
+      "12:45",
+      "16:35",
+      "18:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "किन्हाळा",
+     "major": false,
+     "departures": [
+      "12:00",
+      "20:25"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "काटोल (तारासावंगा मार्गे)",
+     "major": false,
+     "departures": [
+      "08:20"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तारासावंगा",
+     "major": false,
+     "departures": [
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वडाळा",
+     "major": false,
+     "departures": [
+      "08:15",
+      "12:30",
+      "18:50"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पार्डी, बोटोणा, थार",
+     "major": false,
+     "departures": [
+      "06:15",
+      "07:00",
+      "09:15",
+      "09:45",
+      "11:30",
+      "12:35",
+      "14:00",
+      "21:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "किन्ही",
+     "major": false,
+     "departures": [
+      "06:20",
+      "09:00",
+      "10:45",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पोरगव्हाण",
+     "major": false,
+     "departures": [
+      "06:50",
+      "11:00",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिरसोली",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-WARD-S006": {
+   "rows": [
+    {
+     "placeName": "वर्धा",
+     "major": false,
+     "departures": [
+      "06:15",
+      "06:45",
+      "07:45",
+      "08:15",
+      "09:00",
+      "09:15",
+      "09:30",
+      "10:30",
+      "10:45",
+      "10:50",
+      "11:30",
+      "12:30",
+      "13:15",
+      "14:25",
+      "16:30",
+      "17:45",
+      "18:00",
+      "18:30",
+      "19:30",
+      "19:40",
+      "20:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नागपूर",
+     "major": false,
+     "departures": [
+      "12:00",
+      "13:20",
+      "14:00",
+      "14:30",
+      "15:15",
+      "17:15"
+     ],
+     "arrivals": [
+      "10:30",
+      "12:30",
+      "13:00",
+      "13:30",
+      "15:00",
+      "16:15",
+      "17:15",
+      "19:00",
+      "19:30",
+      "20:00",
+      "21:15"
+     ]
+    },
+    {
+     "placeName": "चंद्रपूर",
+     "major": false,
+     "departures": [
+      "06:45",
+      "08:30",
+      "11:05",
+      "13:45",
+      "15:00",
+      "17:45"
+     ],
+     "arrivals": [
+      "10:35",
+      "12:20",
+      "13:10",
+      "15:25",
+      "16:25",
+      "17:45"
+     ]
+    },
+    {
+     "placeName": "अहेरी",
+     "major": false,
+     "departures": [
+      "06:35",
+      "09:45",
+      "10:15",
+      "11:35",
+      "13:00"
+     ],
+     "arrivals": [
+      "15:25",
+      "17:55",
+      "21:15"
+     ]
+    },
+    {
+     "placeName": "हिंगणघाट",
+     "major": false,
+     "departures": [
+      "11:45",
+      "12:00",
+      "14:30",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "राजुरा",
+     "major": false,
+     "departures": [
+      "16:05"
+     ],
+     "arrivals": [
+      "11:35"
+     ]
+    },
+    {
+     "placeName": "आर्वी",
+     "major": false,
+     "departures": [
+      "06:00",
+      "06:30",
+      "07:15",
+      "07:45",
+      "08:15",
+      "08:45",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:15",
+      "13:00",
+      "13:45",
+      "14:15",
+      "14:45",
+      "15:15",
+      "15:45",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00",
+      "18:15",
+      "18:45",
+      "19:30",
+      "20:00",
+      "20:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सालफळ",
+     "major": false,
+     "departures": [
+      "09:45",
+      "12:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "काटोल",
+     "major": false,
+     "departures": [
+      "15:15"
+     ],
+     "arrivals": [
+      "08:25"
+     ]
+    },
+    {
+     "placeName": "रसुलाबाद",
+     "major": false,
+     "departures": [
+      "06:15",
+      "10:15",
+      "12:30",
+      "14:20",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कळंब",
+     "major": false,
+     "departures": [
+      "07:15",
+      "10:15",
+      "13:30",
+      "14:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रोहणी",
+     "major": false,
+     "departures": [
+      "09:00",
+      "19:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "विजयगोपाल",
+     "major": false,
+     "departures": [
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बाभुळगांव (वा.)",
+     "major": false,
+     "departures": [
+      "09:00",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कांदगांव",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:45",
+      "12:15",
+      "15:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नळणी (भा.)",
+     "major": false,
+     "departures": [
+      "08:45",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भिर्डी",
+     "major": false,
+     "departures": [
+      "07:00",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमरावती",
+     "major": false,
+     "departures": [
+      "06:30",
+      "08:00",
+      "08:15",
+      "10:14"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "दर्यापूर",
+     "major": false,
+     "departures": [
+      "10:30",
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अकोला",
+     "major": false,
+     "departures": [
+      "07:15"
+     ],
+     "arrivals": [
+      "16:50"
+     ]
+    },
+    {
+     "placeName": "औरंगाबाद",
+     "major": false,
+     "departures": [
+      "09:15",
+      "10:35"
+     ],
+     "arrivals": [
+      "17:55"
+     ]
+    },
+    {
+     "placeName": "जालना",
+     "major": false,
+     "departures": [
+      "10:00"
+     ],
+     "arrivals": [
+      "13:15"
+     ]
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": [
+      "14:40"
+     ]
+    },
+    {
+     "placeName": "परतवाडा",
+     "major": false,
+     "departures": [
+      "09:30"
+     ],
+     "arrivals": [
+      "16:55"
+     ]
+    },
+    {
+     "placeName": "यवतमाळ",
+     "major": false,
+     "departures": [
+      "06:30",
+      "08:30",
+      "09:15",
+      "09:45",
+      "13:45",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "यवतमाळ (घारफळ मार्ग)",
+     "major": false,
+     "departures": [
+      "10:15",
+      "11:15",
+      "16:15",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "दारव्हा",
+     "major": false,
+     "departures": [
+      "10:45"
+     ],
+     "arrivals": [
+      "10:30"
+     ]
+    }
+   ]
+  },
+  "MSRTC-WARD-S004": {
+   "rows": [
+    {
+     "placeName": "नागपूर (शिवाई)",
+     "major": false,
+     "departures": [
+      "06:35",
+      "08:40",
+      "09:30",
+      "09:40",
+      "09:45",
+      "10:00",
+      "10:40",
+      "11:00",
+      "11:30",
+      "12:10",
+      "13:00",
+      "13:30",
+      "14:00",
+      "16:00",
+      "16:20",
+      "17:30",
+      "18:00",
+      "19:15",
+      "20:35"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चंद्रपूर (शिवाई)",
+     "major": false,
+     "departures": [
+      "08:15",
+      "09:20",
+      "10:10",
+      "10:35",
+      "11:40",
+      "12:30",
+      "13:15",
+      "13:30",
+      "13:50",
+      "14:00",
+      "15:10",
+      "15:25",
+      "16:15",
+      "16:30",
+      "17:25",
+      "18:40",
+      "21:30",
+      "21:50"
+     ],
+     "arrivals": []
+    }
+   ]
+  }
+ }
+}

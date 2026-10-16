@@ -11,6 +11,7 @@ digit errors and omitted times. Each JSON's `source` field says what was skipped
 | `jalna-division.json` | 7 of 8 | Badnapur has no station in the master |
 | `yavatmal-division.json` | 3 of 9 | only the legible pages |
 | `chhatrapati-sambhajinagar-division.json` | 3 of 8 | "every N min" rows expanded to explicit times |
+| `wardha-division.json` | 3 of 9 | Ashti, Pulgaon, Jam (Shivai routes only); Wardha, Selu, Hinganghat, Deoli skipped |
 
 Load into a running backend (needs a COMPANY_ADMIN login; each board replaces the whole timetable
 of that depot/station):
