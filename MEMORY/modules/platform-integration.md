@@ -23,3 +23,8 @@ Lets the OCCPL SaaS platform treat this app as one of its products. Provisioning
 - Runs under a fixed company-less SUPER_ADMIN principal (restored afterwards) so `CompanyService.create` keeps its audit/events.
 - Security chain matches only `/provisioning/v1/**`; everything else uses the app's own chain.
 - A concurrent first PUT for the same id can fail on the unique key; the platform retries and then gets the existing company.
+
+## Hosting beside the platform (dev)
+- Images: `.github/workflows/images.yml` publishes `ghcr.io/<owner>/courier-backend` and `courier-frontend` (tags: SHA and `dev`); the web image is built with `BUILD_CONFIGURATION=production`.
+- Compose, Caddy and `bin/courier-setup.sh` live in the OCCPL repository (`infra/vps`). One public host serves both: `/provisioning/*` goes to the backend, everything else to the web image (nginx forwards `/api/`).
+- A fresh database has **no users and no subscription plans** (no seed; plans and the first `SUPER_ADMIN` are created by hand). The plan named in `OCCPL_PLATFORM_DEFAULT_PLAN_CODE` must exist before the first company is provisioned, otherwise PUT fails with 404 for the plan.
