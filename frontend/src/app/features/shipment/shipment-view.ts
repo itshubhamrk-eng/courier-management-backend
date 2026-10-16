@@ -710,11 +710,21 @@ export class ShipmentView implements OnInit {
             const rows = history.filter((h) => h.manifestId === m.id && h.status === status);
             return rows.length ? rows[last ? rows.length - 1 : 0].changedAt : null;
           };
+          // A hub receive writes READY_FOR_MANIFEST with no manifest id (the shipment is
+          // detached from the sheet), so match it as the first such row after dispatch.
+          const hubReceivedAt = (m: Manifest): string | null => {
+            const dispatched = at(m, 'DISPATCHED');
+            if (!dispatched) return null;
+            const row = history
+              .filter((h) => h.status === 'READY_FOR_MANIFEST' && h.changedAt >= dispatched)
+              .sort((a, b) => a.changedAt.localeCompare(b.changedAt))[0];
+            return row ? row.changedAt : null;
+          };
           this.movementDocs.set(manifests.map((m) => ({
             manifest: m,
             createdAt: at(m, 'MANIFEST_CREATED') ?? m.createdAt ?? null,
             dispatchedAt: at(m, 'DISPATCHED') ?? m.departureTime ?? m.dispatchedAt ?? null,
-            receivedAt: at(m, 'IN_SCAN', true),
+            receivedAt: at(m, 'IN_SCAN', true) ?? hubReceivedAt(m),
             vehicle: m.vehicleId ? vNames.get(m.vehicleId) ?? null : null,
             driver: m.driverUserId ? dir.get(m.driverUserId) ?? null : null
           })));
