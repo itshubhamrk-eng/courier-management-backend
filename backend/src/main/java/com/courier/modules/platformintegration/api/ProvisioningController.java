@@ -38,9 +38,8 @@ public class ProvisioningController {
                                    @Size(max = 50) String companyCode,
                                    @Size(max = 150) String companyName,
                                    @Size(max = 255) String adminEmail,
-                                   @Size(max = 100) String adminFirstName,
-                                   @Size(max = 100) String adminLastName,
-                                   @Size(max = 20) String mobile) {
+                                   @Size(max = 200) String adminName,
+                                   @Size(max = 20) String adminPhone) {
     }
 
     @PutMapping
@@ -49,10 +48,14 @@ public class ProvisioningController {
         if (request.companyId() != null && !request.companyId().equals(companyId.toString())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyId does not match the path.");
         }
+        // The platform sends one display name; the first word is the first name, the rest the last.
+        String name = request.adminName() == null ? "" : request.adminName().trim();
+        int space = name.indexOf(' ');
+        String first = space < 0 ? name : name.substring(0, space);
+        String last = space < 0 ? null : name.substring(space + 1).trim();
         PlatformTenantService.Result result = service.provision(companyId,
                 new PlatformTenantService.ProvisionCommand(request.companyCode(), request.companyName(),
-                        request.adminEmail(), request.adminFirstName(), request.adminLastName(),
-                        request.mobile()));
+                        request.adminEmail(), first.isEmpty() ? null : first, last, request.adminPhone()));
         return ResponseEntity.ok(Map.of(
                 "companyId", companyId.toString(),
                 "status", "PROVISIONED",

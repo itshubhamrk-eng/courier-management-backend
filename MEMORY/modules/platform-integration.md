@@ -15,7 +15,7 @@ Lets the OCCPL SaaS platform treat this app as one of its products. Provisioning
 | `occpl.platform.default-mobile` | optional; company mobile when the platform sends none |
 
 ## Endpoints
-- `PUT /provisioning/v1/tenants/{companyId}` body: `companyCode, companyName, adminEmail, adminFirstName?, adminLastName?, mobile?` (other platform fields ignored) → `{companyId, status: PROVISIONED, created}`.
+- `PUT /provisioning/v1/tenants/{companyId}` body: `companyCode, companyName, adminEmail, adminName?, adminPhone?` (the platform's names; `adminName` is split into first/last, `adminPhone` is the company mobile) (other platform fields ignored) → `{companyId, status: PROVISIONED, created}`.
 - `DELETE /provisioning/v1/tenants/{companyId}` → 204, or 404 if never provisioned. Deactivates; no data is deleted.
 
 ## Rules
