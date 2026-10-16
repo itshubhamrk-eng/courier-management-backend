@@ -58,3 +58,40 @@ export interface BusDivision {
   stationCount: number;
   version: number;
 }
+
+/** MSRTC crossing: a bus A -> B with no direct service goes via one or more depots / stations. */
+export interface BusDepotRef {
+  id: string;
+  depotCode: string;
+  depotName: string;
+  depotType: BusDepotType;
+  city?: string | null;
+}
+
+export interface BusCrossingRoute {
+  id: string;
+  status: BusDepotStatus;
+  from: BusDepotRef;
+  to: BusDepotRef;
+  stops: BusDepotRef[];
+  version: number;
+}
+
+export interface ShipmentBusCrossing {
+  id: string;
+  shipmentId: string;
+  routeId?: string | null;
+  from: BusDepotRef;
+  to: BusDepotRef;
+  stops: BusDepotRef[];
+}
+
+export interface BusCrossingPick {
+  fromDepotId: string;
+  toDepotId: string;
+  stops: string[];
+}
+
+export function depotRefLabel(d: BusDepotRef): string {
+  return `${d.depotName} (${d.depotCode}) · ${BUS_DEPOT_TYPE_LABEL[d.depotType]}`;
+}

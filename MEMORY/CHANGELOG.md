@@ -10,6 +10,31 @@ All notable changes to this project. Format based on
 
 
 
+## 2026-10-16 — MSRTC crossings: several per trip, suggestions, shipment-detail panel (follow-up to `V126`)
+
+Reverses "one route per From/To pair": a pair can hold **several crossings**; saving the same pair with identical ordered points
+returns the existing one (no duplicate). `GET /bus-crossings/lookup` now returns a **list** (suggestions); `PUT /bus-crossings/{id}` edits
+that route's points by id. MSRTC booking and the shipment detail panel offer every saved crossing for the trip (by booking/delivery
+branch depots) as pick-one buttons; exactly one is applied by itself at booking; the checkbox turns on when any exist. Any number of
+points works (A→C→D→E→B). Half-typed autocomplete text no longer counts as a filled point (only real depot ids). Shipment detail
+panel (MSRTC shipments only, `ShipmentResponse.flowType` added) adds/changes/removes a shipment's crossing after booking.
+**Verified in the browser** as a branch user: suggestions, 3-point booking, panel, change, remove. Test fixtures left in `courier_db`:
+depots `MSRTC-PUNE-D004`/`S019` assigned to CP-TEST-01 / CP-KOL, a CP-TEST-01→Kolhapur district freight row, shipment `CP-TEST-01-000001`.
+
+## 2026-10-16 — MSRTC crossings: depot/station routes, auto-applied at booking (`V126`)
+
+Bus A→B with no direct service goes via crossing points C (D...). New in `com.courier.modules.busdepot`: `bus_crossing_routes`
+(+ ordered `bus_crossing_route_stops`) — depot/station to depot/station via depots/stations, **never branch-based**, one route per
+From/To pair (saving the pair again replaces its stops). `/api/v1/bus-crossings`: list, `/lookup` (by depots, or by booking branch +
+delivery branch = any depot assigned to each), save/activate/deactivate/delete, and `/shipments/{id}` GET/PUT/DELETE for the
+per-shipment snapshot (`shipment_bus_crossings`) — usable at booking or any time after. Writes: COMPANY_ADMIN or `SHIPMENT_CREATE`
+(booking desk saves routes); activate/deactivate/delete COMPANY_ADMIN. Frontend: `bus-crossing-editor` (reused), MSRTC → Crossings
+list/form (COMPANY_ONLY), MSRTC booking gets "No direct bus — route through a crossing point"; the saved route for the trip is applied
+by itself, Book is held while the crossing is half filled, and the shipment's crossing is PUT right after create (separate call, so a
+failure there toasts but the booking stands). **Informational only:** does not touch the branch-based `crossing_details` flow, pricing,
+manifests or in-scan; MSRTC still refuses the old branch Crossing. No shipment-detail panel yet. Verified live on `:8082`
+(save, replace, lookup, validation, attach); fixture route `MSRTC-PUNE-S019 → D004` + one shipment crossing left in `courier_db`. Not deployed.
+
 ## 2026-10-16 — MSRTC structure: Division → Depot → Station, Maharashtra data loaded (`V125`)
 
 New `bus_divisions` master (`/api/v1/bus-divisions`, COMPANY_ADMIN writes, delete refused while depots remain) and

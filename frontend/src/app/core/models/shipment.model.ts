@@ -118,6 +118,7 @@ export interface BulkTrackResponse {
 
 /** Full representation, with its item grid — mirrors backend `ShipmentResponse`. */
 export interface ShipmentResponse {
+  flowType?: FlowType;
   id: string;
   companyId: string;
   shipmentNumber: string;

@@ -43,6 +43,7 @@ public record ShipmentResponse(
         Instant deliveredAt, String podPhotoUrl, String podSignatureUrl, String shipmentImageUrl,
         BigDecimal invoiceValue, boolean ewayBillRequired, EwayBillInfo ewayBill,
         UUID createdBy, String createdByName, Instant createdDate, UUID updatedBy, Instant updatedDate, Long version,
+        @Schema(description = "STANDARD or MSRTC") String flowType,
         List<ShipmentItemResponse> items
 ) {
     /** The shipment's current E-Way Bill, read-only — plain fields only (no enum type),

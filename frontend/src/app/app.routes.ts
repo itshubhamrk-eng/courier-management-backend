@@ -550,6 +550,18 @@ export const routes: Routes = [
         loadComponent: () => import('@features/bus-depot/bus-depot-form').then((m) => m.BusDepotForm)
       },
       {
+        path: 'msrtc/crossings', title: 'Crossings', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-crossing-list').then((m) => m.BusCrossingList)
+      },
+      {
+        path: 'msrtc/crossings/new', title: 'New Crossing', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-crossing-form').then((m) => m.BusCrossingForm)
+      },
+      {
+        path: 'msrtc/crossings/:id', title: 'Crossing', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-crossing-form').then((m) => m.BusCrossingForm)
+      },
+      {
         path: 'msrtc/create-manifest', title: 'Create Manifest', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/msrtc/msrtc-create-manifest').then((m) => m.MsrtcCreateManifest)
       },
