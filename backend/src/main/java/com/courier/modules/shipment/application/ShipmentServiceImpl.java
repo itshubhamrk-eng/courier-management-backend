@@ -2158,14 +2158,24 @@ public class ShipmentServiceImpl implements ShipmentService {
     public List<TimelineStep> timeline(UUID shipmentId) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
-        Map<ShipmentStatus, ShipmentStatusHistory> reached = historyRepository
-                .findAllByShipmentIdWithinCompany(shipmentId, companyId).stream()
+        List<ShipmentStatusHistory> log = historyRepository.findAllByShipmentIdWithinCompany(shipmentId, companyId);
+        Map<ShipmentStatus, ShipmentStatusHistory> reached = log.stream()
                 .collect(Collectors.toMap(ShipmentStatusHistory::getStatus, h -> h,
                         (first, second) -> second));
+
+        // A receive at an intermediate hub never writes IN_SCAN (the shipment goes
+        // DISPATCHED -> READY_FOR_MANIFEST, see scanOneIn), so without this a hub-routed
+        // shipment's "Received" step would read Pending for good.
+        ShipmentStatusHistory hubReceive = reached.containsKey(ShipmentStatus.IN_SCAN) ? null
+                : log.stream()
+                        .filter(h -> h.getStatus() == ShipmentStatus.READY_FOR_MANIFEST
+                                && h.getPreviousStatus() == ShipmentStatus.DISPATCHED)
+                        .reduce((first, second) -> second).orElse(null);
 
         List<TimelineStep> steps = new ArrayList<>(TIMELINE_ORDER.size());
         for (ShipmentStatus status : TIMELINE_ORDER) {
             ShipmentStatusHistory entry = reached.get(status);
+            if (entry == null && status == ShipmentStatus.IN_SCAN) entry = hubReceive;
             steps.add(new TimelineStep(status, TIMELINE_LABELS.get(status),
                     entry == null ? null : entry.getChangedAt(),
                     entry == null ? null : entry.getChangedBy(),

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
@@ -9,6 +9,8 @@ import { BUS_DEPOT_TYPE_LABEL, BusDepot, BusDepotStatus, BusDepotType } from '@c
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { Page } from '@core/models/page.model';
+import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiTable, TableColumn } from '@shared/components/ui-table/ui-table';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
@@ -25,12 +27,12 @@ const TYPE_OPTS: SelectOption[] = [
   selector: 'app-bus-depot-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiButton, UiSearch, UiSelect, UiTable, StatusBadge, MatMenuModule, MatIconModule],
+  imports: [ReactiveFormsModule, UiButton, UiSearch, UiSelect, UiTable, UiPagination, StatusBadge, MatMenuModule, MatIconModule],
   template: `
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Bus Depot / Station</h1>
-          <p class="text-caption">MSRTC depots and stations, and the branch or vendor handling each — {{ depots().length }} shown.</p></div>
+          <p class="text-caption">MSRTC depots and stations, and the branch or vendor handling each — {{ depots().length }} in all.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search code, name, city…" (changed)="onSearch($event)" />
           <app-button icon="add" (pressed)="create()">New Depot / Station</app-button>
@@ -43,7 +45,7 @@ const TYPE_OPTS: SelectOption[] = [
         <app-select [control]="statusCtl" label="Status" [options]="statusOpts" [allowEmpty]="true" emptyLabel="All" placeholder="All" />
       </div>
 
-      <app-table [columns]="columns" [rows]="depots()" [loading]="loading()"
+      <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
                  emptyTitle="No bus depots or stations" emptyHint="Add the MSRTC depots and stations your cargo moves through."
                  (rowClick)="open($event)">
         <ng-template #row let-d>
@@ -67,6 +69,7 @@ const TYPE_OPTS: SelectOption[] = [
           </td>
         </ng-template>
       </app-table>
+      <app-pagination [page]="page()" (pageChange)="pageIndex.set($event)" />
     </div>
   `,
   styles: [`
@@ -95,6 +98,9 @@ export class BusDepotList implements OnInit {
   protected readonly depots = signal<BusDepot[]>([]);
   protected readonly loading = signal(true);
   private search = '';
+  private readonly pageSize = 20;
+  protected readonly pageIndex = signal(0);
+  protected readonly page = computed<Page<BusDepot>>(() => this.pageOf(this.depots(), this.pageIndex()));
 
   protected readonly columns: TableColumn<BusDepot>[] = [
     { key: 'depotName', header: 'Depot / Station' },
@@ -111,11 +117,13 @@ export class BusDepotList implements OnInit {
     this.service.divisions().subscribe((d) => this.divisionOpts.set(d.map((x) => ({ value: x.id, label: x.divisionName }))));
     const qp = this.route.snapshot.queryParamMap.get('divisionId');
     if (qp) this.divisionCtl.setValue(qp, { emitEvent: false });
-    this.divisionCtl.valueChanges.subscribe(() => this.load());
-    this.typeCtl.valueChanges.subscribe(() => this.load());
-    this.statusCtl.valueChanges.subscribe(() => this.load());
+    this.divisionCtl.valueChanges.subscribe(() => this.reload());
+    this.typeCtl.valueChanges.subscribe(() => this.reload());
+    this.statusCtl.valueChanges.subscribe(() => this.reload());
     this.load();
   }
+
+  private reload(): void { this.pageIndex.set(0); this.load(); }
 
   private load(): void {
     this.loading.set(true);
@@ -130,8 +138,18 @@ export class BusDepotList implements OnInit {
     });
   }
 
+  private pageOf(all: BusDepot[], index: number): Page<BusDepot> {
+    const size = this.pageSize;
+    const totalPages = Math.max(1, Math.ceil(all.length / size));
+    const page = Math.min(index, totalPages - 1);
+    return {
+      content: all.slice(page * size, (page + 1) * size), page, size, totalElements: all.length, totalPages,
+      first: page === 0, last: page >= totalPages - 1, hasNext: page < totalPages - 1
+    };
+  }
+
   protected typeLabel(t: BusDepotType): string { return BUS_DEPOT_TYPE_LABEL[t]; }
-  protected onSearch(t: string): void { this.search = t; this.load(); }
+  protected onSearch(t: string): void { this.search = t; this.reload(); }
   protected create(): void { this.router.navigate(['/msrtc/bus-depots/new']); }
   protected open(d: BusDepot): void { this.router.navigate(['/msrtc/bus-depots', d.id]); }
 

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,6 +7,8 @@ import { NotificationService } from '@core/services/notification.service';
 import { BusDivision } from '@core/models/bus-depot.model';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiSearch } from '@shared/components/ui-search/ui-search';
+import { Page } from '@core/models/page.model';
+import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiTable, TableColumn } from '@shared/components/ui-table/ui-table';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
@@ -17,19 +19,19 @@ import { BusDepotService } from './bus-depot.service';
   selector: 'app-bus-division-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiButton, UiSearch, UiTable, StatusBadge, MatMenuModule, MatIconModule],
+  imports: [UiButton, UiSearch, UiTable, UiPagination, StatusBadge, MatMenuModule, MatIconModule],
   template: `
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Divisions</h1>
-          <p class="text-caption">MSRTC divisions — each groups its depots and bus stations — {{ divisions().length }} shown.</p></div>
+          <p class="text-caption">MSRTC divisions — each groups its depots and bus stations — {{ divisions().length }} in all.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search division…" (changed)="onSearch($event)" />
           <app-button icon="add" (pressed)="create()">New Division</app-button>
         </div>
       </header>
 
-      <app-table [columns]="columns" [rows]="divisions()" [loading]="loading()"
+      <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
                  emptyTitle="No divisions" emptyHint="Add the MSRTC divisions, then place depots and stations in them."
                  (rowClick)="open($event)">
         <ng-template #row let-v>
@@ -52,6 +54,7 @@ import { BusDepotService } from './bus-depot.service';
           </td>
         </ng-template>
       </app-table>
+      <app-pagination [page]="page()" (pageChange)="pageIndex.set($event)" />
     </div>
   `,
   styles: [`
@@ -71,6 +74,17 @@ export class BusDivisionList implements OnInit {
   protected readonly divisions = signal<BusDivision[]>([]);
   protected readonly loading = signal(true);
   private search = '';
+  private readonly pageSize = 20;
+  protected readonly pageIndex = signal(0);
+  protected readonly page = computed<Page<BusDivision>>(() => {
+    const all = this.divisions(), size = this.pageSize;
+    const totalPages = Math.max(1, Math.ceil(all.length / size));
+    const page = Math.min(this.pageIndex(), totalPages - 1);
+    return {
+      content: all.slice(page * size, (page + 1) * size), page, size, totalElements: all.length, totalPages,
+      first: page === 0, last: page >= totalPages - 1, hasNext: page < totalPages - 1
+    };
+  });
 
   protected readonly columns: TableColumn<BusDivision>[] = [
     { key: 'divisionName', header: 'Division' },
@@ -93,7 +107,7 @@ export class BusDivisionList implements OnInit {
     });
   }
 
-  protected onSearch(t: string): void { this.search = t; this.load(); }
+  protected onSearch(t: string): void { this.search = t; this.pageIndex.set(0); this.load(); }
   protected create(): void { this.router.navigate(['/msrtc/divisions/new']); }
   protected open(v: BusDivision): void { this.router.navigate(['/msrtc/divisions', v.id]); }
   protected viewDepots(v: BusDivision): void { this.router.navigate(['/msrtc/bus-depots'], { queryParams: { divisionId: v.id } }); }

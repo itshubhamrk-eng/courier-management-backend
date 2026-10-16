@@ -15,6 +15,10 @@ Frontend only (`shipment-view.ts`). A hub in-scan writes a `READY_FOR_MANIFEST` 
 "Pending" for a shipment already at the hub (seen on CP-INDR-000001 once its hub DRS existed).
 Received now falls back to the first `READY_FOR_MANIFEST` row after that manifest's dispatch.
 
+Same bug in the Timeline card: `ShipmentServiceImpl.timeline()` now treats a `DISPATCHED -> READY_FOR_MANIFEST` row as the
+"Received" step when there is no `IN_SCAN` row (backend; test `timelineShowsHubReceiveAsReceived`).
+Also: client-side pagination on Divisions, Bus Depot/Station and Bus Timetable (list + board read view) lists.
+
 ---
 
 ## 2026-10-16 — MSRTC Bus Timetable board (V127)

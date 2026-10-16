@@ -1227,6 +1227,29 @@ class ShipmentMovementServiceImplTest {
         assertThat(steps).allMatch(s -> !s.completed());
     }
 
+    @Test
+    @DisplayName("timeline counts a hub receive (DISPATCHED -> READY_FOR_MANIFEST) as the Received step")
+    void timelineShowsHubReceiveAsReceived() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        java.time.Instant hubAt = java.time.Instant.parse("2026-10-03T09:51:40Z");
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(shipment));
+        when(historyRepository.findAllByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(List.of(
+                        com.courier.modules.shipment.domain.ShipmentStatusHistory.builder()
+                                .status(ShipmentStatus.DISPATCHED).previousStatus(ShipmentStatus.MANIFEST_CREATED)
+                                .changedAt(hubAt.minusSeconds(3600)).build(),
+                        com.courier.modules.shipment.domain.ShipmentStatusHistory.builder()
+                                .status(ShipmentStatus.READY_FOR_MANIFEST).previousStatus(ShipmentStatus.DISPATCHED)
+                                .changedAt(hubAt).build()));
+
+        var received = service.timeline(shipment.getId()).stream()
+                .filter(st -> st.status() == ShipmentStatus.IN_SCAN).findFirst().orElseThrow();
+
+        assertThat(received.completed()).isTrue();
+        assertThat(received.changedAt()).isEqualTo(hubAt);
+    }
+
     // ---------------------------------------------------------------------- helpers
 
     private static Shipment shipment(ShipmentStatus status) {

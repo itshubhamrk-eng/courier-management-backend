@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Page } from '@core/models/page.model';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { BUS_DEPOT_TYPE_LABEL, BusTimetableBoard as Board, BusTimetableRow, parseTimes } from '@core/models/bus-depot.model';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
+import { UiPagination } from '@shared/components/ui-pagination/ui-pagination';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { BusDepotService } from './bus-depot.service';
 
@@ -22,7 +24,7 @@ interface DraftRow { placeName: string; major: boolean; departures: string; arri
   selector: 'app-bus-timetable-board',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiCard, UiButton, UiLoader],
+  imports: [UiCard, UiButton, UiLoader, UiPagination],
   template: `
     <div class="page">
       <header class="page__head">
@@ -73,7 +75,7 @@ interface DraftRow { placeName: string; major: boolean; departures: string; arri
           } @else {
             <div class="tt">
               <div class="tt__row tt__row--head"><span>गावाचे नाव · Place</span><span>जाणाऱ्या गाड्या · Departing</span><span>येणाऱ्या गाड्या · Arriving</span></div>
-              @for (r of board()!.rows; track r.id) {
+              @for (r of rowPage().content; track r.id) {
                 <div class="tt__row" [class.tt__row--major]="r.major">
                   <span class="tt__place">{{ r.placeName }}</span>
                   <span>{{ r.departures.join(', ') || '—' }}</span>
@@ -81,6 +83,7 @@ interface DraftRow { placeName: string; major: boolean; departures: string; arri
                 </div>
               }
             </div>
+            <app-pagination [page]="rowPage()" (pageChange)="rowIndex.set($event)" />
           }
         </app-card>
       }
@@ -119,6 +122,16 @@ export class BusTimetableBoard implements OnInit {
   protected readonly editing = signal(false);
   protected readonly saving = signal(false);
   protected readonly draft = signal<DraftRow[]>([]);
+  protected readonly rowIndex = signal(0);
+  protected readonly rowPage = computed<Page<BusTimetableRow>>(() => {
+    const all = (this.board()?.rows ?? []), size = 25;
+    const totalPages = Math.max(1, Math.ceil(all.length / size));
+    const page = Math.min(this.rowIndex(), totalPages - 1);
+    return {
+      content: all.slice(page * size, (page + 1) * size), page, size, totalElements: all.length, totalPages,
+      first: page === 0, last: page >= totalPages - 1, hasNext: page < totalPages - 1
+    };
+  });
   protected readonly canEdit = computed(() => this.permissions.hasRole('COMPANY_ADMIN'));
   protected readonly typeLabel = computed(() => (this.board() ? BUS_DEPOT_TYPE_LABEL[this.board()!.depot.depotType] : ''));
 
