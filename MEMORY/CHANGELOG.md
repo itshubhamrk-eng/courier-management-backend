@@ -20,8 +20,6 @@ Needs the two Keycloak clients before it can be used end to end (see `MEMORY/mod
 
 ---
 
-## 2026-10-16 — OCCPL platform provisioning endpoint (`V126`, off by default)
-
 ## 2026-10-16 — OCCPL platform provisioning endpoint (`V127`, off by default)
 
 New module `platformintegration`: `PUT/DELETE /provisioning/v1/tenants/{companyId}`, the contract the OCCPL SaaS
