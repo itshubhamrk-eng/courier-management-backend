@@ -8,6 +8,30 @@ All notable changes to this project. Format based on
 
 ---
 
+
+
+## 2026-10-16 — MSRTC structure: Division → Depot → Station, Maharashtra data loaded (`V125`)
+
+New `bus_divisions` master (`/api/v1/bus-divisions`, COMPANY_ADMIN writes, delete refused while depots remain) and
+`bus_depots.division_id` + `parent_depot_id` (a station names the BUS_DEPOT of the same division that serves it;
+a depot with served stations cannot be deleted). Frontend: MSRTC → Divisions (list/form with depot+station counts),
+depot list gets Division column/filter and "Served by", depot form gets Division + Served-by-Depot. MSRTC booking now
+shows only **To Branch** (pincode/area/from-to city hidden; the branch's own pincode still feeds pricing).
+**Data:** scraped msrtc.maharashtra.gov.in/GeneralPages/Bus-Stands-Depots.aspx (public contact tables, 28 divisions
+with data) into the local `courier_db` for AMAZING_LOGISTICS via the API: 234 depots + 441 stations (codes `MSRTC-<DIV>-D/S###`,
+division name also in `district`, phone = STD+number), 202 stations linked to the depot of the same name. Gotcha: many
+divisions use Marathi table headers (बस आगार = depot) — an English-only parse files every depot as a station. Not deployed.
+
+## 2026-10-16 — MSRTC Bus Depot / Station master (`V124`)
+
+New company-scoped master `com.courier.modules.busdepot` (`/api/v1/bus-depots`, table `bus_depots`): code, name,
+type (BUS_DEPOT | BUS_STATION), address/city/district/state/pincode, contact, status. **Optional `branch_id`** assigns any
+active branch of the company — a Pickup-Delivery Partner branch is the "vendor" case. Code and name unique among live
+rows (service-checked). Writes COMPANY_ADMIN, reads any authenticated user; no new permission module. Frontend:
+`features/bus-depot/` (list + form), sidebar MSRTC → Bus Depot / Station, routes `/msrtc/bus-depots`. Not yet used by
+MSRTC booking/manifest. Verified live on `:8082` (create, duplicate, bad branch, unassign, list, deactivate); one fixture
+row `PUNE-SWG` left in `courier_db`.
+
 ## 2026-10-14 — PDP billing frequency + scheduled statements
 
 Added per-partner Weekly / 15-day / Monthly (default Monthly) via `pdp_billing_settings` (V121; V120 was taken by the communication work). Daily `PdpBillingCycleJob` drafts a statement when a partner's cycle closes with unbilled earnings; manual and scheduled generate both reject overlapping periods. New: `GET /pdp-statements/schedule`, `PUT /pdp-billing-frequency/{branchId}`, `POST /pdp-statements/generate-due`; Partner Billing gets a "Billing schedule" card. Unit tests `PdpBillingCycleTest` + existing PDP tests pass; note `CommunicationTemplateServiceImplTest` (other session) currently breaks test compile.

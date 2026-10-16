@@ -526,6 +526,30 @@ export const routes: Routes = [
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
       {
+        path: 'msrtc/divisions', title: 'Divisions', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-division-list').then((m) => m.BusDivisionList)
+      },
+      {
+        path: 'msrtc/divisions/new', title: 'New Division', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-division-form').then((m) => m.BusDivisionForm)
+      },
+      {
+        path: 'msrtc/divisions/:id', title: 'Division', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-division-form').then((m) => m.BusDivisionForm)
+      },
+      {
+        path: 'msrtc/bus-depots', title: 'Bus Depot / Station', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-depot-list').then((m) => m.BusDepotList)
+      },
+      {
+        path: 'msrtc/bus-depots/new', title: 'New Bus Depot / Station', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-depot-form').then((m) => m.BusDepotForm)
+      },
+      {
+        path: 'msrtc/bus-depots/:id', title: 'Bus Depot / Station', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        loadComponent: () => import('@features/bus-depot/bus-depot-form').then((m) => m.BusDepotForm)
+      },
+      {
         path: 'msrtc/create-manifest', title: 'Create Manifest', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/msrtc/msrtc-create-manifest').then((m) => m.MsrtcCreateManifest)
       },

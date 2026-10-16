@@ -283,6 +283,8 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'msrtc', title: 'MSRTC', icon: 'directions_bus', order: 5.2, roles: [...OPS_BOOKING, AppRole.DELIVERY_OPERATOR],
     children: [
+      { id: 'msrtc-divisions', title: 'Divisions', icon: 'account_tree', route: '/msrtc/divisions', roles: COMPANY_ONLY },
+      { id: 'msrtc-bus-depots', title: 'Bus Depot / Station', icon: 'warehouse', route: '/msrtc/bus-depots', roles: COMPANY_ONLY },
       { id: 'msrtc-booking', title: 'MSRTC Shipment Booking', icon: 'add_box', route: '/msrtc/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       { id: 'msrtc-create-manifest', title: 'Create Manifest', icon: 'qr_code_scanner', route: '/msrtc/create-manifest', permission: 'MANIFEST_CREATE', roles: OPS_BOOKING },
       { id: 'msrtc-finalize-manifest', title: 'Finalize Manifest', icon: 'outbound', route: '/msrtc/finalize-manifest', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },

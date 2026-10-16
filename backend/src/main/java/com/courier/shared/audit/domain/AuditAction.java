@@ -119,6 +119,18 @@ public enum AuditAction {
     CUSTOMER_ADDRESS_UPDATED,
     CUSTOMER_ADDRESS_DELETED,
 
+    // --- MSRTC bus depot / station master.
+    BUS_DEPOT_CREATED,
+    BUS_DEPOT_UPDATED,
+    BUS_DEPOT_ACTIVATED,
+    BUS_DEPOT_DEACTIVATED,
+    BUS_DEPOT_DELETED,
+    BUS_DIVISION_CREATED,
+    BUS_DIVISION_UPDATED,
+    BUS_DIVISION_ACTIVATED,
+    BUS_DIVISION_DEACTIVATED,
+    BUS_DIVISION_DELETED,
+
     // --- business customer pricing: zones, their locations, and the per-zone rate card.
     PRICING_ZONE_CREATED,
     PRICING_ZONE_UPDATED,

@@ -99,22 +99,9 @@ type FreightOutcome =
               <label class="fld"><span class="fld__l">Booking Date</span>
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
               @if (isMsrtc) {
-                <div class="fld">
-                  <span class="fld__l">Destination By</span>
-                  <div class="dest-mode">
-                    <label class="chk"><input type="radio" name="destMode" [checked]="destMode() === 'PINCODE'" (change)="setDestMode('PINCODE')" /><span>Pincode</span></label>
-                    <label class="chk"><input type="radio" name="destMode" [checked]="destMode() === 'BRANCH'" (change)="setDestMode('BRANCH')" /><span>To Branch</span></label>
-                  </div>
-                </div>
-                @if (destMode() === 'BRANCH') {
-                  <app-select [control]="c('msrtcDeliveryBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Select the delivery branch" />
-                } @else {
-                  <div class="fld">
-                    <span class="fld__l">Delivery Branch</span>
-                    <span class="fld__i fld__i--hint">{{ pincodeBranchLabel() }}</span>
-                  </div>
-                }
+                <app-select [control]="c('msrtcDeliveryBranchId')" label="To Branch" [options]="branchOptions()" placeholder="Select the delivery branch" />
               }
+              @if (!isMsrtc) {
               <label class="fld"><span class="fld__l">Destination Pincode</span>
                 <input class="fld__i" [formControl]="c('destinationPincode')" [readonly]="isMsrtc && destMode() === 'BRANCH'" placeholder="e.g. 411001" maxlength="10" /></label>
               <div class="fld">
@@ -131,6 +118,7 @@ type FreightOutcome =
                 <input class="fld__i" [value]="myBranchCity() ?? '—'" disabled /></label>
               <label class="fld"><span class="fld__l">To City</span>
                 <input class="fld__i" [value]="freightCalc()?.destinationCityName ?? (freightCalcLoading() ? 'Resolving…' : '—')" disabled /></label>
+              }
               <div class="fld">
                 <app-select [control]="c('serviceTypeId')" label="Service Type" [options]="serviceTypeOptions()" placeholder="Select a service type" />
                 @if (expectedDeliveryPreview(); as edp) {
@@ -456,7 +444,7 @@ type FreightOutcome =
               @if (!myBranchIdPresent()) {
                 <p class="err">Your account has no branch assigned — ask an admin before booking.</p>
               } @else if (!readyToPrice()) {
-                <p class="hint">Enter a destination pincode and add at least one item's weight to see pricing.</p>
+                <p class="hint">{{ isMsrtc ? 'Select the delivery branch' : 'Enter a destination pincode' }} and add at least one item's weight to see pricing.</p>
               } @else if (pricingLoading()) {
                 <p class="hint">Pricing…</p>
               } @else if (pricingError()) {
@@ -647,7 +635,7 @@ export class ShipmentCreate implements OnInit {
   protected readonly isBusinessBooking = this.route.snapshot.data['businessBooking'] === true;
   /** MSRTC only: how the destination is chosen — a pincode (its mapped branch is looked up)
    *  or a branch picked directly (its own pincode drives pricing). */
-  protected readonly destMode = signal<'PINCODE' | 'BRANCH'>('PINCODE');
+  protected readonly destMode = signal<'PINCODE' | 'BRANCH'>(this.route.snapshot.data['flowType'] === 'MSRTC' ? 'BRANCH' : 'PINCODE');
   /** MSRTC only: the branch mapped to the typed destination pincode, if any. */
   protected readonly pincodeBranch = signal<{ id: string; name: string } | null>(null);
   private readonly pincodeBranchLookup = signal<'idle' | 'loading' | 'none'>('idle');
@@ -1772,7 +1760,7 @@ export class ShipmentCreate implements OnInit {
     if (!p || !f || this.form.invalid || this.ewayBillReason() !== null) return;
     const v = this.form.getRawValue();
     if (this.isMsrtc && !this.msrtcDeliveryBranchId()) {
-      this.notify.error('Choose the delivery branch (or a pincode that has a branch mapped).');
+      this.notify.error('Choose the delivery branch.');
       return;
     }
     if (!v.declaredValue || v.declaredValue <= 0) {

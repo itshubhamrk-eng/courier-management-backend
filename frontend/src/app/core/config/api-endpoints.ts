@@ -26,6 +26,9 @@ export const API = {
   customers: '/customers',
   /** Business Customer pricing: a customer's zones (districts/cities) and per-zone rate cards. */
   pricingZones: '/pricing-zones',
+  /** MSRTC bus depot / station master. */
+  busDepots: '/bus-depots',
+  busDivisions: '/bus-divisions',
   customerRates: '/customer-rates',
   pdpRates: '/pdp-rates',
   pickups: '/pickups',
