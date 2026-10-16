@@ -8,13 +8,13 @@ All notable changes to this project. Format based on
 
 ---
 
-## 2026-10-16 — OCCPL platform provisioning endpoint (`V126`, off by default)
+## 2026-10-16 — OCCPL platform provisioning endpoint (`V127`, off by default)
 
 New module `platformintegration`: `PUT/DELETE /provisioning/v1/tenants/{companyId}`, the contract the OCCPL SaaS
 platform uses to create / stop serving a company in a product. Disabled unless `occpl.platform.enabled=true`.
 - Own `@Order(1)` security chain for `/provisioning/v1/**` only (Keycloak JWT: signature via JWK set, issuer,
   audience, and `client_id` = the platform's service client). The app's own login/tokens/chain are unchanged.
-- PUT is idempotent on `companies.external_company_id` (new nullable unique column, `V126`); creates the company
+- PUT is idempotent on `companies.external_company_id` (new nullable unique column, `V127`); creates the company
   through `CompanyService.create` (roles, settings, first admin, activation email) on the configured
   `default-plan-code`. A deactivated company is re-activated. DELETE deactivates only; data is kept.
 - Needs `adminEmail` (+ `mobile`, or `default-mobile` configured) in the request; the platform's current payload
