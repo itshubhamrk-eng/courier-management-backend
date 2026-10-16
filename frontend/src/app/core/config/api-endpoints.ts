@@ -7,6 +7,8 @@ export const API = {
     logout: '/auth/logout',
     me: '/auth/me',
     changePassword: '/auth/change-password',
+    platformConfig: '/auth/platform/config',
+    platformExchange: '/auth/platform/exchange',
     forgotPassword: '/auth/forgot-password',
     resetPassword: '/auth/reset-password',
     impersonate: (companyId: string) => `/auth/impersonate/${companyId}`,

@@ -36,11 +36,32 @@ public class PlatformSecurityConfig {
 
     public static final String PROVISIONER = "PLATFORM_PROVISIONER";
 
+    /** Verifies platform (Keycloak) tokens; also used by the sign-in exchange. */
+    @Bean
+    JwtDecoder platformJwtDecoder(PlatformIntegrationProperties props) {
+        return decoderFor(props);
+    }
+
+    /**
+     * The sign-in exchange carries the platform token in the request body and checks it itself, so this
+     * chain only turns off the app's own bearer-token handling for that one path.
+     */
+    @Bean
+    @Order(2)
+    SecurityFilterChain platformSignInChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/api/v1/auth/platform/**")
+                .authorizeHttpRequests(a -> a.anyRequest().permitAll())
+                .cors(org.springframework.security.config.Customizer.withDefaults())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(c -> c.disable());
+        return http.build();
+    }
+
     @Bean
     @Order(1)
-    SecurityFilterChain platformProvisioningChain(HttpSecurity http, PlatformIntegrationProperties props)
-            throws Exception {
-        JwtDecoder decoder = platformJwtDecoder(props);
+    SecurityFilterChain platformProvisioningChain(HttpSecurity http, PlatformIntegrationProperties props,
+            JwtDecoder platformJwtDecoder) throws Exception {
+        JwtDecoder decoder = platformJwtDecoder;
         http.securityMatcher("/provisioning/v1/**")
                 .authorizeHttpRequests(a -> a.anyRequest().hasAuthority(PROVISIONER))
                 .oauth2ResourceServer(o -> o.jwt(jwt -> jwt
@@ -59,7 +80,7 @@ public class PlatformSecurityConfig {
                 : List.of();
     }
 
-    static JwtDecoder platformJwtDecoder(PlatformIntegrationProperties props) {
+    static JwtDecoder decoderFor(PlatformIntegrationProperties props) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(props.jwkSetUri()).build();
         decoder.setJwtValidator(validator(props));
         return decoder;

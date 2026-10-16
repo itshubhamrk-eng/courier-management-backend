@@ -44,7 +44,8 @@ class PlatformTenantServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PlatformTenantServiceImpl(companyService, companyRepository, planService,
-                new PlatformIntegrationProperties(true, "iss", "jwks", "aud", "client", "STARTER", null));
+                new PlatformIntegrationProperties(true, "iss", "jwks", "aud", "client", "STARTER", null,
+                        "courier-web", "http://core", "http://token", "courier-service", "secret"));
         SecurityContextHolder.clearContext();
     }
 
