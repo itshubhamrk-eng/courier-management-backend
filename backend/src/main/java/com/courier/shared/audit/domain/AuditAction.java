@@ -135,6 +135,8 @@ public enum AuditAction {
     BUS_CROSSING_ROUTE_DEACTIVATED,
     BUS_CROSSING_ROUTE_DELETED,
     SHIPMENT_BUS_CROSSING_SET,
+    BUS_TIMETABLE_SAVED,
+    BUS_TIMETABLE_CLEARED,
 
     // --- business customer pricing: zones, their locations, and the per-zone rate card.
     PRICING_ZONE_CREATED,

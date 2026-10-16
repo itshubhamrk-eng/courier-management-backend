@@ -133,7 +133,7 @@ type FreightOutcome =
             </div>
             <div class="spacer"></div>
             @if (isMsrtc) {
-              <app-bus-crossing-editor [fromBranchId]="myBranchId" [toBranchId]="msrtcDeliveryBranchId()"
+              <app-bus-crossing-editor [hideResolved]="true" [fromBranchId]="myBranchId" [toBranchId]="msrtcDeliveryBranchId()"
                 [(value)]="busCrossing" [(incomplete)]="busCrossingIncomplete" />
             }
             @if (!isMsrtc) {

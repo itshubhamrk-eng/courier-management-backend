@@ -8,6 +8,36 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-16 — Shipment view: hub receive showed "Pending" on the THC row
+
+Frontend only (`shipment-view.ts`). A hub in-scan writes a `READY_FOR_MANIFEST` history row with
+`manifestId = null`, never `IN_SCAN`, so the Loading Sheet/THC table's Received column stayed
+"Pending" for a shipment already at the hub (seen on CP-INDR-000001 once its hub DRS existed).
+Received now falls back to the first `READY_FOR_MANIFEST` row after that manifest's dispatch.
+
+---
+
+## 2026-10-16 — MSRTC Bus Timetable board (V127)
+
+MSRTC publishes a वेळापत्रक per depot / bus station as a **scanned image PDF per division**
+(msrtc.maharashtra.gov.in/GeneralPages/Timetabel.aspx — region -> division tabs; no text layer, so
+nothing could be imported): a row per place (गावाचे नाव) with the times buses leave
+(जाणाऱ्या गाड्या) and arrive (येणाऱ्या गाड्या), major places in red. Same structure built here.
+- `V127`: `bus_timetable_entries` (depot_id, place_name, is_major, sort_order) + `bus_timetable_departures` /
+  `bus_timetable_arrivals` (ordered TIME lists). One board per `bus_depots` row, saved/replaced as a whole.
+- Backend in `com.courier.modules.busdepot`: `BusTimetableService`/`Impl`, `BusTimetableController`
+  (`GET /bus-timetables`, `GET|PUT /bus-timetables/depots/{depotId}`); read = any authenticated, write = COMPANY_ADMIN;
+  audit `BUS_TIMETABLE_SAVED/CLEARED`; duplicate place names rejected; times go out as `HH:mm`.
+- Frontend `features/bus-depot/bus-timetable-list|board.ts`, nav MSRTC -> Bus Timetable (`/msrtc/timetable[/:depotId]`);
+  editor takes times as text (`06.30, 13:00`, Devanagari digits ok).
+- Verified live on :8082/:4300 (V127 applied to courier_db). Not deployed.
+- **Pune division data imported (local dev DB only, 2026-10-16)**: 23 boards / ~1,500 place rows read by eye from the 46-page scanned PDF
+  (best effort — blurry pages, ~5-min digit errors likely; unreadable times left out; Swargate board has 1 row, Ghodegaon is partial,
+  Bhimashankar + Supa pages skipped: no matching depot/station in the master). Merged JSON + import script lived in the Claude scratchpad;
+  production has NOT been imported. Proof-read against the PDF before relying on it.
+
+---
+
 
 
 ## 2026-10-16 — MSRTC crossings: several per trip, suggestions, shipment-detail panel (follow-up to `V126`)

@@ -285,6 +285,7 @@ export const NAVIGATION: NavNode[] = [
     children: [
       { id: 'msrtc-divisions', title: 'Divisions', icon: 'account_tree', route: '/msrtc/divisions', roles: COMPANY_ONLY },
       { id: 'msrtc-bus-depots', title: 'Bus Depot / Station', icon: 'warehouse', route: '/msrtc/bus-depots', roles: COMPANY_ONLY },
+      { id: 'msrtc-timetable', title: 'Bus Timetable', icon: 'schedule', route: '/msrtc/timetable', roles: [...OPS_BOOKING, AppRole.DELIVERY_OPERATOR] },
       { id: 'msrtc-crossings', title: 'Crossings', icon: 'alt_route', route: '/msrtc/crossings', roles: COMPANY_ONLY },
       { id: 'msrtc-booking', title: 'MSRTC Shipment Booking', icon: 'add_box', route: '/msrtc/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       { id: 'msrtc-create-manifest', title: 'Create Manifest', icon: 'qr_code_scanner', route: '/msrtc/create-manifest', permission: 'MANIFEST_CREATE', roles: OPS_BOOKING },

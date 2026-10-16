@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
-import { BusCrossingPick, BusCrossingRoute, ShipmentBusCrossing, BusDepot, BusDepotStatus, BusDivision, BusDepotType, SaveBusDepotRequest, UpdateBusDepotRequest } from '@core/models/bus-depot.model';
+import { BusCrossingPick, BusTimetableBoard, BusTimetableRow, BusTimetableSummary, BusCrossingRoute, ShipmentBusCrossing, BusDepot, BusDepotStatus, BusDivision, BusDepotType, SaveBusDepotRequest, UpdateBusDepotRequest } from '@core/models/bus-depot.model';
 
 @Injectable({ providedIn: 'root' })
 export class BusDepotService {
@@ -45,4 +45,11 @@ export class BusDepotService {
     return this.api.put<ShipmentBusCrossing>(`${API.busCrossings}/shipments/${shipmentId}`, body);
   }
   clearShipmentCrossing(shipmentId: string) { return this.api.delete<void>(`${API.busCrossings}/shipments/${shipmentId}`); }
+
+  // ---- timetable boards --------------------------------------------------------
+  timetables() { return this.api.get<BusTimetableSummary[]>(API.busTimetables); }
+  timetable(depotId: string) { return this.api.get<BusTimetableBoard>(`${API.busTimetables}/depots/${depotId}`); }
+  saveTimetable(depotId: string, rows: BusTimetableRow[]) {
+    return this.api.put<BusTimetableBoard>(`${API.busTimetables}/depots/${depotId}`, { rows });
+  }
 }

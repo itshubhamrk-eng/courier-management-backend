@@ -53,6 +53,7 @@ public class BusDepotServiceImpl implements BusDepotService {
         apply(depot, in);
         requireUnique(companyId, depot, null);
         requireBranch(depot.getBranchId());
+        requireOnePerBranch(companyId, depot.getBranchId(), null);
         requireStructure(companyId, depot);
         BusDepot saved = depots.save(depot);
         log.info("Bus depot {} ({}) created in company {} by {}", saved.getDepotCode(), saved.getId(), companyId, actor());
@@ -77,6 +78,7 @@ public class BusDepotServiceImpl implements BusDepotService {
         // newly chosen one must be an active branch.
         if (!Objects.equals(previousBranch, depot.getBranchId())) {
             requireBranch(depot.getBranchId());
+            requireOnePerBranch(companyId, depot.getBranchId(), depot.getId());
         }
         requireStructure(companyId, depot);
         BusDepot saved = depots.save(depot);
@@ -176,6 +178,13 @@ public class BusDepotServiceImpl implements BusDepotService {
         }
         if (depots.existsByName(companyId, d.getDepotName(), excludeId)) {
             throw new DuplicateResourceException(ENTITY, "depotName", d.getDepotName());
+        }
+    }
+
+    /** A branch serves exactly one depot / station; a branch already holding another one cannot take a second. */
+    private void requireOnePerBranch(UUID companyId, UUID branchId, UUID selfId) {
+        if (branchId != null && depots.existsOtherForBranch(companyId, branchId, selfId)) {
+            throw new BusinessRuleException("This branch already has a bus depot / station. A branch can have only one — unassign it there first.");
         }
     }
 

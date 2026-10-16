@@ -42,6 +42,8 @@ const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.DELIVERY_OPERATOR, AppRol
 // screen below already defaults to "my own branch", so HUB_MANAGER only needed adding
 // to the role gate, not a new component. Was missing before this change even though the
 // backend role already held the underlying permissions (TRACKING_CREATE/READ etc).
+/** Anyone on the MSRTC desk may read a depot's timetable board; only COMPANY_ADMIN edits it (the API enforces that). */
+const MSRTC_VIEWERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB_MANAGER, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR];
 const MOVEMENT_WRITERS = [...UPDATERS, AppRole.HUB_MANAGER, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR];
 // Hub Operations' own screens (dashboard, shipments-at-hub, out-scan, exceptions) —
 // COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's own desk.
@@ -548,6 +550,14 @@ export const routes: Routes = [
       {
         path: 'msrtc/bus-depots/:id', title: 'Bus Depot / Station', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/bus-depot/bus-depot-form').then((m) => m.BusDepotForm)
+      },
+      {
+        path: 'msrtc/timetable', title: 'Bus Timetable', canActivate: [roleGuard], data: { roles: MSRTC_VIEWERS },
+        loadComponent: () => import('@features/bus-depot/bus-timetable-list').then((m) => m.BusTimetableList)
+      },
+      {
+        path: 'msrtc/timetable/:depotId', title: 'Bus Timetable', canActivate: [roleGuard], data: { roles: MSRTC_VIEWERS },
+        loadComponent: () => import('@features/bus-depot/bus-timetable-board').then((m) => m.BusTimetableBoard)
       },
       {
         path: 'msrtc/crossings', title: 'Crossings', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },

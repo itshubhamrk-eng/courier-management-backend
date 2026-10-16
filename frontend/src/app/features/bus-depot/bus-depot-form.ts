@@ -93,7 +93,11 @@ export class BusDepotForm implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly depot = signal<BusDepot | null>(null);
-  protected readonly branchOpts = signal<SelectOption[]>([]);
+  private readonly allBranchOpts = signal<(SelectOption & { taken?: boolean })[]>([]);
+  /** Branch ids that already hold a depot / station (one per branch). */
+  private readonly takenBranches = signal<Set<string>>(new Set());
+  /** A branch has only one depot / station: branches already holding another one are not offered (the depot's own stays). */
+  protected readonly branchOpts = computed(() => this.allBranchOpts().filter((o) => !this.takenBranches().has(o.value) || o.value === this.depot()?.branchId));
   protected readonly divisionOpts = signal<SelectOption[]>([]);
   private readonly allDepots = signal<BusDepot[]>([]);
   /** Depots of the chosen division, for a station's "Served by". */
@@ -123,12 +127,13 @@ export class BusDepotForm implements OnInit {
       { label: this.isCreate() ? 'New' : 'Edit' }
     ]);
     this.masters.branchDirectory().pipe(catchError(() => of([]))).subscribe((list) =>
-      this.branchOpts.set(list.map((b) => ({
+      this.allBranchOpts.set(list.map((b) => ({
         value: b.id,
         label: `${b.branchName} (${b.branchCode})${b.branchType === 'PICKUP_DELIVERY_PARTNER' ? ' — Vendor' : ''}`
       }))));
     this.service.divisions({ status: 'ACTIVE' }).subscribe((d) => this.divisionOpts.set(d.map((x) => ({ value: x.id, label: x.divisionName }))));
     this.service.list({ type: 'BUS_DEPOT', status: 'ACTIVE' }).subscribe((d) => this.allDepots.set(d ?? []));
+    this.service.list({}).subscribe((d) => this.takenBranches.set(new Set((d ?? []).filter((x) => x.branchId).map((x) => x.branchId as string))));
     this.divisionCtl.valueChanges.subscribe((v) => { this.divisionValue.set(v); this.parentCtl.setValue(''); });
     if (!this.depotId) { this.loading.set(false); return; }
     this.service.get(this.depotId).subscribe({

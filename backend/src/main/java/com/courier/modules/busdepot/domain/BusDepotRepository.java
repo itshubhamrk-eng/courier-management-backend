@@ -26,6 +26,11 @@ public interface BusDepotRepository extends JpaRepository<BusDepot, UUID> {
                           @Param("type") BusDepotType type, @Param("branchId") UUID branchId,
                           @Param("divisionId") UUID divisionId, @Param("search") String search);
 
+    @Query("select count(d) > 0 from BusDepot d where d.companyId = :companyId and d.branchId = :branchId"
+            + " and (:excludeId is null or d.id <> :excludeId)")
+    boolean existsOtherForBranch(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId,
+                                 @Param("excludeId") UUID excludeId);
+
     @Query("select count(d) > 0 from BusDepot d where d.companyId = :companyId and d.divisionId = :divisionId")
     boolean existsByDivision(@Param("companyId") UUID companyId, @Param("divisionId") UUID divisionId);
 

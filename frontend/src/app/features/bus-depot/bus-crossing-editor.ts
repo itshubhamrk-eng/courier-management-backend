@@ -43,10 +43,16 @@ import { BusDepotService } from './bus-depot.service';
           <p class="sugg__h">Or enter different crossing points below.</p>
         </div>
       }
-      <div class="row2">
-        <app-autocomplete [control]="fromCtl" label="From (depot / station)" [options]="fromOptions()" placeholder="Search depot or station…" />
-        <app-autocomplete [control]="toCtl" label="To (depot / station)" [options]="toOptions()" placeholder="Search depot or station…" />
-      </div>
+      @if (!fromHidden() || !toHidden()) {
+        <div class="row2">
+          @if (!fromHidden()) {
+            <app-autocomplete [control]="fromCtl" label="From (depot / station)" [options]="fromOptions()" placeholder="Search depot or station…" />
+          }
+          @if (!toHidden()) {
+            <app-autocomplete [control]="toCtl" label="To (depot / station)" [options]="toOptions()" placeholder="Search depot or station…" />
+          }
+        </div>
+      }
       <div class="stops">
         @for (ctl of stopCtls(); track ctl; let i = $index) {
           <div class="stop">
@@ -94,6 +100,8 @@ export class BusCrossingEditor implements OnInit {
   readonly initial = input<BusCrossingPick | null>(null);
   /** Offer the crossings already saved for the chosen trip. Off when editing one saved route. */
   readonly suggest = input(true);
+  /** Booking: hide a From / To that already resolved to a depot. */
+  readonly hideResolved = input(false);
 
   readonly value = model<BusCrossingPick | null>(null);
   readonly incomplete = model(false);
@@ -112,6 +120,11 @@ export class BusCrossingEditor implements OnInit {
   private readonly fromV = signal<string | null>(null);
   private readonly toV = signal<string | null>(null);
   private readonly stopsV = signal<(string | null)[]>([null]);
+
+  private readonly knownIds = computed(() => new Set(this.depots().map((d) => d.id)));
+  /** Booking (branches given): a From / To already resolved to a real depot is not shown; an unresolved one still is, so booking never stalls. */
+  protected readonly fromHidden = computed(() => this.hideResolved() && !!this.fromBranchId() && !!this.fromV() && this.knownIds().has(this.fromV()!));
+  protected readonly toHidden = computed(() => this.hideResolved() && !!this.toBranchId() && !!this.toV() && this.knownIds().has(this.toV()!));
 
   protected readonly enabled = computed(() => !this.optional() || this.enabledV());
 
@@ -218,21 +231,28 @@ export class BusCrossingEditor implements OnInit {
 
   /** Booking branches changed: offer every saved crossing for them (one alone is applied), else preselect a lone depot per side. */
   private onBranchesChanged(from: string | null, to: string | null): void {
-    if (!from || !to || !this.suggest()) return;
+    if (!from || !to) return;
+    if (!this.suggest()) { this.defaultEnds(from, to); return; }
     this.service.crossingLookup({ fromBranchId: from, toBranchId: to }).subscribe({
       next: (list) => {
         this.suggestions.set(list ?? []);
         if (list?.length && !this.initial()) this.enabledCtl.setValue(true);
         if (list?.length === 1 && !this.initial()) { this.fillFromRoute(list[0]); return; }
-        if (list?.length) return;
-        this.selectedRoute.set(null);
-        const f = this.fromOptions();
-        const t = this.toOptions();
-        if (!this.fromCtl.value && f.length === 1) this.fromCtl.setValue(f[0].value);
-        if (!this.toCtl.value && t.length === 1) this.toCtl.setValue(t[0].value);
+        if (!list?.length) this.selectedRoute.set(null);
+        this.defaultEnds(from, to);
       },
-      error: () => this.selectedRoute.set(null)
+      error: () => { this.selectedRoute.set(null); this.defaultEnds(from, to); }
     });
+  }
+
+  /** Empty From / To default to the first depot assigned to the login / destination branch. */
+  private defaultEnds(from: string, to: string): void {
+    if (this.initial()) return;
+    const first = (branchId: string) => this.depots().find((d) => d.branchId === branchId)?.id ?? null;
+    const f = first(from);
+    const t = first(to);
+    if (!this.fromCtl.value && f && f !== this.toCtl.value) this.fromCtl.setValue(f);
+    if (!this.toCtl.value && t && t !== this.fromCtl.value) this.toCtl.setValue(t);
   }
 
   /** Both ends picked by hand: offer the crossings saved for exactly that pair; a lone one fills an empty form. */
