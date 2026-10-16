@@ -30,6 +30,7 @@ export const API = {
   pricingZones: '/pricing-zones',
   /** MSRTC bus depot / station master. */
   busDepots: '/bus-depots',
+  busCrossings: '/bus-crossings',
   busDivisions: '/bus-divisions',
   customerRates: '/customer-rates',
   pdpRates: '/pdp-rates',

@@ -145,6 +145,7 @@ public class ShipmentMapper {
                 latestAssetUrl(assets, ShipmentAssetType.BOOKING, "PHOTO"),
                 s.getInvoiceValue(), s.isEwayBillRequired(), toEwayBillInfo(ewayBill),
                 s.getCreatedBy(), createdByName(s), s.getCreatedAt(), s.getUpdatedBy(), s.getUpdatedAt(), s.getVersion(),
+                s.getFlowType() == null ? null : s.getFlowType().name(),
                 items.stream().map(this::toResponse).toList());
     }
 

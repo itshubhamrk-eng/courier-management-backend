@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
-import { BusDepot, BusDepotStatus, BusDivision, BusDepotType, SaveBusDepotRequest, UpdateBusDepotRequest } from '@core/models/bus-depot.model';
+import { BusCrossingPick, BusCrossingRoute, ShipmentBusCrossing, BusDepot, BusDepotStatus, BusDivision, BusDepotType, SaveBusDepotRequest, UpdateBusDepotRequest } from '@core/models/bus-depot.model';
 
 @Injectable({ providedIn: 'root' })
 export class BusDepotService {
@@ -27,4 +27,22 @@ export class BusDepotService {
   activateDivision(id: string) { return this.api.patch<BusDivision>(`${API.busDivisions}/${id}/activate`, {}); }
   deactivateDivision(id: string) { return this.api.patch<BusDivision>(`${API.busDivisions}/${id}/deactivate`, {}); }
   removeDivision(id: string) { return this.api.delete<void>(`${API.busDivisions}/${id}`); }
+
+  // ---- crossing routes ---------------------------------------------------------
+  crossings(filter: { status?: BusDepotStatus; depotId?: string } = {}) { return this.api.get<BusCrossingRoute[]>(API.busCrossings, filter); }
+  crossing(id: string) { return this.api.get<BusCrossingRoute>(`${API.busCrossings}/${id}`); }
+  /** Every saved crossing for a trip (by depots, or by the branches whose depots count) — suggestions to pick from. */
+  crossingLookup(q: { fromDepotId?: string; toDepotId?: string; fromBranchId?: string; toBranchId?: string }) {
+    return this.api.get<BusCrossingRoute[]>(`${API.busCrossings}/lookup`, q);
+  }
+  updateCrossing(id: string, body: BusCrossingPick) { return this.api.put<BusCrossingRoute>(`${API.busCrossings}/${id}`, body); }
+  saveCrossing(body: BusCrossingPick) { return this.api.post<BusCrossingRoute>(API.busCrossings, body); }
+  activateCrossing(id: string) { return this.api.patch<BusCrossingRoute>(`${API.busCrossings}/${id}/activate`, {}); }
+  deactivateCrossing(id: string) { return this.api.patch<BusCrossingRoute>(`${API.busCrossings}/${id}/deactivate`, {}); }
+  removeCrossing(id: string) { return this.api.delete<void>(`${API.busCrossings}/${id}`); }
+  shipmentCrossing(shipmentId: string) { return this.api.get<ShipmentBusCrossing | null>(`${API.busCrossings}/shipments/${shipmentId}`); }
+  setShipmentCrossing(shipmentId: string, body: BusCrossingPick & { saveAsRoute?: boolean }) {
+    return this.api.put<ShipmentBusCrossing>(`${API.busCrossings}/shipments/${shipmentId}`, body);
+  }
+  clearShipmentCrossing(shipmentId: string) { return this.api.delete<void>(`${API.busCrossings}/shipments/${shipmentId}`); }
 }

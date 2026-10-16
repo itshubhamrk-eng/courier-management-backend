@@ -1,3 +1,4 @@
+import { ShipmentBusCrossingCard } from '@features/bus-depot/shipment-bus-crossing-card';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -60,7 +61,7 @@ const TIMELINE_ICONS: Record<string, string> = {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, DatePipe, RouterLink, MatIconModule, UiCard, UiLoader, UiButton, TrackingCard,
-    ChargeSummary, ShipmentCommunicationCard],
+    ChargeSummary, ShipmentCommunicationCard, ShipmentBusCrossingCard],
   template: `
     @if (loading()) {
       <app-loader [minHeight]="320" caption="Loading…" />
@@ -323,6 +324,11 @@ const TIMELINE_ICONS: Record<string, string> = {
               }
             </dl>
           </app-card>
+
+          @if (shipment()!.flowType === 'MSRTC') {
+            <app-shipment-bus-crossing-card [shipmentId]="shipment()!.id" [canEdit]="can().update"
+              [fromBranchId]="shipment()!.bookingBranchId" [toBranchId]="shipment()!.deliveryBranchId ?? null" />
+          }
 
           <app-card title="Weight &amp; Value">
             <dl class="kv">

@@ -17,6 +17,9 @@ import { BusinessCustomerService } from '@features/business-customer/business-cu
 import { SettingsService } from '@features/settings/settings.service';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiAutocomplete } from '@shared/components/ui-autocomplete/ui-autocomplete';
+import { BusCrossingEditor } from '@features/bus-depot/bus-crossing-editor';
+import { BusDepotService } from '@features/bus-depot/bus-depot.service';
+import { BusCrossingPick } from '@core/models/bus-depot.model';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { Customer, CustomerAddress } from '@core/models/customer.model';
@@ -63,7 +66,7 @@ type FreightOutcome =
   selector: 'app-shipment-create',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, DecimalPipe, ReactiveFormsModule, MatIconModule, UiSelect, UiAutocomplete, UiButton, UiCard, ItemEntryGrid, ChargeSummary, VoiceMicButton],
+  imports: [DatePipe, DecimalPipe, ReactiveFormsModule, MatIconModule, UiSelect, UiAutocomplete, UiButton, UiCard, BusCrossingEditor, ItemEntryGrid, ChargeSummary, VoiceMicButton],
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
@@ -129,6 +132,10 @@ type FreightOutcome =
                 <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
             </div>
             <div class="spacer"></div>
+            @if (isMsrtc) {
+              <app-bus-crossing-editor [fromBranchId]="myBranchId" [toBranchId]="msrtcDeliveryBranchId()"
+                [(value)]="busCrossing" [(incomplete)]="busCrossingIncomplete" />
+            }
             @if (!isMsrtc) {
             <label class="chk">
               <input type="checkbox" [formControl]="c('crossing')" />
@@ -491,7 +498,7 @@ type FreightOutcome =
               <app-button icon="check" [loading]="submitting()"
                 [disabled]="!pricing() || pricingLoading() || !freightCalc() || freightCalcLoading()
                   || form.invalid || ewayBillReason() !== null || appointmentDeliveryReason() !== null
-                  || !c('declaredValue').value || (isMsrtc && !msrtcDeliveryBranchId())"
+                  || !c('declaredValue').value || (isMsrtc && !msrtcDeliveryBranchId()) || busCrossingIncomplete()"
                 (pressed)="book()">Book Shipment</app-button>
             </div>
           </div>
@@ -623,7 +630,7 @@ export class ShipmentCreate implements OnInit {
   /** The signed-in user's own branch — Booking Branch is not a picker here, a booking
    *  desk books from its own branch, not a chosen one. `null` for a user with no branch
    *  of their own (e.g. COMPANY_ADMIN), handled as a hard stop, not a silent fallback. */
-  private readonly myBranchId = this.auth.user()?.branchId ?? null;
+  protected readonly myBranchId = this.auth.user()?.branchId ?? null;
   private readonly route = inject(ActivatedRoute);
   private readonly pickupService = inject(PickupService);
   /** `?pickupId=` — this booking is for a collected Pickup Request; it is linked back once booked. */
@@ -643,6 +650,9 @@ export class ShipmentCreate implements OnInit {
   /** MSRTC only: the branch picked in "To Branch" mode (mirrors the form control as a signal). */
   private readonly msrtcPickedBranch = signal<string | null>(null);
   /** MSRTC only: the delivery branch this booking will carry, whichever way it was chosen. */
+  protected readonly busCrossing = signal<BusCrossingPick | null>(null);
+  protected readonly busCrossingIncomplete = signal(false);
+  private readonly busDepotService = inject(BusDepotService);
   protected readonly msrtcDeliveryBranchId = computed(() =>
     this.destMode() === 'BRANCH' ? this.msrtcPickedBranch() : (this.pincodeBranch()?.id ?? null));
   protected readonly pincodeBranchLabel = computed(() => {
@@ -1815,6 +1825,12 @@ export class ShipmentCreate implements OnInit {
           });
         }
         this.notify.success(`Shipment ${s.shipmentNumber} booked — AWB ${s.trackingNumber}.`);
+        const crossing = this.isMsrtc ? this.busCrossing() : null;
+        if (crossing) {
+          this.busDepotService.setShipmentCrossing(s.id, { ...crossing, saveAsRoute: true }).subscribe({
+            error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but its crossing could not be saved. Add it again from the shipment.`)
+          });
+        }
         if (this.pickupId) {
           this.pickupService.linkShipment(this.pickupId, { shipmentId: s.id, shipmentNo: s.shipmentNumber }).subscribe({
             error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but the pickup request could not be linked to it.`)
