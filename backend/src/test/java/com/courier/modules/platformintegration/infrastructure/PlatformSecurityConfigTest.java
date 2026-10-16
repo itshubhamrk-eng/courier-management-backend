@@ -12,7 +12,8 @@ class PlatformSecurityConfigTest {
 
     private static final PlatformIntegrationProperties PROPS = new PlatformIntegrationProperties(
             true, "https://auth.test/realms/occpl", "https://auth.test/jwks", "courier-api",
-            "occpl-core-services", "STARTER", null);
+            "occpl-core-services", "STARTER", null,
+            "courier-web", "http://core", "http://token", "courier-service", "secret");
 
     private static Jwt token(String issuer, List<String> aud, String clientId) {
         Jwt.Builder b = Jwt.withTokenValue("t").header("alg", "RS256").subject("s")

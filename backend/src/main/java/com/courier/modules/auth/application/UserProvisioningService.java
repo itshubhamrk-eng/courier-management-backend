@@ -162,4 +162,21 @@ public interface UserProvisioningService {
             return temporaryPassword != null;
         }
     }
+
+    /**
+     * Creates a member of a company who signs in through the OCCPL platform instead of a password.
+     *
+     * <p>ACTIVE and pre-verified: the platform has already proven the address. The stored password is
+     * random and never returned, so the account can only be entered through the platform (or a password
+     * reset the person asks for).
+     *
+     * @throws com.courier.shared.exception.DuplicateResourceException if the address is already
+     *         registered within that company
+     */
+    ProvisionedBranchUser provisionPlatformUser(NewPlatformUserCommand command);
+
+    /** @param roles the courier roles to grant; never a platform-scoped role */
+    record NewPlatformUserCommand(UUID companyId, String email, String firstName, String lastName,
+                                  java.util.Set<com.courier.modules.auth.domain.Role> roles) {
+    }
 }
