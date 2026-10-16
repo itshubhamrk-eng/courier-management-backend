@@ -3,6 +3,7 @@ package com.courier.modules.platformintegration.api;
 import com.courier.modules.auth.api.dto.LoginResponse;
 import com.courier.modules.auth.application.SessionService;
 import com.courier.modules.platformintegration.application.PlatformSignInService;
+import com.courier.modules.platformintegration.infrastructure.PlatformIntegrationProperties;
 import com.courier.shared.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,11 +32,28 @@ import java.util.UUID;
 public class PlatformSignInController {
 
     private final PlatformSignInService service;
+    private final PlatformIntegrationProperties properties;
 
     public record ExchangeRequest(@NotBlank @Size(max = 8000) String accessToken,
                                   @NotNull UUID platformCompanyId,
                                   @Size(max = 100) String deviceId,
                                   @Size(max = 150) String deviceName) {
+    }
+
+    /** Where the browser sends people to sign in with the platform. */
+    public record SsoConfig(String authorizationEndpoint, String tokenEndpoint, String clientId) {
+    }
+
+    /**
+     * Public: tells the web app how to start the platform sign-in (public Keycloak addresses and the web
+     * client id), so those are set with the rest of the server settings and need no web rebuild. A 404 here
+     * means the platform sign-in is not switched on.
+     */
+    @GetMapping("/config")
+    public ApiResponse<SsoConfig> config() {
+        String issuer = properties.issuerUri().replaceAll("/+$", "");
+        return ApiResponse.success(new SsoConfig(issuer + "/protocol/openid-connect/auth",
+                issuer + "/protocol/openid-connect/token", properties.webClientId()));
     }
 
     @PostMapping("/exchange")

@@ -40,4 +40,11 @@ Flow: verify the platform token (signature, issuer, audience `courier-api`; `azp
 - **Created users** get a random, discarded password (`UserProvisioningService.provisionPlatformUser`), so they can only enter through the platform or a password reset they request.
 - **Refusals** after a valid token (unknown company, not a member, no entitlement) all answer the same 403, so company and membership existence is not revealed. A platform outage answers 503.
 - **Security chain:** `@Order(2)` chain for `/api/v1/auth/platform/**` (permit-all; the body token is the credential). Settings: `OCCPL_PLATFORM_WEB_CLIENT_ID`, `_CORE_BASE_URL`, `_CORE_TOKEN_URI`, `_SERVICE_CLIENT_ID`, `_SERVICE_CLIENT_SECRET`.
-- **Not done here:** the courier web `/sso` page and "Sign in with OCCPL" button, the Keycloak `courier-web` and `courier-service` clients, shared sign-out, rate limiting of the endpoint (a forged token cannot pass verification, so brute force is not a concern, but a limit would still cap load).
+- **Not done here:** the Keycloak `courier-web` and `courier-service` clients (see the OCCPL runbook), shared sign-out, rate limiting of the endpoint (a forged token cannot pass verification, so brute force is not a concern, but a limit would still cap load).
+
+### Web side (`frontend/src/app`)
+- `GET /api/v1/auth/platform/config` (public; 404 when the platform sign-in is off) returns the Keycloak authorization and token endpoints and the web client id, so they are server settings and need no web rebuild.
+- Route `/sso` (`features/auth/platform-sign-in.ts`) is both ends of the flow. Opened from the platform as `/sso?company=<platform company id>` it starts an authorization-code + PKCE round trip (`core/auth/platform-sso.service.ts`, `core/utils/pkce.util.ts`); when Keycloak sends the browser back to `/sso?code&state` it checks `state`, trades the code for the platform token with a plain `fetch` (our interceptors must not touch another host), calls `AuthService.loginWithPlatform` and opens the normal session, then goes to `/dashboard`.
+- The platform token is used once and never stored. The platform company id is remembered in `localStorage` (`occpl.sso.company`) so the login page can offer a **Sign in with OCCPL** link on browsers that have used it.
+- Keycloak client `courier-web` must be a public client with PKCE (S256), redirect URI `https://<courier host>/sso`, web origin `https://<courier host>`, and the `courier-api` audience scope.
+- Product configuration on the platform: launch path `/sso?company={companyId}`.

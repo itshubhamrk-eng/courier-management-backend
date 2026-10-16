@@ -118,6 +118,15 @@ export const routes: Routes = [
     ]
   },
   {
+    // "Sign in with OCCPL": opened from the platform, and where the platform sends people back to.
+    path: 'sso',
+    canActivate: [guestGuard],
+    loadComponent: () => import('@layouts/auth-layout/auth-layout').then((m) => m.AuthLayout),
+    children: [
+      { path: '', loadComponent: () => import('@features/auth/platform-sign-in').then((m) => m.PlatformSignIn) }
+    ]
+  },
+  {
     path: 'forgot-password',
     canActivate: [guestGuard],
     loadComponent: () => import('@layouts/auth-layout/auth-layout').then((m) => m.AuthLayout),
