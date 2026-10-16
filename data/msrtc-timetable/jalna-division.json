@@ -1,0 +1,3035 @@
+{
+ "source": "msrtc.maharashtra.gov.in Timetabel.aspx, Jalna division PDF (scanned, 8 pages), read by eye 2026-10-16. NOT verified: expect digit errors; unreadable names/times omitted. Badnapur (page 7) skipped: no matching station in the master. Partur school-trip list skipped. Departures only (these sheets list departures).",
+ "division": "Jalna",
+ "boards": {
+  "MSRTC-JALN-S001": {
+   "rows": [
+    {
+     "placeName": "नागपूर (अकोला मार्गे)",
+     "major": false,
+     "departures": [
+      "05:30",
+      "06:00",
+      "07:30",
+      "08:15",
+      "08:45",
+      "09:00",
+      "11:15",
+      "13:00",
+      "19:30",
+      "20:30",
+      "21:00",
+      "23:00",
+      "23:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नागपूर (अकोला मार्गे, शिवशाही)",
+     "major": false,
+     "departures": [
+      "00:00",
+      "07:30",
+      "08:30",
+      "09:30",
+      "19:30",
+      "20:30",
+      "23:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नागपूर (मेहकर मार्गे)",
+     "major": false,
+     "departures": [
+      "07:30",
+      "08:00",
+      "08:30",
+      "09:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वर्धा",
+     "major": false,
+     "departures": [
+      "05:00",
+      "09:00",
+      "11:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमरावती (अकोला मार्गे)",
+     "major": false,
+     "departures": [
+      "01:45",
+      "05:30",
+      "06:45",
+      "08:45",
+      "11:15",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हिंगणघाट",
+     "major": false,
+     "departures": [
+      "06:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अकोला (चिखली मार्गे)",
+     "major": false,
+     "departures": [
+      "00:15",
+      "02:30",
+      "06:30",
+      "07:00",
+      "07:15",
+      "09:00",
+      "09:30",
+      "10:00",
+      "12:30",
+      "13:00",
+      "13:15",
+      "14:00",
+      "14:15",
+      "14:45",
+      "15:15",
+      "15:30",
+      "16:15",
+      "17:00",
+      "20:15",
+      "20:30",
+      "21:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शेगाव",
+     "major": false,
+     "departures": [
+      "03:15",
+      "08:30",
+      "11:00",
+      "12:30",
+      "13:15",
+      "13:30",
+      "14:30",
+      "15:45",
+      "16:15",
+      "16:30",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परतवाडा",
+     "major": false,
+     "departures": [
+      "07:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चांदूरबाजार",
+     "major": false,
+     "departures": [
+      "08:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रिसोड",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:45",
+      "08:30",
+      "09:30",
+      "12:15",
+      "14:45",
+      "16:30",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वाशिम",
+     "major": false,
+     "departures": [
+      "05:00",
+      "09:00",
+      "09:45",
+      "10:30",
+      "12:30",
+      "13:30",
+      "13:45",
+      "14:15",
+      "16:00",
+      "16:15",
+      "16:30",
+      "18:30",
+      "21:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बुलढाणा",
+     "major": false,
+     "departures": [
+      "04:45",
+      "08:00",
+      "13:15",
+      "14:30",
+      "15:00",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुक्ताईनगर",
+     "major": false,
+     "departures": [
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मलकापूर",
+     "major": false,
+     "departures": [
+      "12:15",
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मेहकर",
+     "major": false,
+     "departures": [
+      "04:00",
+      "08:15",
+      "09:00",
+      "09:45",
+      "11:00",
+      "12:00",
+      "12:30",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "16:15",
+      "17:15",
+      "17:30",
+      "20:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "साखरखेर्डा",
+     "major": false,
+     "departures": [
+      "11:30",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "यवतमाळ",
+     "major": false,
+     "departures": [
+      "01:30",
+      "02:00",
+      "02:30",
+      "06:45",
+      "09:30",
+      "10:00",
+      "10:30",
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुसद",
+     "major": false,
+     "departures": [
+      "03:00",
+      "10:00",
+      "14:30",
+      "14:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चिखली",
+     "major": false,
+     "departures": [
+      "03:30",
+      "16:00",
+      "16:30",
+      "18:00",
+      "18:45",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मूर्तिजापूर",
+     "major": false,
+     "departures": [
+      "08:00",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "दिग्रस",
+     "major": false,
+     "departures": [
+      "05:45",
+      "07:30",
+      "11:30",
+      "12:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कारंजा",
+     "major": false,
+     "departures": [
+      "07:45",
+      "10:15",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अकोट",
+     "major": false,
+     "departures": [
+      "06:45",
+      "11:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंगरुळपीर",
+     "major": false,
+     "departures": [
+      "10:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तेल्हारा",
+     "major": false,
+     "departures": [
+      "12:15",
+      "15:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नेर",
+     "major": false,
+     "departures": [
+      "10:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चांदूर रेल्वे",
+     "major": false,
+     "departures": [
+      "06:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे",
+     "major": false,
+     "departures": [
+      "00:30",
+      "01:00",
+      "01:30",
+      "01:45",
+      "02:00",
+      "02:45",
+      "03:00",
+      "04:00",
+      "05:00",
+      "05:30",
+      "06:00",
+      "06:30",
+      "06:45",
+      "07:00",
+      "07:30",
+      "07:45",
+      "08:15",
+      "08:30",
+      "09:00",
+      "09:30",
+      "09:45",
+      "10:15",
+      "10:30",
+      "10:45",
+      "11:00",
+      "11:15",
+      "11:45",
+      "12:00",
+      "12:15",
+      "12:45",
+      "13:00",
+      "13:15",
+      "13:30",
+      "13:45",
+      "14:00",
+      "14:30",
+      "16:00",
+      "17:30",
+      "18:00",
+      "19:30",
+      "20:30",
+      "20:45",
+      "22:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पिंपरी चिंचवड",
+     "major": false,
+     "departures": [
+      "08:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शिर्डी",
+     "major": false,
+     "departures": [
+      "08:00",
+      "12:30",
+      "12:45",
+      "13:15",
+      "13:45",
+      "14:15",
+      "14:45",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वाडा",
+     "major": false,
+     "departures": [
+      "08:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कुर्ला",
+     "major": false,
+     "departures": [
+      "08:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पनवेल",
+     "major": false,
+     "departures": [
+      "09:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "ठाणे",
+     "major": false,
+     "departures": [
+      "09:15",
+      "20:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नालासोपारा",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कल्याण",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "विठ्ठलवाडी",
+     "major": false,
+     "departures": [
+      "14:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुंबई (नाशिक मार्ग)",
+     "major": false,
+     "departures": [
+      "21:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "संगमनेर",
+     "major": false,
+     "departures": [
+      "06:45",
+      "08:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वैजापूर",
+     "major": false,
+     "departures": [
+      "09:30",
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नाशिक",
+     "major": false,
+     "departures": [
+      "07:15",
+      "09:15",
+      "09:30",
+      "10:15",
+      "10:30",
+      "11:15",
+      "11:45",
+      "12:15",
+      "12:30",
+      "13:15",
+      "14:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "त्र्यंबकेश्वर",
+     "major": false,
+     "departures": [
+      "10:30",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "धुळे",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:30",
+      "08:30",
+      "09:30",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कन्नड",
+     "major": false,
+     "departures": [
+      "09:15",
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमळनेर",
+     "major": false,
+     "departures": [
+      "11:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गंगापूर",
+     "major": false,
+     "departures": [
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मालेगांव",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नांदेड",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:00",
+      "09:00",
+      "09:30",
+      "11:30",
+      "12:00",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "निजामाबाद",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वसमत",
+     "major": false,
+     "departures": [
+      "07:30",
+      "12:45",
+      "14:15",
+      "18:30",
+      "20:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "देगलूर",
+     "major": false,
+     "departures": [
+      "07:15",
+      "09:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "धर्माबाद",
+     "major": false,
+     "departures": [
+      "11:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परभणी",
+     "major": false,
+     "departures": [
+      "12:30",
+      "13:15",
+      "14:15",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जिंतूर",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:00",
+      "09:00",
+      "09:30",
+      "11:30",
+      "12:00",
+      "13:15",
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मानवत",
+     "major": false,
+     "departures": [
+      "14:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "किनवट",
+     "major": false,
+     "departures": [
+      "07:15",
+      "09:15",
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कळमनुरी",
+     "major": false,
+     "departures": [
+      "09:45",
+      "13:15",
+      "14:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हिंगोली",
+     "major": false,
+     "departures": [
+      "00:30",
+      "01:45",
+      "03:45",
+      "08:30",
+      "13:30",
+      "15:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "माहूर",
+     "major": false,
+     "departures": [
+      "08:00",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कंधार",
+     "major": false,
+     "departures": [
+      "06:30",
+      "10:00",
+      "11:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गंगाखेड",
+     "major": false,
+     "departures": [
+      "11:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हादगांव",
+     "major": false,
+     "departures": [
+      "08:30",
+      "11:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परतूर",
+     "major": false,
+     "departures": [
+      "06:30",
+      "14:30",
+      "15:15",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जळगांव",
+     "major": false,
+     "departures": [
+      "02:40",
+      "07:00",
+      "13:45",
+      "14:00",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भुसावळ",
+     "major": false,
+     "departures": [
+      "11:15",
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रावेर",
+     "major": false,
+     "departures": [
+      "11:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "यावल",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिल्लोड",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:30",
+      "08:30",
+      "09:00",
+      "10:00",
+      "10:30",
+      "11:00",
+      "12:00",
+      "13:00",
+      "13:30",
+      "14:30",
+      "15:00",
+      "16:00",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोयगांव",
+     "major": false,
+     "departures": [
+      "09:30",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोलापूर",
+     "major": false,
+     "departures": [
+      "09:00",
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अक्कलकोट",
+     "major": false,
+     "departures": [
+      "07:45",
+      "09:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परळी",
+     "major": false,
+     "departures": [
+      "09:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गेवराई",
+     "major": false,
+     "departures": [
+      "09:30",
+      "11:15",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कोल्हापूर",
+     "major": false,
+     "departures": [
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सांगली",
+     "major": false,
+     "departures": [
+      "19:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पंढरपूर",
+     "major": false,
+     "departures": [
+      "10:15",
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "05:30",
+      "07:15",
+      "08:30",
+      "11:00",
+      "11:15",
+      "13:30",
+      "14:15",
+      "14:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तुळजापूर",
+     "major": false,
+     "departures": [
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बार्शी",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बारामती",
+     "major": false,
+     "departures": [
+      "06:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बीड",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:00",
+      "07:30",
+      "08:00",
+      "08:15",
+      "08:45",
+      "09:00",
+      "10:00",
+      "10:45",
+      "11:00",
+      "11:45",
+      "12:00",
+      "12:30",
+      "12:45",
+      "13:00",
+      "14:00",
+      "14:15",
+      "14:30",
+      "14:45",
+      "15:00",
+      "15:15",
+      "15:45",
+      "16:30",
+      "16:45",
+      "17:00",
+      "17:30",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पैठण",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:30",
+      "09:30",
+      "10:30",
+      "11:15",
+      "12:00",
+      "13:45",
+      "14:00",
+      "15:00",
+      "15:45",
+      "16:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पाथर्डी",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गुलबर्गा (कलबुर्गी) (लातूर मार्गे)",
+     "major": false,
+     "departures": [
+      "05:30",
+      "08:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "इंदौर",
+     "major": false,
+     "departures": [
+      "04:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जाफ्राबाद",
+     "major": false,
+     "departures": [
+      "06:15",
+      "07:15",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00",
+      "18:30",
+      "18:45",
+      "19:00",
+      "19:30",
+      "20:00",
+      "20:30",
+      "21:30",
+      "22:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मोतीगव्हाण",
+     "major": false,
+     "departures": [
+      "07:00",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सेवली",
+     "major": false,
+     "departures": [
+      "06:30",
+      "08:00",
+      "13:30",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सरकटे वझर",
+     "major": false,
+     "departures": [
+      "11:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लोणार",
+     "major": false,
+     "departures": [
+      "07:15",
+      "14:30",
+      "16:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिंदखेडराजा (नाव्हामार्गे)",
+     "major": false,
+     "departures": [
+      "10:30",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हसनाबाद",
+     "major": false,
+     "departures": [
+      "06:30",
+      "13:00",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नळणी",
+     "major": false,
+     "departures": [
+      "06:30",
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "घनसावंगी",
+     "major": false,
+     "departures": [
+      "06:30",
+      "13:30",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "उचेगांव",
+     "major": false,
+     "departures": [
+      "07:30",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सायगाव",
+     "major": false,
+     "departures": [
+      "06:00",
+      "10:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "उजैनपुरी",
+     "major": false,
+     "departures": [
+      "06:00",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "ममदाबाद",
+     "major": false,
+     "departures": [
+      "06:30",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बाजी उमरद",
+     "major": false,
+     "departures": [
+      "08:00",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भोकरदन",
+     "major": false,
+     "departures": [
+      "05:45",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आन्वी",
+     "major": false,
+     "departures": [
+      "08:30",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चांगेफळ",
+     "major": false,
+     "departures": [
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वाघाळा",
+     "major": false,
+     "departures": [
+      "18:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S008": {
+   "rows": [
+    {
+     "placeName": "जालना (बावणे पांगरी)",
+     "major": false,
+     "departures": [
+      "07:15",
+      "07:30",
+      "08:00",
+      "09:00",
+      "11:30",
+      "12:30",
+      "14:30",
+      "16:15",
+      "16:30",
+      "17:30",
+      "18:15",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परळी",
+     "major": false,
+     "departures": [
+      "08:45",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोलापूर",
+     "major": false,
+     "departures": [
+      "09:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "10:30",
+      "12:15",
+      "13:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तुळजापूर",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बीड",
+     "major": false,
+     "departures": [
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अंबड",
+     "major": false,
+     "departures": [
+      "10:30",
+      "11:30",
+      "12:30",
+      "13:30",
+      "14:30",
+      "17:30",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नांदेड (मंठा, जिंतूर, परभणी)",
+     "major": false,
+     "departures": [
+      "14:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिल्लोड",
+     "major": false,
+     "departures": [
+      "07:00",
+      "08:00",
+      "08:45",
+      "09:00",
+      "09:45",
+      "10:00",
+      "10:45",
+      "11:00",
+      "12:00",
+      "14:00",
+      "14:45",
+      "15:00",
+      "15:45",
+      "16:00",
+      "16:30",
+      "19:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जळगांव",
+     "major": false,
+     "departures": [
+      "07:45",
+      "14:30",
+      "15:30",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भुसावळ",
+     "major": false,
+     "departures": [
+      "12:00",
+      "14:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रावेर",
+     "major": false,
+     "departures": [
+      "12:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "यावल",
+     "major": false,
+     "departures": [
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुक्ताईनगर",
+     "major": false,
+     "departures": [
+      "13:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोयगांव",
+     "major": false,
+     "departures": [
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "छत्रपती संभाजीनगर",
+     "major": false,
+     "departures": [
+      "06:30",
+      "09:30",
+      "10:30",
+      "10:45",
+      "15:00",
+      "15:30",
+      "16:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हसनाबाद",
+     "major": false,
+     "departures": [
+      "09:30",
+      "14:00",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नळणी",
+     "major": false,
+     "departures": [
+      "07:30",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तडेगांव",
+     "major": false,
+     "departures": [
+      "09:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "देऊळगांव राजा",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S004": {
+   "rows": [
+    {
+     "placeName": "अकोला",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे",
+     "major": false,
+     "departures": [
+      "06:15",
+      "07:45",
+      "09:30",
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सेवली",
+     "major": false,
+     "departures": [
+      "07:30",
+      "13:00",
+      "18:00",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंठा",
+     "major": false,
+     "departures": [
+      "08:00",
+      "10:00",
+      "12:00",
+      "12:45",
+      "13:00",
+      "13:30",
+      "13:45",
+      "15:30",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमरावती",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गो.पांगरी",
+     "major": false,
+     "departures": [
+      "10:30",
+      "16:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वाघोडा/मंठा",
+     "major": false,
+     "departures": [
+      "12:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंठा/लोणार",
+     "major": false,
+     "departures": [
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शिरपूर/पाटोदा",
+     "major": false,
+     "departures": [
+      "12:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अंभोडा/लोणार",
+     "major": false,
+     "departures": [
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "उस्वद",
+     "major": false,
+     "departures": [
+      "13:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंगरूळ/अंभोडा",
+     "major": false,
+     "departures": [
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शेगाव",
+     "major": false,
+     "departures": [
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "06:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सेलू",
+     "major": false,
+     "departures": [
+      "07:45",
+      "09:00",
+      "10:15",
+      "11:30",
+      "13:00",
+      "14:30",
+      "16:00",
+      "17:30",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तुळजापूर",
+     "major": false,
+     "departures": [
+      "06:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पैठण",
+     "major": false,
+     "departures": [
+      "07:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बीड",
+     "major": false,
+     "departures": [
+      "07:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गेवराई",
+     "major": false,
+     "departures": [
+      "07:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "धामणगाव",
+     "major": false,
+     "departures": [
+      "07:45",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आष्टी",
+     "major": false,
+     "departures": [
+      "08:15",
+      "10:00",
+      "14:00",
+      "16:30",
+      "19:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आष्टी (को.हादगाव)",
+     "major": false,
+     "departures": [
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पंढरपूर",
+     "major": false,
+     "departures": [
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "को.हादगाव",
+     "major": false,
+     "departures": [
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आनंदगाव",
+     "major": false,
+     "departures": [
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "माजलगाव",
+     "major": false,
+     "departures": [
+      "06:30",
+      "09:00",
+      "10:30",
+      "13:00",
+      "14:30",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कुंभार पिंपळगाव",
+     "major": false,
+     "departures": [
+      "10:15",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चांगतपुरी",
+     "major": false,
+     "departures": [
+      "18:30"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S006": {
+   "rows": [
+    {
+     "placeName": "पुणे",
+     "major": false,
+     "departures": [
+      "07:15",
+      "08:00",
+      "08:30",
+      "08:45",
+      "09:30",
+      "10:30",
+      "10:45",
+      "12:00",
+      "13:00",
+      "14:00",
+      "14:30",
+      "20:00",
+      "20:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शिर्डी",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "औरंगाबाद",
+     "major": false,
+     "departures": [
+      "07:00",
+      "07:15",
+      "07:30",
+      "07:45",
+      "08:00",
+      "08:30",
+      "08:40",
+      "09:00",
+      "09:20",
+      "09:40",
+      "10:00",
+      "10:10",
+      "11:00",
+      "11:30",
+      "12:30",
+      "13:30",
+      "14:15",
+      "14:40",
+      "15:30",
+      "15:50",
+      "16:15",
+      "16:30",
+      "17:00",
+      "17:45",
+      "18:30",
+      "19:00",
+      "19:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नाशिक",
+     "major": false,
+     "departures": [
+      "08:15",
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुंबई",
+     "major": false,
+     "departures": [
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमळनेर",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भुसावळ",
+     "major": false,
+     "departures": [
+      "10:15",
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नांदेड",
+     "major": false,
+     "departures": [
+      "07:45",
+      "08:20",
+      "08:30",
+      "08:40",
+      "09:00",
+      "09:30",
+      "10:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:30",
+      "16:30",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "किनवट",
+     "major": false,
+     "departures": [
+      "06:00",
+      "08:45",
+      "09:15",
+      "11:45",
+      "15:30",
+      "16:30",
+      "19:00",
+      "19:15",
+      "20:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पंढरपूर",
+     "major": false,
+     "departures": [
+      "08:00",
+      "10:00",
+      "12:00",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "08:00",
+      "12:00",
+      "14:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गंगाखेड",
+     "major": false,
+     "departures": [
+      "12:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लोणार",
+     "major": false,
+     "departures": [
+      "07:15",
+      "13:30",
+      "17:00",
+      "19:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मेहकर",
+     "major": false,
+     "departures": [
+      "08:30",
+      "09:30",
+      "11:00",
+      "13:00",
+      "14:00",
+      "14:30",
+      "15:00",
+      "17:30",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शेगाव",
+     "major": false,
+     "departures": [
+      "12:30",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अकोला",
+     "major": false,
+     "departures": [
+      "07:00",
+      "08:00",
+      "10:00",
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "उस्वद",
+     "major": false,
+     "departures": [
+      "07:15",
+      "09:30",
+      "13:30",
+      "14:00",
+      "16:30",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंगरुळ",
+     "major": false,
+     "departures": [
+      "06:15",
+      "08:45",
+      "11:00",
+      "14:15",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अंभोडा",
+     "major": false,
+     "departures": [
+      "05:30",
+      "07:30",
+      "10:00",
+      "14:00",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वैद्यवडगाव",
+     "major": false,
+     "departures": [
+      "08:15",
+      "08:30",
+      "15:15",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पाटोदा",
+     "major": false,
+     "departures": [
+      "07:00",
+      "15:30",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वडगाव",
+     "major": false,
+     "departures": [
+      "10:00",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परतूर",
+     "major": false,
+     "departures": [
+      "08:30",
+      "09:00",
+      "10:30",
+      "11:00",
+      "11:15",
+      "11:30",
+      "11:45",
+      "12:15",
+      "12:20",
+      "13:00",
+      "14:30",
+      "15:00",
+      "16:30",
+      "17:15",
+      "17:30",
+      "18:00",
+      "19:00",
+      "19:30",
+      "19:45",
+      "20:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शिरपूर",
+     "major": false,
+     "departures": [
+      "08:15",
+      "14:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पाडळी",
+     "major": false,
+     "departures": [
+      "07:00",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हिवरखेडा",
+     "major": false,
+     "departures": [
+      "07:00",
+      "13:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S002": {
+   "rows": [
+    {
+     "placeName": "पुणे (श्री शिवाजीनगर)",
+     "major": false,
+     "departures": [
+      "05:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कुर्ला (शिवशाही)",
+     "major": false,
+     "departures": [
+      "07:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पनवेल",
+     "major": false,
+     "departures": [
+      "08:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे (वल्लभनगर)",
+     "major": false,
+     "departures": [
+      "09:15",
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नाशिक",
+     "major": false,
+     "departures": [
+      "09:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जालना",
+     "major": false,
+     "departures": [
+      "06:45",
+      "07:15",
+      "07:45",
+      "08:45",
+      "10:00",
+      "10:30",
+      "10:45",
+      "11:30",
+      "12:15",
+      "12:30",
+      "13:45",
+      "14:30",
+      "15:30",
+      "16:30",
+      "17:00",
+      "17:30",
+      "19:00",
+      "20:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिडको (छ.संभाजीनगर) (जालना मार्गे)",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:00",
+      "08:00",
+      "09:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "छत्रपती संभाजीनगर (सिल्लोड मार्गे)",
+     "major": false,
+     "departures": [
+      "09:00",
+      "10:30",
+      "13:00",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आळंद",
+     "major": false,
+     "departures": [
+      "07:00",
+      "08:00",
+      "14:00",
+      "16:15",
+      "17:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कुंभारझरी",
+     "major": false,
+     "departures": [
+      "08:00",
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "निवडुंगा",
+     "major": false,
+     "departures": [
+      "07:00",
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "निमखेडा",
+     "major": false,
+     "departures": [
+      "09:45",
+      "15:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रेपाळा",
+     "major": false,
+     "departures": [
+      "09:30",
+      "15:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मेरखेडा",
+     "major": false,
+     "departures": [
+      "07:00",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शिंदी",
+     "major": false,
+     "departures": [
+      "06:15",
+      "08:35",
+      "13:30",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "खासगांव",
+     "major": false,
+     "departures": [
+      "11:00",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "ब्रम्हपुरी",
+     "major": false,
+     "departures": [
+      "08:00",
+      "09:15",
+      "13:30",
+      "16:15",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंगरुळ",
+     "major": false,
+     "departures": [
+      "10:00",
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आढा",
+     "major": false,
+     "departures": [
+      "08:00",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चिखली",
+     "major": false,
+     "departures": [
+      "07:00",
+      "08:30",
+      "09:45",
+      "10:30",
+      "10:45",
+      "11:30",
+      "12:30",
+      "13:30",
+      "14:00",
+      "16:30",
+      "19:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बोरगांव",
+     "major": false,
+     "departures": [
+      "09:00",
+      "11:00",
+      "14:00",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मालेगांव",
+     "major": false,
+     "departures": [
+      "12:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भोकरदन",
+     "major": false,
+     "departures": [
+      "06:30",
+      "08:00",
+      "09:45",
+      "10:15",
+      "11:30",
+      "12:00",
+      "13:00",
+      "13:15",
+      "13:20",
+      "13:30",
+      "13:45",
+      "17:15",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जानेफळ/चिंचखेडा",
+     "major": false,
+     "departures": [
+      "08:00",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पिंपळगांव कड",
+     "major": false,
+     "departures": [
+      "08:00",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कोनद",
+     "major": false,
+     "departures": [
+      "08:00",
+      "14:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S007": {
+   "rows": [
+    {
+     "placeName": "सुरंगळी",
+     "major": false,
+     "departures": [
+      "07:30",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पारध-वालसावंगी",
+     "major": false,
+     "departures": [
+      "07:45",
+      "14:00",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "घावडा-वालसावंगी",
+     "major": false,
+     "departures": [
+      "08:15",
+      "12:30",
+      "17:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पारध-घाट-जाफ्राबाद",
+     "major": false,
+     "departures": [
+      "10:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पिंपळगाव रे.",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तलेगांव",
+     "major": false,
+     "departures": [
+      "07:30",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हसनाबाद",
+     "major": false,
+     "departures": [
+      "10:45",
+      "13:30",
+      "15:45",
+      "17:00",
+      "18:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "वेलोरा",
+     "major": false,
+     "departures": [
+      "07:30",
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "संडाळा-हसनाबाद",
+     "major": false,
+     "departures": [
+      "08:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आन्वा-हिसोडा",
+     "major": false,
+     "departures": [
+      "07:30",
+      "13:00",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कल्याणी-हिसोडा",
+     "major": false,
+     "departures": [
+      "09:30",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "दगडवाडी-भिवपूर",
+     "major": false,
+     "departures": [
+      "08:30",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जाफ्राबाद-औरंगाबाद",
+     "major": false,
+     "departures": [
+      "08:00",
+      "09:00",
+      "10:00",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "चिखली-औरंगाबाद",
+     "major": false,
+     "departures": [
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जाफ्राबाद-मालेगांव",
+     "major": false,
+     "departures": [
+      "13:30",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कड पिंपळगांव",
+     "major": false,
+     "departures": [
+      "06:15",
+      "11:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नळणी-जवसेडा",
+     "major": false,
+     "departures": [
+      "08:30",
+      "16:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तडेगांव",
+     "major": false,
+     "departures": [
+      "13:15",
+      "18:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "डावरगाव संगमेश्वर",
+     "major": false,
+     "departures": [
+      "07:45",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "हिवरा दाभाडी",
+     "major": false,
+     "departures": [
+      "08:30",
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जाफ्राबाद (माहोरा मार्गे)",
+     "major": false,
+     "departures": [
+      "06:45",
+      "10:30",
+      "10:45",
+      "11:15",
+      "11:35",
+      "16:30",
+      "17:15",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "औरंगाबाद-चिखली",
+     "major": false,
+     "departures": [
+      "09:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मालेगांव-जाफ्राबाद",
+     "major": false,
+     "departures": [
+      "10:00",
+      "10:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "औरंगाबाद-जाफ्राबाद",
+     "major": false,
+     "departures": [
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  },
+  "MSRTC-JALN-S003": {
+   "rows": [
+    {
+     "placeName": "अकोला",
+     "major": false,
+     "departures": [
+      "05:30",
+      "09:00",
+      "09:15",
+      "12:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नागपूर",
+     "major": false,
+     "departures": [
+      "07:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "धुळे",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:30",
+      "08:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे (जालना मार्ग)",
+     "major": false,
+     "departures": [
+      "16:00",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सिल्लोड",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:00",
+      "08:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जालना",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:00",
+      "07:30",
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "संभाजीनगर (जालना मार्ग)",
+     "major": false,
+     "departures": [
+      "13:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जळगाव",
+     "major": false,
+     "departures": [
+      "12:15",
+      "13:30",
+      "14:00",
+      "14:30",
+      "23:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बीड",
+     "major": false,
+     "departures": [
+      "08:00",
+      "08:30",
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "14:15",
+      "15:00",
+      "16:00",
+      "17:00",
+      "17:30",
+      "18:00",
+      "18:30",
+      "19:00",
+      "20:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अक्कलकोट",
+     "major": false,
+     "departures": [
+      "08:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे (रोहिलागड मार्ग)",
+     "major": false,
+     "departures": [
+      "07:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "छ.संभाजीनगर (वाकुळणी मार्ग)",
+     "major": false,
+     "departures": [
+      "08:00",
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "छ.संभाजीनगर (जामखेड मार्ग)",
+     "major": false,
+     "departures": [
+      "09:00",
+      "17:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "छ.संभाजीनगर (रोहिलागड मार्ग)",
+     "major": false,
+     "departures": [
+      "13:00",
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "जामखेड",
+     "major": false,
+     "departures": [
+      "06:15",
+      "14:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पुणे (पैठण मार्ग)",
+     "major": false,
+     "departures": [
+      "07:00",
+      "08:00",
+      "09:00",
+      "10:00",
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "नांदेड",
+     "major": false,
+     "departures": [
+      "06:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परभणी (तीर्थपुरी मार्गे)",
+     "major": false,
+     "departures": [
+      "07:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "परभणी (घनसावंगी मार्गे)",
+     "major": false,
+     "departures": [
+      "08:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तीर्थपुरी",
+     "major": false,
+     "departures": [
+      "08:00",
+      "12:30",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मंगरूळ",
+     "major": false,
+     "departures": [
+      "09:00",
+      "10:30",
+      "13:00",
+      "14:00",
+      "18:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कंडारी (तीर्थपुरी मार्ग)",
+     "major": false,
+     "departures": [
+      "10:00",
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "साडेगांव",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुरमा",
+     "major": false,
+     "departures": [
+      "11:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कुं.पिंपळगाव",
+     "major": false,
+     "departures": [
+      "06:30",
+      "07:00",
+      "08:30",
+      "10:15",
+      "11:00",
+      "11:30",
+      "13:00",
+      "13:30",
+      "14:15",
+      "14:30",
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "घनसावंगी",
+     "major": false,
+     "departures": [
+      "07:15",
+      "14:30",
+      "16:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "आष्टी",
+     "major": false,
+     "departures": [
+      "08:30",
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गुंज",
+     "major": false,
+     "departures": [
+      "07:45",
+      "09:15",
+      "12:30",
+      "19:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "धामणगांव",
+     "major": false,
+     "departures": [
+      "09:35",
+      "14:00",
+      "18:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "साकळगांव",
+     "major": false,
+     "departures": [
+      "17:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "अमरावती",
+     "major": false,
+     "departures": [
+      "08:00",
+      "10:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "शेगाव",
+     "major": false,
+     "departures": [
+      "12:00",
+      "13:00",
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मलकापूर",
+     "major": false,
+     "departures": [
+      "14:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बुलढाणा",
+     "major": false,
+     "departures": [
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "रावेर",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोयगांव",
+     "major": false,
+     "departures": [
+      "08:30",
+      "16:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "भुसावळ",
+     "major": false,
+     "departures": [
+      "10:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "यावल",
+     "major": false,
+     "departures": [
+      "11:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "मुक्ताईनगर",
+     "major": false,
+     "departures": [
+      "11:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बार्शी",
+     "major": false,
+     "departures": [
+      "11:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "गुलबर्गा",
+     "major": false,
+     "departures": [
+      "06:15",
+      "09:15"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "कोल्हापूर",
+     "major": false,
+     "departures": [
+      "18:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सांगली",
+     "major": false,
+     "departures": [
+      "20:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "लातूर",
+     "major": false,
+     "departures": [
+      "08:00",
+      "12:30",
+      "14:00",
+      "15:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "सोलापूर",
+     "major": false,
+     "departures": [
+      "10:00",
+      "12:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पंढरपूर",
+     "major": false,
+     "departures": [
+      "11:30",
+      "13:00"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "तुळजापूर",
+     "major": false,
+     "departures": [
+      "15:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पाथर्डी",
+     "major": false,
+     "departures": [
+      "13:45"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "बारामती",
+     "major": false,
+     "departures": [
+      "07:15",
+      "13:30"
+     ],
+     "arrivals": []
+    },
+    {
+     "placeName": "पैठण",
+     "major": false,
+     "departures": [
+      "06:00",
+      "07:30",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:15",
+      "11:45",
+      "14:30",
+      "15:00",
+      "16:00",
+      "16:15",
+      "16:30",
+      "18:00"
+     ],
+     "arrivals": []
+    }
+   ]
+  }
+ }
+}
