@@ -681,6 +681,9 @@ public class UserServiceImpl implements UserService {
         if (caller.isSuperAdmin() || caller.hasRole(Roles.COMPANY_ADMIN)) {
             return;
         }
+        if (Objects.equals(caller.userId(), user.getId())) {
+            return;
+        }
         User self = self(caller);
         if (self.getBranchId() != null && Objects.equals(self.getBranchId(), user.getBranchId())) {
             return;
