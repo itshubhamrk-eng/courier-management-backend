@@ -54,6 +54,7 @@ public class ShipmentPendingCommissionDirectory implements PendingCommissionPort
     private final ShipmentChargeRepository chargeRepository;
     private final BranchService branchService;
     private final PaymentModeService paymentModeService;
+    private final com.courier.modules.company.application.CompanySettingsService companySettingsService;
 
     @Override
     @Transactional(readOnly = true)
@@ -76,14 +77,20 @@ public class ShipmentPendingCommissionDirectory implements PendingCommissionPort
                 .map(Shipment::getPaymentModeId).distinct()
                 .collect(Collectors.toMap(id -> id, paymentModeService::getById));
 
+        String trigger = companySettingsService.get().getCommissionCreditTrigger();
+        boolean onDelivery = "DELIVERED".equals(trigger);
+        boolean atHub = "HUB_IN_SCAN".equals(trigger);
         BigDecimal bookingPending = open.stream()
+                .filter(s -> s.getBookingCommissionCreditedAt() == null)
                 .filter(s -> PRE_INSCAN.contains(s.getStatus()))
-                .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtBooking())
+                .filter(s -> !onDelivery)
+                .filter(s -> atHub || paymentModes.get(s.getPaymentModeId()).isCollectAtBooking())
                 .map(s -> commissionOf(charges.get(s.getId())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal deliveryPending = open.stream()
-                .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtDelivery())
+                .filter(s -> s.getBookingCommissionCreditedAt() == null)
+                .filter(s -> onDelivery || (!atHub && paymentModes.get(s.getPaymentModeId()).isCollectAtDelivery()))
                 .map(s -> commissionOf(charges.get(s.getId())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

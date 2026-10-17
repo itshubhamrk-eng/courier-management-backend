@@ -39,6 +39,22 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class ShipmentBookingWalletListener {
 
     private final WalletService walletService;
+    private final com.courier.modules.shipment.domain.ShipmentRepository shipmentRepository;
+
+    // The shipment was stamped "commission credited" when the event was published; if the
+    // wallet credit then fails, un-stamp it so the report shows it as pending again.
+    private void clearStamp(java.util.UUID shipmentId, java.util.UUID companyId) {
+        try {
+            CompanyContext.runAs(companyId, () -> shipmentRepository.findByIdWithinCompany(shipmentId, companyId)
+                    .ifPresent(s -> {
+                        s.setBookingCommissionCreditedAt(null);
+                        s.setBookingCommissionCreditedAmount(null);
+                        shipmentRepository.save(s);
+                    }));
+        } catch (RuntimeException e) {
+            log.error("Could not clear commission stamp on shipment {}", shipmentId, e);
+        }
+    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -67,6 +83,7 @@ public class ShipmentBookingWalletListener {
             log.error("Could not settle commission credit for branch {}, shipment {} ({}); "
                     + "the shipment stays in-scanned, commission uncredited — reconcile manually",
                     event.bookingBranchId(), event.shipmentNumber(), event.shipmentId(), e);
+            clearStamp(event.shipmentId(), event.companyId());
         }
     }
 
@@ -85,6 +102,7 @@ public class ShipmentBookingWalletListener {
             log.error("Could not settle commission credit for branch {}, shipment {} ({}); "
                     + "the shipment stays delivered, commission uncredited — reconcile manually",
                     event.bookingBranchId(), event.shipmentNumber(), event.shipmentId(), e);
+            clearStamp(event.shipmentId(), event.companyId());
         }
     }
 }

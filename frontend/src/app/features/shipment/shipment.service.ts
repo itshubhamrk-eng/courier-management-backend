@@ -6,7 +6,7 @@ import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentDrs, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse, PaymentModeChange
+  BranchCommissionSummary, CommissionLedgerRow, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse, PaymentModeChange
 } from '@core/models/shipment.model';
 
 /**
@@ -31,6 +31,11 @@ export class ShipmentService {
   commissionSummary(filters: ShipmentSearchRequest) {
     return this.api.get<BranchCommissionSummary[]>(
       `${API.shipments}/commission-summary`, filters as Record<string, unknown>);
+  }
+  /** Per-shipment booking-branch commission, credited vs pending — the Commission Credit report. */
+  commissionLedger(filters: ShipmentSearchRequest) {
+    return this.api.get<CommissionLedgerRow[]>(
+      `${API.shipments}/commission-ledger`, filters as Record<string, unknown>);
   }
   /** Shipment volume/outcome totals grouped by booking branch — the Branch Performance
    *  Report's summary table. Same filters as `list`. */

@@ -47,6 +47,8 @@ public record CompanySettingsCommand(
         String invoiceTemplate, String labelTemplate, String manifestTemplate,
         String receiptTemplate,
 
+        String commissionCreditTrigger,
+
         Long expectedVersion
 ) {
 }

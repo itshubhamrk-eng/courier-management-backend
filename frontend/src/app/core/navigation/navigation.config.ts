@@ -371,6 +371,7 @@ export const NAVIGATION: NavNode[] = [
       { id: 'booking-report', title: 'Booking Report', icon: 'summarize', route: '/reports/bookings', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'delivery-report', title: 'Delivery Report', icon: 'local_shipping', route: '/reports/deliveries', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'commission-credit-report', title: 'Commission Credit Report', icon: 'price_check', route: '/reports/commission-credit', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'branch-reports', title: 'Branch Reports', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_READ', roles: BRANCH_REPORT_READERS },

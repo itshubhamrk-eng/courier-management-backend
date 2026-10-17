@@ -1,3 +1,5 @@
+import { forkJoin } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -298,6 +300,12 @@ export class LoadingSheet implements OnInit {
         const eligible = new Set(
           p.content.map((s) => s.nextLocationId ?? s.deliveryBranchId)
             .filter((id): id is string => !!id && id !== this.myBranchId));
+        // A hub's received shipments have no next stop yet — the operator picks the branch here
+        // (or makes a DRS instead), so any branch is a valid destination while such stock exists.
+        if (this.atHub() && p.content.some((s) => !s.nextLocationId && !s.deliveryBranchId)) {
+          [...names.keys()].filter((id) => id !== this.myBranchId && !this.hubIds().has(id))
+            .forEach((id) => eligible.add(id));
+        }
         const options = [...eligible]
           .map((id) => ({ value: id, label: names.get(id) ?? id }))
           .sort((a, b) => a.label.localeCompare(b.label));
@@ -342,11 +350,20 @@ export class LoadingSheet implements OnInit {
     // Same current/next-location matching as loadEligibleDeliveryBranches — the shipment
     // picker for a chosen destination must use the identical criteria that produced it as
     // an option, or a crossing shipment picked as "eligible" here would vanish from the list.
-    this.shipmentService.list({
+    const status = ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string;
+    const lane$ = this.shipmentService.list({
       page: 0, size: 100, currentLocationId: this.myBranchId, nextLocationId: deliveryBranchId,
-      status: ['BOOKED', 'READY_FOR_MANIFEST'] as unknown as string, flowType: 'STANDARD'
-    }).subscribe({
-      next: (p) => this.bookedShipments.set(p.content),
+      status, flowType: 'STANDARD'
+    });
+    // At a hub, shipments nobody has routed yet are offered for any branch too.
+    const source$ = this.atHub()
+      ? forkJoin([lane$, this.shipmentService.list({
+          page: 0, size: 100, currentLocationId: this.myBranchId, unassignedDeliveryBranch: true,
+          status, flowType: 'STANDARD'
+        })]).pipe(map(([a, b]) => [...a.content, ...b.content]))
+      : lane$.pipe(map((p) => p.content));
+    source$.subscribe({
+      next: (rows) => this.bookedShipments.set(rows),
       error: () => this.bookedShipments.set([])
     });
   }

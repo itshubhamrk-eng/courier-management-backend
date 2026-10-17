@@ -137,6 +137,10 @@ public record CompanySettingsRequest(
         @Size(max = 100) String manifestTemplate,
         @Size(max = 100) String receiptTemplate,
 
+        @Pattern(regexp = "HUB_IN_SCAN|DELIVERY_BRANCH_IN_SCAN|DELIVERED",
+                message = "must be HUB_IN_SCAN, DELIVERY_BRANCH_IN_SCAN or DELIVERED")
+        String commissionCreditTrigger,
+
         @PositiveOrZero
         @Schema(description = "Version last read; required for the full PUT, ignored by PATCH")
         Long version

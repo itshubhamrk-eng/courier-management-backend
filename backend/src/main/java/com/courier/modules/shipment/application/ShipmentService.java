@@ -117,6 +117,14 @@ public interface ShipmentService {
     List<BranchCommissionSummary> commissionSummary(ShipmentCriteria criteria);
 
     /**
+     * Per-shipment booking-branch commission for the same search — credited (posted to the
+     * booking branch's wallet on first hub / final-branch in-scan, or on delivery for
+     * TO_PAY/COD) or still pending. Cancelled shipments and ones with no branch commission
+     * are left out. Powers the Commission Credit report.
+     */
+    List<com.courier.modules.shipment.domain.CommissionLedgerRow> commissionLedger(ShipmentCriteria criteria);
+
+    /**
      * Shipment volume and outcome totals for the same search, grouped by booking branch —
      * the Branch Performance Report's per-branch row. One row per booking branch with at
      * least one matching shipment.

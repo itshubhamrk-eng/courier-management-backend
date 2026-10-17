@@ -472,6 +472,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/commission-report').then((m) => m.CommissionReport)
       },
       {
+        path: 'reports/commission-credit', title: 'Commission Credit Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        loadComponent: () => import('@features/reports/commission-credit-report').then((m) => m.CommissionCreditReport)
+      },
+      {
         path: 'reports/commissions/:branchId', title: 'Branch Commission', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/reports/commission-branch-detail').then((m) => m.CommissionBranchDetail)
       },

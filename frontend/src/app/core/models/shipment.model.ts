@@ -545,6 +545,20 @@ export interface BranchCommissionSummary {
   totalCommission: number;
 }
 
+/** One row of GET /shipments/commission-ledger — the Commission Credit report. Mirrors
+ *  backend `CommissionLedgerRowResponse`. */
+export interface CommissionLedgerRow {
+  shipmentId: string;
+  shipmentNumber: string;
+  bookingBranchId: string;
+  status: ShipmentStatus;
+  paymentModeName: string;
+  commission: number;
+  credited: boolean;
+  creditedAt: string | null;
+  awaiting: string | null;
+}
+
 /** One row of GET /shipments/vendor-audit — the Vendor Audit Report's per-branch
  *  reconciliation table. Mirrors backend `VendorAuditRowResponse`.
  *  `deliveryCommission`/`deliveryTotalCommission` are recomputed from the branch's

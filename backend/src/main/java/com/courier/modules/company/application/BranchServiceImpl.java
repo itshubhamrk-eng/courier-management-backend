@@ -390,6 +390,15 @@ public class BranchServiceImpl implements BranchService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
+    public boolean isHubBranch(UUID branchId) {
+        return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
+                .map(b -> b.getBranchType() == com.courier.modules.company.domain.BranchType.HUB)
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
     public boolean instantCommissionOf(UUID branchId) {
         return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
                 .map(Branch::isInstantCommission)

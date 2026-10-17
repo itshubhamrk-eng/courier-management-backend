@@ -223,6 +223,20 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                   </div>
                 </div>
                 <div class="dcw">
+                  <label class="text-caption" for="commission-trigger-select">Credit booking-branch commission to wallet</label>
+                  <div class="dcw__row">
+                    <select id="commission-trigger-select" class="dcw__i" [value]="commissionTriggerInput()"
+                            (change)="commissionTriggerInput.set($any($event.target).value)">
+                      <option value="HUB_IN_SCAN">On first in-scan at a hub (or delivery branch)</option>
+                      <option value="DELIVERY_BRANCH_IN_SCAN">On in-scan at the delivery branch</option>
+                      <option value="DELIVERED">On delivery</option>
+                    </select>
+                    <button type="button" class="dcw__save" [disabled]="savingCommissionTrigger()"
+                            (click)="saveCommissionTrigger()">{{ savingCommissionTrigger() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                  <p class="text-caption">TO_PAY / COD shipments always credit on delivery.</p>
+                </div>
+                <div class="dcw">
                   <label class="text-caption">Net Amount edit bounds (Shipment Booking's editable preview)</label>
                   <div class="dcw__row">
                     <input class="dcw__i" type="number" min="0" max="100" step="0.01"
@@ -316,6 +330,8 @@ export class SettingsPage implements OnInit {
   /** Finance's second inline field — same "no full edit dialog yet" treatment as
    *  Razorpay above and Shipment's default weight. */
   readonly roundOffRuleInput = signal('NEAREST_FIVE');
+  readonly commissionTriggerInput = signal('HUB_IN_SCAN');
+  readonly savingCommissionTrigger = signal(false);
   readonly savingRoundOff = signal(false);
 
   /** Finance's third inline field — bounds on Shipment Booking's editable Net Amount
@@ -353,10 +369,13 @@ export class SettingsPage implements OnInit {
         if (shipment?.toPayCharge != null) this.toPayChargeInput.set(Number(shipment.toPayCharge));
         this.manualStatusOverrideInput.set(shipment?.manualStatusOverrideEnabled === true);
         const finance = (d as { finance?: {
-          gstPercentage?: number; roundOffRule?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
+          gstPercentage?: number; roundOffRule?: string; commissionCreditTrigger?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
         } })?.finance;
         if (finance?.gstPercentage != null) {
           this.gstPercentageInput.set(Number(finance.gstPercentage));
+        }
+        if (finance?.commissionCreditTrigger) {
+          this.commissionTriggerInput.set(finance.commissionCreditTrigger);
         }
         if (finance?.roundOffRule) {
           this.roundOffRuleInput.set(finance.roundOffRule);
@@ -541,6 +560,19 @@ export class SettingsPage implements OnInit {
         this.notify.success('Round off rule updated');
       },
       error: () => this.savingRoundOff.set(false)
+    });
+  }
+
+  saveCommissionTrigger(): void {
+    this.savingCommissionTrigger.set(true);
+    this.service.patchSection('finance', { commissionCreditTrigger: this.commissionTriggerInput() }).subscribe({
+      next: (d) => {
+        const finance = (d as { finance?: unknown })?.finance;
+        if (finance) this.data.update((prev) => ({ ...prev, finance }));
+        this.savingCommissionTrigger.set(false);
+        this.notify.success('Commission credit timing updated');
+      },
+      error: () => this.savingCommissionTrigger.set(false)
     });
   }
 

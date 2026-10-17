@@ -72,6 +72,10 @@ public interface BranchService {
      *  branch's wallet). False for a branch id absent from the caller's company. */
     boolean instantCommissionOf(UUID branchId);
 
+    /** True when the branch is a {@code HUB}. Not visibility-gated (same shape as {@link
+     *  #instantCommissionOf}); false for a branch id absent from the caller's company. */
+    boolean isHubBranch(UUID branchId);
+
     Page<Branch> search(BranchCriteria criteria, Pageable pageable);
 
     /**

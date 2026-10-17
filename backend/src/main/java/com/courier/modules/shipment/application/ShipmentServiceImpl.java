@@ -854,6 +854,46 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<com.courier.modules.shipment.domain.CommissionLedgerRow> commissionLedger(ShipmentCriteria criteria) {
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria)).stream()
+                .filter(s -> s.getStatus() != ShipmentStatus.CANCELLED)
+                .toList();
+        Map<UUID, ShipmentCharge> charges = chargesFor(matches.stream().map(Shipment::getId).toList());
+        Map<UUID, PaymentMode> modes = matches.stream().map(Shipment::getPaymentModeId).distinct()
+                .collect(Collectors.toMap(id -> id, paymentModeService::getById));
+        Map<UUID, Boolean> instant = matches.stream().map(Shipment::getBookingBranchId).distinct()
+                .collect(Collectors.toMap(id -> id, branchService::instantCommissionOf));
+        List<com.courier.modules.shipment.domain.CommissionLedgerRow> rows = new ArrayList<>();
+        for (Shipment s : matches) {
+            ShipmentCharge charge = charges.get(s.getId());
+            if (charge == null) {
+                continue;
+            }
+            PaymentMode mode = modes.get(s.getPaymentModeId());
+            boolean credited = s.getBookingCommissionCreditedAt() != null;
+            BigDecimal commission = credited && s.getBookingCommissionCreditedAmount() != null
+                    ? s.getBookingCommissionCreditedAmount()
+                    : charge.getCommissionOnBasicFreight().add(charge.getBranchCommissionOnOtherAmount());
+            if (commission.compareTo(BigDecimal.ZERO) <= 0 || (!credited && !instant.get(s.getBookingBranchId()))) {
+                continue;
+            }
+            String trigger = commissionCreditTrigger();
+            String awaiting = credited ? null
+                    : "DELIVERED".equals(trigger) || (mode.isCollectAtDelivery() && !"HUB_IN_SCAN".equals(trigger)) ? "Delivery"
+                    : "HUB_IN_SCAN".equals(trigger) ? "In scan at hub / delivery branch"
+                    : "In scan at delivery branch";
+            rows.add(new com.courier.modules.shipment.domain.CommissionLedgerRow(
+                    s.getId(), s.getShipmentNumber(), s.getBookingBranchId(), s.getStatus(), mode.getName(),
+                    commission, credited, s.getBookingCommissionCreditedAt(), awaiting));
+        }
+        rows.sort(Comparator.comparing(com.courier.modules.shipment.domain.CommissionLedgerRow::credited)
+                .thenComparing(com.courier.modules.shipment.domain.CommissionLedgerRow::shipmentNumber).reversed());
+        return rows;
+    }
+
     private static BigDecimal sum(List<ShipmentCharge> charges, java.util.function.Function<ShipmentCharge, BigDecimal> field) {
         return charges.stream().map(field).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -1412,13 +1452,33 @@ public class ShipmentServiceImpl implements ShipmentService {
     // at booking, and the booking branch itself has instantCommission on. Caller already
     // checked paymentMode.isCollectAtBooking().
     private void publishInScanCommissionIfEarned(Shipment shipment, UUID companyId, ShipmentCharge charge) {
+        if (shipment.getBookingCommissionCreditedAt() != null) {
+            return;
+        }
         BigDecimal branchCommission = eligibleBranchCommission(shipment.getBookingBranchId(), charge);
         if (branchCommission.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
+        stampBookingCommission(shipment, branchCommission);
         eventPublisher.publishEvent(new ShipmentEvent.InScanCommissionEarned(
                 shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
                 branchCommission, Instant.now()));
+    }
+
+    // Company setting: HUB_IN_SCAN | DELIVERY_BRANCH_IN_SCAN | DELIVERED. TO_PAY/COD ignore it
+    // and always wait for delivery, when the consignee's payment is actually collected.
+    private String commissionCreditTrigger() {
+        String trigger = companySettingsService.get().getCommissionCreditTrigger();
+        return trigger == null ? "HUB_IN_SCAN" : trigger;
+    }
+
+    // Marks the booking commission as credited before the AFTER_COMMIT listener posts it, so a
+    // second scan can never publish it again; the listener clears the stamp if the wallet
+    // credit fails, which puts the shipment back in the report's PENDING list.
+    private void stampBookingCommission(Shipment shipment, BigDecimal amount) {
+        shipment.setBookingCommissionCreditedAt(Instant.now());
+        shipment.setBookingCommissionCreditedAmount(amount);
+        shipmentRepository.save(shipment);
     }
 
     // Delivery-side mirror of publishInScanCommissionIfEarned, for collect-at-delivery
@@ -1427,10 +1487,14 @@ public class ShipmentServiceImpl implements ShipmentService {
     // commission on a TO_PAY order was never credited at all. Caller already checked
     // paymentMode.isCollectAtDelivery().
     private void publishDeliveryCommissionIfEarned(Shipment shipment, UUID companyId, ShipmentCharge charge) {
+        if (shipment.getBookingCommissionCreditedAt() != null) {
+            return;
+        }
         BigDecimal branchCommission = eligibleBranchCommission(shipment.getBookingBranchId(), charge);
         if (branchCommission.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
+        stampBookingCommission(shipment, branchCommission);
         eventPublisher.publishEvent(new ShipmentEvent.DeliveryCommissionEarned(
                 shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
                 branchCommission, Instant.now()));
@@ -1553,14 +1617,17 @@ public class ShipmentServiceImpl implements ShipmentService {
             // ShipmentEvent.InScanCommissionEarned.
             PaymentMode paymentMode = paymentModeService.getById(saved.getPaymentModeId());
             boolean toPay = paymentMode.isCollectAtDelivery() && !paymentMode.isCashOnDelivery();
-            if (paymentMode.isCollectAtBooking() || toPay) {
+            boolean creditAtScan = "HUB_IN_SCAN".equals(commissionCreditTrigger());
+            if (paymentMode.isCollectAtBooking() || toPay || creditAtScan) {
                 ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
                         .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
                 if (toPay) {
                     eventPublisher.publishEvent(new ShipmentEvent.ToPayReceivedAtDeliveryBranch(
                             saved.getId(), companyId, receivingBranchId, saved.getShipmentNumber(),
                             charge.getNetAmount(), Instant.now()));
-                } else {
+                }
+                if (!"DELIVERED".equals(commissionCreditTrigger())
+                        && (!toPay || creditAtScan) && (paymentMode.isCollectAtBooking() || creditAtScan)) {
                     publishInScanCommissionIfEarned(saved, companyId, charge);
                 }
             }
@@ -1583,6 +1650,16 @@ public class ShipmentServiceImpl implements ShipmentService {
         recordAsset(saved.getId(), companyId, ShipmentAssetType.IN_SCAN, "PHOTO", photoUrl);
         auditService.record(AuditAction.SHIPMENT_IN_SCANNED, ENTITY, saved.getId(),
                 Map.of("shipmentNumber", saved.getShipmentNumber(), "crossingHub", true));
+
+        // Booking-branch commission credits on the first in-scan at a hub, not only at the
+        // final delivery branch — every payment mode, including TO_PAY/COD (company setting
+        // HUB_IN_SCAN).
+        if ("HUB_IN_SCAN".equals(commissionCreditTrigger())
+                && branchService.isHubBranch(receivingBranchId)) {
+            ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(saved.getId(), companyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", saved.getId()));
+            publishInScanCommissionIfEarned(saved, companyId, charge);
+        }
         return new MovementOutcome(trackingNumber, true, null);
     }
 
@@ -1930,7 +2007,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
 
         PaymentMode paymentMode = paymentModeService.getById(shipment.getPaymentModeId());
-        if (paymentMode.isCollectAtDelivery()) {
+        if (paymentMode.isCollectAtDelivery() || "DELIVERED".equals(commissionCreditTrigger())) {
             ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), companyId)
                     .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", shipment.getId()));
             publishDeliveryCommissionIfEarned(shipment, companyId, charge);

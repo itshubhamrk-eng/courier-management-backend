@@ -206,6 +206,14 @@ public class CompanySettings extends CompanyOwnedEntity {
      *  {@code "NEAREST_FIVE"}). Plain string, not that enum, so this module stays free of
      *  a dependency on pricing (pricing already depends on company one-way, via
      *  {@code CompanySettingsService}) — the same treatment {@link #passwordPolicy} gets. */
+    /** When a shipment's booking-branch commission is credited to the booking branch's wallet:
+     *  {@code HUB_IN_SCAN} (first in-scan at a hub, or at the final delivery branch if no hub
+     *  comes first), {@code DELIVERY_BRANCH_IN_SCAN} (final delivery branch only) or
+     *  {@code DELIVERED} (once delivered with POD approved). TO_PAY/COD always wait for delivery. */
+    @Column(name = "commission_credit_trigger", length = 30, nullable = false)
+    @Builder.Default
+    private String commissionCreditTrigger = "HUB_IN_SCAN";
+
     @Column(name = "round_off_rule", length = 20, nullable = false)
     @Builder.Default
     private String roundOffRule = "NEAREST_FIVE";

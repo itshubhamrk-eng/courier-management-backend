@@ -8,6 +8,17 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-17 — Booking-branch commission credited at hub in-scan, company setting for timing, Commission Credit Report (V131)
+
+- New company setting `commission_credit_trigger` (Settings → Finance): `HUB_IN_SCAN` (default) | `DELIVERY_BRANCH_IN_SCAN` | `DELIVERED`. `HUB_IN_SCAN` credits the booking branch's wallet (`COM`, ref = shipment number) on the first in-scan at a hub, or at the final delivery branch if no hub came first — **every payment mode**, TO_PAY/COD included. Credits only `commissionOnBasicFreight + branchCommissionOnOtherAmount`, never company commission.
+- `shipments.booking_commission_credited_at/_amount` make the credit once-only; the listener clears the stamp if the wallet credit fails. V131 backfills these from existing `COM` wallet entries.
+- New `GET /shipments/commission-ledger` + Reports → Commission Credit Report (credited vs pending, awaiting-scan text, CSV). Wallet dashboard pending-commission follows the setting.
+- DRS page lists a hub's received shipments on "My Branch"; Loading Sheet "Send to Branch" offers every branch and lists unrouted hub stock when at a hub.
+- Verified live on :8082: hub in-scan credits (prepaid + TO_PAY), DELIVERY_BRANCH_IN_SCAN holds back, DELIVERED credits on delivery. CP-STR-000002/000003 (received at hub before the TO_PAY fix) were credited by hand (144.00 / 224.00).
+- Gotcha: the :4200 `ng serve` does not hot-reload on this machine — restart with `npm start`.
+
+---
+
 ## 2026-10-17 — Per-menu user permissions (V130), self-lookup fix, menu list (V129), MSRTC hidden from branch manager
 
 - **V130 `user_menu_grants`:** the User Permissions screen now stores CRUD ticks per menu item, not per module, so unticking one menu (or a group) no longer

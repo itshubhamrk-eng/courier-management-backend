@@ -4,8 +4,8 @@ import { ActAsBranch } from '@shared/components/act-as-branch/act-as-branch';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import { forkJoin, of } from 'rxjs';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { AuthService } from '@core/auth/auth.service';
@@ -212,6 +212,9 @@ export class OutForDelivery implements OnInit, OnDestroy {
   /** Hub delivery: shipments received (in-scanned) at this hub with no delivery branch,
    *  delivered from here instead of going on another Load Sheet. */
   readonly hubMode = signal(false);
+  /** The effective branch is a HUB: "My Branch" then also lists the hub's own received stock. */
+  private readonly hubIds = signal<Set<string>>(new Set());
+  readonly isHub = computed(() => { const id = this.acting.effectiveId(); return !!id && this.hubIds().has(id); });
   /** Company letterhead for the DRS header — same `CompanyProfileService` the LR and THC
    *  prints use, so every printed document shares one masthead. */
   readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
@@ -283,9 +286,13 @@ export class OutForDelivery implements OnInit, OnDestroy {
       this.collectAtDeliveryModeIds.set(new Set(p.content.filter((r) => r['collectAtDelivery'] === true).map((r) => r.id))));
     this.masterData.branchDirectory().subscribe((list) => {
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
+      this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
+      if (this.isHub()) this.load();
       if (this.myBranchId) {
         const b = list.find((x) => x.id === this.myBranchId);
         this.branchLabel.set(b ? `${b.branchName} (${b.branchCode})` : '');
+        // A hub's received shipments (READY_FOR_MANIFEST, no delivery branch) belong on "My Branch"
+        // too — the operator picks DRS here or Loading Sheet, so both must see the same stock.
       }
     });
     // In Scan at a hub links here with ?tab=hub: open straight on the hub's own shipments.
@@ -317,13 +324,18 @@ export class OutForDelivery implements OnInit, OnDestroy {
     if (this.hubMode() && !this.myBranchId) return;
     this.loading.set(true);
     this.selectedIds.set(new Set());
-    this.shipmentService.list(this.hubMode()
-      ? { page: 0, size: 100, currentLocationId: this.myBranchId!, unassignedDeliveryBranch: true, status: 'READY_FOR_MANIFEST' }
+    const hubStock = { page: 0, size: 100, currentLocationId: this.myBranchId!, unassignedDeliveryBranch: true, status: 'READY_FOR_MANIFEST' };
+    const branchStock = { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status: 'IN_SCAN' };
+    const source$ = this.hubMode()
+      ? this.shipmentService.list(hubStock).pipe(map((p) => p.content))
       : this.directMode()
-      ? { page: 0, size: 100, unassignedDeliveryBranch: true, status: 'IN_SCAN' }
-      : { page: 0, size: 100, deliveryBranchId: this.myBranchId!, status: 'IN_SCAN' }
-    ).subscribe({
-      next: (p) => { this.shipments.set(p.content); this.loading.set(false); },
+      ? this.shipmentService.list({ page: 0, size: 100, unassignedDeliveryBranch: true, status: 'IN_SCAN' }).pipe(map((p) => p.content))
+      : this.isHub()
+      ? forkJoin([this.shipmentService.list(branchStock), this.shipmentService.list(hubStock)])
+          .pipe(map(([a, b]) => [...a.content, ...b.content]))
+      : this.shipmentService.list(branchStock).pipe(map((p) => p.content));
+    source$.subscribe({
+      next: (rows) => { this.shipments.set(rows); this.loading.set(false); },
       error: () => { this.shipments.set([]); this.loading.set(false); }
     });
   }

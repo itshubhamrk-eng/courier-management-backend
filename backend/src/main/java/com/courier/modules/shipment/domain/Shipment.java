@@ -254,6 +254,14 @@ public class Shipment extends CompanyOwnedEntity {
     @Builder.Default
     private boolean commissionCredited = false;
 
+    /** When the booking branch's commission was credited to its wallet — first in-scan at a hub
+     *  or final delivery branch (collect-at-booking), or delivery (TO_PAY/COD). Null = pending. */
+    @Column(name = "booking_commission_credited_at")
+    private java.time.Instant bookingCommissionCreditedAt;
+
+    @Column(name = "booking_commission_credited_amount", precision = 19, scale = 2)
+    private java.math.BigDecimal bookingCommissionCreditedAmount;
+
     @Column(name = "remarks", length = 500)
     private String remarks;
 

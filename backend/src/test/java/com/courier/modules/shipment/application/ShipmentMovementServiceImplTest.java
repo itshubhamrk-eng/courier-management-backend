@@ -137,6 +137,8 @@ class ShipmentMovementServiceImplTest {
                 CALLER, COMPANY, "ops@test.com", Set.of(Roles.COMPANY_ADMIN), "jti");
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder().build());
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(inv -> inv.getArgument(0));
         // Default: collect-at-booking, so scanOneIn's finalDestination branch (which now
         // unconditionally reads the payment mode) doesn't publish ToPayReceivedAtDeliveryBranch

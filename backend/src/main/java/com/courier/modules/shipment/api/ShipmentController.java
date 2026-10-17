@@ -267,6 +267,22 @@ public class ShipmentController {
                 .map(mapper::toCommissionSummary).toList());
     }
 
+    @GetMapping("/commission-ledger")
+    @Operation(summary = "Booking-branch commission per shipment, credited vs pending",
+            description = "Same filters as the list endpoint (`ShipmentSearchRequest`), unpaged. "
+                    + "A shipment's commission is credited to its booking branch's wallet on first "
+                    + "in-scan at a hub (or its final delivery branch) for collect-at-booking "
+                    + "payment modes, or on delivery for TO_PAY/COD; until then it is pending. "
+                    + "Powers the Commission Credit report.")
+    public ApiResponse<List<com.courier.modules.shipment.api.dto.CommissionLedgerRowResponse>> commissionLedger(
+            @Valid @ParameterObject ShipmentSearchRequest search) {
+        return ApiResponse.success(shipmentService.commissionLedger(mapper.toCriteria(search)).stream()
+                .map(r -> new com.courier.modules.shipment.api.dto.CommissionLedgerRowResponse(
+                        r.shipmentId(), r.shipmentNumber(), r.bookingBranchId(), r.status(), r.paymentModeName(),
+                        r.commission(), r.credited(), r.creditedAt(), r.awaiting()))
+                .toList());
+    }
+
     @GetMapping("/branch-performance")
     @Operation(summary = "Shipment volume/outcome totals grouped by booking branch",
             description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "

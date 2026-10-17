@@ -86,6 +86,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null, null,
+                null,
                 null);
     }
 
@@ -158,6 +159,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null, null,
+                null,
                 null);
 
         CompanySettings saved = service.patchFinance(cmd);
@@ -191,6 +193,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null, null,
+                null,
                 null);
 
         CompanySettings saved = service.patchShipment(cmd);
@@ -218,6 +221,7 @@ class CompanySettingsServiceImplTest {
                 null, 45, null, null, null,
                 null, null, null, null, ThemePreference.DARK,
                 null, null, null, null,
+                null,
                 3L);
 
         CompanySettings saved = service.replace(cmd);
@@ -245,6 +249,7 @@ class CompanySettingsServiceImplTest {
                 null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null, null,
+                null,
                 1L);
 
         assertThatThrownBy(() -> service.replace(cmd))
