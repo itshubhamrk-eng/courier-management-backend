@@ -32,7 +32,7 @@ import {
       @if (nodes().length) {
         <ul class="tree__list">
           @for (node of nodes(); track node.id) {
-            <app-menu-permission-node [node]="node" [pending]="pending()" [expanded]="open()"
+            <app-menu-permission-node [node]="node" [pending]="pending()" [expanded]="open()" [keyBy]="keyBy()"
                                        (toggle)="toggle.emit($event)" (toggleMany)="toggleMany.emit($event)"
                                        (expandToggle)="toggleOpen($event)" />
           }
@@ -54,6 +54,8 @@ import {
 export class MenuPermissionTree {
   readonly nodes = input.required<MenuPermissionNode[]>();
   readonly pending = input.required<Map<string, ActionState>>();
+  /** What `pending` is keyed by: a role's rights are per module, a user's ticks are per menu item. */
+  readonly keyBy = input<'module' | 'menu'>('module');
 
   readonly toggle = output<PermissionToggle>();
   readonly toggleMany = output<PermissionToggleMany>();

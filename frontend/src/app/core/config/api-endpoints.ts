@@ -13,6 +13,11 @@ export const API = {
     impersonateBranch: (branchId: string) => `/auth/impersonate/branch/${branchId}`
   },
   companies: '/companies',
+  /** Menus a super admin hid from a company: per-company (SUPER_ADMIN) and the caller's own. */
+  companyMenuLocks: (companyId: string) => `/companies/${companyId}/menu-locks`,
+  myMenuLocks: '/menu-locks/me',
+  /** Menus an admin unticked for the signed-in user (User Permissions screen). */
+  myMenuGrants: '/menu-grants/me',
   users: '/users',
   roles: '/roles',
   departments: '/departments',

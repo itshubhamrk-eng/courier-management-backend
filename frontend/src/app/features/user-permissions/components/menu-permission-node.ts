@@ -62,7 +62,7 @@ export interface PermissionToggleMany { menuItemIds: string[]; checked: boolean;
       @if (hasChildren() && isExpanded()) {
         <ul class="node__children">
           @for (child of node().children; track child.id) {
-            <app-menu-permission-node [node]="child" [pending]="pending()" [expanded]="expanded()"
+            <app-menu-permission-node [node]="child" [pending]="pending()" [expanded]="expanded()" [keyBy]="keyBy()"
                                        [depth]="depth() + 1" (toggle)="toggle.emit($event)"
                                        (toggleMany)="toggleMany.emit($event)" (expandToggle)="expandToggle.emit($event)" />
           }
@@ -97,6 +97,8 @@ export class MenuPermissionNodeComponent {
   readonly pending = input.required<Map<string, ActionState>>();
   readonly expanded = input.required<ReadonlySet<string>>();
   readonly depth = input(0);
+  /** 'menu' = state is per menu item (a user's ticks); 'module' = shared by every menu on a module (a role). */
+  readonly keyBy = input<'module' | 'menu'>('module');
 
   readonly toggle = output<PermissionToggle>();
   readonly toggleMany = output<PermissionToggleMany>();
@@ -111,9 +113,13 @@ export class MenuPermissionNodeComponent {
   readonly leaves = computed(() => flattenLeaves(this.node()));
   readonly leafIds = computed(() => this.leaves().map((l) => l.id));
 
+  private keyOf(n: MenuPermissionNode): string | null {
+    return this.keyBy() === 'menu' ? (n.module ? n.id : null) : n.module;
+  }
+
   private state(): ActionState | undefined {
-    const module = this.node().module;
-    return module ? this.pending().get(module) : undefined;
+    const key = this.keyOf(this.node());
+    return key ? this.pending().get(key) : undefined;
   }
 
   available(action: CrudAction): boolean {
@@ -137,7 +143,7 @@ export class MenuPermissionNodeComponent {
     const leaves = this.leaves();
     const cells = leaves.flatMap((leaf) =>
       this.actions.filter((a) => hasAction(leaf.roleDefault, a))
-        .map((a) => (leaf.module ? p.get(leaf.module)?.[a] : false) === true));
+        .map((a) => (this.keyOf(leaf) ? p.get(this.keyOf(leaf)!)?.[a] : false) === true));
     return cells.length > 0 && cells.every(Boolean);
   });
 
@@ -146,7 +152,7 @@ export class MenuPermissionNodeComponent {
     const leaves = this.leaves();
     const cells = leaves.flatMap((leaf) =>
       this.actions.filter((a) => hasAction(leaf.roleDefault, a))
-        .map((a) => (leaf.module ? p.get(leaf.module)?.[a] : false) === true));
+        .map((a) => (this.keyOf(leaf) ? p.get(this.keyOf(leaf)!)?.[a] : false) === true));
     const checkedCount = cells.filter(Boolean).length;
     return checkedCount > 0 && checkedCount < cells.length;
   });

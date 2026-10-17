@@ -311,7 +311,7 @@ public class PickupServiceImpl implements PickupService {
         if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
             return null;
         }
-        UUID branchId = userService.getById(caller.userId()).getBranchId();
+        UUID branchId = userService.getCurrent().getBranchId();
         // A branch-bound caller with no branch matches nothing, never everything.
         return branchId != null ? branchId : new UUID(0L, 0L);
     }

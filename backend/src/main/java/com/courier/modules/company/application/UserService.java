@@ -39,6 +39,9 @@ public interface UserService {
 
     User getById(UUID id);
 
+    /** The signed-in user's own record. Needs no role or USER_READ: every scoped list reads it to find the caller's branch. */
+    User getCurrent();
+
     Page<User> search(UserCriteria criteria, Pageable pageable);
 
     /** Soft delete. The row is retained; the account can no longer authenticate. */

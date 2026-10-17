@@ -29,13 +29,11 @@ const EMPTY_ROOT: MenuPermissionNode = {
 /**
  * User Permissions — pick a user, see their complete menu hierarchy with the role's
  * default CRUD per leaf, override anything without touching the role, save. Selection
- * is held here as one `Map<permissionModule, ActionState>` — keyed by module, not by
- * menu item: several leaves can name the same module (e.g. Shipment Booking/List/
- * Tracking all govern `SHIPMENT_*`), and they are the *same underlying right* shown on
- * different screens, not independent ones — keying by leaf id would let two sibling
- * checkboxes disagree about one right and silently race on save. Save submits the whole
- * matrix; the backend persists only what actually differs from the role's own default
- * (see {@code UserPermissionService.updateUserPermissions}).
+ * is held here as one `Map<menuItemId, ActionState>` — each menu is ticked on its own,
+ * even when several menus name the same module (e.g. every Reports leaf). The backend
+ * stores the ticks per menu and derives the module right as the union over its menus
+ * (see {@code UserPermissionService.updateUserPermissions}), so unticking one menu never
+ * touches a sibling or a group.
  */
 @Component({
   selector: 'app-user-permissions',
@@ -73,7 +71,8 @@ const EMPTY_ROOT: MenuPermissionNode = {
         <app-card [title]="'Menu Permissions for ' + currentUser()!.displayName"
                   [subtitle]="customCount() + ' overridden from the role default' + (dirty() ? ' · unsaved changes' : '')">
           <app-menu-permission-tree [nodes]="root().children" [pending]="pending()"
-                                     (toggle)="onToggle($event)" (toggleMany)="onToggleMany($event)" />
+                                     keyBy="menu"
+                                    (toggle)="onToggle($event)" (toggleMany)="onToggleMany($event)" />
         </app-card>
 
         <footer class="up__foot">
@@ -140,12 +139,9 @@ export class UserPermissions implements OnInit {
   readonly dirty = computed(() => !sameMatrix(this.pending(), this.original()));
 
   readonly customCount = computed(() => {
-    const seen = new Set<string>();
     let n = 0;
     for (const leaf of this.leaves()) {
-      if (!leaf.module || seen.has(leaf.module)) continue;
-      seen.add(leaf.module);
-      const state = this.pending().get(leaf.module);
+      const state = this.pending().get(leaf.id);
       if (!state) continue;
       for (const a of CRUD_ACTIONS) {
         if (hasAction(leaf.roleDefault, a) && state[a] !== (leaf.roleDefault[a] === true)) n++;
@@ -193,7 +189,7 @@ export class UserPermissions implements OnInit {
   private applyRoot(root: MenuPermissionNode): void {
     this.root.set(root);
     const state = new Map<string, ActionState>();
-    for (const leaf of flattenLeaves(root)) if (leaf.module) state.set(leaf.module, effectiveState(leaf));
+    for (const leaf of flattenLeaves(root)) state.set(leaf.id, effectiveState(leaf));
     this.pending.set(state);
     this.original.set(new Map(state));
   }
@@ -205,11 +201,10 @@ export class UserPermissions implements OnInit {
   }
 
   onToggle({ menuItemId, action, checked }: PermissionToggle): void {
-    const leaf = this.leafById().get(menuItemId);
-    if (!leaf?.module) return;
+    if (!this.leafById().has(menuItemId)) return;
     const next = new Map(this.pending());
-    const current = next.get(leaf.module) ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
-    next.set(leaf.module, { ...current, [action]: checked });
+    const current = next.get(menuItemId) ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+    next.set(menuItemId, { ...current, [action]: checked });
     this.pending.set(next);
   }
 
@@ -218,11 +213,11 @@ export class UserPermissions implements OnInit {
     const byId = this.leafById();
     for (const id of menuItemIds) {
       const leaf = byId.get(id);
-      if (!leaf?.module) continue;
-      const current = next.get(leaf.module) ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+      if (!leaf) continue;
+      const current = next.get(id) ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
       const updated = { ...current };
       for (const a of CRUD_ACTIONS) if (hasAction(leaf.roleDefault, a)) updated[a] = checked;
-      next.set(leaf.module, updated);
+      next.set(id, updated);
     }
     this.pending.set(next);
   }
@@ -235,7 +230,7 @@ export class UserPermissions implements OnInit {
 
     const pending = this.pending();
     const items = this.leaves().map((leaf) => {
-      const s = (leaf.module ? pending.get(leaf.module) : undefined)
+      const s = pending.get(leaf.id)
         ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
       return { menuItemId: leaf.id, create: s.CREATE, read: s.READ, update: s.UPDATE, delete: s.DELETE };
     });

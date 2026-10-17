@@ -242,7 +242,7 @@ class PdpBillingServicesTest {
     private void callerAt(UUID userId, UUID branchId, String role) {
         User u = org.mockito.Mockito.mock(User.class);
         when(u.getBranchId()).thenReturn(branchId);
-        when(userService.getById(userId)).thenReturn(u);
+        when(userService.getCurrent()).thenReturn(u);
         AuthenticatedUser p = new AuthenticatedUser(userId, COMPANY, "p@test", java.util.Set.of(role), "jti");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(p, null, p.authorities()));
     }

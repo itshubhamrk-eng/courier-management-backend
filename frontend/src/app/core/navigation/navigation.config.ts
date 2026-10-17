@@ -61,6 +61,8 @@ const OPS_MANAGERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB
 const OPS_BOOKING = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR];
 /** The road: takes the inbound manifest in, runs deliveries out, closes them. */
 const OPS_DELIVERY_DESK = [...OPS_MANAGERS, AppRole.DELIVERY_OPERATOR];
+/** MSRTC is not shown in a branch manager's sidebar (company admin, hub and counter/delivery staff keep it). */
+const NOT_BRANCH_MANAGER = (roles: AppRole[]): AppRole[] => roles.filter((r) => r !== AppRole.BRANCH_MANAGER);
 const OPS_SHIPMENT_READERS = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 
 // Hub Operations' own screens — COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's
@@ -281,18 +283,18 @@ export const NAVIGATION: NavNode[] = [
   // straight to a delivery branch (picked directly, or resolved from the pincode) and only
   // ever moves branch to branch. Reuses Operations' permission codes, so no new grants.
   {
-    id: 'msrtc', title: 'MSRTC', icon: 'directions_bus', order: 5.2, roles: [...OPS_BOOKING, AppRole.DELIVERY_OPERATOR],
+    id: 'msrtc', title: 'MSRTC', icon: 'directions_bus', order: 5.2, roles: NOT_BRANCH_MANAGER([...OPS_BOOKING, AppRole.DELIVERY_OPERATOR]),
     children: [
       { id: 'msrtc-divisions', title: 'Divisions', icon: 'account_tree', route: '/msrtc/divisions', roles: COMPANY_ONLY },
       { id: 'msrtc-bus-depots', title: 'Bus Depot / Station', icon: 'warehouse', route: '/msrtc/bus-depots', roles: COMPANY_ONLY },
-      { id: 'msrtc-timetable', title: 'Bus Timetable', icon: 'schedule', route: '/msrtc/timetable', roles: [...OPS_BOOKING, AppRole.DELIVERY_OPERATOR] },
+      { id: 'msrtc-timetable', title: 'Bus Timetable', icon: 'schedule', route: '/msrtc/timetable', roles: NOT_BRANCH_MANAGER([...OPS_BOOKING, AppRole.DELIVERY_OPERATOR]) },
       { id: 'msrtc-crossings', title: 'Crossings', icon: 'alt_route', route: '/msrtc/crossings', roles: COMPANY_ONLY },
-      { id: 'msrtc-booking', title: 'MSRTC Shipment Booking', icon: 'add_box', route: '/msrtc/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
-      { id: 'msrtc-create-manifest', title: 'Create Manifest', icon: 'qr_code_scanner', route: '/msrtc/create-manifest', permission: 'MANIFEST_CREATE', roles: OPS_BOOKING },
-      { id: 'msrtc-finalize-manifest', title: 'Finalize Manifest', icon: 'outbound', route: '/msrtc/finalize-manifest', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
+      { id: 'msrtc-booking', title: 'MSRTC Shipment Booking', icon: 'add_box', route: '/msrtc/shipments/new', permission: 'SHIPMENT_CREATE', roles: NOT_BRANCH_MANAGER(OPS_BOOKING) },
+      { id: 'msrtc-create-manifest', title: 'Create Manifest', icon: 'qr_code_scanner', route: '/msrtc/create-manifest', permission: 'MANIFEST_CREATE', roles: NOT_BRANCH_MANAGER(OPS_BOOKING) },
+      { id: 'msrtc-finalize-manifest', title: 'Finalize Manifest', icon: 'outbound', route: '/msrtc/finalize-manifest', permission: 'MANIFEST_DISPATCH', roles: NOT_BRANCH_MANAGER(OPS_BOOKING) },
       // Branch B receives what branch A dispatched; in-scanned shipments then show up in
       // Pending Delivery / Generate DRS / Delivery like any other.
-      { id: 'msrtc-in-scan', title: 'In Scan Manifest', icon: 'move_to_inbox', route: '/msrtc/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK }
+      { id: 'msrtc-in-scan', title: 'In Scan Manifest', icon: 'move_to_inbox', route: '/msrtc/in-scan', permission: 'MANIFEST_RECEIVE', roles: NOT_BRANCH_MANAGER(OPS_DELIVERY_DESK) }
     ]
   },
 

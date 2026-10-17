@@ -46,6 +46,12 @@ public interface UserPermissionService {
      */
     UserPermissionUpdateResult updateUserPermissions(UUID userId, List<MenuPermissionUpdateItem> items);
 
+    /**
+     * Codes of the menus an admin explicitly unticked READ for, for one user. The sidebar
+     * hides exactly these; a menu with no stored tick is never listed.
+     */
+    List<String> deniedMenuCodes(UUID userId);
+
     record MenuPermissionUpdateItem(UUID menuItemId, boolean create, boolean read,
                                     boolean update, boolean delete) {
     }

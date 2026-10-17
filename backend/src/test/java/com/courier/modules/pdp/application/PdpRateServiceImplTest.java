@@ -216,7 +216,7 @@ class PdpRateServiceImplTest {
         UUID me = UUID.randomUUID();
         com.courier.modules.company.domain.User u = org.mockito.Mockito.mock(com.courier.modules.company.domain.User.class);
         when(u.getBranchId()).thenReturn(UUID.randomUUID()); // a different partner
-        when(userService.getById(me)).thenReturn(u);
+        when(userService.getCurrent()).thenReturn(u);
         AuthenticatedUser p = new AuthenticatedUser(me, COMPANY, "p@test", java.util.Set.of("BRANCH_MANAGER"), "jti");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(p, null, p.authorities()));
 

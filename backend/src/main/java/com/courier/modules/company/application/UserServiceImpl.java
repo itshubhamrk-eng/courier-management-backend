@@ -348,6 +348,18 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public User getCurrent() {
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (caller.isSuperAdmin() && CompanyContext.getCompanyId().isEmpty()) {
+            return userRepository.findById(caller.userId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ENTITY, caller.userId()));
+        }
+        return loadWithinCompany(caller.userId(), CompanyContext.requireCompanyId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public User getById(UUID id) {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();

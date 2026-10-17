@@ -106,7 +106,7 @@ public class PdpEarningServiceImpl implements PdpEarningService {
         if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
             return null;
         }
-        UUID branchId = userService.getById(caller.userId()).getBranchId();
+        UUID branchId = userService.getCurrent().getBranchId();
         return branchId != null ? branchId : new UUID(0L, 0L);
     }
 

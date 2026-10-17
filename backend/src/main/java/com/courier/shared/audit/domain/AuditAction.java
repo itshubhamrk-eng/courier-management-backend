@@ -46,6 +46,8 @@ public enum AuditAction {
     COMPANY_EXPIRED,
     COMPANY_DELETED,
     COMPANY_ROLES_SEEDED,
+    /** SUPER_ADMIN changed which sidebar menus a company may see. */
+    COMPANY_MENU_LOCKS_UPDATED,
     COMPANY_SETTINGS_SEEDED,
     COMPANY_SETTINGS_INITIALIZED,
     COMPANY_SETTINGS_UPDATED,

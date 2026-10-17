@@ -194,7 +194,7 @@ public class ManifestServiceImpl implements ManifestService {
         if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
             return (root, query, cb) -> cb.conjunction();
         }
-        UUID ownBranchId = userService.getById(caller.userId()).getBranchId();
+        UUID ownBranchId = userService.getCurrent().getBranchId();
         if (ownBranchId == null) {
             return (root, query, cb) -> cb.conjunction();
         }

@@ -182,6 +182,11 @@ export const routes: Routes = [
         loadComponent: () => import('@features/company/company-profile').then((m) => m.CompanyProfilePage)
       },
       {
+        path: 'companies/:id/menu-access', title: 'Menu Access', canActivate: [roleGuard],
+        data: { roles: [AppRole.SUPER_ADMIN] },
+        loadComponent: () => import('@features/company/company-menu-access').then((m) => m.CompanyMenuAccessPage)
+      },
+      {
         path: 'companies/:id/edit', title: 'Edit Company', canActivate: [roleGuard],
         data: { roles: [AppRole.SUPER_ADMIN] },
         loadComponent: () => import('@features/company/company-profile-edit').then((m) => m.CompanyProfileEditPage)

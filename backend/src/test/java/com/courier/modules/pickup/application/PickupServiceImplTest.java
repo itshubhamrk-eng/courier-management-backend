@@ -75,7 +75,7 @@ class PickupServiceImplTest {
         when(branchService.getById(OTHER_PDP)).thenReturn(partner(OTHER_PDP, BranchType.PICKUP_DELIVERY_PARTNER, true));
         User pdpUser = mock(User.class);
         when(pdpUser.getBranchId()).thenReturn(PDP);
-        when(userService.getById(PDP_USER)).thenReturn(pdpUser);
+        when(userService.getCurrent()).thenReturn(pdpUser);
         as(ADMIN, Roles.COMPANY_ADMIN);
     }
 

@@ -62,6 +62,7 @@ class UserPermissionServiceImplTest {
     @Mock private PermissionRepository permissionRepository;
     @Mock private UserPermissionOverrideRepository overrideRepository;
     @Mock private MenuItemRepository menuItemRepository;
+    @Mock private com.courier.modules.company.domain.UserMenuGrantRepository menuGrantRepository;
     @Mock private AuditService auditService;
 
     private UserPermissionServiceImpl service;
@@ -74,7 +75,7 @@ class UserPermissionServiceImplTest {
     void setUp() {
         service = new UserPermissionServiceImpl(userRepository, userRoleRepository,
                 rolePermissionRepository, permissionRepository, overrideRepository,
-                menuItemRepository, auditService);
+                menuItemRepository, menuGrantRepository, auditService);
         CompanyContext.setCompanyId(TENANT);
 
         targetUser = User.builder()

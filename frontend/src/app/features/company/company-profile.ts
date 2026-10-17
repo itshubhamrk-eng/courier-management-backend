@@ -30,6 +30,7 @@ import { CompanyService } from './company.service';
         @if (company()) {
           <div class="page__actions">
             <app-button icon="edit" (pressed)="edit()">Edit Profile</app-button>
+            <app-button variant="stroked" icon="menu_open" (pressed)="menuAccess()">Menu Access</app-button>
             <app-button variant="stroked" icon="workspace_premium" (pressed)="assign()">Assign Plan</app-button>
             <app-button variant="stroked" icon="autorenew" (pressed)="renew()">Renew</app-button>
             @if (company()!.status !== 'ACTIVE') {
@@ -171,6 +172,7 @@ export class CompanyProfilePage implements OnInit {
   }
 
   edit(): void { this.router.navigate(['/companies', this.id, 'edit']); }
+  menuAccess(): void { this.router.navigate(['/companies', this.id, 'menu-access']); }
 
   // ------------------------------------------------------------------ lifecycle
 

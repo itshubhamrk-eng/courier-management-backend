@@ -3,6 +3,8 @@ package com.courier.modules.company.application;
 import com.courier.modules.company.domain.CompanyUserRepository;
 import com.courier.modules.company.domain.MenuItem;
 import com.courier.modules.company.domain.MenuItemRepository;
+import com.courier.modules.company.domain.UserMenuGrant;
+import com.courier.modules.company.domain.UserMenuGrantRepository;
 import com.courier.modules.company.domain.Permission;
 import com.courier.modules.company.domain.PermissionAction;
 import com.courier.modules.company.domain.PermissionModule;
@@ -77,6 +79,7 @@ public class UserPermissionServiceImpl implements UserPermissionService {
     private final PermissionRepository permissionRepository;
     private final UserPermissionOverrideRepository overrideRepository;
     private final MenuItemRepository menuItemRepository;
+    private final UserMenuGrantRepository menuGrantRepository;
     private final AuditService auditService;
 
     @Override
@@ -112,7 +115,10 @@ public class UserPermissionServiceImpl implements UserPermissionService {
                 .filter(m -> m.isActive())
                 .collect(Collectors.groupingBy(m -> m.getParentId() == null ? ROOT : m.getParentId()));
 
-        List<MenuPermissionNode> roots = buildNodes(null, byParent, roleCodes, overrideByCode);
+        Map<UUID, UserMenuGrant> grantByMenu = menuGrantRepository.findAllByUserId(userId).stream()
+                .collect(Collectors.toMap(UserMenuGrant::getMenuItemId, g -> g, (a, b) -> a));
+
+        List<MenuPermissionNode> roots = buildNodes(null, byParent, roleCodes, overrideByCode, grantByMenu);
         return new MenuPermissionNode(null, "root", "Menu", null, null, null, 0,
                 Map.of(), Map.of(), Map.of(), roots);
     }
@@ -149,7 +155,10 @@ public class UserPermissionServiceImpl implements UserPermissionService {
         // entry per permission BEFORE writing anything is what keeps that from reading a
         // stale pre-loop snapshot twice and attempting two inserts for the same
         // (company, user, permission) tuple in one request.
-        Map<Permission, Boolean> wantedByPermission = new LinkedHashMap<>();
+        // Each submitted leaf's ticks are stored against that menu item alone.
+        Map<UUID, UserMenuGrant> grantByMenu = menuGrantRepository.findAllByUserId(userId).stream()
+                .collect(Collectors.toMap(UserMenuGrant::getMenuItemId, g -> g, (a, b) -> a));
+        Map<UUID, MenuPermissionUpdateItem> requested = new LinkedHashMap<>();
         for (MenuPermissionUpdateItem item : items) {
             MenuItem menuItem = menuById.get(item.menuItemId());
             if (menuItem == null || menuItem.isGroup()) {
@@ -158,11 +167,59 @@ public class UserPermissionServiceImpl implements UserPermissionService {
                 // the whole tree (including group rows) in one shot without filtering it.
                 continue;
             }
-            Map<PermissionAction, Boolean> wanted = Map.of(
-                    PermissionAction.CREATE, item.create(), PermissionAction.READ, item.read(),
-                    PermissionAction.UPDATE, item.update(), PermissionAction.DELETE, item.delete());
-            for (Permission permission : availablePermissions(menuItem.getPermissionModule())) {
-                wantedByPermission.put(permission, Boolean.TRUE.equals(wanted.get(permission.getAction())));
+            requested.put(item.menuItemId(), item);
+            UserMenuGrant grant = grantByMenu.get(item.menuItemId());
+            if (grant == null) {
+                grant = UserMenuGrant.builder().userId(userId).menuItemId(item.menuItemId()).build();
+                grantByMenu.put(item.menuItemId(), grant);
+            }
+            grant.setCanCreate(item.create());
+            grant.setCanRead(item.read());
+            grant.setCanUpdate(item.update());
+            grant.setCanDelete(item.delete());
+            menuGrantRepository.save(grant);
+        }
+
+        // A module's right is the union over all of its menus, so unticking one menu only
+        // revokes the module when no other menu on it is still ticked. A menu not in this
+        // request counts as its stored tick, else as the user's current module-level value.
+        Set<PermissionModule> touchedModules = requested.keySet().stream()
+                .map(id -> menuById.get(id).getPermissionModule())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<MenuItem> allLeaves = menuItemRepository.findAllByOrderByDisplayOrderAsc().stream()
+                .filter(m -> m.isActive() && !m.isGroup() && touchedModules.contains(m.getPermissionModule()))
+                .toList();
+
+        Map<Permission, Boolean> wantedByPermission = new LinkedHashMap<>();
+        for (PermissionModule module : touchedModules) {
+            for (Permission permission : availablePermissions(module)) {
+                String code = permission.getPermissionCode();
+                UserPermissionOverride current = existingByCode.get(code);
+                boolean currentModuleValue = current != null ? current.isGranted() : roleCodes.contains(code);
+                boolean union = false;
+                for (MenuItem leaf : allLeaves) {
+                    if (leaf.getPermissionModule() != module) {
+                        continue;
+                    }
+                    MenuPermissionUpdateItem req = requested.get(leaf.getId());
+                    UserMenuGrant stored = grantByMenu.get(leaf.getId());
+                    boolean value;
+                    if (req != null) {
+                        value = switch (permission.getAction()) {
+                            case CREATE -> req.create();
+                            case READ -> req.read();
+                            case UPDATE -> req.update();
+                            case DELETE -> req.delete();
+                            default -> false;
+                        };
+                    } else if (stored != null) {
+                        value = stored.allows(permission.getAction());
+                    } else {
+                        value = currentModuleValue;
+                    }
+                    union |= value;
+                }
+                wantedByPermission.put(permission, union);
             }
         }
 
@@ -218,30 +275,65 @@ public class UserPermissionServiceImpl implements UserPermissionService {
         return new UserPermissionUpdateResult(granted, revoked, resolveEffectivePermissionCodes(userId));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> deniedMenuCodes(UUID userId) {
+        List<UserMenuGrant> grants = menuGrantRepository.findAllByUserId(userId);
+        if (grants.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, MenuItem> menuById = menuItemRepository.findAllById(
+                        grants.stream().map(UserMenuGrant::getMenuItemId).toList()).stream()
+                .collect(Collectors.toMap(MenuItem::getId, m -> m));
+        List<String> denied = new ArrayList<>();
+        for (UserMenuGrant grant : grants) {
+            MenuItem menu = menuById.get(grant.getMenuItemId());
+            if (menu == null || menu.isGroup() || grant.isCanRead()) {
+                continue;
+            }
+            // A module with no READ checkbox can never be "unticked" for reading.
+            boolean hasRead = availablePermissions(menu.getPermissionModule()).stream()
+                    .anyMatch(p -> p.getAction() == PermissionAction.READ);
+            if (hasRead) {
+                denied.add(menu.getCode());
+            }
+        }
+        return denied;
+    }
+
     // -------------------------------------------------------------------- helpers
 
     /** Sentinel key for top-level nodes in the parent-grouped map — {@code null} cannot be a map key. */
     private static final UUID ROOT = new UUID(0L, 0L);
 
     private List<MenuPermissionNode> buildNodes(UUID parentId, Map<UUID, List<MenuItem>> byParent,
-                                                Set<String> roleCodes, Map<String, Boolean> overrideByCode) {
+                                                Set<String> roleCodes, Map<String, Boolean> overrideByCode,
+                                                Map<UUID, UserMenuGrant> grantByMenu) {
         List<MenuItem> children = byParent.getOrDefault(parentId == null ? ROOT : parentId, List.of());
         List<MenuPermissionNode> nodes = new ArrayList<>();
         for (MenuItem item : children.stream()
                 .sorted(Comparator.comparingInt(MenuItem::getDisplayOrder)).toList()) {
-            List<MenuPermissionNode> kids = buildNodes(item.getId(), byParent, roleCodes, overrideByCode);
+            List<MenuPermissionNode> kids = buildNodes(item.getId(), byParent, roleCodes, overrideByCode, grantByMenu);
 
             Map<PermissionAction, Boolean> roleDefault = new EnumMap<>(PermissionAction.class);
             Map<PermissionAction, Boolean> effective = new EnumMap<>(PermissionAction.class);
             Map<PermissionAction, Boolean> overridden = new EnumMap<>(PermissionAction.class);
 
             if (!item.isGroup()) {
+                UserMenuGrant grant = grantByMenu.get(item.getId());
                 for (Permission permission : availablePermissions(item.getPermissionModule())) {
                     boolean roleHas = roleCodes.contains(permission.getPermissionCode());
                     Boolean override = overrideByCode.get(permission.getPermissionCode());
                     roleDefault.put(permission.getAction(), roleHas);
-                    overridden.put(permission.getAction(), override != null);
-                    effective.put(permission.getAction(), override != null ? override : roleHas);
+                    if (grant != null) {
+                        // This menu's own tick, independent of every other menu on the module.
+                        boolean ticked = grant.allows(permission.getAction());
+                        overridden.put(permission.getAction(), ticked != roleHas);
+                        effective.put(permission.getAction(), ticked);
+                    } else {
+                        overridden.put(permission.getAction(), override != null);
+                        effective.put(permission.getAction(), override != null ? override : roleHas);
+                    }
                 }
             }
 

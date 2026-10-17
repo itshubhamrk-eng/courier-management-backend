@@ -5,6 +5,8 @@ import { filter, map, startWith } from 'rxjs';
 import { PermissionService } from '../auth/permission.service';
 import { PartnerContextService } from '../auth/partner-context.service';
 import { storage } from '../utils/storage.util';
+import { MenuLockService } from './menu-lock.service';
+import { MenuGrantService } from './menu-grant.service';
 import { NAVIGATION } from './navigation.config';
 import { NavNode } from './navigation.model';
 
@@ -28,6 +30,8 @@ export class NavigationService {
   private readonly perm = inject(PermissionService);
   private readonly router = inject(Router);
   private readonly partner = inject(PartnerContextService);
+  private readonly menuLocks = inject(MenuLockService);
+  private readonly menuGrants = inject(MenuGrantService);
 
   /** Desktop rail collapsed to icons — remembered across sessions. */
   readonly collapsed = signal<boolean>(storage.get(COLLAPSE_KEY) === '1');
@@ -85,7 +89,11 @@ export class NavigationService {
   // ── filtering ─────────────────────────────────────────────────────────────
   private filter(nodes: NavNode[], parentId?: string): NavNode[] {
     const partner = this.partner.isPartner();
+    const locked = this.menuLocks.locked();
+    const denied = this.menuGrants.denied();
     return [...nodes]
+      .filter((n) => !locked.has(n.id))
+      .filter((n) => !denied.has(n.id))
       .filter((n) => !partner || (parentId === undefined ? PARTNER_GROUPS.has(n.id)
         : parentId !== 'operations' || PARTNER_OPERATIONS.has(n.id)))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))

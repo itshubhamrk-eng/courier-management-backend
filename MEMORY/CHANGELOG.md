@@ -8,6 +8,29 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-17 — Per-menu user permissions (V130), self-lookup fix, menu list (V129), MSRTC hidden from branch manager
+
+- **V130 `user_menu_grants`:** the User Permissions screen now stores CRUD ticks per menu item, not per module, so unticking one menu (or a group) no longer
+  clears siblings that share a module. A module's server-side right is the union over its menus (`user_permission_overrides` still derived, JWT/`@PreAuthorize`
+  unchanged). `GET /api/v1/menu-grants/me` -> sidebar hides menus unticked for READ (`MenuGrantService`). Role Assign Permissions screen stays per module (`keyBy`).
+  A menu with no stored row follows the module-level value as before. Sidebar hide only; routes/APIs unchanged.
+- **`UserService.getCurrent()`:** scoped lists (shipments, manifests, pickups, PDP) read the caller's own branch through an ungated lookup; `getById` needs a manager
+  role or `USER_READ`, so a user without a manager role got 403. `getById` also lets a user read their own record (was a 404 for a branchless non-admin).
+- **V129:** 57 `menu_items` rows for screens the assign tree was missing (MSRTC, Follow-ups, Support, Communication groups etc.); screens with no module reuse the
+  nearest one. Ticking those does not widen access yet - roles still gate them.
+- **Nav:** MSRTC group removed from BRANCH_MANAGER's sidebar (direct URLs still work).
+- Verified on :8082 (API only; not browser-clicked): commission-report READ off while drs/thc stayed on; full backend tests pass.
+
+## 2026-10-17 — Super admin controls which sidebar menus a company sees (V128)
+
+- **Backend:** `V128` `company_menu_locks` (company_id + menu_code, platform-level, hard-deleted on unlock; no row = visible). `CompanyMenuLockService`
+  + `CompanyMenuLockController`: `GET/PUT /api/v1/companies/{companyId}/menu-locks` (SUPER_ADMIN, takes `companies.company_id`) and
+  `GET /api/v1/menu-locks/me` (caller's own company; empty for tenant-unbound). `dashboard` and `settings` can never be locked. Audit `COMPANY_MENU_LOCKS_UPDATED`.
+- **Frontend:** `MenuLockService` (refetches on session change) -> `NavigationService.filter` drops locked nav ids (group or leaf). New page
+  `/companies/:id/menu-access` (button "Menu Access" on Company Profile) lists every `NAVIGATION` group/leaf as checkboxes.
+- **Menu-only:** `/msrtc/*` etc. routes and APIs are NOT blocked, only the sidebar. Sits above the company admin's own role/user permission screens.
+- Verified live :8082/:4300: locked msrtc + hub-operations on AMAZING_LOGISTICS, company admin sidebar lost both, CA PUT = 403. Those 2 lock rows left in the dev DB.
+
 ## 2026-10-16 — Shipment view: hub receive showed "Pending" on the THC row
 
 Frontend only (`shipment-view.ts`). A hub in-scan writes a `READY_FOR_MANIFEST` history row with
