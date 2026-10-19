@@ -73,6 +73,7 @@ export class UserCreate implements OnInit {
         this.saving.set(false);
         if (err.status === 409) this.notify.error(err.error?.message ?? 'Email, username or employee code already in use.');
         else if (err.status === 400 || err.status === 422) this.notify.error(err.error?.message ?? 'Please correct the highlighted fields.');
+        else if (err.status === 403) this.notify.error(err.error?.message ?? 'You are not allowed to create this user.');
         else this.notify.error('Could not create the user.');
       }
     });

@@ -8,6 +8,15 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-19 — Hub staffing: hub can assign any non-admin role; hub counter staff no longer bounced to "Access denied"
+
+- `UserServiceImpl`: a manager whose own branch is a HUB may assign every role except `COMPANY_ADMIN`/`SUPER_ADMIN` (create + assignRole); other branch managers keep the closed branch role set. +2 tests.
+- `hubLandingGuard`: only `COMPANY_ADMIN`/`HUB_MANAGER` are redirected to `/hub-operations/dashboard`; other hub-placed users (booking/delivery operators, accounts) land on `/dashboard`. Cause of prod "Access denied" for a hub-placed BOOKING_OPERATOR (abhishek hire, 2026-10-19) — the Hub Dashboard route needs HUB_WRITERS.
+- User create form shows the server's 403 message instead of "Could not create the user".
+- Gotcha: role assignments live in `user_company_roles` (not the legacy `user_roles`).
+
+---
+
 ## 2026-10-19 — MSRTC menu hidden from hub login too
 
 - `NOT_BRANCH_MANAGER` in `navigation.config.ts` now also drops `HUB_MANAGER`, so the MSRTC group and its leaves no longer show in a hub manager's sidebar (company admin, booking and delivery staff keep it). Sidebar hide only; routes and APIs unchanged. Verified as Pune Hub on :4300.

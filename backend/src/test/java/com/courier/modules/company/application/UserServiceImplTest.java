@@ -360,6 +360,42 @@ class UserServiceImplTest {
     }
 
     @Test
+    @DisplayName("a manager running a HUB may hand out any non-admin role")
+    void hubManagerAssignsAnyNonAdminRole() {
+        UUID ownBranch = UUID.randomUUID();
+        plantedBranchManager(ownBranch);
+        com.courier.modules.company.domain.Branch hub = org.mockito.Mockito.mock(com.courier.modules.company.domain.Branch.class);
+        when(hub.getBranchType()).thenReturn(com.courier.modules.company.domain.BranchType.HUB);
+        when(branchRepository.findByIdWithinCompany(ownBranch, TENANT)).thenReturn(Optional.of(hub));
+        User own = existing("asha@legacy.test");
+        own.setBranchId(ownBranch);
+        UUID roleId = UUID.randomUUID();
+        when(userRepository.findByIdWithinCompany(own.getId(), TENANT)).thenReturn(Optional.of(own));
+        when(roleRepository.findByIdWithinCompany(roleId, TENANT)).thenReturn(Optional.of(role("VIEWER", true)));
+        when(userRoleRepository.findAllByUserIdOrderByRoleCodeAsc(own.getId())).thenReturn(List.of());
+
+        service.assignRole(own.getId(), roleId);
+
+        verify(userRoleRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("a manager running a HUB still may not hand out COMPANY_ADMIN")
+    void hubManagerCannotAssignCompanyAdmin() {
+        UUID ownBranch = UUID.randomUUID();
+        plantedBranchManager(ownBranch);
+        User own = existing("asha@legacy.test");
+        own.setBranchId(ownBranch);
+        UUID roleId = UUID.randomUUID();
+        when(userRepository.findByIdWithinCompany(own.getId(), TENANT)).thenReturn(Optional.of(own));
+        when(roleRepository.findByIdWithinCompany(roleId, TENANT)).thenReturn(Optional.of(role("COMPANY_ADMIN", true)));
+
+        assertThatThrownBy(() -> service.assignRole(own.getId(), roleId))
+                .isInstanceOf(ForbiddenException.class);
+        verify(userRoleRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("a branch manager may hand out the company's own custom role")
     void branchManagerAssignsCustomRole() {
         UUID ownBranch = UUID.randomUUID();

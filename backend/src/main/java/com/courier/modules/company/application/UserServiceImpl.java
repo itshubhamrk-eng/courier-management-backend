@@ -544,8 +544,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessRuleException(
                     "Role %s is inactive and cannot be assigned.".formatted(role.getRoleCode()));
         }
-        if (isBranchManagerActor(caller)
-                && !DefaultRoleCatalog.isBranchAssignable(role.getRoleCode(), role.isSystemRole())) {
+        if (isBranchManagerActor(caller) && !roleAssignableByCaller(caller, companyId, role)) {
             throw new ForbiddenException(
                     "A branch manager may not assign the role %s.".formatted(role.getRoleCode()));
         }
@@ -645,8 +644,7 @@ public class UserServiceImpl implements UserService {
                             "Role %s is not offered by the selected department."
                                     .formatted(role.getRoleCode()));
                 }
-                if (branchManagerActor
-                        && !DefaultRoleCatalog.isBranchAssignable(role.getRoleCode(), role.isSystemRole())) {
+                if (branchManagerActor && !roleAssignableByCaller(SecurityUtils.requireCurrentUser(), companyId, role)) {
                     throw new ForbiddenException(
                             "A branch manager may not assign the role %s.".formatted(role.getRoleCode()));
                 }
@@ -724,6 +722,24 @@ public class UserServiceImpl implements UserService {
             }
         }
         throw new ForbiddenException("You may only manage users of your own branch.");
+    }
+
+    /**
+     * A branch manager hands out the closed branch role set; a manager running a HUB may hand out
+     * every role except the administrative ones (COMPANY_ADMIN / SUPER_ADMIN) — a hub staffs a
+     * wider desk than a counter, but never mints an administrator.
+     */
+    private boolean roleAssignableByCaller(AuthenticatedUser caller, UUID companyId, CompanyRole role) {
+        if (DefaultRoleCatalog.isBranchAssignable(role.getRoleCode(), role.isSystemRole())) {
+            return true;
+        }
+        if (Roles.COMPANY_ADMIN.equals(role.getRoleCode()) || Roles.SUPER_ADMIN.equals(role.getRoleCode())) {
+            return false;
+        }
+        UUID ownBranchId = self(caller).getBranchId();
+        return ownBranchId != null && branchRepository.findByIdWithinCompany(ownBranchId, companyId)
+                .map(b -> b.getBranchType() == com.courier.modules.company.domain.BranchType.HUB)
+                .orElse(false);
     }
 
     private boolean isBranchManagerActor(AuthenticatedUser caller) {
