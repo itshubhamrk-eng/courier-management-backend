@@ -102,6 +102,12 @@ public class UserServiceImpl implements UserService {
             + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "', '" + Roles.HUB_MANAGER
             + "') or hasAuthority('USER_READ')";
 
+    // The list (not the single-user read) is also open to the counter roles: DRS, THC and loading
+    // sheet pages fill their delivery-user / driver pickers from it. Scoped to the caller's own
+    // branch or hub in search() (restrictToManagerScope), so a counter user sees only colleagues.
+    private static final String LIST_READERS = READERS + " or hasAnyRole('" + DefaultRoleCatalog.BOOKING_OPERATOR
+            + "', '" + DefaultRoleCatalog.DELIVERY_OPERATOR + "')";
+
     private final CompanyUserRepository userRepository;
     private final BranchRepository branchRepository;
     private final UserRoleRepository userRoleRepository;
@@ -334,7 +340,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(LIST_READERS)
     public java.util.Map<UUID, Integer> roleCounts(java.util.Collection<UUID> userIds) {
         if (userIds == null || userIds.isEmpty()) {
             return Map.of();
@@ -377,7 +383,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(LIST_READERS)
     public Page<User> search(UserCriteria criteria, Pageable pageable) {
         UserCriteria safe = criteria == null ? UserCriteria.none() : criteria;
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();

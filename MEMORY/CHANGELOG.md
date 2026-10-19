@@ -8,6 +8,14 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-19 — Hub counter staff: user list readable, DRS list null-safe, blank manifests hidden at hub In Scan
+
+- `UserServiceImpl.search`/`roleCounts`: `BOOKING_OPERATOR` and `DELIVERY_OPERATOR` may read the user list (scoped to their own branch/hub by `restrictToManagerScope`); single-user read stays manager-only. Fixes "Access denied" toasts on DRS/THC/Loading Sheet pickers for counter staff at a hub.
+- `ShipmentServiceImpl.listDrs`: null-safe `deliveryBranchId` filter (hub deliveries have no delivery branch -> NPE on `GET /shipment-movement/drs`).
+- In Scan page, at a hub: Pending Manifests hides manifests with 0 shipments (a hub in-scan releases shipments from the manifest, leaving a blank THC).
+
+---
+
 ## 2026-10-19 — Hub staffing: hub can assign any non-admin role; hub counter staff no longer bounced to "Access denied"
 
 - `UserServiceImpl`: a manager whose own branch is a HUB may assign every role except `COMPANY_ADMIN`/`SUPER_ADMIN` (create + assignRole); other branch managers keep the closed branch role set. +2 tests.

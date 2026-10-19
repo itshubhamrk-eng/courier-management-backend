@@ -2272,7 +2272,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 companyId, rangeFrom.atStartOfDay(ZoneOffset.UTC).toInstant(),
                 rangeTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
         if (deliveryBranchId != null) {
-            rows = rows.stream().filter(d -> d.getDeliveryBranchId().equals(deliveryBranchId)).toList();
+            rows = rows.stream().filter(d -> deliveryBranchId.equals(d.getDeliveryBranchId())).toList();
         }
 
         return rows.stream()

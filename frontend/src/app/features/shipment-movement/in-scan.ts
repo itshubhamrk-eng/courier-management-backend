@@ -156,10 +156,10 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
         <h2 class="text-h2 section-title">Pending Manifests</h2>
         @if (loadingManifests()) {
           <app-loader [minHeight]="120" caption="Loading…" />
-        } @else if (!pendingManifests().length) {
+        } @else if (!visibleManifests().length) {
           <app-card><p class="empty">No manifest is pending receipt at your branch.</p></app-card>
         } @else {
-          @for (m of pendingManifests(); track m.id) {
+          @for (m of visibleManifests(); track m.id) {
             <app-manifest-card [manifest]="m" [branchNames]="branchNames()"
               [showInScanAction]="true" [inScanLoading]="receivingId() === m.id"
               (inScan)="receiveManifest($event)" />
@@ -220,6 +220,10 @@ export class InScan implements OnInit {
   readonly successCount = computed(() => this.outcomes().filter((o) => o.success).length);
 
   readonly pendingManifests = signal<Manifest[]>([]);
+  /** A hub's in-scan releases each shipment from its manifest as it is received (it goes on to its next leg),
+   *  so a manifest left with no shipments is fully received — not shown as a blank THC/manifest. */
+  readonly visibleManifests = computed(() =>
+    this.atHub() ? this.pendingManifests().filter((m) => m.shipmentCount > 0) : this.pendingManifests());
   readonly loadingManifests = signal(true);
   readonly branchNames = signal<Map<string, string>>(new Map());
   /** Set only while that manifest's shipment list is being fetched for the checklist. */
