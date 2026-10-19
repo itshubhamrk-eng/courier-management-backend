@@ -348,3 +348,10 @@ occpl:
     provisioning-client-id: ${OCCPL_PLATFORM_PROVISIONING_CLIENT_ID:occpl-core-services}
     default-plan-code: ${OCCPL_PLATFORM_DEFAULT_PLAN_CODE:}
     default-mobile: ${OCCPL_PLATFORM_DEFAULT_MOBILE:}
+    # "Sign in with OCCPL": the Keycloak client people use (token azp), and this app's own service client
+    # for asking the platform who may sign in.
+    web-client-id: ${OCCPL_PLATFORM_WEB_CLIENT_ID:courier-web}
+    core-base-url: ${OCCPL_PLATFORM_CORE_BASE_URL:}
+    core-token-uri: ${OCCPL_PLATFORM_CORE_TOKEN_URI:}
+    service-client-id: ${OCCPL_PLATFORM_SERVICE_CLIENT_ID:courier-service}
+    service-client-secret: ${OCCPL_PLATFORM_SERVICE_CLIENT_SECRET:}

@@ -8,6 +8,18 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-16 — "Sign in with OCCPL" backend (single sign-on, off by default)
+
+New `POST /api/v1/auth/platform/exchange` turns a platform (Keycloak) access token into a normal courier session, after asking the platform
+whether the person may use the company. Existing accounts are matched by email; new people are created as `VIEWER` (platform company admins as
+`COMPANY_ADMIN`). New `TrustedSignInService` (auth) and `UserProvisioningService.provisionPlatformUser`; `AuthService` and the password login are unchanged.
+Only exists with `occpl.platform.enabled=true`. Tests: `PlatformSignInServiceTest` (6), `TrustedSignInServiceTest` (5); unit suite 1354 passing.
+Web side: public `GET /api/v1/auth/platform/config`, route `/sso` (authorization-code + PKCE round trip, then the exchange), and a "Sign in with OCCPL" link on the
+login page for browsers that have used it before. Tests: `PlatformSignInControllerTest`, `pkce.util.spec.ts`, `platform-sso.service.spec.ts`; web suite 232 passing.
+Needs the two Keycloak clients before it can be used end to end (see `MEMORY/modules/platform-integration.md`).
+
+---
+
 ## 2026-10-16 — OCCPL platform provisioning endpoint (`V127`, off by default)
 
 New module `platformintegration`: `PUT/DELETE /provisioning/v1/tenants/{companyId}`, the contract the OCCPL SaaS
