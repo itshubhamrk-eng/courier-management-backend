@@ -32,7 +32,10 @@ const SHIPMENT_WRITERS = [...UPDATERS, AppRole.BOOKING_OPERATOR];
 // Shipment reads: same tier as SHIPMENT_WRITERS plus the road (delivery desk reads what
 // it's asked to move) and accounts — SUPER_ADMIN excluded, day-to-day operations are a
 // company's own work, not the platform's.
-const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
+// HUB_MANAGER reads too: the sidebar (navigation.config.ts) already shows the Reports menu to every
+// manager incl. hub managers, so the route guard must admit the same set or the click lands on
+// "Access denied". The backend already grants a hub manager SHIPMENT_READ / REPORT_READ.
+const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.HUB_MANAGER, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 // Shipment Movement: the same desks as Shipment Booking, plus the delivery desk —
 // Loading Sheet/Trip Hire Challan (THC) are typically the booking branch, In Scan/Out
 // For Delivery/Deliver the

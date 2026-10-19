@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-19 — Hub manager can open the report pages
+
+- `app.routes.ts` `SHIPMENT_READERS` now includes `HUB_MANAGER`. The sidebar already showed Reports to every manager incl. hub managers (`navigation.config.ts`), but the route guard did not, so a hub-manager-only user (no BRANCH_MANAGER) was bounced to "Access denied" on every report. Verified as a HUB_MANAGER-only user on :4300. Finance/Vendor Audit/Customer reports stay hidden from hub managers by design.
+
+---
+
 ## 2026-10-19 — HUB_MANAGER manifest permissions backfill (V132)
 
 - `V132` grants `MANIFEST_CREATE/READ/UPDATE/DISPATCH` to every active `HUB_MANAGER` role lacking them (same shape as V98). Prod's AMAZING_LOGISTICS `HUB_MANAGER` role had none, so a hub manager without `BRANCH_MANAGER` got "Access denied" on `GET /manifests` and `/hub-operations/dashboard` (the dashboard reads manifests). Permissions are read at login — the user must log out and in.
