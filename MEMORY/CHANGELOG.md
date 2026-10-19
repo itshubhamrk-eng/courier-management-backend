@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-19 — HUB_MANAGER manifest permissions backfill (V132)
+
+- `V132` grants `MANIFEST_CREATE/READ/UPDATE/DISPATCH` to every active `HUB_MANAGER` role lacking them (same shape as V98). Prod's AMAZING_LOGISTICS `HUB_MANAGER` role had none, so a hub manager without `BRANCH_MANAGER` got "Access denied" on `GET /manifests` and `/hub-operations/dashboard` (the dashboard reads manifests). Permissions are read at login — the user must log out and in.
+
+---
+
 ## 2026-10-19 — Hub counter staff: user list readable, DRS list null-safe, blank manifests hidden at hub In Scan
 
 - `UserServiceImpl.search`/`roleCounts`: `BOOKING_OPERATOR` and `DELIVERY_OPERATOR` may read the user list (scoped to their own branch/hub by `restrictToManagerScope`); single-user read stays manager-only. Fixes "Access denied" toasts on DRS/THC/Loading Sheet pickers for counter staff at a hub.
