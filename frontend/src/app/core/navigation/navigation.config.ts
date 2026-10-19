@@ -61,8 +61,9 @@ const OPS_MANAGERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.HUB
 const OPS_BOOKING = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR];
 /** The road: takes the inbound manifest in, runs deliveries out, closes them. */
 const OPS_DELIVERY_DESK = [...OPS_MANAGERS, AppRole.DELIVERY_OPERATOR];
-/** MSRTC is not shown in a branch manager's sidebar (company admin, hub and counter/delivery staff keep it). */
-const NOT_BRANCH_MANAGER = (roles: AppRole[]): AppRole[] => roles.filter((r) => r !== AppRole.BRANCH_MANAGER);
+/** MSRTC is not shown in a branch manager's or hub manager's sidebar (company admin and counter/delivery staff keep it). */
+const NOT_BRANCH_MANAGER = (roles: AppRole[]): AppRole[] =>
+  roles.filter((r) => r !== AppRole.BRANCH_MANAGER && r !== AppRole.HUB_MANAGER);
 const OPS_SHIPMENT_READERS = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 
 // Hub Operations' own screens — COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's

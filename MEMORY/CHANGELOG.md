@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-19 — MSRTC menu hidden from hub login too
+
+- `NOT_BRANCH_MANAGER` in `navigation.config.ts` now also drops `HUB_MANAGER`, so the MSRTC group and its leaves no longer show in a hub manager's sidebar (company admin, booking and delivery staff keep it). Sidebar hide only; routes and APIs unchanged. Verified as Pune Hub on :4300.
+
+---
+
 ## 2026-10-17 — Booking-branch commission credited at hub in-scan, company setting for timing, Commission Credit Report (V131)
 
 - New company setting `commission_credit_trigger` (Settings → Finance): `HUB_IN_SCAN` (default) | `DELIVERY_BRANCH_IN_SCAN` | `DELIVERED`. `HUB_IN_SCAN` credits the booking branch's wallet (`COM`, ref = shipment number) on the first in-scan at a hub, or at the final delivery branch if no hub came first — **every payment mode**, TO_PAY/COD included. Credits only `commissionOnBasicFreight + branchCommissionOnOtherAmount`, never company commission.
