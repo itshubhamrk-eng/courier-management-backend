@@ -46,6 +46,15 @@ public class PricingZone extends CompanyOwnedEntity {
     @Column(name = "description", length = 255)
     private String description;
 
+    /** Non-null = catch-all zone (no locations): rest of the home state, or everything outside it. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fallback_scope", length = 20)
+    private FallbackScope fallbackScope;
+
+    public boolean isFallback() {
+        return fallbackScope != null;
+    }
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default

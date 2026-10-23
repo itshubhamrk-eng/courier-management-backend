@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -7,11 +7,12 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
-import { PricingZone, ZoneLocation } from '@core/models/pricing-zone.model';
+import { FallbackScope, PricingZone, ZoneLocation } from '@core/models/pricing-zone.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { QuickRateCard } from './quick-rate-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { CustomerService } from '@features/customer/customer.service';
 import { BusinessCustomerService } from './business-customer.service';
@@ -31,7 +32,7 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
   selector: 'app-pricing-zone-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton, UiLoader, MatIconModule],
+  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton, UiLoader, MatIconModule, QuickRateCard],
   template: `
     <div class="page">
       <header class="page__head">
@@ -59,8 +60,21 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
             <app-input [control]="nameCtl" label="Zone Name" [required]="true" placeholder="e.g. West Maharashtra" [maxLength]="100" />
             <app-input [control]="descCtl" label="Description" placeholder="Optional" [maxLength]="255" />
           </div>
+          @if (isCreate()) {
+            <label class="fb">
+              <input type="checkbox" [checked]="fallbackScope() === 'REST_OF_STATE'" (change)="toggleScope('REST_OF_STATE', $any($event.target).checked)" />
+              <span>Rest of Maharashtra — every Maharashtra destination not in this customer's other zones</span>
+            </label>
+            <label class="fb">
+              <input type="checkbox" [checked]="fallbackScope() === 'OUT_OF_STATE'" (change)="toggleScope('OUT_OF_STATE', $any($event.target).checked)" />
+              <span>Out of Maharashtra — every destination outside Maharashtra</span>
+            </label>
+          } @else if (zone()?.fallbackScope) {
+            <p class="fb-note">{{ scopeNote() }}</p>
+          }
         </app-card>
 
+        @if (!isFallback()) {
         <app-card title="Districts &amp; Cities" subtitle="Add where this zone applies. Leave City empty to cover the whole district.">
           @if (canWrite()) {
             <div class="picker">
@@ -88,6 +102,11 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
             </ul>
           }
         </app-card>
+        }
+
+        @if (isCreate()) {
+          <app-quick-rate-card title="Rate (optional)" subtitle="Add this zone's rate now — a flat per-kg rate and its charges. Leave the per-kg rate blank to add it later." />
+        }
 
         <div class="bar">
           <app-button variant="stroked" (pressed)="back()">{{ isCreate() ? 'Cancel' : 'Back' }}</app-button>
@@ -112,6 +131,8 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
     .loc__tag { font:500 12px var(--font-sans); color:var(--content-muted); }
     .loc__rm { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:inline-flex; padding:4px; border-radius:8px; }
     .loc__rm:hover { background:var(--surface-muted); color:var(--danger); }
+    .fb { display:flex; align-items:center; gap:8px; margin-top:16px; font:500 14px var(--font-sans); cursor:pointer; }
+    .fb-note { margin:16px 0 0; font:500 13px var(--font-sans); color:var(--content-muted); }
     .bar { display:flex; justify-content:flex-end; gap:10px; margin-top:8px; }
     @media (max-width:760px){ .grid, .picker { grid-template-columns:1fr; } }
   `]
@@ -125,6 +146,7 @@ export class PricingZoneForm implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  private readonly rateCard = viewChild(QuickRateCard);
   private readonly zoneId = this.route.snapshot.paramMap.get('id');
   protected readonly isCreate = computed(() => !this.zoneId);
 
@@ -132,6 +154,11 @@ export class PricingZoneForm implements OnInit {
   protected readonly saving = signal(false);
   protected readonly adding = signal(false);
   protected readonly zone = signal<PricingZone | null>(null);
+  protected readonly fallbackScope = signal<FallbackScope | null>(null);
+  protected readonly scopeNote = computed(() => this.zone()?.fallbackScope === 'OUT_OF_STATE'
+    ? 'Out of Maharashtra zone — prices every destination outside Maharashtra.'
+    : 'Rest of Maharashtra zone — prices every Maharashtra destination not in the other zones of this customer.');
+  protected readonly isFallback = computed(() => this.isCreate() ? this.fallbackScope() !== null : !!this.zone()?.fallbackScope);
   private readonly pending = signal<PendingLocation[]>([]);
 
   protected readonly customerCtl = new FormControl<string>('', { nonNullable: true, validators: [Validators.required] });
@@ -215,6 +242,16 @@ export class PricingZoneForm implements OnInit {
     });
   }
 
+  /** Ticking a catch-all option unticks the other and names the zone for the user if they have not typed one. */
+  protected toggleScope(scope: FallbackScope, on: boolean): void {
+    const names: Record<FallbackScope, string> = { REST_OF_STATE: 'Rest of Maharashtra', OUT_OF_STATE: 'Out of Maharashtra' };
+    const current = this.nameCtl.value.trim();
+    const autoNamed = current === '' || Object.values(names).includes(current);
+    this.fallbackScope.set(on ? scope : null);
+    if (on && autoNamed) this.nameCtl.setValue(names[scope]);
+    else if (!on && autoNamed) this.nameCtl.setValue('');
+  }
+
   protected removeRow(key: string): void {
     if (this.isCreate()) {
       const idx = Number(key.slice(1));
@@ -233,6 +270,7 @@ export class PricingZoneForm implements OnInit {
       this.customerCtl.markAsTouched();
       return;
     }
+    if (this.isCreate() && this.rateCard() && !this.rateCard()!.validate()) return;
     const zoneName = this.nameCtl.value.trim();
     const description = this.descCtl.value.trim() || null;
     this.saving.set(true);
@@ -244,9 +282,20 @@ export class PricingZoneForm implements OnInit {
     };
     if (this.isCreate()) {
       this.service.createZone({
-        customerId: this.customerCtl.value, zoneName, description,
-        locations: this.pending().map((p) => ({ districtId: p.districtId, cityId: p.cityId }))
-      }).subscribe({ next: (z) => done(z, 'Zone created.'), error: fail });
+        customerId: this.customerCtl.value, zoneName, description, fallbackScope: this.fallbackScope(),
+        locations: this.fallbackScope() ? [] : this.pending().map((p) => ({ districtId: p.districtId, cityId: p.cityId }))
+      }).subscribe({
+        next: (z) => {
+          const rate = this.rateCard()?.value();
+          if (!rate) { done(z, 'Zone created.'); return; }
+          this.service.saveRate(z.id, rate).subscribe({
+            next: () => done(z, 'Zone created with its rate.'),
+            // Zone exists; land on it and say the rate is still to do rather than leave a half-state unexplained.
+            error: (e: HttpErrorResponse) => { this.notify.error(e.error?.message ?? 'Zone created, but its rate could not be saved. Set it from the Rate page.'); done(z, 'Zone created.'); }
+          });
+        },
+        error: fail
+      });
     } else {
       this.service.updateZone(this.zoneId!, { zoneName, description, version: this.zone()!.version })
         .subscribe({ next: (z) => { this.zone.set(z); this.saving.set(false); this.notify.success('Zone updated.'); }, error: fail });

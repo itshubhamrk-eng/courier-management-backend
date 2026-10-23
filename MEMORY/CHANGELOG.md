@@ -8,9 +8,13 @@ All notable changes to this project. Format based on
 
 ---
 
-## 2026-10-23 — CSV exports carry a UTF-8 BOM (Marathi/Devanagari no longer garbled in Excel)
+## 2026-10-23 — Business Customer: catch-all zones "Rest of Maharashtra" / "Out of Maharashtra" (V133, V134)
 
-- `downloadCsv` (shared by every report/list export), the PDP partner statement CSV and the backend activity-log export (`ActivityLogController.toCsv`) now start with a UTF-8 BOM, so Excel stops reading Marathi sender/receiver names and addresses as ANSI. Print views already declared `<meta charset="utf-8">`. Verified the BOM bytes `EF BB BF` on :8082/:4300; not yet deployed.
+`customer_pricing_zones.fallback_scope` (`REST_OF_STATE` | `OUT_OF_STATE` | NULL; V133 added a boolean, V134 replaced it). A catch-all zone takes no locations. `PricingZoneService.resolve`: exact city, then whole district, then the customer's ACTIVE catch-all for the destination's side of the line (district's state name == "Maharashtra", hardcoded `HOME_STATE`). Out-of-Maharashtra destination with no OUT zone gets no zone (falls back to District Level Freight as before). One live zone per (customer, scope). Create form: two mutually exclusive checkboxes that auto-name the zone and hide the district picker. Verified live on :8100/:4200 (API quotes Akola->West, Dhule->Rest, North Goa->Out; UI create).
+
+**Rate entry at creation (same day):** new `quick-rate-card` (flat per-kg rate + docket/mathadi/pack/ODA/fuel %/FOV %, blank per-kg = skip). Business-customer create form shows two cards (Rest / Out of Maharashtra) via `catch-all-rate-cards`; after the customer is created, `customer-create` creates each filled catch-all zone and saves its rate (a failure leaves the customer created and says so). Pricing Zone create form has an optional Rate card that saves the rate right after the zone. Slabs beyond the one flat slab are still edited on the Rate page. Known gap: Rate page "Test a quote" needs a zone location, so it is unusable for catch-all zones.
+
+**Auto-create (same day):** creating a BUSINESS customer now creates both catch-all zones server-side (`CustomerEvent.CustomerCreated` -> `CatchAllZoneProvisioningListener`, AFTER_COMMIT + REQUIRES_NEW, writes via repository because customer creation is open to roles that cannot create zones; failure is logged, never rolls back the customer). Zones start with no rate; `resolve` skips a catch-all zone with no active rate, so an unpriced zone changes no booking. The customer form no longer creates zones, it only saves the typed rates into the auto-created ones. Existing business customers were NOT backfilled (would add unpriced zones; harmless but unrequested). Verified live via API and UI.
 
 ---
 

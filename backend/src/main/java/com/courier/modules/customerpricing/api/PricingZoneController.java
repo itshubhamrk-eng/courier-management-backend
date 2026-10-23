@@ -48,7 +48,7 @@ public class PricingZoneController {
         List<LocationInput> locations = request.locations() == null ? List.of()
                 : request.locations().stream().map(l -> new LocationInput(l.districtId(), l.cityId())).toList();
         PricingZoneView created = service.create(request.customerId(), request.zoneName(),
-                request.description(), locations);
+                request.description(), request.fallbackScope(), locations);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(toResponse(created), "Pricing zone created"));
     }
 
@@ -116,7 +116,7 @@ public class PricingZoneController {
     private ZoneResponse toResponse(PricingZoneView v) {
         var z = v.zone();
         return new ZoneResponse(z.getId(), z.getCustomerId(), v.customerName(), z.getZoneName(), z.getDescription(),
-                z.getStatus(), v.hasRate(),
+                z.getFallbackScope(), z.getStatus(), v.hasRate(),
                 v.locations().stream().map(l -> new LocationResponse(l.id(), l.districtId(), l.districtName(),
                         l.cityId(), l.cityName())).toList(),
                 z.getCreatedAt(), z.getUpdatedAt(), z.getVersion());

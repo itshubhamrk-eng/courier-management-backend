@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import {
   AbstractControl, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors,
   Validators
@@ -7,6 +7,7 @@ import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { CatchAllRateCards } from '@features/business-customer/catch-all-rate-cards';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import {
   BILLING_FREQUENCIES, BILLING_FREQUENCY_LABELS, BillingFrequency, CUSTOMER_PAYMENT_MODES, CUSTOMER_TYPES,
@@ -52,7 +53,7 @@ function upperPattern(pattern: RegExp) {
   selector: 'app-customer-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton, MatCheckboxModule],
+  imports: [ReactiveFormsModule, UiCard, UiInput, UiSelect, UiButton, MatCheckboxModule, CatchAllRateCards],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="cform">
       <app-card title="Basic Information" subtitle="Identity and classification.">
@@ -112,6 +113,10 @@ function upperPattern(pattern: RegExp) {
         </div>
       </app-card>
 
+      @if (isCreate() && isBusiness()) {
+        <app-catch-all-rate-cards />
+      }
+
       <app-card title="Communication Preferences" subtitle="Which channels this customer may be notified on — off by request, on by default.">
         <div class="cform__prefs">
           <mat-checkbox [formControl]="c('whatsappEnabled')">WhatsApp</mat-checkbox>
@@ -163,6 +168,11 @@ export class CustomerForm {
 
   readonly saved = output<CreateCustomerRequest | UpdateCustomerRequest>();
   readonly cancelled = output<void>();
+
+  private readonly catchAll = viewChild(CatchAllRateCards);
+
+  /** Catch-all rates typed on a business-customer create form (empty otherwise). */
+  catchAllRates() { return this.catchAll()?.values() ?? {}; }
 
   protected readonly types = TYPE_OPTS;
   protected readonly paymentModes = PAYMENT_OPTS;
@@ -236,7 +246,7 @@ export class CustomerForm {
     if (this.isBusiness() && !this.c('gstNumber').value?.trim()) {
       this.c('gstNumber').setErrors({ required: true });
     }
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.form.invalid || (this.catchAll() && !this.catchAll()!.validate())) { this.form.markAllAsTouched(); return; }
 
     const v = this.form.getRawValue();
     const trim = (s: string | null) => (s && s.trim() ? s.trim() : null);

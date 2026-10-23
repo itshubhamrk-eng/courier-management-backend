@@ -47,7 +47,7 @@ const STATUS_OPTS: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { val
                  emptyTitle="No pricing zones" emptyHint="Create a zone for a business customer to start pricing by destination."
                  (rowClick)="open($event)">
         <ng-template #row let-z>
-          <td><div class="zn">{{ z.zoneName }}</div>@if (z.description) { <div class="sub">{{ z.description }}</div> }</td>
+          <td><div class="zn">{{ z.zoneName }}@if (z.fallbackScope && z.zoneName !== scopeLabel(z)) { <span class="sub"> · {{ scopeLabel(z) }}</span> }</div>@if (z.description) { <div class="sub">{{ z.description }}</div> }</td>
           <td>{{ z.customerName || '—' }}</td>
           <td>{{ summary(z) }}</td>
           <td>{{ z.hasRate ? 'Configured' : 'Not set' }}</td>
@@ -137,7 +137,10 @@ export class PricingZoneList implements OnInit {
   open(z: PricingZone): void { this.router.navigate(['/business-customer/pricing-zones', z.id]); }
   openRate(z: PricingZone): void { this.router.navigate(['/business-customer/rates', z.id]); }
 
+  scopeLabel(z: PricingZone): string { return z.fallbackScope === 'OUT_OF_STATE' ? 'Out of Maharashtra' : 'Rest of Maharashtra'; }
+
   summary(z: PricingZone): string {
+    if (z.fallbackScope) return z.fallbackScope === 'OUT_OF_STATE' ? 'All outside Maharashtra' : 'Rest of Maharashtra';
     if (!z.locations.length) return 'None yet';
     const label = (l: PricingZone['locations'][number]) => l.cityName ? `${l.cityName}, ${l.districtName}` : (l.districtName ?? '—');
     const shown = z.locations.slice(0, 2).map(label).join(' · ');

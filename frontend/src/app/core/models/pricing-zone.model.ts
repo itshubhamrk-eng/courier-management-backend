@@ -6,6 +6,7 @@
  */
 
 export type ZoneStatus = 'ACTIVE' | 'INACTIVE';
+export type FallbackScope = 'REST_OF_STATE' | 'OUT_OF_STATE';
 
 export interface ZoneLocation {
   id: string;
@@ -22,6 +23,8 @@ export interface PricingZone {
   customerName?: string | null;
   zoneName: string;
   description?: string | null;
+  /** Catch-all zone (no locations): rest of Maharashtra, or everywhere outside it. Null = ordinary zone. */
+  fallbackScope: FallbackScope | null;
   status: ZoneStatus;
   hasRate: boolean;
   locations: ZoneLocation[];
@@ -36,6 +39,7 @@ export interface CreateZoneRequest {
   customerId: string;
   zoneName: string;
   description?: string | null;
+  fallbackScope?: FallbackScope | null;
   locations?: LocationRequest[];
 }
 

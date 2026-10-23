@@ -1,5 +1,6 @@
 package com.courier.modules.customerpricing.application;
 
+import com.courier.modules.customerpricing.domain.FallbackScope;
 import com.courier.modules.customerpricing.domain.ZoneStatus;
 
 import java.util.List;
@@ -11,8 +12,11 @@ import java.util.UUID;
  */
 public interface PricingZoneService {
 
-    /** @param locations may be empty; each entry is a district, or a city inside one. */
-    PricingZoneView create(UUID customerId, String zoneName, String description, List<LocationInput> locations);
+    /** @param fallbackScope non-null = catch-all zone: takes no locations; REST_OF_STATE covers what the
+     *  customer's other zones leave uncovered inside Maharashtra, OUT_OF_STATE everything outside it.
+     *  @param locations may be empty; each entry is a district, or a city inside one. */
+    PricingZoneView create(UUID customerId, String zoneName, String description, FallbackScope fallbackScope,
+                           List<LocationInput> locations);
 
     PricingZoneView update(UUID zoneId, String zoneName, String description, Long expectedVersion);
 
@@ -34,7 +38,9 @@ public interface PricingZoneService {
 
     /**
      * The ACTIVE zone of {@code customerId} covering a destination — an exact city match wins
-     * over a whole-district one — or empty if none does.
+     * over a whole-district one. When no location matches, the customer's ACTIVE catch-all zone for the
+     * destination's side of the state line (REST_OF_STATE inside Maharashtra, OUT_OF_STATE outside), if any;
+     * otherwise empty.
      */
     java.util.Optional<PricingZoneView> resolve(UUID customerId, UUID districtId, UUID cityId);
 

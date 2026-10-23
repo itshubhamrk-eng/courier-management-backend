@@ -3,6 +3,7 @@ package com.courier.modules.customerpricing.application;
 import com.courier.modules.customer.application.CustomerService;
 import com.courier.modules.customer.domain.Customer;
 import com.courier.modules.customer.domain.CustomerType;
+import com.courier.modules.customerpricing.domain.FallbackScope;
 import com.courier.modules.customerpricing.domain.PricingZone;
 import com.courier.modules.customerpricing.domain.PricingZoneRepository;
 import com.courier.modules.customerpricing.domain.ZoneLocation;
@@ -14,6 +15,7 @@ import com.courier.modules.customerpricing.domain.ZoneRateSlabRepository;
 import com.courier.modules.customerpricing.domain.ZoneStatus;
 import com.courier.modules.master.application.CityService;
 import com.courier.modules.master.application.DistrictService;
+import com.courier.modules.master.application.StateService;
 import com.courier.modules.master.domain.City;
 import com.courier.modules.master.domain.District;
 import com.courier.shared.audit.application.AuditService;
@@ -54,6 +56,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
     private static final String ENTITY = "PricingZone";
     private static final String WRITE = "hasRole('" + Roles.COMPANY_ADMIN + "')";
     private static final String READ = "isAuthenticated()";
+    private static final String HOME_STATE = "Maharashtra";
 
     private final PricingZoneRepository zones;
     private final ZoneLocationRepository locations;
@@ -61,13 +64,14 @@ public class PricingZoneServiceImpl implements PricingZoneService {
     private final ZoneRateSlabRepository slabs;
     private final CustomerService customerService;
     private final DistrictService districtService;
+    private final StateService stateService;
     private final CityService cityService;
     private final AuditService auditService;
 
     @Override
     @Transactional
     @PreAuthorize(WRITE)
-    public PricingZoneView create(UUID customerId, String zoneName, String description,
+    public PricingZoneView create(UUID customerId, String zoneName, String description, FallbackScope fallbackScope,
                                   List<LocationInput> locationInputs) {
         UUID companyId = requireCompany();
         Customer customer = customerService.getById(customerId);
@@ -78,12 +82,20 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
         PricingZone zone = PricingZone.builder()
                 .customerId(customer.getId()).zoneName(zoneName).description(description)
-                .status(ZoneStatus.ACTIVE).build();
+                .fallbackScope(fallbackScope).status(ZoneStatus.ACTIVE).build();
         zone.applyInvariants();
         requireNameAvailable(companyId, customer.getId(), zone.getZoneName(), null);
+        List<LocationInput> inputs = locationInputs == null ? List.of() : locationInputs;
+        if (fallbackScope != null) {
+            if (!inputs.isEmpty()) {
+                throw new BusinessRuleException("A rest-of / out-of Maharashtra zone covers everything else, so it takes no districts or cities.");
+            }
+            if (zones.existsFallback(companyId, customer.getId(), fallbackScope, null)) {
+                throw new DuplicateResourceException(ENTITY, "fallbackScope", fallbackScope.name());
+            }
+        }
         PricingZone saved = zones.save(zone);
 
-        List<LocationInput> inputs = locationInputs == null ? List.of() : locationInputs;
         for (LocationInput input : inputs) {
             insertLocation(companyId, saved, input);
         }
@@ -146,6 +158,9 @@ public class PricingZoneServiceImpl implements PricingZoneService {
     public PricingZoneView addLocation(UUID zoneId, LocationInput input) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
+        if (zone.isFallback()) {
+            throw new BusinessRuleException("A rest-of / out-of Maharashtra zone covers everything else, so it takes no districts or cities.");
+        }
         insertLocation(companyId, zone, input);
         return view(companyId, zone);
     }
@@ -237,13 +252,31 @@ public class PricingZoneServiceImpl implements PricingZoneService {
         if (match.isEmpty()) {
             match = candidates.stream().filter(l -> l.getCityId() == null).findFirst();
         }
-        return match
+        Optional<PricingZoneView> located = match
                 .flatMap(l -> zones.findByIdWithinCompany(l.getZoneId(), companyId))
                 .filter(PricingZone::isActive)
+                .map(z -> view(companyId, z));
+        if (located.isPresent()) {
+            return located;
+        }
+        // A catch-all zone with no active rate yet (auto-created with the customer) is not a match:
+        // the destination keeps pricing the way it did before the zone existed.
+        return zones.findFallback(companyId, customerId, scopeOf(districtId)).stream()
+                .filter(PricingZone::isActive)
+                .filter(z -> rates.findByZone(companyId, z.getId()).filter(ZoneRate::isActive).isPresent())
+                .findFirst()
                 .map(z -> view(companyId, z));
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** Which catch-all zone prices a destination no location matched: by whether its state is Maharashtra. */
+    private FallbackScope scopeOf(UUID districtId) {
+        District district = lookup(districtId, districtService::getById, "district");
+        String state = lookup(district.getStateId(), stateService::getById, "state").getName();
+        return HOME_STATE.equalsIgnoreCase(state == null ? "" : state.trim())
+                ? FallbackScope.REST_OF_STATE : FallbackScope.OUT_OF_STATE;
+    }
 
     private void insertLocation(UUID companyId, PricingZone zone, LocationInput input) {
         if (input == null || input.districtId() == null) {

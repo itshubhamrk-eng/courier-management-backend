@@ -23,6 +23,16 @@ public interface PricingZoneRepository extends JpaRepository<PricingZone, UUID> 
                              @Param("status") ZoneStatus status, @Param("search") String search);
 
     @Query("select count(z) > 0 from PricingZone z where z.companyId = :companyId and z.customerId = :customerId"
+            + " and z.fallbackScope = :scope and (:excludeId is null or z.id <> :excludeId)")
+    boolean existsFallback(@Param("companyId") UUID companyId, @Param("customerId") UUID customerId,
+                           @Param("scope") FallbackScope scope, @Param("excludeId") UUID excludeId);
+
+    @Query("select z from PricingZone z where z.companyId = :companyId and z.customerId = :customerId"
+            + " and z.fallbackScope = :scope")
+    List<PricingZone> findFallback(@Param("companyId") UUID companyId, @Param("customerId") UUID customerId,
+                                   @Param("scope") FallbackScope scope);
+
+    @Query("select count(z) > 0 from PricingZone z where z.companyId = :companyId and z.customerId = :customerId"
             + " and lower(z.zoneName) = lower(:name) and (:excludeId is null or z.id <> :excludeId)")
     boolean existsByName(@Param("companyId") UUID companyId, @Param("customerId") UUID customerId,
                          @Param("name") String name, @Param("excludeId") UUID excludeId);

@@ -1,5 +1,6 @@
 package com.courier.modules.customerpricing.api;
 
+import com.courier.modules.customerpricing.domain.FallbackScope;
 import com.courier.modules.customerpricing.domain.ZoneStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -24,6 +25,7 @@ public final class PricingZoneDtos {
             @NotNull UUID customerId,
             @NotBlank @Size(max = 100) String zoneName,
             @Size(max = 255) String description,
+            FallbackScope fallbackScope,
             @Valid List<LocationRequest> locations) {
     }
 
@@ -38,7 +40,7 @@ public final class PricingZoneDtos {
 
     public record ZoneResponse(
             UUID id, UUID customerId, String customerName, String zoneName, String description,
-            ZoneStatus status, boolean hasRate, List<LocationResponse> locations,
+            FallbackScope fallbackScope, ZoneStatus status, boolean hasRate, List<LocationResponse> locations,
             Instant createdDate, Instant updatedDate, Long version) {
     }
 }

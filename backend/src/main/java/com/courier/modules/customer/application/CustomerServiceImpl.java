@@ -54,6 +54,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository repository;
     private final AuditService auditService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     // ------------------------------------------------------------------- create
 
@@ -104,6 +105,8 @@ public class CustomerServiceImpl implements CustomerService {
                 saved.getCustomerCode(), saved.getId(), companyId, currentActor());
         auditService.record(AuditAction.CUSTOMER_CREATED, ENTITY, saved.getId(),
                 Map.of("customerCode", saved.getCustomerCode(), "customerType", saved.getCustomerType().name()));
+        eventPublisher.publishEvent(new com.courier.modules.customer.application.event.CustomerEvent.CustomerCreated(
+                saved.getId(), companyId, saved.getCustomerType(), java.time.Instant.now()));
 
         return saved;
     }

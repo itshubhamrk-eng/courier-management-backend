@@ -53,7 +53,8 @@ class CustomerServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CustomerServiceImpl(repository, auditService);
+        service = new CustomerServiceImpl(repository, auditService,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         CompanyContext.setCompanyId(COMPANY);
         signedIn(Roles.COMPANY_ADMIN);
 
