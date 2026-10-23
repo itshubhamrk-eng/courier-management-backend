@@ -60,6 +60,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -87,6 +88,7 @@ class ShipmentMovementServiceImplTest {
     @Mock private ShipmentStatusHistoryRepository historyRepository;
     @Mock private ShipmentDocumentRepository documentRepository;
     @Mock private DeliveryAssignmentRepository deliveryAssignmentRepository;
+    @Mock private com.courier.modules.shipment.domain.DeliveryAttemptRepository deliveryAttemptRepository;
     @Mock private BranchShipmentSequenceRepository branchShipmentSequenceRepository;
     @Mock private ReleasedShipmentNumberRepository releasedShipmentNumberRepository;
     @Mock private CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
@@ -123,7 +125,7 @@ class ShipmentMovementServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ShipmentServiceImpl(shipmentRepository, itemRepository, chargeRepository,
-                historyRepository, documentRepository, deliveryAssignmentRepository,
+                historyRepository, documentRepository, deliveryAssignmentRepository, deliveryAttemptRepository,
                 branchShipmentSequenceRepository, releasedShipmentNumberRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
@@ -706,6 +708,113 @@ class ShipmentMovementServiceImplTest {
         assertThat(assignment.getStatus()).isEqualTo(DeliveryAssignmentStatus.DELIVERED);
         assertThat(assignment.getReceiverName()).isEqualTo("Rahul Verma");
         verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.CodCollectedAtDelivery.class));
+    }
+
+    // ------------------------------------------------------------ failed delivery (V135)
+
+    private DeliveryAssignment assignedFor(Shipment shipment) {
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .shipmentId(shipment.getId()).deliveryUserId(UUID.randomUUID())
+                .deliveryBranchId(shipment.getDeliveryBranchId()).drsNumber("DRS-1")
+                .status(DeliveryAssignmentStatus.ASSIGNED).build();
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY)).thenReturn(Optional.of(shipment));
+        when(deliveryAssignmentRepository.findByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(Optional.of(assignment));
+        when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(deliveryAttemptRepository.save(any(com.courier.modules.shipment.domain.DeliveryAttempt.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        return assignment;
+    }
+
+    @Test
+    @DisplayName("failed attempt 1 of 3 sends the shipment back to IN_SCAN for the next DRS")
+    void failedDeliveryFirstAttemptRetries() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setCurrentLocationId(DELIVERY_BRANCH);
+        DeliveryAssignment assignment = assignedFor(shipment);
+        when(deliveryAttemptRepository.countByCompanyIdAndShipmentId(COMPANY, shipment.getId())).thenReturn(0L);
+
+        ShipmentService.DeliveryAttemptResult r = service.recordFailedDelivery(shipment.getId(),
+                new ShipmentService.FailedDeliveryCommand(
+                        com.courier.modules.shipment.domain.DeliveryFailureReason.CUSTOMER_UNAVAILABLE, " "));
+
+        assertThat(r.shipment().getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+        assertThat(r.attempt().getAttemptNo()).isEqualTo(1);
+        assertThat(r.attempt().getOutcome()).isEqualTo(com.courier.modules.shipment.domain.DeliveryAttemptOutcome.RETRY);
+        assertThat(r.attempt().getRemarks()).isNull();
+        assertThat(r.attempt().getDrsNumber()).isEqualTo("DRS-1");
+        assertThat(assignment.getStatus()).isEqualTo(DeliveryAssignmentStatus.FAILED);
+        verify(auditService).record(eq(com.courier.shared.audit.domain.AuditAction.SHIPMENT_DELIVERY_FAILED),
+                any(), eq(shipment.getId()), any());
+    }
+
+    @Test
+    @DisplayName("third failed attempt returns the shipment to origin (RETURNED)")
+    void failedDeliveryThirdAttemptIsRto() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setCurrentLocationId(DELIVERY_BRANCH);
+        assignedFor(shipment);
+        when(deliveryAttemptRepository.countByCompanyIdAndShipmentId(COMPANY, shipment.getId())).thenReturn(2L);
+
+        ShipmentService.DeliveryAttemptResult r = service.recordFailedDelivery(shipment.getId(),
+                new ShipmentService.FailedDeliveryCommand(
+                        com.courier.modules.shipment.domain.DeliveryFailureReason.CUSTOMER_REFUSED, "Did not order"));
+
+        assertThat(r.shipment().getStatus()).isEqualTo(ShipmentStatus.RETURNED);
+        assertThat(r.attempt().getAttemptNo()).isEqualTo(3);
+        assertThat(r.attempt().getOutcome()).isEqualTo(com.courier.modules.shipment.domain.DeliveryAttemptOutcome.RTO);
+        verify(auditService).record(eq(com.courier.shared.audit.domain.AuditAction.SHIPMENT_RETURNED_TO_ORIGIN),
+                any(), eq(shipment.getId()), any());
+    }
+
+    @Test
+    @DisplayName("hub-direct shipment goes back to READY_FOR_MANIFEST at the hub")
+    void failedDeliveryHubDirectReturnsToReadyForManifest() {
+        Shipment shipment = shipment(ShipmentStatus.OUT_FOR_DELIVERY);
+        shipment.setDeliveryBranchId(null);
+        shipment.setCurrentLocationId(UUID.randomUUID());
+        assignedFor(shipment);
+        when(deliveryAttemptRepository.countByCompanyIdAndShipmentId(COMPANY, shipment.getId())).thenReturn(0L);
+
+        ShipmentService.DeliveryAttemptResult r = service.recordFailedDelivery(shipment.getId(),
+                new ShipmentService.FailedDeliveryCommand(
+                        com.courier.modules.shipment.domain.DeliveryFailureReason.ADDRESS_NOT_FOUND, null));
+
+        assertThat(r.shipment().getStatus()).isEqualTo(ShipmentStatus.READY_FOR_MANIFEST);
+    }
+
+    @Test
+    @DisplayName("failed delivery refuses a shipment that is not out for delivery")
+    void failedDeliveryRefusesWrongStatus() {
+        Shipment shipment = shipment(ShipmentStatus.IN_SCAN);
+        when(shipmentRepository.findByIdWithinCompany(shipment.getId(), COMPANY)).thenReturn(Optional.of(shipment));
+
+        assertThatThrownBy(() -> service.recordFailedDelivery(shipment.getId(),
+                new ShipmentService.FailedDeliveryCommand(
+                        com.courier.modules.shipment.domain.DeliveryFailureReason.CUSTOMER_REFUSED, null)))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("OUT_FOR_DELIVERY");
+        verify(deliveryAttemptRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reason OTHER needs remarks")
+    void failedDeliveryOtherNeedsRemarks() {
+        assertThatThrownBy(() -> service.recordFailedDelivery(UUID.randomUUID(),
+                new ShipmentService.FailedDeliveryCommand(
+                        com.courier.modules.shipment.domain.DeliveryFailureReason.OTHER, "  ")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Other");
+    }
+
+    @Test
+    @DisplayName("a new DRS after a failed attempt reopens the assignment")
+    void reassignAfterFailureReopensAssignment() {
+        DeliveryAssignment assignment = DeliveryAssignment.builder()
+                .status(DeliveryAssignmentStatus.ASSIGNED).build();
+        assignment.markFailed("Customer away");
+        assignment.reassign(UUID.randomUUID(), DELIVERY_BRANCH);
+        assertThat(assignment.getStatus()).isEqualTo(DeliveryAssignmentStatus.ASSIGNED);
     }
 
     private Shipment partnerDelivery(boolean podApproved) {

@@ -169,6 +169,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final ShipmentStatusHistoryRepository historyRepository;
     private final ShipmentDocumentRepository documentRepository;
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
+    private final com.courier.modules.shipment.domain.DeliveryAttemptRepository deliveryAttemptRepository;
     private final BranchShipmentSequenceRepository branchShipmentSequenceRepository;
     private final ReleasedShipmentNumberRepository releasedShipmentNumberRepository;
     private final CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
@@ -217,87 +218,28 @@ public class ShipmentServiceImpl implements ShipmentService {
     public Shipment create(CreateShipmentCommand command) {
         UUID companyId = requireCompany();
 
-        List<ShipmentItem> items = buildItems(command.items(), command.actualWeight(),
-                command.length(), command.width(), command.height());
-        WeightSummary weight = summariseWeight(items);
-        requireWithinPackageTypeCeiling(command.packageTypeId(), weight.actualWeight());
-
-        LocalDate bookingDate = command.bookingDate() == null ? LocalDate.now() : command.bookingDate();
-
-        boolean crossing = Boolean.TRUE.equals(command.crossing());
-        if (crossing && (command.crossingBranchIds() == null || command.crossingBranchIds().isEmpty())) {
-            throw new BusinessRuleException(
-                    "Pick at least one branch this shipment is crossing through, or turn Crossing off.");
-        }
-        UUID firstCrossingBranch = crossing ? command.crossingBranchIds().get(0) : null;
-
-        com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
-
-        // MSRTC books straight to a delivery branch picked (or resolved from the pincode) at
-        // the counter, so it is the one flow that writes deliveryBranchId at booking. STANDARD
-        // is untouched: its delivery branch is still assigned later, by Load Sheet.
-        FlowType flowType = command.flowType() == null ? FlowType.STANDARD : command.flowType();
-        UUID msrtcDeliveryBranchId = null;
-        if (flowType == FlowType.MSRTC) {
-            msrtcDeliveryBranchId = requireMsrtcDeliveryBranch(companyId, command.bookingBranchId(),
-                    command.deliveryBranchId(), crossing);
-        }
-
-        String manualShipmentNumber = command.manualShipmentNumber() == null
-                ? null : command.manualShipmentNumber().trim();
-        if (manualShipmentNumber != null && !manualShipmentNumber.isEmpty()
-                && shipmentRepository.existsByCompanyIdAndShipmentNumber(companyId, manualShipmentNumber)) {
-            throw new BusinessRuleException(
-                    "Shipment number '%s' is already in use.".formatted(manualShipmentNumber));
-        }
-
-        // E-Way Bill gate, ahead of pricing and AWB generation, exactly where the brief's
-        // own booking flow places it: no-op when invoiceValue does not exceed the
-        // company's threshold, otherwise requires command.ewayBill() to carry at least an
-        // invoice number/date — the minimum a Part-A request needs. Only missing *data*
-        // blocks the booking; the actual provider call (below, after the shipment has an
-        // id) never does — its failure is caught and persisted as FAILED, retryable later.
-        boolean ewayBillRequired = ewayBillService.isRequired(command.invoiceValue());
-        ewayBillService.requireBookingData(command.invoiceValue(), command.ewayBill());
-
-        // Freight is District Level Freight's own job now, not the Pricing Engine's —
-        // authoritative, mandatory, never trusted from the frontend. Computed ahead of
-        // `priceIt` (which still supplies fuel/handling/insurance/discount/round-off/GST%,
-        // untouched) so a missing configuration blocks the booking before anything else
-        // is validated. See `FreightCalculationServiceImpl` for the full sequence.
-        FreightCalculationResult freightCalc = freightCalculationService.calculate(
-                command.bookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
-                weight.chargeableWeight(), command.businessCustomerId(), command.declaredValue());
-        requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
-        requireCustomerExtraCharges(command.otherCharges(), freightCalc);
-
-        // Delivery Branch is no longer picked, decided, or even resolved at booking —
-        // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
-        // destination city (see ShipmentServiceImpl.attachToManifest), or never at all
-        // for Direct Company Delivery. Pricing (Route/Rate's old branch-pair matching)
-        // runs with no delivery branch every time now; District Level Freight (the
-        // authoritative freight figure) never needed one — it keys off district, not
-        // branch.
-        PricingResult priced = priceIt(command.bookingBranchId(), null,
-                command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
-                command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
-                command.declaredValue(), bookingDate, command.freightFactorOverride(),
-                weight.actualWeight(), totalQuantity(items));
-
-        PaymentMode paymentMode = paymentModeService.getById(command.paymentModeId());
-        ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
-
-        BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
-        BigDecimal appointmentDeliveryCharge = command.appointmentDeliveryCharge() == null
-                ? BigDecimal.ZERO : command.appointmentDeliveryCharge();
-        boolean insuranceApplicable = Boolean.TRUE.equals(command.insuranceApplicable());
-        DeliveryType deliveryType = command.deliveryType() == null ? DeliveryType.DOOR : command.deliveryType();
-        BigDecimal doorDeliveryCharge = deliveryType == DeliveryType.DOOR && command.doorDeliveryCharge() != null
-                ? command.doorDeliveryCharge() : BigDecimal.ZERO;
-        BigDecimal toPayCharge = toPayChargeFor(paymentMode);
-        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
-                freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable,
-                doorDeliveryCharge, toPayCharge, command.invoiceValue());
+        BookingQuote q = quote(command, companyId, false);
+        List<ShipmentItem> items = q.items();
+        LocalDate bookingDate = q.bookingDate();
+        boolean crossing = q.crossing();
+        UUID firstCrossingBranch = q.firstCrossingBranch();
+        com.courier.modules.company.domain.Branch bookingBranch = q.bookingBranch();
+        FlowType flowType = q.flowType();
+        UUID msrtcDeliveryBranchId = q.msrtcDeliveryBranchId();
+        String manualShipmentNumber = q.manualShipmentNumber();
+        boolean ewayBillRequired = q.ewayBillRequired();
+        WeightSummary weight = q.weight();
+        FreightCalculationResult freightCalc = q.freightCalc();
+        PricingResult priced = q.priced();
+        PaymentMode paymentMode = q.paymentMode();
+        ServiceType serviceType = q.serviceType();
+        BigDecimal otherCharges = q.otherCharges();
+        BigDecimal appointmentDeliveryCharge = q.appointmentDeliveryCharge();
+        boolean insuranceApplicable = q.insuranceApplicable();
+        DeliveryType deliveryType = q.deliveryType();
+        BigDecimal doorDeliveryCharge = q.doorDeliveryCharge();
+        BigDecimal toPayCharge = q.toPayCharge();
+        BigDecimal netAmount = q.netAmount();
 
         if (paymentMode.isCollectAtBooking()) {
             requireSufficientBalance(command.bookingBranchId(), netAmount);
@@ -392,6 +334,141 @@ public class ShipmentServiceImpl implements ShipmentService {
         eventPublisher.publishEvent(new ShipmentEvent.Booked(saved.getId(), companyId, Instant.now()));
 
         return saved;
+    }
+
+    /** Everything {@link #create} prices and validates before it writes anything. */
+    private record BookingQuote(List<ShipmentItem> items, WeightSummary weight, LocalDate bookingDate, boolean crossing,
+                                UUID firstCrossingBranch, com.courier.modules.company.domain.Branch bookingBranch,
+                                FlowType flowType, UUID msrtcDeliveryBranchId, String manualShipmentNumber,
+                                boolean ewayBillRequired, FreightCalculationResult freightCalc, PricingResult priced,
+                                PaymentMode paymentMode, ServiceType serviceType, BigDecimal otherCharges,
+                                BigDecimal appointmentDeliveryCharge, boolean insuranceApplicable,
+                                DeliveryType deliveryType, BigDecimal doorDeliveryCharge, BigDecimal toPayCharge,
+                                BigDecimal netAmount) {
+    }
+
+    /**
+     * The pricing and validation half of {@link #create}, shared with {@link #preview} so a
+     * preview can never drift from what booking charges. {@code preview} only relaxes the
+     * E-Way Bill data requirement (the operator may not have typed it yet); every other rule,
+     * including freight configuration and rate/charge guards, applies the same.
+     */
+    private BookingQuote quote(CreateShipmentCommand command, UUID companyId, boolean preview) {
+        List<ShipmentItem> items = buildItems(command.items(), command.actualWeight(),
+                command.length(), command.width(), command.height());
+        WeightSummary weight = summariseWeight(items);
+        requireWithinPackageTypeCeiling(command.packageTypeId(), weight.actualWeight());
+
+        LocalDate bookingDate = command.bookingDate() == null ? LocalDate.now() : command.bookingDate();
+
+        boolean crossing = Boolean.TRUE.equals(command.crossing());
+        if (crossing && (command.crossingBranchIds() == null || command.crossingBranchIds().isEmpty())) {
+            throw new BusinessRuleException(
+                    "Pick at least one branch this shipment is crossing through, or turn Crossing off.");
+        }
+        UUID firstCrossingBranch = crossing ? command.crossingBranchIds().get(0) : null;
+
+        com.courier.modules.company.domain.Branch bookingBranch = branchService.getById(command.bookingBranchId());
+
+        // MSRTC books straight to a delivery branch picked (or resolved from the pincode) at
+        // the counter, so it is the one flow that writes deliveryBranchId at booking. STANDARD
+        // is untouched: its delivery branch is still assigned later, by Load Sheet.
+        FlowType flowType = command.flowType() == null ? FlowType.STANDARD : command.flowType();
+        UUID msrtcDeliveryBranchId = null;
+        if (flowType == FlowType.MSRTC) {
+            msrtcDeliveryBranchId = requireMsrtcDeliveryBranch(companyId, command.bookingBranchId(),
+                    command.deliveryBranchId(), crossing);
+        }
+
+        String manualShipmentNumber = command.manualShipmentNumber() == null
+                ? null : command.manualShipmentNumber().trim();
+        if (manualShipmentNumber != null && !manualShipmentNumber.isEmpty()
+                && shipmentRepository.existsByCompanyIdAndShipmentNumber(companyId, manualShipmentNumber)) {
+            throw new BusinessRuleException(
+                    "Shipment number '%s' is already in use.".formatted(manualShipmentNumber));
+        }
+
+        // E-Way Bill gate, ahead of pricing and AWB generation, exactly where the brief's
+        // own booking flow places it: no-op when invoiceValue does not exceed the
+        // company's threshold, otherwise requires command.ewayBill() to carry at least an
+        // invoice number/date — the minimum a Part-A request needs. Only missing *data*
+        // blocks the booking; the actual provider call (below, after the shipment has an
+        // id) never does — its failure is caught and persisted as FAILED, retryable later.
+        boolean ewayBillRequired = ewayBillService.isRequired(command.invoiceValue());
+        if (!preview) {
+            ewayBillService.requireBookingData(command.invoiceValue(), command.ewayBill());
+        }
+
+        // Freight is District Level Freight's own job now, not the Pricing Engine's —
+        // authoritative, mandatory, never trusted from the frontend. Computed ahead of
+        // `priceIt` (which still supplies fuel/handling/insurance/discount/round-off/GST%,
+        // untouched) so a missing configuration blocks the booking before anything else
+        // is validated. See `FreightCalculationServiceImpl` for the full sequence.
+        FreightCalculationResult freightCalc = freightCalculationService.calculate(
+                command.bookingBranchId(), command.deliveryPincode(), command.destinationAreaId(),
+                weight.chargeableWeight(), command.businessCustomerId(), command.declaredValue());
+        requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
+        requireCustomerExtraCharges(command.otherCharges(), freightCalc);
+
+        // Delivery Branch is no longer picked, decided, or even resolved at booking —
+        // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
+        // destination city (see ShipmentServiceImpl.attachToManifest), or never at all
+        // for Direct Company Delivery. Pricing (Route/Rate's old branch-pair matching)
+        // runs with no delivery branch every time now; District Level Freight (the
+        // authoritative freight figure) never needed one — it keys off district, not
+        // branch.
+        PricingResult priced = priceIt(command.bookingBranchId(), null,
+                command.pickupPincode(), command.deliveryPincode(), command.serviceTypeId(),
+                command.packageTypeId(), command.paymentModeId(), weight.chargeableWeight(),
+                command.declaredValue(), bookingDate, command.freightFactorOverride(),
+                weight.actualWeight(), totalQuantity(items));
+
+        PaymentMode paymentMode = paymentModeService.getById(command.paymentModeId());
+        ServiceType serviceType = serviceTypeService.getById(command.serviceTypeId());
+
+        BigDecimal otherCharges = command.otherCharges() == null ? BigDecimal.ZERO : command.otherCharges();
+        BigDecimal appointmentDeliveryCharge = command.appointmentDeliveryCharge() == null
+                ? BigDecimal.ZERO : command.appointmentDeliveryCharge();
+        boolean insuranceApplicable = Boolean.TRUE.equals(command.insuranceApplicable());
+        DeliveryType deliveryType = command.deliveryType() == null ? DeliveryType.DOOR : command.deliveryType();
+        BigDecimal doorDeliveryCharge = deliveryType == DeliveryType.DOOR && command.doorDeliveryCharge() != null
+                ? command.doorDeliveryCharge() : BigDecimal.ZERO;
+        BigDecimal toPayCharge = toPayChargeFor(paymentMode);
+        BigDecimal netAmount = netAmountWithOtherCharges(priced, otherCharges, command.odaCharge(), bookingBranch,
+                freightCalc, command.ratePerKgOverride(), appointmentDeliveryCharge, insuranceApplicable,
+                doorDeliveryCharge, toPayCharge, command.invoiceValue());
+
+        return new BookingQuote(items, weight, bookingDate, crossing, firstCrossingBranch, bookingBranch, flowType,
+                msrtcDeliveryBranchId, manualShipmentNumber, ewayBillRequired, freightCalc, priced, paymentMode,
+                serviceType, otherCharges, appointmentDeliveryCharge, insuranceApplicable, deliveryType,
+                doorDeliveryCharge, toPayCharge, netAmount);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('SHIPMENT_CREATE')")
+    public ShipmentPreview preview(CreateShipmentCommand command) {
+        UUID companyId = requireCompany();
+        BookingQuote q = quote(command, companyId, true);
+        ShipmentCharge charge = toCharge(q.priced(), q.otherCharges(), command.odaCharge(), q.bookingBranch(),
+                q.freightCalc(), command.ratePerKgOverride(), q.appointmentDeliveryCharge(), q.insuranceApplicable(),
+                q.doorDeliveryCharge(), q.toPayCharge(), command.invoiceValue());
+        int packages = command.numberOfPackages() == null ? 1 : command.numberOfPackages();
+        List<com.courier.modules.pricing.application.calculator.ApplicableChargesCalculator.Line> lines =
+                applicableChargesCalculator.resolve(command.serviceTypeId(), q.weight().chargeableWeight(),
+                        q.weight().actualWeight(), packages, command.bookingBranchId(), q.msrtcDeliveryBranchId(),
+                        charge.getFreight());
+        Boolean walletSufficient = null;
+        BigDecimal walletAvailable = null;
+        if (q.paymentMode().isCollectAtBooking()) {
+            walletAvailable = walletService.getForBranch(command.bookingBranchId()).getAvailableBalance();
+            walletSufficient = walletAvailable.compareTo(q.netAmount()) >= 0;
+        }
+        return new ShipmentPreview(q.weight().actualWeight(), q.weight().volumetricWeight(),
+                q.weight().chargeableWeight(), q.freightCalc().destinationCityName(),
+                q.freightCalc().weightSlabLabel(), q.freightCalc().ratePerKg(), q.ewayBillRequired(),
+                walletSufficient, walletAvailable, new ShipmentCharges(charge, resolveRouteCode(charge),
+                        resolveRateCode(charge), lines));
     }
 
     // ------------------------------------------------------------------- update
@@ -1889,6 +1966,97 @@ public class ShipmentServiceImpl implements ShipmentService {
         return saved;
     }
 
+    // ------------------------------------------------------------- failed delivery (V135)
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITERS)
+    public DeliveryAttemptResult recordFailedDelivery(UUID shipmentId, FailedDeliveryCommand command) {
+        UUID companyId = requireCompany();
+        if (command == null || command.reason() == null) {
+            throw new BusinessRuleException("Choose why the delivery failed.");
+        }
+        String remarks = command.remarks() == null || command.remarks().isBlank() ? null : command.remarks().trim();
+        if (command.reason() == com.courier.modules.shipment.domain.DeliveryFailureReason.OTHER && remarks == null) {
+            throw new BusinessRuleException("Describe the reason when choosing Other.");
+        }
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        if (shipment.getStatus() != ShipmentStatus.OUT_FOR_DELIVERY) {
+            throw new BusinessRuleException("Shipment %s is %s — only an OUT_FOR_DELIVERY shipment can have a "
+                    .formatted(shipment.getShipmentNumber(), shipment.getStatus()) + "failed delivery attempt.");
+        }
+        DeliveryAssignment assignment = deliveryAssignmentRepository
+                .findByShipmentIdWithinCompany(shipmentId, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("DeliveryAssignment", shipmentId));
+
+        int attemptNo = (int) deliveryAttemptRepository.countByCompanyIdAndShipmentId(companyId, shipmentId) + 1;
+        boolean rto = attemptNo >= MAX_DELIVERY_ATTEMPTS;
+        String reasonText = failureReasonText(command.reason(), remarks);
+
+        assignment.markFailed(reasonText);
+        deliveryAssignmentRepository.save(assignment);
+
+        // Where it waited for its DRS: a hub-direct shipment (no delivery branch, away from its
+        // booking branch) goes back to READY_FOR_MANIFEST, same test assignOneOutForDelivery uses.
+        boolean hubDirect = shipment.getDeliveryBranchId() == null
+                && shipment.getCurrentLocationId() != null
+                && !Objects.equals(shipment.getCurrentLocationId(), shipment.getBookingBranchId());
+        ShipmentStatus previous = shipment.getStatus();
+        ShipmentStatus next = rto ? ShipmentStatus.RETURNED
+                : (hubDirect ? ShipmentStatus.READY_FOR_MANIFEST : ShipmentStatus.IN_SCAN);
+        shipment.transitionTo(next);
+        Shipment saved = shipmentRepository.save(shipment);
+
+        com.courier.modules.shipment.domain.DeliveryAttempt attempt =
+                com.courier.modules.shipment.domain.DeliveryAttempt.builder()
+                        .shipmentId(shipmentId)
+                        .attemptNo(attemptNo)
+                        .reason(command.reason())
+                        .remarks(remarks)
+                        .outcome(rto ? com.courier.modules.shipment.domain.DeliveryAttemptOutcome.RTO
+                                : com.courier.modules.shipment.domain.DeliveryAttemptOutcome.RETRY)
+                        .deliveryUserId(assignment.getDeliveryUserId())
+                        .deliveryBranchId(assignment.getDeliveryBranchId())
+                        .drsNumber(assignment.getDrsNumber())
+                        .attemptedAt(Instant.now())
+                        .build();
+        attempt.setCompanyId(companyId);
+        attempt = deliveryAttemptRepository.save(attempt);
+
+        String history = rto
+                ? "Returned to origin after %d failed delivery attempts. Last: %s".formatted(attemptNo, reasonText)
+                : "Delivery attempt %d of %d failed: %s".formatted(attemptNo, MAX_DELIVERY_ATTEMPTS, reasonText);
+        appendHistory(saved, companyId, previous, next, history,
+                saved.getCurrentLocationId(), saved.getManifestId(), null);
+        auditService.record(rto ? AuditAction.SHIPMENT_RETURNED_TO_ORIGIN : AuditAction.SHIPMENT_DELIVERY_FAILED,
+                ENTITY, saved.getId(),
+                Map.of("shipmentNumber", saved.getShipmentNumber(), "attemptNo", String.valueOf(attemptNo),
+                        "reason", command.reason().name()));
+        return new DeliveryAttemptResult(saved, attempt, MAX_DELIVERY_ATTEMPTS);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(READERS)
+    public List<com.courier.modules.shipment.domain.DeliveryAttempt> listDeliveryAttempts(UUID shipmentId) {
+        UUID companyId = requireCompany();
+        loadOrThrow(shipmentId, companyId);
+        return deliveryAttemptRepository.findByShipment(companyId, shipmentId);
+    }
+
+    private static String failureReasonText(com.courier.modules.shipment.domain.DeliveryFailureReason reason,
+                                            String remarks) {
+        String label = switch (reason) {
+            case CUSTOMER_REFUSED -> "Customer refused";
+            case ADDRESS_NOT_FOUND -> "Address not found";
+            case CUSTOMER_UNAVAILABLE -> "Customer not available";
+            case RESCHEDULE_REQUESTED -> "Customer asked for another day";
+            case PAYMENT_NOT_READY -> "Payment not ready";
+            case OTHER -> "Other";
+        };
+        return remarks == null ? label : label + " — " + remarks;
+    }
+
     // ------------------------------------------------------------- manual override
 
     @Override
@@ -2282,9 +2450,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .map(e -> {
                     long delivered = e.getValue().stream()
                             .filter(d -> d.getStatus() == DeliveryAssignmentStatus.DELIVERED).count();
+                    long failed = e.getValue().stream()
+                            .filter(d -> d.getStatus() == DeliveryAssignmentStatus.FAILED).count();
                     return new DrsSummary(e.getKey().deliveryUserId(), e.getKey().deliveryBranchId(),
                             e.getKey().runDate(), representativeDrsNumber(e.getValue()), e.getValue().size(),
-                            (int) delivered, e.getValue().size() - (int) delivered);
+                            (int) delivered, e.getValue().size() - (int) delivered - (int) failed, (int) failed);
                 })
                 .sorted(Comparator.comparing(DrsSummary::runDate).reversed())
                 .toList();

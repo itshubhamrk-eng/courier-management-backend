@@ -109,6 +109,18 @@ public class ShipmentController {
                         "Shipment booked"));
     }
 
+    @PostMapping("/preview")
+    @Operation(summary = "Preview a booking's charges",
+            description = "Same body and same pricing as `POST /shipments`, but nothing is saved: no AWB, "
+                    + "no shipment number, no wallet debit. Returns weights, the District Level Freight "
+                    + "match and the full charge breakup with the net amount the booking would have. "
+                    + "Booking validations still apply; the E-Way Bill data requirement does not "
+                    + "(`ewayBillRequired` says whether it will be needed). `SHIPMENT_CREATE`.")
+    public ApiResponse<com.courier.modules.shipment.api.dto.ShipmentPreviewResponse> preview(
+            @Valid @RequestBody CreateShipmentRequest request) {
+        return ApiResponse.success(mapper.toResponse(shipmentService.preview(mapper.toCommand(request))));
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Update a shipment",
             description = "Full replacement, only while the shipment is still `BOOKED`. "
@@ -387,6 +399,14 @@ public class ShipmentController {
         List<com.courier.modules.shipment.api.dto.TimelineStepResponse> steps =
                 shipmentService.timeline(id).stream().map(mapper::toResponse).toList();
         return ApiResponse.success(steps);
+    }
+
+    @GetMapping("/{id}/delivery-attempts")
+    @Operation(summary = "Failed delivery attempts of a shipment", description = "Oldest first. Empty when none.")
+    public ApiResponse<List<com.courier.modules.shipment.api.dto.DeliveryAttemptResponse>> deliveryAttempts(
+            @PathVariable UUID id) {
+        return ApiResponse.success(shipmentService.listDeliveryAttempts(id).stream()
+                .map(a -> mapper.toResponse(a, ShipmentService.MAX_DELIVERY_ATTEMPTS)).toList());
     }
 
     @GetMapping("/{id}/delivery-run")

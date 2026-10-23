@@ -97,6 +97,7 @@ class ShipmentServiceImplTest {
     @Mock private ShipmentStatusHistoryRepository historyRepository;
     @Mock private ShipmentDocumentRepository documentRepository;
     @Mock private DeliveryAssignmentRepository deliveryAssignmentRepository;
+    @Mock private com.courier.modules.shipment.domain.DeliveryAttemptRepository deliveryAttemptRepository;
     @Mock private BranchShipmentSequenceRepository branchShipmentSequenceRepository;
     @Mock private ReleasedShipmentNumberRepository releasedShipmentNumberRepository;
     @Mock private CompanyShipmentSequenceRepository companyShipmentSequenceRepository;
@@ -134,7 +135,7 @@ class ShipmentServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ShipmentServiceImpl(shipmentRepository, itemRepository, chargeRepository,
-                historyRepository, documentRepository, deliveryAssignmentRepository,
+                historyRepository, documentRepository, deliveryAssignmentRepository, deliveryAttemptRepository,
                 branchShipmentSequenceRepository, releasedShipmentNumberRepository, companyShipmentSequenceRepository, companyDrsSequenceRepository,
                 serviceTypeService, packageTypeService, paymentModeService,
                 rateService, routeService, pricingEngine, new PricingProperties(), walletService,
@@ -490,6 +491,48 @@ class ShipmentServiceImplTest {
         verify(walletService).getForBranch(BOOKING_BRANCH);
         verify(eventPublisher).publishEvent(any(ShipmentEvent.PrepaidBookingConfirmed.class));
         assertThat(created.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
+    }
+
+    // ------------------------------------------------------------ preview (mobile G9)
+
+    @Test
+    @DisplayName("preview prices like a booking but saves nothing and uses no AWB or shipment number")
+    void previewPricesWithoutSaving() {
+        when(companySettingsService.get()).thenReturn(
+                com.courier.modules.company.domain.CompanySettings.builder()
+                        .defaultChargeableWeightKg(BigDecimal.ZERO).build());
+
+        ShipmentService.ShipmentPreview preview = service.preview(command());
+        Shipment booked = service.create(command());
+        org.mockito.ArgumentCaptor<com.courier.modules.shipment.domain.ShipmentCharge> saved =
+                org.mockito.ArgumentCaptor.forClass(com.courier.modules.shipment.domain.ShipmentCharge.class);
+        verify(chargeRepository).save(saved.capture());
+
+        assertThat(preview.chargeableWeight()).isEqualByComparingTo("5.000");
+        assertThat(preview.walletSufficient()).isNull();
+        assertThat(preview.charges().charge().getNetAmount())
+                .as("same net amount the booking stores")
+                .isEqualByComparingTo(saved.getValue().getNetAmount());
+        // Exactly one shipment save, one sequence draw: the booking's, not the preview's.
+        verify(shipmentRepository).save(any());
+        verify(branchShipmentSequenceRepository).nextValue();
+        assertThat(booked.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
+    }
+
+    @Test
+    @DisplayName("preview of a PAID booking reports a short wallet instead of refusing")
+    void previewReportsShortWallet() {
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        Wallet wallet = mock(Wallet.class);
+        when(wallet.getAvailableBalance()).thenReturn(new BigDecimal("10.00"));
+        when(walletService.getForBranch(BOOKING_BRANCH)).thenReturn(wallet);
+
+        ShipmentService.ShipmentPreview preview = service.preview(command());
+
+        assertThat(preview.walletSufficient()).isFalse();
+        assertThat(preview.walletAvailable()).isEqualByComparingTo("10.00");
+        verify(shipmentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

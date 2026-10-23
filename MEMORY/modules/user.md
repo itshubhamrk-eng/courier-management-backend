@@ -257,3 +257,9 @@ Against MySQL 8.0.46 on 2026-07-23, using the existing Phase-3 company fixtures:
 - [ ] Token revocation on lock / deactivate / delete, via the event listener.
 - [ ] `users.tenant_id -> companies.tenant_id` FK once the orphan row is reconciled.
 - [ ] Bulk user import (the spec flagged it "future ready").
+
+## Picker access (2026-10-23)
+
+`GET /users` (`LIST_READERS`) also admits role `OPERATOR` and holders of `MANIFEST_DISPATCH`, `DELIVERY_ASSIGN` or
+`DELIVERY_DISPATCH`, for the THC driver and DRS delivery-partner pickers (web and mobile). Non-admin callers stay scoped
+to their own branch / hub.

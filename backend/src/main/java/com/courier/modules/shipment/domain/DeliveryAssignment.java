@@ -110,6 +110,16 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
         this.deliveryUserId = deliveryUserId;
         this.deliveryBranchId = deliveryBranchId;
         this.assignedAt = Instant.now();
+        this.status = DeliveryAssignmentStatus.ASSIGNED;
+    }
+
+    /** Records a failed attempt on this run (V135). */
+    public void markFailed(String remarks) {
+        if (status == DeliveryAssignmentStatus.DELIVERED) {
+            throw new BusinessRuleException("This shipment has already been delivered.");
+        }
+        this.status = DeliveryAssignmentStatus.FAILED;
+        this.deliveryRemarks = remarks;
     }
 
     /** Signature/photo capture urls are no longer stored here — see {@code ShipmentAsset}
