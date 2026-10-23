@@ -67,8 +67,9 @@ public class GlobalExceptionHandler {
                 .map(GlobalExceptionHandler::toFieldError)
                 .toList();
 
-        log.warn("Validation failed at {} {}: {} field error(s)",
-                request.getMethod(), request.getRequestURI(), errors.size());
+        log.warn("Validation failed at {} {}: {} field error(s): {}",
+                request.getMethod(), request.getRequestURI(), errors.size(),
+                errors.stream().map(e -> e.field() + " " + e.message()).collect(java.util.stream.Collectors.joining("; ")));
 
         return build(ErrorCode.VALIDATION_FAILED, "Request validation failed", request, errors);
     }

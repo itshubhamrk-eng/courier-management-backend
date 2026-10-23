@@ -1915,7 +1915,11 @@ export class ShipmentCreate implements OnInit {
         this.submitting.set(false);
         // Any 4xx is the caller's to fix (bad input, a business rule, a stale reference) and
         // carries a specific message worth showing; 5xx/network failures get the generic one.
-        const specific: string | null = err.status >= 400 && err.status < 500 ? err.error?.message : null;
+        // "Request validation failed" names no field; the real `field: message` pairs travel in errors[].
+        const fieldErrors: { field: string; message: string }[] = err.error?.errors ?? [];
+        const specific: string | null = fieldErrors.length
+          ? fieldErrors.map((e) => `${e.field}: ${e.message}`).join('; ')
+          : err.status >= 400 && err.status < 500 ? err.error?.message : null;
         // ShipmentServiceImpl.requireSufficientBalance's own wording ("available X, required Y")
         // is accurate but not actionable — the fix is always one of two things, so say that
         // instead of the raw balance figures.
