@@ -26,6 +26,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((err: HttpErrorResponse) => {
       const envelope = err.error ?? {};
+      // "Request validation failed" names no field; the real `field: message` pairs travel in
+      // errors[]. Fold them into message so every screen that shows err.error.message gets them.
+      const fieldErrors: { field: string; message: string }[] = Array.isArray(envelope.errors) ? envelope.errors : [];
+      if (fieldErrors.length && typeof envelope.message === 'string') {
+        envelope.message = fieldErrors.map((e) => `${e.field}: ${e.message}`).join('; ');
+      }
       const isAuthCall = req.url.includes(API.auth.login) || req.url.includes(API.auth.refresh);
 
       if (err.status === 401 && !isAuthCall && tokens.refreshToken) {
