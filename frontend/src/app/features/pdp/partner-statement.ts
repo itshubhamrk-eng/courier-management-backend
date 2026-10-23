@@ -162,7 +162,7 @@ export class PartnerStatement implements OnInit {
     const csv = [`Statement,${q(d.statement.statementNo)},Partner,${q(d.statement.branchName)},Period,${d.statement.periodFrom} to ${d.statement.periodTo}`,
       ['Type', 'Date', 'Reference', 'Pincode', 'Weight kg', 'Rate/kg', 'Weight charge', 'Extras', 'Amount'].join(','), ...rows,
       `Net payable,${d.statement.netPayable}`].join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url; a.download = `${d.statement.statementNo}.csv`; a.click();
     URL.revokeObjectURL(url);

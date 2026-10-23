@@ -8,6 +8,12 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-23 — CSV exports carry a UTF-8 BOM (Marathi/Devanagari no longer garbled in Excel)
+
+- `downloadCsv` (shared by every report/list export), the PDP partner statement CSV and the backend activity-log export (`ActivityLogController.toCsv`) now start with a UTF-8 BOM, so Excel stops reading Marathi sender/receiver names and addresses as ANSI. Print views already declared `<meta charset="utf-8">`. Verified the BOM bytes `EF BB BF` on :8082/:4300; not yet deployed.
+
+---
+
 ## 2026-10-19 — Hub manager can open the report pages
 
 - `app.routes.ts` `SHIPMENT_READERS` now includes `HUB_MANAGER`. The sidebar already showed Reports to every manager incl. hub managers (`navigation.config.ts`), but the route guard did not, so a hub-manager-only user (no BRANCH_MANAGER) was bounced to "Access denied" on every report. Verified as a HUB_MANAGER-only user on :4300. Finance/Vendor Audit/Customer reports stay hidden from hub managers by design.

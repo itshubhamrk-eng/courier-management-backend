@@ -98,6 +98,10 @@ public class ActivityLogController {
 
     private byte[] toCsv(List<ActivityLog> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        // UTF-8 BOM so Excel does not read Marathi / non-ASCII text as ANSI and garble it.
+        out.write(0xEF);
+        out.write(0xBB);
+        out.write(0xBF);
         try (PrintWriter writer = new PrintWriter(out, false, StandardCharsets.UTF_8)) {
             writer.println("Timestamp,User,Module,Submodule,Action,Entity Type,Entity Id,"
                     + "Description,Status,IP Address,Device,Browser,OS,Error Message");

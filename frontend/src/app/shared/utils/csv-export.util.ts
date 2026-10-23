@@ -21,7 +21,9 @@ export function downloadCsv(
     lines.push(total.map(esc).join(','));
   }
   const csv = lines.join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  // UTF-8 BOM: without it Excel reads the file as ANSI and shows Marathi/Devanagari (and any non-ASCII
+  // name) as garbage characters.
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
