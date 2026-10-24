@@ -414,7 +414,7 @@ class AuthServiceTest {
     @DisplayName("a mobile number resolves to its account's own email before authenticating")
     void mobileNumberResolvesToOwnEmail() {
         user.setMobile("9876543210");
-        when(userRepository.findFirstByMobileOrderByCreatedAtAsc("9876543210")).thenReturn(Optional.of(user));
+        when(userRepository.findByMobileDigitsLike("%9876543210")).thenReturn(List.of(user));
         stubSuccessfulAuthentication();
 
         authService.login(new AuthService.LoginCommand(
@@ -430,7 +430,7 @@ class AuthServiceTest {
     @DisplayName("an unmatched mobile number degrades to the same invalid-credentials response "
             + "as an unknown email, never a separate error")
     void unmatchedMobileNumberDegradesGracefully() {
-        when(userRepository.findFirstByMobileOrderByCreatedAtAsc("9999999999")).thenReturn(Optional.empty());
+        when(userRepository.findByMobileDigitsLike("%9999999999")).thenReturn(List.of());
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
 
         UnauthorizedException failure = catchUnauthorized(() -> authService.login(new AuthService.LoginCommand(
@@ -446,7 +446,35 @@ class AuthServiceTest {
 
         authService.login(command("correct-password", false));
 
-        verify(userRepository, never()).findFirstByMobileOrderByCreatedAtAsc(anyString());
+        verify(userRepository, never()).findByMobileDigitsLike(anyString());
+    }
+
+    @Test
+    @DisplayName("a mobile typed with spaces or a +91 prefix matches the stored number by its last ten digits")
+    void formattedMobileMatchesOnNationalNumber() {
+        user.setMobile("98765 43210");
+        when(userRepository.findByMobileDigitsLike("%9876543210")).thenReturn(List.of(user));
+        stubSuccessfulAuthentication();
+
+        authService.login(new AuthService.LoginCommand(
+                companyId, null, "+91 98765-43210", "correct-password", false, "10.0.0.1", "JUnit", null));
+
+        ArgumentCaptor<UsernamePasswordAuthenticationToken> token =
+                ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+        verify(authenticationManager).authenticate(token.capture());
+        assertThat(token.getValue().getPrincipal()).isEqualTo("ops@acme.test");
+    }
+
+    @Test
+    @DisplayName("mobile digits: formatting stripped, short numbers match exactly, emails and words are not mobiles")
+    void mobileDigitsAndPattern() {
+        assertThat(AuthService.mobileDigits("+91 (98765) 43210")).isEqualTo("919876543210");
+        assertThat(AuthService.mobileDigits("ops@acme.test")).isNull();
+        assertThat(AuthService.mobileDigits("ops9876543210")).isNull();
+        assertThat(AuthService.mobileDigits("12345")).isNull();
+        assertThat(AuthService.mobileDigitsPattern("919876543210")).isEqualTo("%9876543210");
+        assertThat(AuthService.mobileDigitsPattern("09876543210")).isEqualTo("%9876543210");
+        assertThat(AuthService.mobileDigitsPattern("2345678")).isEqualTo("2345678");
     }
 
     // ---------------------------------------------------------------- refresh

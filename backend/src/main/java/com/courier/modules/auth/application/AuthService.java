@@ -243,23 +243,37 @@ public class AuthService {
      * mobile" and "no such email" for an attacker to distinguish.
      */
     private String resolveLoginEmail(String identifier) {
-        if (!looksLikeMobile(identifier)) {
+        String digits = mobileDigits(identifier);
+        if (digits == null) {
             return User.normaliseEmail(identifier);
         }
-        return userRepository.findFirstByMobileOrderByCreatedAtAsc(identifier)
+        return userRepository.findByMobileDigitsLike(mobileDigitsPattern(digits)).stream()
+                .findFirst()
                 .map(User::getEmail)
                 .orElse(identifier);
     }
 
-    /** Digits only (an optional leading {@code +}), at least 7 of them, no {@code @} —
-     *  deliberately loose since an unmatched identifier degrades gracefully (see
+    /** The digits of a mobile-shaped identifier — digits, spaces, dashes, brackets
+     *  and an optional leading {@code +}, at least 7 digits, no {@code @} — or null.
+     *  Deliberately loose since an unmatched identifier degrades gracefully (see
      *  {@link #resolveLoginEmail}) rather than needing to reject anything up front. */
-    private static boolean looksLikeMobile(String identifier) {
+    static String mobileDigits(String identifier) {
         if (identifier == null || identifier.isBlank() || identifier.contains("@")) {
-            return false;
+            return null;
         }
-        String digits = identifier.startsWith("+") ? identifier.substring(1) : identifier;
-        return digits.length() >= 7 && digits.chars().allMatch(Character::isDigit);
+        String trimmed = identifier.strip();
+        if (!trimmed.matches("\\+?[0-9 ()\\-]+")) {
+            return null;
+        }
+        String digits = trimmed.replaceAll("[^0-9]", "");
+        return digits.length() >= 7 ? digits : null;
+    }
+
+    /** Ten or more digits match on the last ten (the national number), so a
+     *  {@code +91} / {@code 0} prefix on either side does not matter; shorter
+     *  numbers must match exactly. */
+    static String mobileDigitsPattern(String digits) {
+        return digits.length() >= 10 ? "%" + digits.substring(digits.length() - 10) : digits;
     }
 
     private String lockMessage(User user) {
