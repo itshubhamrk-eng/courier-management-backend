@@ -6,6 +6,10 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-23 - PDP operations dashboard (no migration)
+`GET /api/v1/pdp-dashboard[?branchId]` (`PdpDashboardServiceImpl`, read-only aggregates over pickups, shipments by `deliveryBranchId`, `pdp_earnings`, `pdp_statements`). Company admin sees all partners (+ per-partner table) or one; a partner login is pinned to its own branch. "POD pending" = delivered shipments minus delivery earnings (approximation). UI `/pdp/dashboard` (`features/pdp/pdp-dashboard.ts`), first item of the PDP menu, COMPANY_ADMIN + BRANCH_MANAGER. Verified live on throwaway :8082/:4300 as admin; partner-login view not exercised. Uncommitted.
+
+
 ---
 
 ## 2026-10-23 — Mobile app backend gaps: booking preview, staff picker access, failed delivery (V135)

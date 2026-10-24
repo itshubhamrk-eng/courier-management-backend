@@ -11,6 +11,7 @@ import com.courier.modules.pdp.api.PdpBillingDtos.FrequencyRequest;
 import com.courier.modules.pdp.api.PdpBillingDtos.GenerateDueResponse;
 import com.courier.modules.pdp.api.PdpBillingDtos.ScheduleResponse;
 import com.courier.modules.pdp.application.PdpBillingCycleService;
+import com.courier.modules.pdp.application.PdpDashboardService;
 import com.courier.modules.pdp.application.PdpEarningService;
 import com.courier.modules.pdp.application.PdpStatementService;
 import com.courier.modules.pdp.application.PdpStatementService.StatementView;
@@ -59,6 +60,7 @@ public class PdpBillingController {
     private final PdpStatementService statementService;
     private final BranchService branchService;
     private final PdpBillingCycleService cycleService;
+    private final PdpDashboardService dashboardService;
 
     @GetMapping("/api/v1/pdp-earnings")
     @Operation(summary = "List partner earnings", description = "Newest first. ACCRUED = priced and unbilled, UNRATED = no "
@@ -146,6 +148,13 @@ public class PdpBillingController {
     public ApiResponse<Void> delete(@PathVariable UUID id) {
         statementService.delete(id);
         return ApiResponse.success("Statement deleted");
+    }
+
+    @GetMapping("/api/v1/pdp-dashboard")
+    @Operation(summary = "Pickup-Delivery Partner dashboard", description = "Pickups, deliveries, earnings and statements. "
+            + "A company admin sees every partner (or one via `branchId`); a partner login always sees only its own.")
+    public ApiResponse<PdpDashboardDtos.DashboardResponse> dashboard(@RequestParam(required = false) UUID branchId) {
+        return ApiResponse.success(dashboardService.dashboard(branchId));
     }
 
     private StatementDetailResponse toDetail(StatementView v) {

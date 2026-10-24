@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import { PageQuery } from '@core/models/page.model';
-import { PdpEarning, PdpBillingFrequency, PdpBillingSchedule, PdpEarningStatus, PdpRateType, PdpStatement, PdpStatementDetail, PdpStatementStatus } from '@core/models/pdp.model';
+import { PdpDashboard, PdpEarning, PdpBillingFrequency, PdpBillingSchedule, PdpEarningStatus, PdpRateType, PdpStatement, PdpStatementDetail, PdpStatementStatus } from '@core/models/pdp.model';
 
 /** Partner earnings and billing statements — mirrors backend `/pdp-earnings` and `/pdp-statements`. */
 @Injectable({ providedIn: 'root' })
@@ -24,6 +24,9 @@ export class PdpBillingService {
   approve(id: string) { return this.api.patch<PdpStatementDetail>(`${API.pdpStatements}/${id}/approve`, {}); }
   pay(id: string, paidOn: string, reference?: string | null) {
     return this.api.patch<PdpStatementDetail>(`${API.pdpStatements}/${id}/pay`, { paidOn, reference: reference || null });
+  }
+  dashboard(branchId?: string) {
+    return this.api.get<PdpDashboard>(API.pdpDashboard, branchId ? { branchId } : undefined);
   }
   schedule() { return this.api.get<PdpBillingSchedule[]>(`${API.pdpStatements}/schedule`); }
   setFrequency(branchId: string, frequency: PdpBillingFrequency) {

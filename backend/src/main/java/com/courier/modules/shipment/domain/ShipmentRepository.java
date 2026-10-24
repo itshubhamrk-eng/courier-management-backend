@@ -421,4 +421,10 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
          *  depending on the dialect path; callers normalise via {@code toInstant}. */
         Object getEnteredAt();
     }
+
+    /** Shipments sitting with a delivery branch, per (branch, status). Partner dashboard. */
+    @Query("select s.deliveryBranchId, s.status, count(s) from Shipment s where s.companyId = :companyId "
+            + "and s.deliveryBranchId is not null and s.status in :statuses group by s.deliveryBranchId, s.status")
+    List<Object[]> countByDeliveryBranchAndStatus(@Param("companyId") UUID companyId,
+                                                  @Param("statuses") Collection<ShipmentStatus> statuses);
 }

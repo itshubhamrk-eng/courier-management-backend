@@ -132,6 +132,8 @@ export const NAVIGATION: NavNode[] = [
   {
     id: 'pdp-management', title: 'Pickup Delivery Partner Management', icon: 'handshake', order: 2.7,
     children: [
+      // Dashboard also serves a partner's own login; the server pins it to the caller's branch, so no permission gate.
+      { id: 'pdp-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/pdp/dashboard', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
       { id: 'pdp-partners', title: 'Partners', icon: 'groups', route: '/pdp/partners', permission: 'PDP_READ', roles: COMPANY_ONLY },
       { id: 'pdp-rates', title: 'Partner Rates', icon: 'request_quote', route: '/pdp/rates', permission: 'PDP_RATE_READ', roles: COMPANY_ONLY },
       { id: 'pdp-pickups', title: 'Pickup Requests', icon: 'inventory_2', route: '/pdp/pickups', permission: 'PICKUP_READ', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },

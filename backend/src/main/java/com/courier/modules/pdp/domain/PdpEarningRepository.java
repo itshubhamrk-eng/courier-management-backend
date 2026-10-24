@@ -60,4 +60,11 @@ public interface PdpEarningRepository extends JpaRepository<PdpEarning, UUID> {
     @Query("select count(e) from PdpEarning e where e.companyId = :companyId and e.branchId = :branchId "
             + "and e.status = 'ACCRUED' and e.statementId is null")
     long countUnbilled(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId);
+
+    /** Count and money per (partner, type, status) for earnings dated on/after {@code from}; pass a very early date for all time. */
+    @Query("select e.branchId, e.earningType, e.status, count(e), coalesce(sum(e.totalAmount), 0) from PdpEarning e "
+            + "where e.companyId = :companyId and (:branchId is null or e.branchId = :branchId) "
+            + "and e.earnedOn >= :from "
+            + "group by e.branchId, e.earningType, e.status")
+    List<Object[]> summarise(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId, @Param("from") LocalDate from);
 }

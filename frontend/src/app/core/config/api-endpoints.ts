@@ -41,6 +41,7 @@ export const API = {
   pickups: '/pickups',
   pdpEarnings: '/pdp-earnings',
   pdpStatements: '/pdp-statements',
+  pdpDashboard: '/pdp-dashboard',
   businessDashboard: '/business-customers/dashboard',
   customerInvoices: '/customer-invoices',
   rates: '/rates',

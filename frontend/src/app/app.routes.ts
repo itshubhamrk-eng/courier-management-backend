@@ -298,6 +298,10 @@ export const routes: Routes = [
         loadComponent: () => import('@features/business-customer/pricing-zone-form').then((m) => m.PricingZoneForm)
       },
       {
+        path: 'pdp/dashboard', title: 'Partner Operations Dashboard', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER] },
+        loadComponent: () => import('@features/pdp/pdp-dashboard').then((m) => m.PdpDashboardPage)
+      },
+      {
         path: 'pdp/partners', title: 'Pickup Delivery Partners', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/pdp/partner-list').then((m) => m.PartnerList)
       },

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,4 +37,16 @@ public interface PdpStatementRepository extends JpaRepository<PdpStatement, UUID
     /** End date of the partner's latest statement period, if any. */
     @Query("select max(s.periodTo) from PdpStatement s where s.companyId = :companyId and s.branchId = :branchId")
     java.time.LocalDate latestPeriodEnd(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId);
+
+    /** Count and net payable per (partner, status). */
+    @Query("select s.branchId, s.status, count(s), coalesce(sum(s.netPayable), 0) from PdpStatement s "
+            + "where s.companyId = :companyId and (:branchId is null or s.branchId = :branchId) "
+            + "group by s.branchId, s.status")
+    List<Object[]> summarise(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId);
+
+    /** Net paid out since {@code from}. */
+    @Query("select coalesce(sum(s.netPayable), 0) from PdpStatement s where s.companyId = :companyId "
+            + "and s.status = 'PAID' and s.paidOn >= :from and (:branchId is null or s.branchId = :branchId)")
+    java.math.BigDecimal paidSince(@Param("companyId") UUID companyId, @Param("branchId") UUID branchId,
+                                   @Param("from") java.time.LocalDate from);
 }

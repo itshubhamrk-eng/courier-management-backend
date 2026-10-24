@@ -194,3 +194,25 @@ export interface PdpBillingSchedule {
   dueTo?: string | null;
   due: boolean;
 }
+
+/** `GET /pdp-dashboard`. `partners` is empty when the view is narrowed to one partner. */
+export interface PdpDashboard {
+  branchId: string | null;
+  branchName: string | null;
+  pickups: { byStatus: Record<string, number>; open: number; unaccepted: number; pickedUpThisMonth: number };
+  deliveries: { atPartner: number; outForDelivery: number; delivered: number; podPending: number; deliveredThisMonth: number };
+  earnings: { accruedAmount: number; accruedCount: number; unratedCount: number; billedThisMonth: number; earnedThisMonth: number };
+  statements: { draft: number; approved: number; paid: number; outstandingPayable: number; paidThisMonth: number };
+  waitingPickups: PdpWaitingPickup[];
+  partners: PdpDashboardPartner[];
+}
+
+export interface PdpWaitingPickup {
+  id: string; pickupNo: string; status: string; contactName: string; pincode: string; city?: string | null;
+  pdpBranchId?: string | null; pdpBranchName?: string | null; createdAt: string;
+}
+
+export interface PdpDashboardPartner {
+  branchId: string; branchCode: string; branchName: string; openPickups: number; pickedUpThisMonth: number;
+  atPartner: number; deliveredThisMonth: number; accruedAmount: number; outstandingPayable: number;
+}
