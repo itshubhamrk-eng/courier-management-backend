@@ -39,6 +39,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     Optional<Shipment> findByCompanyIdAndTrackingNumber(UUID companyId, String trackingNumber);
 
+    /** Shipment numbers are unique per company (see {@link #existsByCompanyIdAndShipmentNumber}). */
+    Optional<Shipment> findByCompanyIdAndShipmentNumber(UUID companyId, String shipmentNumber);
+
     /** Bulk Shipment Tracking report: one query for every number pasted in, matched against
      *  either column since the caller can't reliably tell an AWB from a shipment number. */
     @Query("select s from Shipment s where s.companyId = :companyId "

@@ -6,6 +6,12 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-24 — Track, In Scan and hub out-scan accept shipment numbers
+
+`ShipmentServiceImpl.findByTrackingOrPackageId` (behind `GET /shipments/track/{number}`, In Scan's `scanOneIn` and `HubOperationsServiceImpl.outScan` via `getByTrackingNumber`) now tries, in order: AWB, label package id (`<AWB>-NNN`), then shipment number (new `ShipmentRepository.findByCompanyIdAndShipmentNumber`; shipment numbers are unique per company). Value is trimmed. Consignment-note QR codes carry the shipment number, so scanning them in the web app or the mobile app now resolves the shipment. Public tracking and bulk track already matched shipment numbers. `mvn test` 1344/1344 (+2).
+
+---
+
 ## 2026-10-23 - PDP operations dashboard (no migration)
 `GET /api/v1/pdp-dashboard[?branchId]` (`PdpDashboardServiceImpl`, read-only aggregates over pickups, shipments by `deliveryBranchId`, `pdp_earnings`, `pdp_statements`). Company admin sees all partners (+ per-partner table) or one; a partner login is pinned to its own branch. "POD pending" = delivered shipments minus delivery earnings (approximation). UI `/pdp/dashboard` (`features/pdp/pdp-dashboard.ts`), first item of the PDP menu, COMPANY_ADMIN + BRANCH_MANAGER. Verified live on throwaway :8082/:4300 as admin; partner-login view not exercised. Uncommitted.
 

@@ -394,6 +394,35 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
+    @DisplayName("inScan accepts a shipment number (consignment-note QR) as well as the AWB")
+    void inScanAcceptsShipmentNumber() {
+        Shipment shipment = shipment(ShipmentStatus.DISPATCHED);
+        when(shipmentRepository.findByCompanyIdAndShipmentNumber(COMPANY, shipment.getShipmentNumber()))
+                .thenReturn(Optional.of(shipment));
+
+        var result = service.inScan(DELIVERY_BRANCH, List.of(" " + shipment.getShipmentNumber() + " "),
+                null, null, null, null);
+
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.IN_SCAN);
+    }
+
+    @Test
+    @DisplayName("tracking lookup finds a shipment by shipment number; an AWB match wins")
+    void trackingLookupByShipmentNumber() {
+        Shipment byNumber = shipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findByCompanyIdAndShipmentNumber(COMPANY, byNumber.getShipmentNumber()))
+                .thenReturn(Optional.of(byNumber));
+        assertThat(service.getByTrackingNumber(byNumber.getShipmentNumber())).isSameAs(byNumber);
+
+        Shipment byAwb = shipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findByCompanyIdAndTrackingNumber(COMPANY, byAwb.getTrackingNumber()))
+                .thenReturn(Optional.of(byAwb));
+        assertThat(service.getByTrackingNumber(byAwb.getTrackingNumber())).isSameAs(byAwb);
+        verify(shipmentRepository, never()).findByCompanyIdAndShipmentNumber(COMPANY, byAwb.getTrackingNumber());
+    }
+
+    @Test
     @DisplayName("inScan rejects a package id beyond the shipment's numberOfPackages")
     void inScanRejectsOutOfRangePackageId() {
         Shipment shipment = shipment(ShipmentStatus.DISPATCHED);

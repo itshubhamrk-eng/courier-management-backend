@@ -1641,12 +1641,21 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     /** Exact tracking number first; failing that, a label's package id ({@code AWB-002}) resolves
      *  to its shipment when the package number is within the shipment's {@code numberOfPackages}. */
+    /**
+     * A scanned or typed value: AWB, label package id ({@code <AWB>-001}) or shipment number
+     * (consignment-note QR codes carry the shipment number). Used by tracking lookup, In Scan
+     * and hub out-scan, so all three accept the same values.
+     */
     private Optional<Shipment> findByTrackingOrPackageId(UUID companyId, String scanned) {
-        Optional<Shipment> exact = shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, scanned);
+        if (scanned == null || scanned.isBlank()) return Optional.empty();
+        String value = scanned.trim();
+        Optional<Shipment> exact = shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, value);
         if (exact.isPresent()) return exact;
-        return PackageId.parse(scanned)
+        Optional<Shipment> byPackage = PackageId.parse(value)
                 .flatMap(p -> shipmentRepository.findByCompanyIdAndTrackingNumber(companyId, p.awb())
                         .filter(s -> p.packageNo() <= (s.getNumberOfPackages() == null ? 1 : s.getNumberOfPackages())));
+        if (byPackage.isPresent()) return byPackage;
+        return shipmentRepository.findByCompanyIdAndShipmentNumber(companyId, value);
     }
 
     private MovementOutcome scanOneIn(UUID companyId, UUID receivingBranchId, String trackingNumber,
