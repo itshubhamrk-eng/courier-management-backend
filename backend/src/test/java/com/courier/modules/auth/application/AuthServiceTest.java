@@ -466,6 +466,42 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("a number shared by several accounts signs in to the one whose password matches")
+    void sharedMobileSignsInToAccountWhosePasswordMatches() {
+        User owner = User.builder().email("owner@acme.test").passwordHash("$owner").build();
+        user.setPasswordHash("$manager");
+        when(userRepository.findByMobileDigitsLike("%9049176362")).thenReturn(List.of(owner, user));
+        when(passwordEncoder.matches("correct-password", "$owner")).thenReturn(false);
+        when(passwordEncoder.matches("correct-password", "$manager")).thenReturn(true);
+        stubSuccessfulAuthentication();
+
+        authService.login(new AuthService.LoginCommand(
+                companyId, null, "9049176362", "correct-password", false, "10.0.0.1", "JUnit", null));
+
+        ArgumentCaptor<UsernamePasswordAuthenticationToken> token =
+                ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+        verify(authenticationManager).authenticate(token.capture());
+        assertThat(token.getValue().getPrincipal()).isEqualTo("ops@acme.test");
+    }
+
+    @Test
+    @DisplayName("a shared number with no matching password fails against the oldest account")
+    void sharedMobileWithWrongPasswordFailsOnOldest() {
+        User owner = User.builder().email("owner@acme.test").passwordHash("$owner").build();
+        user.setPasswordHash("$manager");
+        when(userRepository.findByMobileDigitsLike("%9049176362")).thenReturn(List.of(owner, user));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad"));
+
+        catchUnauthorized(() -> authService.login(new AuthService.LoginCommand(
+                companyId, null, "9049176362", "wrong", false, "10.0.0.1", "JUnit", null)));
+
+        ArgumentCaptor<UsernamePasswordAuthenticationToken> token =
+                ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+        verify(authenticationManager).authenticate(token.capture());
+        assertThat(token.getValue().getPrincipal()).isEqualTo("owner@acme.test");
+    }
+
+    @Test
     @DisplayName("mobile digits: formatting stripped, short numbers match exactly, emails and words are not mobiles")
     void mobileDigitsAndPattern() {
         assertThat(AuthService.mobileDigits("+91 (98765) 43210")).isEqualTo("919876543210");

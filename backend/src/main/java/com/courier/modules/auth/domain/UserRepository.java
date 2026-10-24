@@ -34,15 +34,20 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * number as well") — same company-scoping requirement as {@link #findByEmail},
      * the caller must bind {@code CompanyContext} first.
      *
-     * <p>Matches on digits only: stored mobiles may contain spaces, dashes and a
+     * <p>Matches on digits only: stored numbers may contain spaces, dashes and a
      * leading {@code +} (the user forms accept {@code ^[+]?[0-9 \-]{7,20}$}), so
      * {@code "+91 98765-43210"} and {@code "9876543210"} must find each other.
      * {@code pattern} is a SQL LIKE pattern over those digits, built by the caller.
-     * {@code mobile} is not unique at the DB level, so the oldest account comes first.
+     *
+     * <p>Checks both {@code mobile} (set by User Management) and {@code phone} (set
+     * when a company admin, branch manager or platform user is provisioned, which
+     * never fills {@code mobile}). Neither is unique, so every match comes back,
+     * oldest first, and the caller picks among them.
      */
     @Query("""
             select u from User u
             where replace(replace(replace(coalesce(u.mobile, ''), ' ', ''), '-', ''), '+', '') like :pattern
+               or replace(replace(replace(coalesce(u.phone, ''), ' ', ''), '-', ''), '+', '') like :pattern
             order by u.createdAt asc""")
     List<User> findByMobileDigitsLike(@Param("pattern") String pattern);
 

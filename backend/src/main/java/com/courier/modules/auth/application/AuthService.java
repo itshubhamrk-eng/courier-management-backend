@@ -124,7 +124,7 @@ public class AuthService {
         // Bind before the first repository call — everything below is company-scoped.
         CompanyContext.setCompanyId(companyId);
 
-        String email = resolveLoginEmail(identifier);
+        String email = resolveLoginEmail(identifier, command.password());
 
         loginAttemptService.assertNotThrottled(email, command.ipAddress());
 
@@ -242,16 +242,32 @@ public class AuthService {
      * — no separate error branch, and no timing difference between "no such
      * mobile" and "no such email" for an attacker to distinguish.
      */
-    private String resolveLoginEmail(String identifier) {
+    private String resolveLoginEmail(String identifier, String rawPassword) {
         String digits = mobileDigits(identifier);
         if (digits == null) {
             return User.normaliseEmail(identifier);
         }
-        return userRepository.findByMobileDigitsLike(mobileDigitsPattern(digits)).stream()
-                .findFirst()
-                .map(User::getEmail)
-                .orElse(identifier);
+        List<User> matches = userRepository.findByMobileDigitsLike(mobileDigitsPattern(digits));
+        if (matches.isEmpty()) {
+            return identifier;
+        }
+        // One number can belong to several accounts: a branch manager is created with
+        // the branch's number, which is often the owner's own. Sign in to the account
+        // whose password matches; with none matching, the oldest takes the normal
+        // failure path (attempt counter, lock) exactly as a single match would.
+        if (matches.size() > 1 && rawPassword != null) {
+            for (User candidate : matches.subList(0, Math.min(matches.size(), MAX_MOBILE_CANDIDATES))) {
+                if (candidate.getPasswordHash() != null
+                        && passwordEncoder.matches(rawPassword, candidate.getPasswordHash())) {
+                    return candidate.getEmail();
+                }
+            }
+        }
+        return matches.get(0).getEmail();
     }
+
+    /** Caps the BCrypt checks one mobile login can trigger when a number is shared. */
+    private static final int MAX_MOBILE_CANDIDATES = 5;
 
     /** The digits of a mobile-shaped identifier — digits, spaces, dashes, brackets
      *  and an optional leading {@code +}, at least 7 digits, no {@code @} — or null.
