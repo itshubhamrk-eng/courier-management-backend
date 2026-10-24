@@ -8,6 +8,18 @@ All notable changes to this project. Format based on
 
 ---
 
+## 2026-10-23 — Mobile app backend gaps: booking preview, staff picker access, failed delivery (V135)
+
+For the Branch Operations Android app (`itshubhamrk-eng/courier-mobile-application`, its `docs/API_GAPS.md` G9/G4/G12).
+
+- **G9 booking preview.** `POST /api/v1/shipments/preview`, same body as `POST /shipments`, `SHIPMENT_CREATE`. `ShipmentServiceImpl.create()`'s pricing and validation half moved into a private `quote()` that both `create()` and the new `preview()` call, so a preview cannot drift from what booking charges. Preview saves nothing, draws no shipment number or AWB, does not require the E-Way Bill data yet (returns `ewayBillRequired`), and reports `walletSufficient`/`walletAvailable` for collect-at-booking modes instead of refusing. Returns weights, the District Level Freight match and the same charge breakup `GET /shipments/{id}/charges` gives after booking (net amount included).
+- **G4 staff picker access.** `UserServiceImpl.LIST_READERS` (the `GET /users` list) also admits role `OPERATOR` and any caller holding `MANIFEST_DISPATCH`, `DELIVERY_ASSIGN` or `DELIVERY_DISPATCH`, so a company's own roles that can dispatch a THC or make a DRS can fill the driver / delivery-partner picker. Same branch/hub scoping as the counter roles (`restrictToManagerScope`). No new endpoint.
+- **G12 failed delivery.** `POST /api/v1/shipment-movement/{shipmentId}/delivery-failed` `{reason, remarks}` (`CUSTOMER_REFUSED`, `ADDRESS_NOT_FOUND`, `CUSTOMER_UNAVAILABLE`, `RESCHEDULE_REQUESTED`, `PAYMENT_NOT_READY`, `OTHER` + remarks), same writers as deliver. OUT_FOR_DELIVERY only. Attempts 1-2: shipment back to IN_SCAN (READY_FOR_MANIFEST for hub direct), ready for the next DRS; attempt 3 (`ShipmentService.MAX_DELIVERY_ATTEMPTS`): RETURNED (RTO). New `delivery_attempts` table (V135, unique per shipment + attempt number), `DeliveryAssignmentStatus.FAILED` (a new DRS `reassign` resets it to ASSIGNED), `ShipmentStatus` OUT_FOR_DELIVERY may now go to IN_SCAN / READY_FOR_MANIFEST, history row and audit (`SHIPMENT_DELIVERY_FAILED` / `SHIPMENT_RETURNED_TO_ORIGIN`). `GET /shipments/{id}/delivery-attempts`. DRS summary gains `failedCount` (pending no longer counts failed).
+- **Not built (follow-ups):** RTO accounting (TO_PAY freight already debited at in-scan is not reversed; no return leg is created, RETURNED is terminal as before); the web app has no failed-delivery or preview UI yet; a reassigned shipment moves to the new run's date in DRS lists (existing behaviour of `reassign`).
+- `mvn test` 1342/1342 (+8: 6 failed-delivery, 2 preview). Verified on a throwaway MySQL 8 + Redis: all 135 migrations apply from empty and the app boots (entity matches V135); `/v3/api-docs` lists the three endpoints. Not exercised end to end with a logged-in user: no local seed login exists (`/api/v1/companies/register` is in the public list but has no handler).
+
+---
+
 ## 2026-10-23 — Business Customer: catch-all zones "Rest of Maharashtra" / "Out of Maharashtra" (V133, V134)
 
 `customer_pricing_zones.fallback_scope` (`REST_OF_STATE` | `OUT_OF_STATE` | NULL; V133 added a boolean, V134 replaced it). A catch-all zone takes no locations. `PricingZoneService.resolve`: exact city, then whole district, then the customer's ACTIVE catch-all for the destination's side of the line (district's state name == "Maharashtra", hardcoded `HOME_STATE`). Out-of-Maharashtra destination with no OUT zone gets no zone (falls back to District Level Freight as before). One live zone per (customer, scope). Create form: two mutually exclusive checkboxes that auto-name the zone and hide the district picker. Verified live on :8100/:4200 (API quotes Akola->West, Dhule->Rest, North Goa->Out; UI create).

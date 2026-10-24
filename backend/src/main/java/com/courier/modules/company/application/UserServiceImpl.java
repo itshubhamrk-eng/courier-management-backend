@@ -105,8 +105,11 @@ public class UserServiceImpl implements UserService {
     // The list (not the single-user read) is also open to the counter roles: DRS, THC and loading
     // sheet pages fill their delivery-user / driver pickers from it. Scoped to the caller's own
     // branch or hub in search() (restrictToManagerScope), so a counter user sees only colleagues.
+    // Also by permission, not only by role name: a company's own role that can dispatch a THC or
+    // make a DRS needs the same picker (mobile app, docs G4). Same branch/hub scoping applies.
     private static final String LIST_READERS = READERS + " or hasAnyRole('" + DefaultRoleCatalog.BOOKING_OPERATOR
-            + "', '" + DefaultRoleCatalog.DELIVERY_OPERATOR + "')";
+            + "', '" + DefaultRoleCatalog.DELIVERY_OPERATOR + "', '" + Roles.OPERATOR + "')"
+            + " or hasAnyAuthority('MANIFEST_DISPATCH', 'DELIVERY_ASSIGN', 'DELIVERY_DISPATCH')";
 
     private final CompanyUserRepository userRepository;
     private final BranchRepository branchRepository;

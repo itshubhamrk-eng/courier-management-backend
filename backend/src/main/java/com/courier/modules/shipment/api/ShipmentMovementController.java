@@ -255,6 +255,23 @@ public class ShipmentMovementController {
                 shipmentMapper.toResponse(shipmentService.getDrsDetail(deliveryUserId, deliveryBranchId, runDate)));
     }
 
+    @PostMapping("/{shipmentId}/delivery-failed")
+    @Operation(summary = "Record a failed delivery attempt",
+            description = "OUT_FOR_DELIVERY only. Attempts 1 and 2 send the shipment back to where it "
+                    + "waited for its DRS (IN_SCAN, or READY_FOR_MANIFEST for hub direct) so the next DRS can "
+                    + "take it; the 3rd marks it RETURNED (return to origin). Reason OTHER needs remarks. "
+                    + "`COMPANY_ADMIN`, `BRANCH_MANAGER` or `OPERATOR`, same as deliver.")
+    public ApiResponse<com.courier.modules.shipment.api.dto.DeliveryAttemptResponse> deliveryFailed(
+            @PathVariable UUID shipmentId,
+            @Valid @RequestBody com.courier.modules.shipment.api.dto.FailedDeliveryRequest request) {
+        ShipmentService.DeliveryAttemptResult r = shipmentService.recordFailedDelivery(shipmentId,
+                new ShipmentService.FailedDeliveryCommand(request.reason(), request.remarks()));
+        return ApiResponse.success(shipmentMapper.toResponse(r.attempt(), r.maxAttempts()),
+                r.attempt().getOutcome() == com.courier.modules.shipment.domain.DeliveryAttemptOutcome.RTO
+                        ? "Returned to origin after " + r.attempt().getAttemptNo() + " failed attempts"
+                        : "Failed attempt " + r.attempt().getAttemptNo() + " of " + r.maxAttempts() + " recorded");
+    }
+
     @PostMapping(value = "/{shipmentId}/pod-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Upload a POD file",
             description = "Stores a delivery photo or signature capture (JPEG/PNG/WEBP/HEIC image, "

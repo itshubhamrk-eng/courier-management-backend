@@ -101,6 +101,13 @@ the instant the upload succeeds — deliberately not a two-step "upload then con
 like POD's `uploadPodFile`/`deliver()` pair, because a booking photo isn't gated behind
 any state-machine transition the way POD is behind `deliver()`.
 
+## Preview (2026-10-23)
+
+`POST /shipments/preview` takes the booking body and returns what `create()` would charge, from the same private
+`quote()` (weights, District Level Freight, Pricing Engine, net amount). Nothing is saved; no shipment number or AWB is
+drawn; E-Way Bill data is not required yet (`ewayBillRequired` says if it will be); a short wallet is reported
+(`walletSufficient`) instead of refused. Used by the mobile booking summary.
+
 ## State machine
 
 The full ten-state vocabulary is declared now (`ShipmentStatus.canTransitionTo`,

@@ -71,7 +71,9 @@ public enum ShipmentStatus {
             Map.entry(MANIFEST_CREATED, EnumSet.of(DISPATCHED, CANCELLED, BOOKED, READY_FOR_MANIFEST)),
             Map.entry(DISPATCHED, EnumSet.of(IN_SCAN, READY_FOR_MANIFEST)),
             Map.entry(IN_SCAN, EnumSet.of(OUT_FOR_DELIVERY, RETURNED)),
-            Map.entry(OUT_FOR_DELIVERY, EnumSet.of(DELIVERED, RETURNED)),
+            // Failed delivery attempt (V135): back to where it waited for its DRS, IN_SCAN at a
+            // branch or READY_FOR_MANIFEST for hub-direct; RETURNED on the last allowed attempt.
+            Map.entry(OUT_FOR_DELIVERY, EnumSet.of(DELIVERED, RETURNED, IN_SCAN, READY_FOR_MANIFEST)),
             Map.entry(DELIVERED, EnumSet.noneOf(ShipmentStatus.class)),
             Map.entry(RETURNED, EnumSet.noneOf(ShipmentStatus.class)),
             Map.entry(CANCELLED, EnumSet.noneOf(ShipmentStatus.class)));

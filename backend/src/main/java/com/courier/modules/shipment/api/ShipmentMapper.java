@@ -245,6 +245,13 @@ public class ShipmentMapper {
                 c.charge().getAppliedFreightFactor());
     }
 
+    public com.courier.modules.shipment.api.dto.ShipmentPreviewResponse toResponse(ShipmentService.ShipmentPreview p) {
+        return new com.courier.modules.shipment.api.dto.ShipmentPreviewResponse(
+                p.actualWeight(), p.volumetricWeight(), p.chargeableWeight(), p.destinationCityName(),
+                p.weightSlabLabel(), p.ratePerKg(), p.ewayBillRequired(), p.walletSufficient(),
+                p.walletAvailable(), toResponse(p.charges()));
+    }
+
     public ShipmentStatusHistoryResponse toResponse(ShipmentStatusHistory h) {
         return new ShipmentStatusHistoryResponse(
                 h.getId(), h.getStatus(), h.getPreviousStatus(), h.getRemarks(),
@@ -270,7 +277,14 @@ public class ShipmentMapper {
     public com.courier.modules.shipment.api.dto.DrsSummaryResponse toResponse(ShipmentService.DrsSummary s) {
         return new com.courier.modules.shipment.api.dto.DrsSummaryResponse(
                 s.deliveryUserId(), s.deliveryBranchId(), s.runDate(), s.drsNumber(),
-                s.shipmentCount(), s.deliveredCount(), s.pendingCount());
+                s.shipmentCount(), s.deliveredCount(), s.pendingCount(), s.failedCount());
+    }
+
+    public com.courier.modules.shipment.api.dto.DeliveryAttemptResponse toResponse(
+            com.courier.modules.shipment.domain.DeliveryAttempt a, int maxAttempts) {
+        return new com.courier.modules.shipment.api.dto.DeliveryAttemptResponse(
+                a.getId(), a.getShipmentId(), a.getAttemptNo(), maxAttempts, a.getReason(), a.getRemarks(),
+                a.getOutcome(), a.getDeliveryUserId(), a.getDeliveryBranchId(), a.getDrsNumber(), a.getAttemptedAt());
     }
 
     public com.courier.modules.shipment.api.dto.DrsDetailResponse toResponse(ShipmentService.DrsDetail d) {

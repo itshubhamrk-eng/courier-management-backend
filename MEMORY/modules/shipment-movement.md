@@ -267,6 +267,15 @@ only service-to-service edges can deadlock Spring's bean graph.
   verified live against an `OUT_FOR_DELIVERY` shipment — "is OUT_FOR_DELIVERY and can
   no longer be cancelled — it has left the branch."
 
+## Failed delivery attempts (V135, 2026-10-23)
+
+`POST /shipment-movement/{shipmentId}/delivery-failed` `{reason, remarks}`; OUT_FOR_DELIVERY only, same writers as deliver.
+Attempts 1-2 return the shipment to IN_SCAN (READY_FOR_MANIFEST for hub direct, same test as
+`assignOneOutForDelivery`), attempt 3 (`ShipmentService.MAX_DELIVERY_ATTEMPTS`) marks it RETURNED. One
+`delivery_attempts` row per failure (unique on company + shipment + attempt_no), `DeliveryAssignment` goes FAILED and a
+new DRS `reassign` reopens it. History remark: "Delivery attempt n of 3 failed: <reason>" / "Returned to origin after 3
+failed delivery attempts". DRS summary `failedCount`. RTO money (TO_PAY freight debited at in-scan) is not reversed yet.
+
 ## API
 
 | Method | Path | Notes |

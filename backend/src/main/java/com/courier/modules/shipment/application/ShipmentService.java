@@ -61,6 +61,21 @@ public interface ShipmentService {
     Shipment create(CreateShipmentCommand command);
 
     /**
+     * Prices a booking exactly as {@link #create} would, without saving anything or using an
+     * AWB / shipment number. For the mobile booking summary (needs SHIPMENT_CREATE).
+     */
+    ShipmentPreview preview(CreateShipmentCommand command);
+
+    /** {@link #preview}'s result. {@code walletSufficient}/{@code walletAvailable} are null
+     *  unless the payment mode collects at booking. */
+    record ShipmentPreview(java.math.BigDecimal actualWeight, java.math.BigDecimal volumetricWeight,
+                           java.math.BigDecimal chargeableWeight, String destinationCityName,
+                           String weightSlabLabel, java.math.BigDecimal ratePerKg, boolean ewayBillRequired,
+                           Boolean walletSufficient, java.math.BigDecimal walletAvailable,
+                           ShipmentCharges charges) {
+    }
+
+    /**
      * Full replacement of the editable fields, re-pricing the shipment. Only while the
      * shipment is still {@code BOOKED} — once it has moved past that, the record is no
      * longer a draft. Does not touch the wallet: see the module doc's honesty note on
@@ -546,8 +561,30 @@ public interface ShipmentService {
     /** {@code drsNumber} is the most recently generated number among the run's assignments
      *  (null for runs made entirely of pre-V31 rows) — the grouping key itself is still
      *  delivery user + delivery branch + calendar day, unchanged. */
+    // =================================================================== Failed delivery (V135)
+
+    /** Failed attempts allowed before the shipment is returned to origin. */
+    int MAX_DELIVERY_ATTEMPTS = 3;
+
+    /**
+     * Records a failed delivery attempt on an OUT_FOR_DELIVERY shipment. Attempts below
+     * {@link #MAX_DELIVERY_ATTEMPTS} send it back to where it waited for its DRS (IN_SCAN, or
+     * READY_FOR_MANIFEST for hub-direct) so the next DRS can pick it up; the last one marks it
+     * RETURNED (RTO).
+     */
+    DeliveryAttemptResult recordFailedDelivery(UUID shipmentId, FailedDeliveryCommand command);
+
+    java.util.List<com.courier.modules.shipment.domain.DeliveryAttempt> listDeliveryAttempts(UUID shipmentId);
+
+    record FailedDeliveryCommand(com.courier.modules.shipment.domain.DeliveryFailureReason reason, String remarks) {
+    }
+
+    record DeliveryAttemptResult(Shipment shipment, com.courier.modules.shipment.domain.DeliveryAttempt attempt,
+                                 int maxAttempts) {
+    }
+
     record DrsSummary(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,
-                      String drsNumber, int shipmentCount, int deliveredCount, int pendingCount) {
+                      String drsNumber, int shipmentCount, int deliveredCount, int pendingCount, int failedCount) {
     }
 
     record DrsShipmentRow(UUID shipmentId, String shipmentNumber, String trackingNumber,
