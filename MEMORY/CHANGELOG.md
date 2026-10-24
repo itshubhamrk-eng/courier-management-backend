@@ -10,6 +10,8 @@ All notable changes to this project. Format based on
 
 `ShipmentServiceImpl.findByTrackingOrPackageId` (behind `GET /shipments/track/{number}`, In Scan's `scanOneIn` and `HubOperationsServiceImpl.outScan` via `getByTrackingNumber`) now tries, in order: AWB, label package id (`<AWB>-NNN`), then shipment number (new `ShipmentRepository.findByCompanyIdAndShipmentNumber`; shipment numbers are unique per company). Value is trimmed. Consignment-note QR codes carry the shipment number, so scanning them in the web app or the mobile app now resolves the shipment. Public tracking and bulk track already matched shipment numbers. `mvn test` 1344/1344 (+2).
 
+**Deployed to prod 2026-10-24** (`f50a0c9` -> `3a96fc0`, also carrying `28bf5dd` PDP operations dashboard, deployed on the user's go-ahead): `mysqldump` first (`~/courier_db_before_3a96fc0_2026-10-24.sql`, 125 MB), `git merge --ff-only origin/main`, `docker compose build backend` (1m28s) + `up -d --force-recreate backend`, then `build frontend` (2m36s) + `up -d --force-recreate frontend`. Both healthy, no new migration (schema stays at 135), no ERROR in backend logs, site and `/actuator/health` 200.
+
 ---
 
 ## 2026-10-23 - PDP operations dashboard (no migration)
