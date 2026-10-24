@@ -182,7 +182,7 @@ public class ShipmentController {
     }
 
     @GetMapping("/track/{trackingNumber}")
-    @Operation(summary = "Fetch a shipment by tracking number (AWB)",
+    @Operation(summary = "Fetch a shipment by AWB, label package id or shipment number",
             description = "See the class-level note on why this is not a second "
                     + "`/shipments/{x}` route.")
     public ApiResponse<ShipmentResponse> getByTrackingNumber(@PathVariable String trackingNumber) {
