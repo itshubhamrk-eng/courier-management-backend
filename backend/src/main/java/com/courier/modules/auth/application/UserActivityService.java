@@ -51,9 +51,8 @@ public class UserActivityService {
                 .map(this::toResponse)
                 .getContent();
 
-        var recentActivities = activityLogService
-                .recentForUser(userId, PageRequest.of(0, RECENT_ACTIVITY_LIMIT))
-                .map(activityLogMapper::toResponse)
+        var recentActivities = activityLogMapper.toResponsePage(
+                        activityLogService.recentForUser(userId, PageRequest.of(0, RECENT_ACTIVITY_LIMIT)))
                 .getContent();
 
         List<String> modules = activityLogService.modulesAccessedBy(userId);

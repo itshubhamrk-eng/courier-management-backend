@@ -64,7 +64,7 @@ public class ActivityLogController {
             @ParameterObject @PageableDefault(size = 25, sort = "occurredAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         Page<ActivityLog> page = service.search(mapper.toCriteria(search), pageable);
-        return ApiResponse.success(PageResponse.from(page, mapper::toResponse));
+        return ApiResponse.success(PageResponse.from(mapper.toResponsePage(page)));
     }
 
     @GetMapping("/filter-options")

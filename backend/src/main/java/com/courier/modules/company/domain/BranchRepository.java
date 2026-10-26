@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +36,9 @@ public interface BranchRepository extends JpaRepository<Branch, UUID>,
      *  legitimately match more than one row, so this returns a list rather than an
      *  {@code Optional} that would throw on a second match. */
     List<Branch> findAllByBranchNameIgnoreCase(String branchName);
+
+    @Query("select b from Branch b where b.id in :ids")
+    List<Branch> findAllByIdIn(@Param("ids") Collection<UUID> ids);
 
     @Query("select b from Branch b where b.id = :id and b.companyId = :companyId")
     Optional<Branch> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);

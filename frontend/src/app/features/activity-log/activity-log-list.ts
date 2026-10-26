@@ -68,7 +68,8 @@ const STATUS_OPTIONS: SelectOption[] = [
         (rowClick)="open($event)">
         <ng-template #row let-a>
           <td class="text-caption">{{ a.occurredAt | date: 'medium' }}</td>
-          <td>{{ a.username || '—' }}</td>
+          <td>{{ a.userFullName || a.username || '—' }}</td>
+          <td>{{ a.branchName || '—' }}</td>
           <td>{{ a.module || '—' }}</td>
           <td>{{ a.action }}</td>
           <td>{{ a.entityType ? (a.entityType + (a.entityId ? ' · ' + shortId(a.entityId) : '')) : '—' }}</td>
@@ -85,7 +86,9 @@ const STATUS_OPTIONS: SelectOption[] = [
       @if (selected(); as a) {
         <div class="detail">
           <div class="detail__row"><span>Timestamp</span><strong>{{ a.occurredAt | date: 'medium' }}</strong></div>
-          <div class="detail__row"><span>User</span><strong>{{ a.username || '—' }}</strong></div>
+          <div class="detail__row"><span>User</span><strong>{{ a.userFullName || a.username || '—' }}</strong></div>
+          <div class="detail__row"><span>Email</span><strong>{{ a.username || '—' }}</strong></div>
+          <div class="detail__row"><span>Branch</span><strong>{{ a.branchName || '—' }}</strong></div>
           <div class="detail__row"><span>Module / Submodule</span><strong>{{ a.module || '—' }} / {{ a.submodule || '—' }}</strong></div>
           <div class="detail__row"><span>Action</span><strong>{{ a.action }}</strong></div>
           <div class="detail__row"><span>Entity</span><strong>{{ a.entityType || '—' }} · {{ a.entityId || '—' }}</strong></div>
@@ -151,6 +154,7 @@ export class ActivityLogList implements OnInit {
   readonly columns: TableColumn<ActivityLog>[] = [
     { key: 'occurredAt', header: 'Date/Time' },
     { key: 'username', header: 'User' },
+    { key: 'branchName', header: 'Branch' },
     { key: 'module', header: 'Module' },
     { key: 'action', header: 'Action' },
     { key: 'entity', header: 'Entity' },

@@ -7,6 +7,9 @@ export interface ActivityLog {
   companyId?: string | null;
   userId?: string | null;
   username?: string | null;
+  /** First + last name, resolved at read time; fall back to `username` (the email). */
+  userFullName?: string | null;
+  branchName?: string | null;
   module?: string | null;
   submodule?: string | null;
   action: string;

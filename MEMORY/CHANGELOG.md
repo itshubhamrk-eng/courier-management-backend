@@ -6,6 +6,9 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-26 - Activity Log shows full name + Branch column
+`ActivityLogResponse` gained `userFullName` and `branchName`, resolved at read time (log rows only store the login email). New port `shared.activity.application.ActivityActorResolver`, implemented in `modules/auth` (`ActivityActorResolverImpl`, uses new `UserRepository.findAllByIdIn` / `BranchRepository.findAllByIdIn`); `ActivityLogMapper.toResponsePage` does one batch lookup per page, also used by `UserActivityService`. Activity Log list: User column shows name (falls back to email), new Branch column, drawer shows Name/Email/Branch. Soft-deleted branches show a dash. CSV export unchanged (email only, no Branch). Verified via API on :8082 (Kolhapur user -> name + branch); not browser-verified, not deployed.
+
 ## 2026-10-26 - Shipment edit works without a package type; dashboard Rate per KG tile
 `UpdateShipmentRequest.packageTypeId` no longer `@NotNull` and `shipment-edit.ts` no longer requires it (create never asked for one, so editing any such shipment 400'd). Company dashboard gained a derived "Rate per KG" tile = `totalRevenue / totalActualWeight` (frontend only, `ratePerKg` in `DashboardStatistics`, null when weight is 0). Prod data fix: CP-KRD-000020 ODA 250 -> 0 via PUT (net 1315 -> 1050); that PUT also set its package type to Parcel (update persists it). Backend compile + frontend tsc clean; not browser-verified, not deployed.
 

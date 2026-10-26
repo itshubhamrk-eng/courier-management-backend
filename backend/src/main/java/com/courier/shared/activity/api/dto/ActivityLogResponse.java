@@ -12,6 +12,10 @@ public record ActivityLogResponse(
         UUID companyId,
         UUID userId,
         String username,
+        @Schema(description = "The user's first and last name, looked up at read time; null if the user is gone.")
+        String userFullName,
+        @Schema(description = "The user's branch, looked up at read time; null for users without one.")
+        String branchName,
         String module,
         String submodule,
         String action,
