@@ -9,6 +9,8 @@ All notable changes to this project. Format based on
 ## 2026-10-26 - Header: breadcrumb removed, user menu no longer overflows (frontend only)
 Top bar no longer shows the page path (`<app-breadcrumb />` + divider dropped from `header.ts`; `breadcrumb.ts`/`BreadcrumbService` kept, unused by the header). The breadcrumb wrapping had pushed the user menu out of the header on deeper pages. Left side now `flex:1 1 0; overflow:hidden`, right side can shrink, global search is `flex:0 1 280px` (min 140px). Verified on :4300 across all 87 sidebar routes at 1470px: user menu inside header on every one.
 
+**Deployed to prod 2026-10-26** (`f101473` -> `de3e2ff`): frontend-only rebuild + `up -d --force-recreate --no-deps frontend`; backend/mysql/redis untouched; all four containers healthy, `vendor.amazinglpl.com` 200.
+
 ## 2026-10-24 — Track, In Scan and hub out-scan accept shipment numbers
 
 `ShipmentServiceImpl.findByTrackingOrPackageId` (behind `GET /shipments/track/{number}`, In Scan's `scanOneIn` and `HubOperationsServiceImpl.outScan` via `getByTrackingNumber`) now tries, in order: AWB, label package id (`<AWB>-NNN`), then shipment number (new `ShipmentRepository.findByCompanyIdAndShipmentNumber`; shipment numbers are unique per company). Value is trimmed. Consignment-note QR codes carry the shipment number, so scanning them in the web app or the mobile app now resolves the shipment. Public tracking and bulk track already matched shipment numbers. `mvn test` 1344/1344 (+2).
