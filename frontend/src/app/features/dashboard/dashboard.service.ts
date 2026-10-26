@@ -67,6 +67,7 @@ export class DashboardService {
     const statistics: DashboardStatistics = {
       ...emptyStatistics(),
       ...s,
+      ratePerKg: s.totalActualWeight ? (s.totalRevenue ?? 0) / s.totalActualWeight : null,
       // derive from live list endpoints when the summary endpoint omits the figure
       activeBranches: s.activeBranches ?? activeBranchCount,
       totalBranches: s.totalBranches ?? branches.totalElements,

@@ -6,6 +6,9 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-26 - Shipment edit works without a package type; dashboard Rate per KG tile
+`UpdateShipmentRequest.packageTypeId` no longer `@NotNull` and `shipment-edit.ts` no longer requires it (create never asked for one, so editing any such shipment 400'd). Company dashboard gained a derived "Rate per KG" tile = `totalRevenue / totalActualWeight` (frontend only, `ratePerKg` in `DashboardStatistics`, null when weight is 0). Prod data fix: CP-KRD-000020 ODA 250 -> 0 via PUT (net 1315 -> 1050); that PUT also set its package type to Parcel (update persists it). Backend compile + frontend tsc clean; not browser-verified, not deployed.
+
 ## 2026-10-26 - Header: breadcrumb removed, user menu no longer overflows (frontend only)
 Top bar no longer shows the page path (`<app-breadcrumb />` + divider dropped from `header.ts`; `breadcrumb.ts`/`BreadcrumbService` kept, unused by the header). The breadcrumb wrapping had pushed the user menu out of the header on deeper pages. Left side now `flex:1 1 0; overflow:hidden`, right side can shrink, global search is `flex:0 1 280px` (min 140px). Verified on :4300 across all 87 sidebar routes at 1470px: user menu inside header on every one.
 

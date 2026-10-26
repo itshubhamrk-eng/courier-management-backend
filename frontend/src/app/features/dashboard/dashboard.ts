@@ -27,6 +27,7 @@ import { FollowUpWidget } from './components/follow-up-widget';
 
 const MONEY_KEYS: ReadonlySet<keyof DashboardStatistics> =
   new Set(['totalRevenue', 'walletBalance', 'todayCollection']);
+const RATE_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['ratePerKg']);
 const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActualWeight']);
 
 /**
@@ -295,6 +296,7 @@ export class Dashboard implements OnInit {
     if (v == null) return '—';
     if (MONEY_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
     if (WEIGHT_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
+    if (RATE_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
     return v;
   }
 
