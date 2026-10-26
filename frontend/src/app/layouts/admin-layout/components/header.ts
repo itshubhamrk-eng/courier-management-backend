@@ -3,7 +3,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '@core/auth/auth.service';
 import { ThemeService } from '@core/services/theme.service';
 import { environment } from '@env/environment';
-import { Breadcrumb } from './breadcrumb';
 import { GlobalSearch } from './global-search';
 import { NotificationMenu } from './notification-menu';
 import { UserMenu } from './user-menu';
@@ -19,7 +18,7 @@ import { AiAssistantButton } from './ai-assistant-button';
   selector: 'app-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, Breadcrumb, GlobalSearch, NotificationMenu, UserMenu, AiAssistantButton],
+  imports: [MatIconModule, GlobalSearch, NotificationMenu, UserMenu, AiAssistantButton],
   template: `
     <header class="hd">
       <div class="hd__left">
@@ -34,8 +33,6 @@ import { AiAssistantButton } from './ai-assistant-button';
           }
           <span class="hd__company">{{ companyName() }}</span>
         </div>
-        <span class="hd__divider"></span>
-        <app-breadcrumb />
       </div>
 
       <div class="hd__right">
@@ -56,20 +53,22 @@ import { AiAssistantButton } from './ai-assistant-button';
     @media (max-width:1024px){ .hd{ padding:0 20px; margin:12px 16px 0; } }
     @media (max-width:640px){ .hd{ padding:0 14px; margin:10px 10px 0; gap:8px; } }
     .hd__left, .hd__right { display:flex; align-items:center; gap:8px; min-width:0; }
+    .hd__left { flex:1 1 0; overflow:hidden; }
+    .hd__right { flex:0 1 auto; }
+    .hd__brand { flex-shrink:0; }
+    app-global-search { flex:0 1 280px; min-width:140px; }
     .hd__brand { display:flex; align-items:center; gap:9px; }
     .hd__logo { width:32px; height:32px; border-radius:11px; background:linear-gradient(155deg, var(--brand-400), var(--brand-600)); color:#fff;
       display:grid; place-items:center; font:800 12px var(--font-display); flex-shrink:0; overflow:hidden; box-shadow:var(--shadow-clay-sm); }
     .hd__logo--img { background:var(--surface-muted); box-shadow:none; }
     .hd__logo--img img { width:100%; height:100%; object-fit:contain; }
     .hd__company { font:700 15px var(--font-display); color:var(--content-fg); white-space:nowrap; }
-    .hd__divider { width:1px; height:24px; background:var(--surface-border); margin:0 4px; }
     .hd__icon-btn { position:relative; display:grid; place-items:center; width:40px; height:40px;
       border-radius:12px; border:0; background:transparent; color:var(--content-muted); cursor:pointer; transition:background .15s, box-shadow .15s; }
     .hd__icon-btn:hover { background:var(--surface-muted); color:var(--content-fg); box-shadow:var(--shadow-clay-inset); }
 
-    /* Below the breadcrumb-crowding point, drop brand text and divider + breadcrumb. */
-    @media (max-width: 900px) { .hd__divider, app-breadcrumb { display:none; } }
     @media (max-width: 560px) { .hd__company { display:none; } }
+    @media (max-width: 900px) { app-global-search { flex-basis:200px; } }
   `]
 })
 export class Header {
