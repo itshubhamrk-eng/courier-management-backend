@@ -240,7 +240,7 @@ export class ShipmentEdit implements OnInit {
     receiverAddress: ['', [Validators.required, Validators.maxLength(500)]],
     receiverContact: ['', [Validators.required, Validators.maxLength(20)]],
     serviceTypeId: [null as string | null, Validators.required],
-    packageTypeId: [null as string | null, Validators.required],
+    packageTypeId: [null as string | null],
     paymentModeId: [null as string | null, Validators.required],
     shipmentType: ['NON_DOCUMENT' as ShipmentType],
     bookingDate: [''],
@@ -265,7 +265,7 @@ export class ShipmentEdit implements OnInit {
   canSave(): boolean {
     const v = this.form.getRawValue();
     return !!(
-      v.serviceTypeId && v.packageTypeId && v.paymentModeId
+      v.serviceTypeId && v.paymentModeId
       && v.senderName && v.senderAddress && v.senderContact
       && v.receiverName && v.receiverAddress && v.receiverContact
       && this.items().length > 0 && this.weight().chargeable > 0

@@ -31,7 +31,7 @@ public record UpdateShipmentRequest(
         @NotBlank @Size(max = 500) String receiverAddress,
         @NotBlank @Size(max = 20) String receiverContact,
         @NotNull UUID serviceTypeId,
-        @NotNull UUID packageTypeId,
+        UUID packageTypeId,
         @NotNull UUID paymentModeId,
         ShipmentType shipmentType,
         LocalDate bookingDate,
