@@ -571,9 +571,9 @@ class ShipmentServiceImplTest {
         assertThat(captor.getValue().getCommissionOnBasicFreight()).isEqualByComparingTo("9.0000");
         assertThat(captor.getValue().getBranchCommissionOnOtherAmount()).isEqualByComparingTo("0.0000");
         assertThat(captor.getValue().getCompanyCommissionOnBasicFreight()).isEqualByComparingTo("10.0000");
-        // totalCommission is every line summed (9 + 0 + 10) — not just the branch's own
-        // two, which is the (smaller) amount that actually gets credited to its wallet.
-        assertThat(captor.getValue().getTotalCommission()).isEqualByComparingTo("19.0000");
+        // totalCommission is the branch's own lines only (9 + 0), the amount credited to its
+        // wallet; the company's 10 stays in companyCommissionOnBasicFreight.
+        assertThat(captor.getValue().getTotalCommission()).isEqualByComparingTo("9.0000");
         assertThat(created.getStatus()).isEqualTo(ShipmentStatus.BOOKED);
     }
 

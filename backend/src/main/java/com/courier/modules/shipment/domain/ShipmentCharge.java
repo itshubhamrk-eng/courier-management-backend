@@ -129,11 +129,9 @@ public class ShipmentCharge extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal companyCommissionOnBasicFreight = BigDecimal.ZERO;
 
-    /** {@code commissionOnBasicFreight + branchCommissionOnOtherAmount +
-     *  companyCommissionOnBasicFreight} — every commission line on this shipment, stored
-     *  rather than re-derived on every report. <b>Not</b> what gets credited to the branch
-     *  wallet — that uses only the branch's own two lines, since this also folds in the
-     *  company's own cut. See {@code ShipmentBookingWalletListener}. */
+    /** {@code commissionOnBasicFreight + branchCommissionOnOtherAmount} — the branch's own
+     *  commission only (V136), which is also what gets credited to the branch wallet. The
+     *  company's cut is {@code companyCommissionOnBasicFreight}, not part of this total. */
     @Column(name = "total_commission", nullable = false, precision = 19, scale = 4)
     @Builder.Default
     private BigDecimal totalCommission = BigDecimal.ZERO;

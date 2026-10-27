@@ -1615,9 +1615,9 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (!branchService.instantCommissionOf(bookingBranchId)) {
             return BigDecimal.ZERO;
         }
-        // Only the branch's own two lines — totalCommission (V28) also folds in the
-        // company's own commissionOnBasicFreight, which is company revenue and must
-        // never land in the branch's wallet.
+        // Only the branch's own two lines — the same as totalCommission since V136; the
+        // company's own commissionOnBasicFreight is company revenue and must never land in
+        // the branch's wallet.
         return charge.getCommissionOnBasicFreight().add(charge.getBranchCommissionOnOtherAmount());
     }
 
@@ -2879,9 +2879,9 @@ public class ShipmentServiceImpl implements ShipmentService {
      *   <li>{@code branchCommissionOnOtherAmount = otherCharges * (100 -
      *       commissionOnOtherCharges)%} — the branch's remainder after the company's cut</li>
      *   <li>{@code totalCommission = commissionOnBasicFreight +
-     *       branchCommissionOnOtherAmount + companyCommissionOnBasicFreight} — every
-     *       commission line on this shipment, summed and stored rather than re-derived on
-     *       every report</li>
+     *       branchCommissionOnOtherAmount} — the branch's own two lines only (V136); the
+     *       company's cut stays in {@code companyCommissionOnBasicFreight}. Stored rather
+     *       than re-derived on every report</li>
      * </ul>
      * The remaining freight share (after both cuts) is company/head-office revenue, not
      * stored separately.
@@ -2954,8 +2954,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 percentOf(remainingFreight, bookingBranch.getCommissionOnBasicFreight());
         BigDecimal branchCommissionOnOtherAmount = percentOf(safeOtherCharges, branchShareOfOtherCharges);
         BigDecimal totalCommission = commissionOnBasicFreight
-                .add(branchCommissionOnOtherAmount)
-                .add(companyCommissionOnBasicFreight);
+                .add(branchCommissionOnOtherAmount);
 
         charge.setFreight(freight);
         charge.setFuelCharge(priced.fuelCharge());

@@ -6,6 +6,9 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-27 - Total Commission = branch commission only (V136)
+`ShipmentCharge.totalCommission` is now `commissionOnBasicFreight + branchCommissionOnOtherAmount`, no longer adding the company's `companyCommissionOnBasicFreight` (which keeps its own column). Every report/view reads the stored `total_commission` (Commission, Branch, Booking, Delivery, Vendor Audit paid/booking commission, shipment list/charges/view), so one change covers them all. V136 rewrites existing rows (`UPDATE shipment_charges SET total_commission = commission_on_basic_freight + branch_commission_on_other_amount`); local DB 1872 -> 0 mismatches, `commission-summary` totals check out. `ShipmentServiceImplTest` expectation 19 -> 9; 106 tests pass. Wallet credit amount unchanged (it already used only the branch's two lines). Not deployed.
+
 ## 2026-10-27 - Commission Credit report: Shipment Date column
 `CommissionLedgerRow` / `CommissionLedgerRowResponse` gained `bookingDate` (from `Shipment.getBookingDate()`); report shows a "Shipment Date" column before Booking Branch (Status column already existed) and the CSV export gained `shipmentDate` (numeric column index moved 4 -> 5). Verified on :8082/:4301 (header + row). Not deployed.
 
