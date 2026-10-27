@@ -73,6 +73,7 @@ const AI_LANGS: AiLangOption[] = [
     </div>
   `,
   styles: [`
+    @media (max-width: 640px) { .aib__label { display:none; } }
     .aib { position:relative; }
     .aib__trigger { position:relative; display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px 0 12px;
       border-radius:999px; border:none; cursor:pointer; white-space:nowrap; font:700 13px var(--font-sans); color:#fff;

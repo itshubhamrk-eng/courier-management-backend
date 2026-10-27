@@ -53,7 +53,8 @@ import { AiAssistantButton } from './ai-assistant-button';
     @media (max-width:1024px){ .hd{ padding:0 20px; margin:12px 16px 0; } }
     @media (max-width:640px){ .hd{ padding:0 14px; margin:10px 10px 0; gap:8px; } }
     .hd__left, .hd__right { display:flex; align-items:center; gap:8px; min-width:0; }
-    .hd__left { flex:1 1 0; overflow:hidden; }
+    .hd__left { flex:1 1 40px; min-width:40px; overflow:hidden; }
+    .hd__icon-btn { flex-shrink:0; }
     .hd__right { flex:0 1 auto; }
     .hd__brand { flex-shrink:0; }
     app-global-search { flex:0 1 280px; min-width:140px; }
@@ -69,6 +70,9 @@ import { AiAssistantButton } from './ai-assistant-button';
 
     @media (max-width: 560px) { .hd__company { display:none; } }
     @media (max-width: 900px) { app-global-search { flex-basis:200px; } }
+    /* The search box hides itself at 720px; its host must not keep reserving width and squeeze the menu button. */
+    @media (max-width: 720px) { app-global-search { display:none; } }
+    @media (max-width: 480px) { .hd__brand { display:none; } }
   `]
 })
 export class Header {
