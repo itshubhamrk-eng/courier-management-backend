@@ -56,6 +56,7 @@ type Filter = 'ALL' | 'CREDITED' | 'PENDING';
                  emptyTitle="No commission" emptyHint="No commission-bearing shipments in this month.">
         <ng-template #row let-r>
           <td>{{ r.shipmentNumber }}</td>
+          <td>{{ r.bookingDate | date: 'dd MMM yyyy' }}</td>
           <td>{{ branchLabel(r.bookingBranchId) }}</td>
           <td>{{ r.paymentModeName }}</td>
           <td>{{ r.status }}</td>
@@ -123,6 +124,7 @@ export class CommissionCreditReport implements OnInit {
 
   protected readonly columns: TableColumn<CommissionLedgerRow>[] = [
     { key: 'shipmentNumber', header: 'Shipment' },
+    { key: 'bookingDate', header: 'Shipment Date' },
     { key: 'bookingBranchId', header: 'Booking Branch' },
     { key: 'paymentModeName', header: 'Payment' },
     { key: 'status', header: 'Status' },
@@ -178,9 +180,9 @@ export class CommissionCreditReport implements OnInit {
   protected exportCsv(): void {
     const rows = this.visible();
     downloadCsv(`commission-credit-${this.month()}.csv`,
-      ['shipment', 'branch', 'payment', 'status', 'commission', 'state', 'creditedAt', 'awaiting'],
-      rows.map((r) => [r.shipmentNumber, this.branchLabel(r.bookingBranchId), r.paymentModeName, r.status,
-        r.commission, r.credited ? 'Credited' : 'Pending', r.creditedAt ?? '', r.awaiting ?? '']), [4]);
+      ['shipment', 'shipmentDate', 'branch', 'payment', 'status', 'commission', 'state', 'creditedAt', 'awaiting'],
+      rows.map((r) => [r.shipmentNumber, r.bookingDate, this.branchLabel(r.bookingBranchId), r.paymentModeName, r.status,
+        r.commission, r.credited ? 'Credited' : 'Pending', r.creditedAt ?? '', r.awaiting ?? '']), [5]);
     this.notify.info(`Exported ${rows.length} row(s).`);
   }
 }

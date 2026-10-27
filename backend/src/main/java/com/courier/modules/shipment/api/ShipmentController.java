@@ -290,7 +290,7 @@ public class ShipmentController {
             @Valid @ParameterObject ShipmentSearchRequest search) {
         return ApiResponse.success(shipmentService.commissionLedger(mapper.toCriteria(search)).stream()
                 .map(r -> new com.courier.modules.shipment.api.dto.CommissionLedgerRowResponse(
-                        r.shipmentId(), r.shipmentNumber(), r.bookingBranchId(), r.status(), r.paymentModeName(),
+                        r.shipmentId(), r.shipmentNumber(), r.bookingDate(), r.bookingBranchId(), r.status(), r.paymentModeName(),
                         r.commission(), r.credited(), r.creditedAt(), r.awaiting()))
                 .toList());
     }

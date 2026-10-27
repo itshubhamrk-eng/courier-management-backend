@@ -2,6 +2,7 @@ package com.courier.modules.shipment.domain;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -12,6 +13,7 @@ import java.util.UUID;
 public record CommissionLedgerRow(
         UUID shipmentId,
         String shipmentNumber,
+        LocalDate bookingDate,
         UUID bookingBranchId,
         ShipmentStatus status,
         String paymentModeName,

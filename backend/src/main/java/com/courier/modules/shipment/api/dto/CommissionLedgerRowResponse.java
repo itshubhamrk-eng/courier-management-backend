@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /** One row of GET /api/v1/shipments/commission-ledger — the Commission Credit report. */
@@ -12,6 +13,7 @@ import java.util.UUID;
 public record CommissionLedgerRowResponse(
         UUID shipmentId,
         String shipmentNumber,
+        LocalDate bookingDate,
         UUID bookingBranchId,
         ShipmentStatus status,
         String paymentModeName,

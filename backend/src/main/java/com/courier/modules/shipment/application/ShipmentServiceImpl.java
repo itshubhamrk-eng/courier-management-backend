@@ -963,7 +963,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                     : "HUB_IN_SCAN".equals(trigger) ? "In scan at hub / delivery branch"
                     : "In scan at delivery branch";
             rows.add(new com.courier.modules.shipment.domain.CommissionLedgerRow(
-                    s.getId(), s.getShipmentNumber(), s.getBookingBranchId(), s.getStatus(), mode.getName(),
+                    s.getId(), s.getShipmentNumber(), s.getBookingDate(), s.getBookingBranchId(), s.getStatus(), mode.getName(),
                     commission, credited, s.getBookingCommissionCreditedAt(), awaiting));
         }
         rows.sort(Comparator.comparing(com.courier.modules.shipment.domain.CommissionLedgerRow::credited)

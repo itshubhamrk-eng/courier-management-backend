@@ -6,6 +6,9 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-10-27 - Commission Credit report: Shipment Date column
+`CommissionLedgerRow` / `CommissionLedgerRowResponse` gained `bookingDate` (from `Shipment.getBookingDate()`); report shows a "Shipment Date" column before Booking Branch (Status column already existed) and the CSV export gained `shipmentDate` (numeric column index moved 4 -> 5). Verified on :8082/:4301 (header + row). Not deployed.
+
 ## 2026-10-27 - Commission credit works for hub in-scan by any user; admin "Credit now" button
 Prod had zero `COM` wallet entries: `WalletServiceImpl.creditCommission` went through `resolveBranchForWrite`, so the event-driven credit after a hub in-scan 403'd ("You may only transact on the wallet of your own branch") whenever the scanning user was not an admin; the listener's `clearStamp` then rolled back with the rollback-only tx, leaving 25 shipments stamped credited with no wallet entry. `creditCommission` now credits `command.branchId()` directly (branch-exists check only; only the two shipment listeners call it). New `POST /shipments/{id}/credit-commission` (COMPANY_ADMIN, `ShipmentService.creditPendingCommission`) + "Credit now" button on the Commission Credit report for pending rows. Verified on :8082/:4301: non-admin hub in-scan -> `COM` posted; admin endpoint + UI click credited TEST-000021. Backlog on prod (45 unstamped past in-scan, 25 stamped-without-wallet) NOT yet reconciled.
 

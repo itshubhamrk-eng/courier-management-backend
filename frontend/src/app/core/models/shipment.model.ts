@@ -550,6 +550,7 @@ export interface BranchCommissionSummary {
 export interface CommissionLedgerRow {
   shipmentId: string;
   shipmentNumber: string;
+  bookingDate: string;
   bookingBranchId: string;
   status: ShipmentStatus;
   paymentModeName: string;
