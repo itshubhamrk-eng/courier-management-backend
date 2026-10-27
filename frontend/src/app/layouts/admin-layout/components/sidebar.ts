@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { NavigationService } from '@core/navigation/navigation.service';
@@ -18,11 +18,11 @@ import { NavigationService } from '@core/navigation/navigation.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive, MatIconModule],
   template: `
-    <nav class="sb app-scroll" [class.sb--collapsed]="nav.collapsed()" [class.sb--open]="mobileOpen()"
+    <nav class="sb app-scroll" [class.sb--collapsed]="rail()" [class.sb--open]="mobileOpen()"
          aria-label="Primary">
       <div class="sb__brand">
         <div class="sb__logo"><span>CS</span></div>
-        @if (!nav.collapsed()) { <span class="sb__brand-name">Courier SaaS</span> }
+        @if (!rail()) { <span class="sb__brand-name">Courier SaaS</span> }
       </div>
 
       <ul class="sb__list" role="list">
@@ -32,18 +32,18 @@ import { NavigationService } from '@core/navigation/navigation.service';
               <!-- Expandable section/group -->
               <button type="button" class="sb__item sb__item--group"
                       [class.sb__item--active]="nav.isGroupActive(item)"
-                      [attr.aria-expanded]="!nav.collapsed() && nav.isExpanded(item)"
+                      [attr.aria-expanded]="!rail() && nav.isExpanded(item)"
                       [attr.aria-controls]="'grp-' + item.id"
                       [attr.data-tour]="item.id"
-                      [title]="nav.collapsed() ? item.title : ''"
+                      [title]="rail() ? item.title : ''"
                       (click)="nav.toggle(item)">
                 <mat-icon class="sb__icon">{{ item.icon }}</mat-icon>
-                @if (!nav.collapsed()) {
+                @if (!rail()) {
                   <span class="sb__label">{{ item.title }}</span>
                   <mat-icon class="sb__chevron" [class.sb__chevron--open]="nav.isExpanded(item)">expand_more</mat-icon>
                 }
               </button>
-              @if (!nav.collapsed() && nav.isExpanded(item)) {
+              @if (!rail() && nav.isExpanded(item)) {
                 <ul class="sb__children" role="list" [id]="'grp-' + item.id">
                   @for (child of item.children ?? []; track child.id) {
                     <li>
@@ -65,10 +65,10 @@ import { NavigationService } from '@core/navigation/navigation.service';
                  [routerLinkActiveOptions]="{ exact: true }"
                  #rla="routerLinkActive" [attr.aria-current]="rla.isActive ? 'page' : null"
                  [attr.data-tour]="item.id"
-                 [title]="nav.collapsed() ? item.title : ''" (click)="navigate.emit()">
+                 [title]="rail() ? item.title : ''" (click)="navigate.emit()">
                 <mat-icon class="sb__icon">{{ item.icon }}</mat-icon>
-                @if (!nav.collapsed()) { <span class="sb__label">{{ item.title }}</span> }
-                @if (item.badge && !nav.collapsed()) { <span class="sb__badge">{{ item.badge }}</span> }
+                @if (!rail()) { <span class="sb__label">{{ item.title }}</span> }
+                @if (item.badge && !rail()) { <span class="sb__badge">{{ item.badge }}</span> }
               </a>
             }
           </li>
@@ -106,10 +106,10 @@ import { NavigationService } from '@core/navigation/navigation.service';
 
     /* Mobile: off-canvas drawer over a shell-rendered backdrop. Collapse is a desktop concept only. */
     @media (max-width: 1024px) {
-      .sb { position:fixed; inset:0 auto 0 0; z-index:60; width:var(--sidebar-w);
-        transform:translateX(-100%); box-shadow:0 0 24px rgba(0,0,0,.25); }
-      .sb--collapsed { width:var(--sidebar-w); }
-      .sb--open { transform:translateX(0); }
+      .sb { position:fixed; inset:0 auto 0 0; z-index:60; width:min(var(--sidebar-w), 86vw); height:100dvh;
+        transform:translateX(-100%); visibility:hidden; box-shadow:0 0 24px rgba(0,0,0,.25);
+        transition:transform .2s ease, visibility 0s linear .2s; }
+      .sb--open { transform:translateX(0); visibility:visible; transition:transform .2s ease; }
     }
     @media (prefers-reduced-motion: reduce) { .sb { transition:none; } .sb__item { transition:background .12s, color .12s; } }
   `]
@@ -117,6 +117,10 @@ import { NavigationService } from '@core/navigation/navigation.service';
 export class Sidebar {
   protected readonly nav = inject(NavigationService);
   readonly mobileOpen = input(false);
+  /** Tablet/mobile viewport: the sidebar is a drawer, so the desktop icon-rail setting must not apply. */
+  readonly drawerMode = input(false);
+  /** Icon-only rail: a desktop-only state, never inside the mobile drawer. */
+  protected readonly rail = computed(() => this.nav.collapsed() && !this.drawerMode());
   /** Emitted on a navigation click so the shell can close the mobile drawer. */
   readonly navigate = output<void>();
 }

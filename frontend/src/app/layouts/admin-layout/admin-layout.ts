@@ -23,7 +23,7 @@ import { Footer } from './components/footer';
   imports: [RouterOutlet, Sidebar, Header, Footer, MatIconModule],
   template: `
     <div class="shell">
-      <app-sidebar [mobileOpen]="drawerOpen()" (navigate)="closeDrawer()" />
+      <app-sidebar [mobileOpen]="drawerOpen()" [drawerMode]="isMobile()" (navigate)="closeDrawer()" />
       @if (drawerOpen()) { <div class="shell__backdrop" (click)="closeDrawer()"></div> }
       <div class="shell__main">
         @if (auth.isImpersonating()) {
@@ -66,7 +66,7 @@ export class AdminLayout {
 
   /** Mobile/tablet: drawer visible. Desktop collapse lives in NavigationService (persisted). */
   readonly drawerOpen = signal(false);
-  private readonly isMobile = signal(false);
+  protected readonly isMobile = signal(false);
 
   constructor() {
     this.idleTimeout.start();
