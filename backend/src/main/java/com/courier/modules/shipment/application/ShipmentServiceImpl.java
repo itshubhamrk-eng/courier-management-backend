@@ -971,6 +971,35 @@ public class ShipmentServiceImpl implements ShipmentService {
         return rows;
     }
 
+    @Override
+    @Transactional
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    public void creditPendingCommission(UUID shipmentId) {
+        UUID companyId = requireCompany();
+        Shipment shipment = loadOrThrow(shipmentId, companyId);
+        if (shipment.getStatus() == ShipmentStatus.CANCELLED) {
+            throw new BusinessRuleException("A cancelled shipment earns no commission.");
+        }
+        if (shipment.getBookingCommissionCreditedAt() != null) {
+            throw new BusinessRuleException("Commission for this shipment is already credited.");
+        }
+        ShipmentCharge charge = chargeRepository.findByShipmentIdWithinCompany(shipmentId, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("ShipmentCharge", shipmentId));
+        BigDecimal commission = eligibleBranchCommission(shipment.getBookingBranchId(), charge);
+        if (commission.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessRuleException("This shipment has no branch commission to credit.");
+        }
+        stampBookingCommission(shipment, commission);
+        eventPublisher.publishEvent(new ShipmentEvent.InScanCommissionEarned(
+                shipment.getId(), companyId, shipment.getBookingBranchId(), shipment.getShipmentNumber(),
+                commission, Instant.now()));
+        log.info("Commission {} for shipment {} credited manually by {}", commission,
+                shipment.getShipmentNumber(), currentActor());
+        auditService.record(AuditAction.SHIPMENT_UPDATED, ENTITY, shipmentId,
+                Map.of("shipmentNumber", shipment.getShipmentNumber(),
+                        "commissionCredited", commission.toPlainString()));
+    }
+
     private static BigDecimal sum(List<ShipmentCharge> charges, java.util.function.Function<ShipmentCharge, BigDecimal> field) {
         return charges.stream().map(field).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
     }

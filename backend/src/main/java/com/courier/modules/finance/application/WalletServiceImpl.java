@@ -801,7 +801,10 @@ public class WalletServiceImpl implements WalletService {
     @PreAuthorize(AUTHENTICATED)
     public WalletTransaction creditCommission(CommissionCreditCommand command) {
         UUID companyId = requireCompany();
-        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+        // Driven by a shipment event (hub in-scan / delivery), so the caller is whoever scanned,
+        // usually not the booking branch's own user — the own-branch guard does not apply.
+        UUID resolvedBranch = command.branchId();
+        requireBranchExists(resolvedBranch, companyId);
 
         BigDecimal validated = requirePositiveAmount(command.amount());
         SubTransactionType reason = SubTransactionType.COM;

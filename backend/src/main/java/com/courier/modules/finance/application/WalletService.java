@@ -211,13 +211,12 @@ public interface WalletService {
      * Credits the booking branch's wallet with its commission share of a PREPAID shipment
      * ({@code COM}, referencing the shipment number) — posted right after
      * {@link #debitForBooking} settles, only when the branch has {@code instantCommission}
-     * on. Same non-{@code COMPANY_ADMIN}-only shape as {@link #debitForBooking}.
+     * on. Event-driven: credits the named branch whoever the caller is, unlike
+     * {@link #debitForBooking}, which is own-branch only for non-admins.
      *
      * @param command branch, amount, and the shipment the credit answers to
      * @throws com.courier.shared.exception.BusinessRuleException a non-ACTIVE wallet or a
      *         non-positive amount
-     * @throws com.courier.shared.exception.ForbiddenException the branch is not the
-     *         caller's own and the caller is not a company admin
      */
     WalletTransaction creditCommission(CommissionCreditCommand command);
 

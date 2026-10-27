@@ -295,6 +295,16 @@ public class ShipmentController {
                 .toList());
     }
 
+    @PostMapping("/{id}/credit-commission")
+    @Operation(summary = "Credit a pending booking-branch commission now",
+            description = "Company admin only. Posts the commission to the booking branch's wallet "
+                    + "without waiting for the in-scan / delivery it is normally tied to. Refused "
+                    + "when already credited, cancelled, or the branch earns no commission.")
+    public ApiResponse<Void> creditCommission(@PathVariable UUID id) {
+        shipmentService.creditPendingCommission(id);
+        return ApiResponse.success(null, "Commission credited");
+    }
+
     @GetMapping("/branch-performance")
     @Operation(summary = "Shipment volume/outcome totals grouped by booking branch",
             description = "Same filters as the list endpoint (`ShipmentSearchRequest`), "

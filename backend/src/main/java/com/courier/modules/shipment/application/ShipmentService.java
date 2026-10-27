@@ -140,6 +140,16 @@ public interface ShipmentService {
     List<com.courier.modules.shipment.domain.CommissionLedgerRow> commissionLedger(ShipmentCriteria criteria);
 
     /**
+     * Credits a still-pending booking-branch commission now, without waiting for the scan or
+     * delivery it is normally tied to. Company-admin only; the credit posts through the same
+     * event as the scan-driven one, so the shipment is stamped and the wallet gets a COM entry.
+     *
+     * @throws com.courier.shared.exception.BusinessRuleException already credited, cancelled,
+     *         or no commission earned (branch has instant commission off, or amount is zero)
+     */
+    void creditPendingCommission(UUID shipmentId);
+
+    /**
      * Shipment volume and outcome totals for the same search, grouped by booking branch —
      * the Branch Performance Report's per-branch row. One row per booking branch with at
      * least one matching shipment.

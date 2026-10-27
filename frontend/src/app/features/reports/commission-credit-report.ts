@@ -7,6 +7,7 @@ import { CommissionLedgerRow } from '@core/models/shipment.model';
 import { TableColumn, UiTable } from '@shared/components/ui-table/ui-table';
 import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { DialogService } from '@shared/components/ui-dialog/dialog.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
 import { excludingCancelled } from './non-cancelled.util';
@@ -61,6 +62,14 @@ type Filter = 'ALL' | 'CREDITED' | 'PENDING';
           <td class="num strong">₹{{ r.commission | number: '1.2-2' }}</td>
           <td><span [class]="r.credited ? 'tag tag--ok' : 'tag tag--wait'">{{ r.credited ? 'Credited' : 'Pending' }}</span></td>
           <td>{{ r.credited ? (r.creditedAt | date: 'dd MMM yyyy, HH:mm') : ('Awaiting: ' + r.awaiting) }}</td>
+          @if (isAdmin) {
+            <td>
+              @if (!r.credited) {
+                <app-button variant="stroked" [loading]="crediting() === r.shipmentId"
+                            (pressed)="creditNow(r)">Credit now</app-button>
+              }
+            </td>
+          }
         </ng-template>
       </app-table>
     </div>
@@ -89,6 +98,11 @@ export class CommissionCreditReport implements OnInit {
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthService);
+  private readonly dialogs = inject(DialogService);
+
+  /** Crediting ahead of the scan is a company-admin override — see ShipmentServiceImpl.creditPendingCommission. */
+  protected readonly isAdmin = this.auth.hasAnyRole(['COMPANY_ADMIN']);
+  protected readonly crediting = signal<string | null>(null);
 
   private readonly myBranchId = this.auth.user()?.branchId ?? null;
   protected readonly maxMonth = currentMonth();
@@ -114,7 +128,8 @@ export class CommissionCreditReport implements OnInit {
     { key: 'status', header: 'Status' },
     { key: 'commission', header: 'Commission', align: 'right' },
     { key: 'credited', header: 'State' },
-    { key: 'creditedAt', header: 'Credited At / Waiting For' }
+    { key: 'creditedAt', header: 'Credited At / Waiting For' },
+    ...(this.isAdmin ? [{ key: 'action', header: '' }] : [])
   ];
 
   ngOnInit(): void {
@@ -133,6 +148,22 @@ export class CommissionCreditReport implements OnInit {
     }).subscribe({
       next: (rows) => { this.rows.set(rows); this.loading.set(false); },
       error: () => this.loading.set(false)
+    });
+  }
+
+  protected creditNow(r: CommissionLedgerRow): void {
+    this.dialogs.confirm({
+      title: 'Credit commission now',
+      message: `Credit ₹${r.commission.toFixed(2)} to ${this.branchLabel(r.bookingBranchId)}'s wallet for ${r.shipmentNumber}, `
+        + `without waiting for ${r.awaiting?.toLowerCase() ?? 'the scan'}?`,
+      confirmLabel: 'Credit'
+    }).subscribe((ok) => {
+      if (!ok) { return; }
+      this.crediting.set(r.shipmentId);
+      this.service.creditCommission(r.shipmentId).subscribe({
+        next: () => { this.crediting.set(null); this.notify.success('Commission credited.'); this.load(); },
+        error: (e) => { this.crediting.set(null); this.notify.error(e?.error?.message ?? 'Could not credit the commission.'); }
+      });
     });
   }
 

@@ -37,6 +37,10 @@ export class ShipmentService {
     return this.api.get<CommissionLedgerRow[]>(
       `${API.shipments}/commission-ledger`, filters as Record<string, unknown>);
   }
+  /** COMPANY_ADMIN only — credits a pending booking-branch commission now, ahead of its scan. */
+  creditCommission(id: string) {
+    return this.api.post<void>(`${API.shipments}/${id}/credit-commission`, {});
+  }
   /** Shipment volume/outcome totals grouped by booking branch — the Branch Performance
    *  Report's summary table. Same filters as `list`. */
   branchPerformance(filters: ShipmentSearchRequest) {
