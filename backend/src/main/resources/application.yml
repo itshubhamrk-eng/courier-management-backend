@@ -336,3 +336,22 @@ logging:
   # a log line — see RequestIdFilter and TenantResolutionFilter.
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{companyId:-}] %logger{36} - %msg%n"
+
+# OCCPL SaaS platform integration (provisioning endpoint). Off unless enabled; see
+# MEMORY/modules/platform-integration.md.
+occpl:
+  platform:
+    enabled: ${OCCPL_PLATFORM_ENABLED:false}
+    issuer-uri: ${OCCPL_PLATFORM_ISSUER_URI:}
+    jwk-set-uri: ${OCCPL_PLATFORM_JWK_SET_URI:}
+    audience: ${OCCPL_PLATFORM_AUDIENCE:}
+    provisioning-client-id: ${OCCPL_PLATFORM_PROVISIONING_CLIENT_ID:occpl-core-services}
+    default-plan-code: ${OCCPL_PLATFORM_DEFAULT_PLAN_CODE:}
+    default-mobile: ${OCCPL_PLATFORM_DEFAULT_MOBILE:}
+    # "Sign in with OCCPL": the Keycloak client people use (token azp), and this app's own service client
+    # for asking the platform who may sign in.
+    web-client-id: ${OCCPL_PLATFORM_WEB_CLIENT_ID:courier-web}
+    core-base-url: ${OCCPL_PLATFORM_CORE_BASE_URL:}
+    core-token-uri: ${OCCPL_PLATFORM_CORE_TOKEN_URI:}
+    service-client-id: ${OCCPL_PLATFORM_SERVICE_CLIENT_ID:courier-service}
+    service-client-secret: ${OCCPL_PLATFORM_SERVICE_CLIENT_SECRET:}

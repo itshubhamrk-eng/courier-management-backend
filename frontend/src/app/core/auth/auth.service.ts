@@ -43,6 +43,16 @@ export class AuthService {
     );
   }
 
+  /** Signs in with a platform access token (already verified by the platform, checked again by the server). */
+  loginWithPlatform(accessToken: string, platformCompanyId: string): Observable<LoginResponse> {
+    return this.api.post<LoginResponse>(API.auth.platformExchange, { accessToken, platformCompanyId }).pipe(
+      tap((res) => {
+        this.applySession(res);
+        this.tokens.setCompanyCode(null);
+      })
+    );
+  }
+
   /** The code this session logged in with (see TokenService.COMPANY_CODE) — null for a
    *  session hydrated from a stored token alone (e.g. a reload) with no login request.
    *  A plain getter, not a computed: it has no signal dependency to react to, and a

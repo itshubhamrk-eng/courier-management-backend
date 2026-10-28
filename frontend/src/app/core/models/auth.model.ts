@@ -82,3 +82,10 @@ export interface JwtClaims {
   iat: number;
   jti: string;
 }
+
+/** Where the browser sends people to sign in with the OCCPL platform (backend `/auth/platform/config`). */
+export interface PlatformSsoConfig {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  clientId: string;
+}

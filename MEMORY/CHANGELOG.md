@@ -168,6 +168,34 @@ nothing could be imported): a row per place (गावाचे नाव) with 
 
 ---
 
+## 2026-10-16 — "Sign in with OCCPL" backend (single sign-on, off by default)
+
+New `POST /api/v1/auth/platform/exchange` turns a platform (Keycloak) access token into a normal courier session, after asking the platform
+whether the person may use the company. Existing accounts are matched by email; new people are created as `VIEWER` (platform company admins as
+`COMPANY_ADMIN`). New `TrustedSignInService` (auth) and `UserProvisioningService.provisionPlatformUser`; `AuthService` and the password login are unchanged.
+Only exists with `occpl.platform.enabled=true`. Tests: `PlatformSignInServiceTest` (6), `TrustedSignInServiceTest` (5); unit suite 1354 passing.
+Web side: public `GET /api/v1/auth/platform/config`, route `/sso` (authorization-code + PKCE round trip, then the exchange), and a "Sign in with OCCPL" link on the
+login page for browsers that have used it before. Tests: `PlatformSignInControllerTest`, `pkce.util.spec.ts`, `platform-sso.service.spec.ts`; web suite 232 passing.
+Needs the two Keycloak clients before it can be used end to end (see `MEMORY/modules/platform-integration.md`).
+
+---
+
+## 2026-10-16 — OCCPL platform provisioning endpoint (`V127`, off by default)
+
+New module `platformintegration`: `PUT/DELETE /provisioning/v1/tenants/{companyId}`, the contract the OCCPL SaaS
+platform uses to create / stop serving a company in a product. Disabled unless `occpl.platform.enabled=true`.
+- Own `@Order(1)` security chain for `/provisioning/v1/**` only (Keycloak JWT: signature via JWK set, issuer,
+  audience, and `client_id` = the platform's service client). The app's own login/tokens/chain are unchanged.
+- PUT is idempotent on `companies.external_company_id` (new nullable unique column, `V127`); creates the company
+  through `CompanyService.create` (roles, settings, first admin, activation email) on the configured
+  `default-plan-code`. A deactivated company is re-activated. DELETE deactivates only; data is kept.
+- Needs `adminEmail` (+ `mobile`, or `default-mobile` configured) in the request; the platform's current payload
+  does not send them yet, so a create is refused (422) until it does.
+- Dependency added: `spring-boot-starter-oauth2-resource-server`. Not yet deployed or registered on the platform.
+- Tests: `PlatformTenantServiceImplTest` (7), `PlatformSecurityConfigTest` (4). Full unit suite 1342 passing.
+
+---
+
 
 
 ## 2026-10-16 — MSRTC crossings: several per trip, suggestions, shipment-detail panel (follow-up to `V126`)

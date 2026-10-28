@@ -127,6 +127,55 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
     @Override
     @Transactional
+    public ProvisionedBranchUser provisionPlatformUser(NewPlatformUserCommand command) {
+        UUID companyId = command.companyId();
+        String email = User.normaliseEmail(command.email());
+
+        return CompanyContext.runAs(companyId, () -> {
+            if (userRepository.existsByEmail(email)) {
+                throw new DuplicateResourceException("User", "email", email);
+            }
+            Set<Role> roles = command.roles() == null || command.roles().isEmpty()
+                    ? EnumSet.of(Role.VIEWER)
+                    : EnumSet.copyOf(command.roles());
+            if (roles.stream().anyMatch(Role::isPlatformScoped)) {
+                throw new IllegalArgumentException("A platform sign-in can never create a platform-scoped user");
+            }
+
+            // Random and discarded: the account is entered through the platform, and still has to pass the
+            // same policy as any password it could later be given.
+            String unusable = generatePassword();
+            passwordPolicy.validate(unusable, email, null, passwordEncoder::matches);
+
+            User user = userRepository.save(User.builder()
+                    .email(email)
+                    .passwordHash(passwordEncoder.encode(unusable))
+                    .firstName(command.firstName())
+                    .lastName(command.lastName())
+                    .status(UserStatus.ACTIVE)
+                    .roles(roles)
+                    .emailVerified(true)
+                    .emailVerifiedAt(Instant.now())
+                    .build());
+
+            if (roles.contains(Role.COMPANY_ADMIN)) {
+                companyRoleProvisioningPort.ensureCompanyAdminRole(companyId, user.getId());
+            }
+
+            log.info("Provisioned platform user {} for company {} with roles {}", user.getId(), companyId, roles);
+            auditService.record(AuditAction.USER_CREATED, "User", user.getId(),
+                    Map.of("email", email,
+                            "companyId", companyId.toString(),
+                            "roles", roles.stream().map(Enum::name).toList(),
+                            "provisioned", true,
+                            "platformSignIn", true));
+
+            return new ProvisionedBranchUser(user.getId(), email, null);
+        });
+    }
+
+    @Override
+    @Transactional
     public ProvisionedBranchUser provisionSuperAdmin(NewSuperAdminCommand command) {
         UUID companyId = command.companyId();
         String email = User.normaliseEmail(command.email());

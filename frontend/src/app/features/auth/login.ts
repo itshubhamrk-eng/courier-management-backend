@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '@core/auth/auth.service';
+import { PlatformSsoService } from '@core/auth/platform-sso.service';
 import { NotificationService } from '@core/services/notification.service';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -46,6 +47,9 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
         <app-button type="submit" [loading]="loading()" [disabled]="form.invalid">Sign in</app-button>
         @if (error()) { <p class="login__error">{{ error() }}</p> }
       </form>
+      @if (ssoAvailable()) {
+        <a class="login__sso" routerLink="/sso">Sign in with OCCPL</a>
+      }
 
       @if (devMode) {
         <div class="login__dev">
@@ -83,6 +87,7 @@ import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
     .login__form { display:flex; flex-direction:column; gap:16px; }
     .login__row { display:flex; align-items:center; justify-content:space-between; }
     .login__remember { display:flex; align-items:center; gap:8px; font:500 13px var(--font-sans); color:var(--content-muted); cursor:pointer; }
+    .login__sso { display:block; text-align:center; margin-top:12px; padding:10px 12px; border:1px solid var(--brand-600); border-radius:8px; font:600 14px var(--font-sans); color:var(--brand-600); text-decoration:none; }
     .login__forgot { font:500 13px var(--font-sans); color:var(--brand-600); text-decoration:none; }
     .login__error { background:var(--danger-bg); color:var(--danger); padding:10px 12px; border-radius:10px; font:500 13px var(--font-sans); margin:0; }
     app-button { display:block; }
@@ -107,6 +112,9 @@ export class Login {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly notify = inject(NotificationService);
+  private readonly sso = inject(PlatformSsoService);
+  /** True once the platform sign-in is switched on and this browser has used it before. */
+  readonly ssoAvailable = signal(false);
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -133,6 +141,9 @@ export class Login {
   });
 
   constructor() {
+    if (this.sso.lastCompany) {
+      this.sso.config().subscribe((config) => this.ssoAvailable.set(config !== null));
+    }
     const companyCode = companyCodeForHostname(window.location.hostname);
     if (companyCode) {
       this.form.controls.companyCode.setValue(companyCode);

@@ -28,6 +28,8 @@ public interface CompanyRepository extends JpaRepository<Company, UUID>,
 
     Optional<Company> findByCompanyCode(String companyCode);
 
+    Optional<Company> findByExternalCompanyId(UUID externalCompanyId);
+
     Optional<Company> findByEmail(String email);
 
     default boolean isCompanyCodeTaken(String companyCode, UUID excludeId) {

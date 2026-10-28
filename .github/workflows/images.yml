@@ -1,0 +1,44 @@
+# Builds the backend and web images and publishes them to GitHub Container Registry, for hosting
+# beside the OCCPL platform (see OCCPL repo infra/vps/RUNBOOK.md). Tags: the commit SHA and "dev".
+# Runs on pushes to the platform-integration branch and to main; it does not deploy anything.
+name: Courier images
+
+on:
+  push:
+    branches: [main, claude/occpl-platform-provisioning]
+    paths: ["backend/**", "frontend/**", ".github/workflows/images.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: courier-backend
+            context: backend
+          - name: courier-frontend
+            context: frontend
+            args: BUILD_CONFIGURATION=production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          build-args: ${{ matrix.args }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:dev
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
