@@ -138,7 +138,8 @@ import { environment } from '@env/environment';
 
     /* Phone: a drawer 12px from top/left/bottom, over a scrim in the shell. Labels always show. */
     @media (max-width: 900px) {
-      .sb { position:fixed; top:12px; left:12px; bottom:12px; margin:0; z-index:60; height:auto;
+      .sb { position:fixed; top:12px; left:12px; bottom:12px; margin:0; z-index:60; height:calc(100vh - 24px); height:calc(100dvh - 24px); overscroll-behavior:contain;
+        -webkit-overflow-scrolling:touch;
         width:min(18rem, 84%); transform:translateX(calc(-100% - 24px)); visibility:hidden;
         transition:transform .22s ease, visibility 0s linear .22s; }
       .sb--open { transform:translateX(0); visibility:visible; transition:transform .22s ease; }
