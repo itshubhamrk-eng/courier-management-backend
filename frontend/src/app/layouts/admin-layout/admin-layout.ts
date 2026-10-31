@@ -11,8 +11,8 @@ import { Footer } from './components/footer';
 
 /**
  * The authenticated shell. One toggle drives two behaviours by viewport:
- *  - desktop (>1024px): the dark rail collapses to icons and back;
- *  - tablet/mobile (≤1024px): the rail becomes an off-canvas drawer over a backdrop.
+ *  - desktop (>900px): the dark rail collapses to icons and back;
+ *  - phone (≤900px): the rail becomes an off-canvas drawer over a backdrop.
  * `matchMedia` tracks the breakpoint; leaving mobile closes the drawer so the desktop
  * layout never inherits a stray open state.
  */
@@ -41,18 +41,18 @@ import { Footer } from './components/footer';
     </div>
   `,
   styles: [`
-    .shell { display:flex; height:100vh; overflow:hidden; background:var(--surface-muted); }
+    .shell { display:flex; gap:0; height:100vh; overflow:hidden; background:var(--page-bg); }
     .shell__main { flex:1; display:flex; flex-direction:column; min-width:0; }
-    .shell__content { flex:1; overflow:auto; padding:24px 32px 32px; background:var(--surface-muted); }
-    .shell__backdrop { position:fixed; inset:0; z-index:50; background:rgba(15,23,42,.5); backdrop-filter:blur(1px); }
-    .imp-banner { display:flex; align-items:center; gap:10px; padding:8px 20px; font:600 13px var(--font-sans);
+    .shell__content { flex:1; overflow:auto; padding:24px 32px 32px; background:var(--page-bg); }
+    .shell__backdrop { position:fixed; inset:0; z-index:50; background:rgb(20 20 40 / 45%); }
+    .imp-banner { display:flex; align-items:center; gap:10px; padding:8px 20px; font:600 16px var(--font-sans);
       background:var(--warning-bg, #fff7ed); color:var(--warning, #b45309); }
-    .imp-banner mat-icon { font-size:18px; width:18px; height:18px; }
+    .imp-banner mat-icon { font-size:21px; width:18px; height:18px; }
     .imp-banner span { flex:1; }
-    .imp-banner__exit { font:700 12px var(--font-sans); color:inherit; background:rgba(0,0,0,.08);
+    .imp-banner__exit { font:700 15px var(--font-sans); color:inherit; background:rgba(0,0,0,.08);
       border:none; border-radius:var(--r-field); padding:4px 12px; cursor:pointer; }
     .imp-banner__exit:hover { background:rgba(0,0,0,.15); }
-    @media (max-width: 1024px) { .shell__content { padding:20px 20px 24px; } }
+    @media (max-width: 900px) { .shell__content { padding:20px 20px 24px; } }
     @media (max-width: 640px) { .shell__content { padding:14px 14px 20px; } }
   `]
 })
@@ -75,7 +75,7 @@ export class AdminLayout {
     // Sidebar/header DOM must be painted before driver.js can measure tour-step anchors.
     afterNextRender(() => this.tour.maybeAutoStart());
 
-    const mq = window.matchMedia('(max-width: 1024px)');
+    const mq = window.matchMedia('(max-width: 900px)');
     const apply = (matches: boolean) => {
       this.isMobile.set(matches);
       if (!matches) this.drawerOpen.set(false); // leaving mobile: never keep the drawer open

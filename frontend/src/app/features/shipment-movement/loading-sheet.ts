@@ -135,10 +135,10 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
     .df { display:flex; flex-direction:column; gap:16px; }
     .df__bar { display:flex; justify-content:flex-end; gap:10px; }
     .section-title { margin:8px 0 0; }
-    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
+    .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
     .tbl__wrap { margin-top:8px; overflow-x:auto; border:1px solid var(--surface-border); border-radius:var(--r-field); max-height:320px; overflow-y:auto; }
-    .tbl { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
-    .tbl th { text-align:left; padding:10px 14px; background:var(--surface-muted); color:var(--content-muted); font:600 11px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; position:sticky; top:0; }
+    .tbl { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); }
+    .tbl th { text-align:left; padding:10px 14px; background:var(--surface-muted); color:var(--content-muted); font:600 14px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; position:sticky; top:0; }
     .tbl td { padding:10px 14px; border-top:1px solid var(--surface-border); white-space:nowrap; }
     .tbl tbody tr { cursor:pointer; }
     .tbl tbody tr:hover { background:var(--surface-muted); }
@@ -431,25 +431,25 @@ export class LoadingSheet implements OnInit {
     return `<!doctype html><html><head><meta charset="utf-8"><title>Loading Sheet ${this.esc(m.manifestNumber)}</title>
       <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 9px; }
+        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
         .toolbar { width: 900px; margin: 0 auto 10px; }
-        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #777; background: #eee; cursor: pointer; font-size: 12px; }
+        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #777; background: #eee; cursor: pointer; font-size: 15px; }
         .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #777; }
-        .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #777; }
+        .title { text-align: center; font-size: 18px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #777; }
         .header { display: grid; grid-template-columns: 1fr 230px; border-bottom: 1px solid #777; }
         .company-info { text-align: center; padding: 10px; line-height: 15px; }
-        .company-info .big { font-size: 13px; font-weight: bold; }
+        .company-info .big { font-size: 16px; font-weight: bold; }
         .company-info .mark { max-width: 100%; max-height: 40px; object-fit: contain; }
         .challan-box { border-left: 1px solid #777; padding: 10px; text-align: center; }
-        .challan-number { font-size: 12px; font-weight: bold; }
+        .challan-number { font-size: 15px; font-weight: bold; }
         .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #777; }
         .meta div { padding: 4px 6px; border-right: 1px solid #777; }
         .meta div:last-child { border-right: 0; }
         .label { font-weight: bold; display: block; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         th, td { border-right: 1px solid #777; border-bottom: 1px solid #777; padding: 3px 4px; vertical-align: middle; height: 19px; word-wrap: break-word; }
-        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 8px; }
-        td { font-size: 8px; }
+        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 11px; }
+        td { font-size: 11px; }
         td.center, th.center { text-align: center; }
         td.right, th.right { text-align: right; }
         .c-sr { width: 30px; }

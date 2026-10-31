@@ -159,27 +159,27 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
     .inv-hdr { margin-bottom:16px; color:#000; background:#fff; }
     .inv-sheet { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--r-field); padding:24px; margin-bottom:16px; }
     .inv-head { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
-    .inv-head h2 { margin:0; font:700 22px var(--font-sans); letter-spacing:.04em; }
-    .inv-right { text-align:right; } .inv-right p { margin:4px 0 0; font:400 14px var(--font-sans); }
-    .inv-muted { font:400 13px var(--font-sans); color:var(--content-muted); margin:4px 0 0; }
-    .inv-bill { display:flex; flex-direction:column; gap:2px; margin-bottom:16px; font:400 14px var(--font-sans); }
-    .inv-t { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
-    .inv-t th { text-align:left; font:600 11px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; padding:8px 8px; border-bottom:1px solid var(--surface-border); }
+    .inv-head h2 { margin:0; font:700 25px var(--font-sans); letter-spacing:.04em; }
+    .inv-right { text-align:right; } .inv-right p { margin:4px 0 0; font:400 17px var(--font-sans); }
+    .inv-muted { font:400 16px var(--font-sans); color:var(--content-muted); margin:4px 0 0; }
+    .inv-bill { display:flex; flex-direction:column; gap:2px; margin-bottom:16px; font:400 17px var(--font-sans); }
+    .inv-t { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); }
+    .inv-t th { text-align:left; font:600 14px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; padding:8px 8px; border-bottom:1px solid var(--surface-border); }
     .inv-t td { padding:8px; border-bottom:1px solid var(--surface-border); } .inv-t .n { text-align:right; }
     .inv-t tfoot td { font-weight:700; border-top:2px solid var(--surface-border); border-bottom:0; }
-    .inv-t--plain td, .inv-t--plain th { font-size:14px; }
+    .inv-t--plain td, .inv-t--plain th { font-size:17px; }
     .inv-totals { margin:16px 0 0 auto; width:min(340px,100%); display:flex; flex-direction:column; gap:6px; }
-    .inv-totals p { display:flex; justify-content:space-between; margin:0; font:400 14px var(--font-sans); }
-    .inv-bal { border-top:2px solid var(--surface-border); padding-top:8px; font-size:16px !important; } .inv-bal strong { color:var(--danger); }
-    .inv-empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:12px; margin:0; }
+    .inv-totals p { display:flex; justify-content:space-between; margin:0; font:400 17px var(--font-sans); }
+    .inv-bal { border-top:2px solid var(--surface-border); padding-top:8px; font-size:19px !important; } .inv-bal strong { color:var(--danger); }
+    .inv-empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:12px; margin:0; }
     .inv-pay { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px 16px; align-items:end; margin-top:16px; }
     .inv-pay__actions { grid-column:1 / -1; display:flex; gap:10px; flex-wrap:wrap; }
-    .inv-file { display:flex; flex-direction:column; gap:6px; font:500 13px var(--font-sans); grid-column:span 2; }
-    .inv-file__n { font:400 12px var(--font-sans); color:var(--content-muted); }
-    .inv-banner { background:var(--success-bg); color:var(--success); border-radius:var(--r-field); padding:10px 14px; margin-bottom:12px; font:400 14px var(--font-sans); }
+    .inv-file { display:flex; flex-direction:column; gap:6px; font:500 16px var(--font-sans); grid-column:span 2; }
+    .inv-file__n { font:400 15px var(--font-sans); color:var(--content-muted); }
+    .inv-banner { background:var(--success-bg); color:var(--success); border-radius:var(--r-field); padding:10px 14px; margin-bottom:12px; font:400 17px var(--font-sans); }
     .inv-banner--warn { background:var(--warning-bg); color:var(--content-fg); }
     .inv-link { color:var(--brand-700); font-weight:600; } .inv-upload { color:var(--brand-700); font-weight:600; cursor:pointer; }
-    .inv-x { border:0; background:transparent; color:var(--content-muted); cursor:pointer; font-size:15px; } .inv-x:hover { color:var(--danger); }
+    .inv-x { border:0; background:transparent; color:var(--content-muted); cursor:pointer; font-size:18px; } .inv-x:hover { color:var(--danger); }
     @media (max-width:960px){ .inv-pay { grid-template-columns:1fr 1fr; } .inv-file { grid-column:1 / -1; } }
     @media print {
       body * { visibility:hidden !important; }

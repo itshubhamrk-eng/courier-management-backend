@@ -75,18 +75,18 @@ export interface TemporaryPasswordData {
   styles: [`
     .tp { padding:24px; width:520px; max-width:92vw; display:flex; flex-direction:column; gap:18px; }
     .tp__head { display:flex; gap:14px; align-items:flex-start; }
-    .tp__icon { color:var(--brand-500); font-size:28px; width:28px; height:28px; }
+    .tp__icon { color:var(--brand-500); font-size:31px; width:28px; height:28px; }
     .tp__grid { display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 18px; margin:0;
       padding:16px; background:var(--surface-muted, var(--surface)); border:1px solid var(--surface-border);
       border-radius:var(--r-field); }
-    .tp__grid dt { font:500 13px var(--font-sans); color:var(--content-muted); }
-    .tp__grid dd { margin:0; font:600 14px var(--font-sans); color:var(--content-fg); word-break:break-all; }
+    .tp__grid dt { font:500 16px var(--font-sans); color:var(--content-muted); }
+    .tp__grid dd { margin:0; font:600 17px var(--font-sans); color:var(--content-fg); word-break:break-all; }
     .mono { font-family:var(--font-mono, ui-monospace); }
     .tp__pwd { letter-spacing:0.04em; }
-    .tp__next { margin:0; font:400 13px var(--font-sans); color:var(--content-muted); line-height:1.55; }
-    .tp__warn { display:flex; gap:10px; margin:0; font:400 12px var(--font-sans);
+    .tp__next { margin:0; font:400 16px var(--font-sans); color:var(--content-muted); line-height:1.55; }
+    .tp__warn { display:flex; gap:10px; margin:0; font:400 15px var(--font-sans);
       color:var(--content-muted); line-height:1.55; }
-    .tp__warn mat-icon { font-size:18px; width:18px; height:18px; color:var(--warning, #b26a00); flex:none; }
+    .tp__warn mat-icon { font-size:21px; width:18px; height:18px; color:var(--warning, #b26a00); flex:none; }
     .tp__actions { display:flex; justify-content:flex-end; gap:10px; }
   `]
 })

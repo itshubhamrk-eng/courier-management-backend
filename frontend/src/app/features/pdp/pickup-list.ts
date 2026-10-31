@@ -96,9 +96,9 @@ import { PickupAssignDialog, PickupCompleteDialog } from './pickup-dialogs';
   `,
   styles: [`
     .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
-    .chip { border:1px solid var(--surface-border); background:transparent; border-radius:999px; padding:6px 12px; font:500 13px var(--font-sans); cursor:pointer; color:var(--content-fg); }
+    .chip { border:1px solid var(--surface-border); background:transparent; border-radius:999px; padding:6px 12px; font:500 16px var(--font-sans); cursor:pointer; color:var(--content-fg); }
     .chip b { margin-left:4px; } .chip.on { background:var(--primary, #1a56db); color:#fff; border-color:transparent; }
-    .cs { font:600 14px var(--font-sans); } .warn { color:var(--danger); }
+    .cs { font:600 17px var(--font-sans); } .warn { color:var(--danger); }
     .col-actions { text-align:right; white-space:nowrap; } .col-actions app-button { margin-left:6px; }
   `]
 })

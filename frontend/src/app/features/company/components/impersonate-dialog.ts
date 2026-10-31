@@ -46,7 +46,7 @@ export interface ImpersonateData {
   styles: [`
     .id { padding:28px; width:440px; max-width:92vw; display:flex; flex-direction:column; gap:18px; }
     .id__head { display:flex; gap:14px; align-items:flex-start; }
-    .id__icon { color:var(--brand-500); font-size:28px; width:28px; height:28px;
+    .id__icon { color:var(--brand-500); font-size:31px; width:28px; height:28px;
       background:var(--brand-50); border-radius:14px; padding:8px; box-sizing:content-box; box-shadow:var(--shadow-clay-sm); }
     .id__actions { display:flex; justify-content:flex-end; gap:10px; }
   `]

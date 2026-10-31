@@ -66,8 +66,8 @@ interface MenuGroup { id: string; title: string; icon?: string; children: { id: 
   styles: [`
     .actions { display:flex; gap:8px; }
     .grid { display:grid; gap:16px; margin-top:16px; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
-    .row { display:flex; align-items:center; gap:10px; padding:6px 0; font:500 13px var(--font-sans); cursor:pointer; }
-    .row--group { font-weight:700; font-size:14px; border-bottom:1px solid var(--surface-border); margin-bottom:4px; }
+    .row { display:flex; align-items:center; gap:10px; padding:6px 0; font:500 16px var(--font-sans); cursor:pointer; }
+    .row--group { font-weight:700; font-size:17px; border-bottom:1px solid var(--surface-border); margin-bottom:4px; }
     .row--child { padding-left:22px; font-weight:400; color:var(--content-fg); }
     .row small { margin-left:auto; color:var(--content-muted); font-weight:400; }
     input[type=checkbox] { width:16px; height:16px; accent-color:var(--brand-600); }

@@ -30,15 +30,15 @@ import { MatIconModule } from '@angular/material/icon';
   `,
   styles: [`
     .field { display:flex; flex-direction:column; gap:6px; }
-    .field__label { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .field__label { font:500 16px var(--font-sans); color:var(--content-fg); }
     .field__label i { color:var(--danger); margin-left:2px; font-style:normal; }
     .field__wrap { display:flex; align-items:center; gap:8px; height:44px; padding:0 14px;
       background:var(--surface-muted); border:1px solid transparent; border-radius:var(--r-field);
       box-shadow:var(--shadow-clay-inset); transition:box-shadow .15s, border-color .15s; }
     .field__wrap:focus-within { border-color:var(--brand-400); box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
     .field__wrap--err { border-color:var(--danger); }
-    .field__icon { color:var(--content-muted); font-size:20px; }
-    .field__input { border:0; outline:0; background:transparent; flex:1; font:400 14px var(--font-sans); color:var(--content-fg); }
+    .field__icon { color:var(--content-muted); font-size:23px; }
+    .field__input { border:0; outline:0; background:transparent; flex:1; font:400 17px var(--font-sans); color:var(--content-fg); }
     .field__input:-webkit-autofill, .field__input:-webkit-autofill:hover,
     .field__input:-webkit-autofill:focus, .field__input:-webkit-autofill:active {
       -webkit-text-fill-color:var(--content-fg); caret-color:var(--content-fg);
@@ -46,8 +46,8 @@ import { MatIconModule } from '@angular/material/icon';
       transition:background-color 9999s ease-in-out 0s;
     }
     .field__eye { display:grid; place-items:center; border:0; background:transparent; cursor:pointer; color:var(--content-muted); padding:0; }
-    .field__eye mat-icon { font-size:20px; width:20px; height:20px; }
-    .field__err { font:500 12px var(--font-sans); color:var(--danger); }
+    .field__eye mat-icon { font-size:23px; width:20px; height:20px; }
+    .field__err { font:500 15px var(--font-sans); color:var(--danger); }
   `]
 })
 export class UiInput {

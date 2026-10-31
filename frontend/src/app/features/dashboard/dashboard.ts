@@ -192,8 +192,8 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
     .dash__track ::ng-deep .ac__body { flex:1; display:flex; align-items:center; }
     .dash__track ::ng-deep .ac__body > * { width:100%; }
     .dash__date { display:inline-flex; align-items:center; gap:8px; padding:8px 16px; border-radius:var(--r-pill);
-      background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); font:600 13px var(--font-sans); color:var(--content-muted); }
-    .dash__date mat-icon { font-size:18px; width:18px; height:18px; }
+      background:var(--surface-muted); box-shadow:var(--shadow-clay-inset); font:600 16px var(--font-sans); color:var(--content-muted); }
+    .dash__date mat-icon { font-size:21px; width:18px; height:18px; }
     .dash__grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px; }
     .dash__charts { display:grid; gap:18px; }
     /* A lone odd-one-out in the final row (3 cards in a 2-up grid, say) spans both
@@ -211,10 +211,10 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
     .dash__cols--single { grid-template-columns:1fr; }
     .dash__main, .dash__side { display:flex; flex-direction:column; gap:18px; min-width:0; }
     .dash__error { display:flex; align-items:center; gap:16px; padding:8px; }
-    .dash__error mat-icon { font-size:36px; width:36px; height:36px; color:var(--danger); }
+    .dash__error mat-icon { font-size:39px; width:36px; height:36px; color:var(--danger); }
     .dash__error div { flex:1; }
     .dash__retry { padding:10px 20px; border-radius:var(--r-pill); border:0; cursor:pointer;
-      background:linear-gradient(155deg, var(--brand-500), var(--brand-600)); color:#fff; font:600 13px var(--font-sans);
+      background:linear-gradient(155deg, var(--brand-500), var(--brand-600)); color:#fff; font:600 16px var(--font-sans);
       box-shadow:var(--shadow-clay-sm); }
     .dash__retry:active { box-shadow:var(--shadow-clay-inset); }
     @media (max-width:1100px){ .dash__grid{grid-template-columns:repeat(2,1fr)} .dash__cols{grid-template-columns:1fr} }

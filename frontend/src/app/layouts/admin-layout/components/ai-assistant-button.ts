@@ -76,7 +76,7 @@ const AI_LANGS: AiLangOption[] = [
     @media (max-width: 640px) { .aib__label { display:none; } }
     .aib { position:relative; }
     .aib__trigger { position:relative; display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px 0 12px;
-      border-radius:999px; border:none; cursor:pointer; white-space:nowrap; font:700 13px var(--font-sans); color:#fff;
+      border-radius:999px; border:none; cursor:pointer; white-space:nowrap; font:700 16px var(--font-sans); color:#fff;
       background:linear-gradient(90deg,#6366f1,#a855f7,#ec4899,#6366f1); background-size:300% 100%;
       animation: aib-gradient 6s ease infinite; box-shadow:0 1px 8px rgba(147,51,234,.35); }
     .aib__trigger::before { content:''; position:absolute; inset:-2px; border-radius:999px; z-index:-1;
@@ -85,7 +85,7 @@ const AI_LANGS: AiLangOption[] = [
     .aib__trigger:hover, .aib__trigger--open { box-shadow:0 2px 14px rgba(147,51,234,.5); }
     @keyframes aib-gradient { 0% { background-position:0% 50%; } 50% { background-position:100% 50%; } 100% { background-position:0% 50%; } }
     .aib__icon { display:inline-flex; }
-    .aib__icon mat-icon { font-size:18px; width:18px; height:18px; animation: aib-sparkle 2.2s ease-in-out infinite; }
+    .aib__icon mat-icon { font-size:21px; width:18px; height:18px; animation: aib-sparkle 2.2s ease-in-out infinite; }
     @keyframes aib-sparkle { 0%,100% { transform:scale(1) rotate(0deg); opacity:1; } 50% { transform:scale(1.15) rotate(8deg); opacity:.75; } }
 
     .aib__backdrop { position:fixed; inset:0; z-index:40; background:transparent; }
@@ -93,14 +93,14 @@ const AI_LANGS: AiLangOption[] = [
       background:var(--surface); border:0; border-radius:var(--r-card-lg);
       box-shadow:var(--shadow-clay-hover); padding:16px; display:flex; flex-direction:column; gap:10px; }
     .aib__head { display:flex; align-items:center; justify-content:space-between; }
-    .aib__title { font:700 14px var(--font-sans); color:var(--content-fg); }
+    .aib__title { font:700 17px var(--font-sans); color:var(--content-fg); }
     .aib__close { border:0; background:transparent; color:var(--content-muted); cursor:pointer; display:flex; padding:2px; border-radius:6px; }
     .aib__close:hover { background:var(--surface-muted); color:var(--content-fg); }
-    .aib__close mat-icon { font-size:18px; width:18px; height:18px; }
+    .aib__close mat-icon { font-size:21px; width:18px; height:18px; }
 
     .aib__row { display:flex; align-items:center; gap:6px; }
     .aib__input { flex:1; height:38px; padding:0 12px; background:var(--surface-muted); border:0; box-shadow:var(--shadow-clay-inset);
-      border-radius:var(--r-field); font:400 13px var(--font-sans); color:var(--content-fg); min-width:0; }
+      border-radius:var(--r-field); font:400 16px var(--font-sans); color:var(--content-fg); min-width:0; }
     .aib__mic, .aib__send { flex:none; height:38px; width:38px; display:grid; place-items:center; border-radius:var(--r-field);
       border:0; background:var(--surface-muted); box-shadow:var(--shadow-clay-sm); color:var(--content-muted); cursor:pointer; }
     .aib__mic:hover:not(:disabled), .aib__send:hover:not(:disabled) { background:var(--surface-muted); color:var(--content-fg); }
@@ -108,20 +108,20 @@ const AI_LANGS: AiLangOption[] = [
     .aib__mic--live { background:var(--danger); border-color:var(--danger); color:#fff; }
     .aib__mic--live mat-icon { animation: aib-pulse .9s ease-in-out infinite; }
     @keyframes aib-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(1.2); } }
-    .aib__mic mat-icon, .aib__send mat-icon { font-size:18px; width:18px; height:18px; }
+    .aib__mic mat-icon, .aib__send mat-icon { font-size:21px; width:18px; height:18px; }
 
     .aib__langs { display:inline-flex; gap:2px; padding:2px; border-radius:999px; background:var(--surface-muted);
       border:1px solid var(--surface-border); align-self:flex-start; }
     .aib__lang { height:24px; min-width:24px; padding:0 8px; border:0; border-radius:999px; background:transparent;
-      color:var(--content-muted); font:600 11px var(--font-sans); cursor:pointer; }
+      color:var(--content-muted); font:600 14px var(--font-sans); cursor:pointer; }
     .aib__lang:hover:not(:disabled) { color:var(--content-fg); }
     .aib__lang--active { background:var(--brand-600); color:#fff; }
     .aib__lang:disabled { opacity:.5; cursor:not-allowed; }
 
-    .aib__interim { margin:0; font:400 12px var(--font-sans); color:var(--brand-600); font-style:italic; }
-    .aib__feedback { margin:0; font:500 12px var(--font-sans); color:var(--danger); background:var(--danger-bg);
+    .aib__interim { margin:0; font:400 15px var(--font-sans); color:var(--brand-600); font-style:italic; }
+    .aib__feedback { margin:0; font:500 15px var(--font-sans); color:var(--danger); background:var(--danger-bg);
       border-radius:8px; padding:8px 10px; }
-    .aib__hint { margin:0; font:400 11px var(--font-sans); color:var(--content-muted); line-height:1.5; }
+    .aib__hint { margin:0; font:400 14px var(--font-sans); color:var(--content-muted); line-height:1.5; }
   `]
 })
 export class AiAssistantButton implements OnDestroy {

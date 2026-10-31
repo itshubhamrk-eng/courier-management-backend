@@ -23,10 +23,10 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
   `,
   styles: [`
     .bc { display:flex; align-items:center; gap:4px; }
-    .bc__link { color:var(--content-muted); text-decoration:none; font:500 14px var(--font-sans); }
+    .bc__link { color:var(--content-muted); text-decoration:none; font:500 17px var(--font-sans); }
     .bc__link:hover { color:var(--brand-600); }
-    .bc__cur { color:var(--content-fg); font:600 14px var(--font-sans); }
-    .bc__sep { font-size:16px; width:16px; height:16px; color:var(--content-muted); }
+    .bc__cur { color:var(--content-fg); font:600 17px var(--font-sans); }
+    .bc__sep { font-size:19px; width:16px; height:16px; color:var(--content-muted); }
   `]
 })
 export class Breadcrumb {

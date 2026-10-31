@@ -47,7 +47,7 @@ import { BusDepotService } from './bus-depot.service';
   `,
   styles: [`
     .pick { display:flex; align-items:flex-end; gap:12px; } .pick app-autocomplete { flex:1; max-width:520px; }
-    .nm { font:600 14px var(--font-sans); } .sub { font:400 12px var(--font-sans); color:var(--content-muted); }
+    .nm { font:600 17px var(--font-sans); } .sub { font:400 15px var(--font-sans); color:var(--content-muted); }
   `]
 })
 export class BusTimetableList implements OnInit {

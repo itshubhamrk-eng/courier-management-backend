@@ -253,24 +253,24 @@ import { SettingsService } from '@features/settings/settings.service';
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
     .otp { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; padding:12px; background:var(--surface-muted); border-radius:var(--r-field); }
     .otp app-input { min-width:160px; }
-    .otp__ok { font:600 14px var(--font-sans); color:var(--success-600, #1a7f37); }
+    .otp__ok { font:600 17px var(--font-sans); color:var(--success-600, #1a7f37); }
     .mh { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    .mh strong { display:block; font:600 15px var(--font-sans); }
+    .mh strong { display:block; font:600 18px var(--font-sans); }
     .mh__actions { display:flex; gap:10px; }
     .section-title { margin:8px 0 0; }
-    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
+    .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
     .tbl__wrap { overflow-x:auto; border:1px solid var(--surface-border); border-radius:var(--r-field); }
-    .tbl { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
-    .tbl th { text-align:left; padding:10px 14px; background:var(--surface-muted); color:var(--content-muted); font:600 11px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+    .tbl { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); }
+    .tbl th { text-align:left; padding:10px 14px; background:var(--surface-muted); color:var(--content-muted); font:600 14px var(--font-sans); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
     .tbl td { padding:10px 14px; border-top:1px solid var(--surface-border); white-space:nowrap; }
     .tbl--right { text-align:right; }
     .fld { display:flex; flex-direction:column; gap:6px; }
-    .fld__l { font:500 13px var(--font-sans); color:var(--content-fg); }
+    .fld__l { font:500 16px var(--font-sans); color:var(--content-fg); }
     .fld__i { height:44px; padding:0 14px; background:var(--surface-muted); border:1px solid transparent;
-      border-radius:var(--r-field); box-shadow:var(--shadow-clay-inset); font:400 14px var(--font-sans); color:var(--content-fg); }
+      border-radius:var(--r-field); box-shadow:var(--shadow-clay-inset); font:400 17px var(--font-sans); color:var(--content-fg); }
     .fld__i:focus { outline:0; border-color:var(--brand-400); box-shadow:var(--shadow-clay-inset), 0 0 0 3px var(--brand-100); }
     .fld__i--area { height:auto; padding:10px 14px; resize:vertical; font-family:var(--font-sans); }
-    .fld__hint { font:400 12px var(--font-sans); color:var(--content-muted); }
+    .fld__hint { font:400 15px var(--font-sans); color:var(--content-muted); }
     @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
   `]
 })
@@ -710,11 +710,11 @@ export class TripHireChallan implements OnInit, OnDestroy {
     return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
       <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 9px; }
+        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
         .toolbar { width: 900px; margin: 0 auto 10px; }
-        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #000; background: #eee; cursor: pointer; font-size: 12px; }
+        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #000; background: #eee; cursor: pointer; font-size: 15px; }
         .challan { width: 900px; margin: auto; background: #fff; border: 1px solid #000; }
-        .title { text-align: center; font-size: 15px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #000; }
+        .title { text-align: center; font-size: 18px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #000; }
         ${PRINT_HEADER_CSS}
         .head, .head .co, .head .lrbox { border-color: #000; border-width: 1px; }
         .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #000; }
@@ -724,8 +724,8 @@ export class TripHireChallan implements OnInit, OnDestroy {
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         th, td { border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 4px; vertical-align: middle; min-height: 19px; word-wrap: break-word; overflow-wrap: break-word; }
         th:last-child, td:last-child { border-right: 0; }
-        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 8px; }
-        td { font-size: 8px; }
+        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 11px; }
+        td { font-size: 11px; }
         td.center, th.center { text-align: center; }
         td.right, th.right { text-align: right; }
         .c-sr { width: 30px; }
@@ -737,7 +737,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
         .footer-left { padding: 5px; border-right: 1px solid #000; }
         .footer-right { text-align: center; padding: 5px; font-weight: bold; }
         .signature { height: 22px; margin-top: 2px; }
-        .terms { border-bottom: 1px solid #000; padding: 6px 8px; font-size: 8px; line-height: 13px; }
+        .terms { border-bottom: 1px solid #000; padding: 6px 8px; font-size: 11px; line-height: 13px; }
         .terms .label { display: block; margin-bottom: 2px; }
         .terms ol { margin: 0; padding-left: 14px; }
         .expenses { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #000; }

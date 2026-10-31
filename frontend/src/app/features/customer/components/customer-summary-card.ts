@@ -27,13 +27,13 @@ import { CustomerResponse } from '@core/models/customer.model';
   styles: [`
     .cs__id { display:flex; gap:16px; align-items:flex-start; }
     .cs__av { width:56px; height:56px; border-radius:14px; background:var(--brand-100); color:var(--brand-700); display:grid; place-items:center; flex:0 0 auto; }
-    .cs__av mat-icon { font-size:28px; width:28px; height:28px; }
+    .cs__av mat-icon { font-size:31px; width:28px; height:28px; }
     .cs__name { display:flex; align-items:center; gap:12px; }
     .mono { font-family:var(--font-mono, ui-monospace); }
     .cs__tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .tag { display:inline-flex; align-items:center; gap:3px; background:var(--surface-muted); border:1px solid var(--surface-border);
-      color:var(--content-muted); font:600 11px var(--font-sans); padding:2px 8px; border-radius:6px; }
-    .tag mat-icon { font-size:13px; width:13px; height:13px; }
+      color:var(--content-muted); font:600 14px var(--font-sans); padding:2px 8px; border-radius:6px; }
+    .tag mat-icon { font-size:16px; width:13px; height:13px; }
     .tag--brand { background:var(--brand-50); color:var(--brand-700); border-color:var(--brand-100); }
   `]
 })

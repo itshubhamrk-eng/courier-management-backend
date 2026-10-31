@@ -139,15 +139,15 @@ function slabsValid(array: AbstractControl): ValidationErrors | null {
     .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 20px; align-items:end; }
     .slabs { display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
     .slab { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) 40px; gap:12px; align-items:center; }
-    .slab--head { font:600 12px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; }
-    .rm { border:0; background:transparent; cursor:pointer; color:var(--content-muted); font-size:16px; }
+    .slab--head { font:600 15px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; }
+    .rm { border:0; background:transparent; cursor:pointer; color:var(--content-muted); font-size:19px; }
     .rm:disabled { opacity:.3; cursor:default; } .rm:hover:not(:disabled) { color:var(--danger); }
-    .err { font:500 13px var(--font-sans); color:var(--danger); margin:0 0 10px; }
-    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:24px; }
+    .err { font:500 16px var(--font-sans); color:var(--danger); margin:0 0 10px; }
+    .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:24px; }
     .bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:8px; }
-    .bar__actions { display:flex; gap:10px; } .note { font:500 13px var(--font-sans); color:var(--danger); }
-    .oda { display:flex; align-items:center; gap:8px; font:500 14px var(--font-sans); padding-bottom:10px; }
-    .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 24px; margin:16px 0 0; font:400 14px var(--font-sans); }
+    .bar__actions { display:flex; gap:10px; } .note { font:500 16px var(--font-sans); color:var(--danger); }
+    .oda { display:flex; align-items:center; gap:8px; font:500 17px var(--font-sans); padding-bottom:10px; }
+    .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 24px; margin:16px 0 0; font:400 17px var(--font-sans); }
     .kv dt { color:var(--content-muted); } .kv dd { margin:0; font-weight:600; }
     .kv .tot { color:var(--content-fg); font-weight:700; border-top:1px solid var(--surface-border); padding-top:8px; }
     @media (max-width:860px){ .grid { grid-template-columns:1fr; } .slab { grid-template-columns:1fr 1fr 1fr 32px; } }

@@ -55,22 +55,22 @@ import { BranchSummaryRow } from '../models/dashboard.model';
     </app-card>
   `,
   styles: [`
-    .bs__link { font:600 13px var(--font-sans); color:var(--brand-600); text-decoration:none; }
+    .bs__link { font:600 16px var(--font-sans); color:var(--brand-600); text-decoration:none; }
     .bs__stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
     .bs__stat { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:var(--r-pill);
-      font:600 12px var(--font-sans); }
-    .bs__stat mat-icon { font-size:16px; width:16px; height:16px; }
+      font:600 15px var(--font-sans); }
+    .bs__stat mat-icon { font-size:19px; width:16px; height:16px; }
     .bs__stat[data-tone="warning"] { background:var(--warning-bg); color:var(--warning); }
     .bs__stat[data-tone="success"] { background:var(--success-bg); color:var(--success); }
     .bs-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:24px 0; color:var(--content-muted); }
-    .bs-empty mat-icon { font-size:34px; width:34px; height:34px; opacity:.45; }
+    .bs-empty mat-icon { font-size:37px; width:34px; height:34px; opacity:.45; }
     .bs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
     .bs__item { display:flex; align-items:center; gap:12px; padding:8px 10px; border-radius:16px; }
     .bs__item:hover { background:var(--surface-muted); }
     .bs__code { display:grid; place-items:center; min-width:54px; height:32px; padding:0 8px; border-radius:12px;
-      background:var(--brand-50); color:var(--brand-600); font:700 12px var(--font-sans); box-shadow:var(--shadow-clay-inset); }
+      background:var(--brand-50); color:var(--brand-600); font:700 15px var(--font-sans); box-shadow:var(--shadow-clay-inset); }
     .bs__body { flex:1; min-width:0; }
-    .bs__name { font:600 14px var(--font-sans); margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bs__name { font:600 17px var(--font-sans); margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   `]
 })
 export class BranchSummary {

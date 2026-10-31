@@ -90,17 +90,17 @@ interface DraftRow { placeName: string; major: boolean; departures: string; arri
     </div>
   `,
   styles: [`
-    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:16px; }
-    .hint { margin:0 0 10px; font:400 12px var(--font-sans); color:var(--content-muted); }
+    .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:16px; }
+    .hint { margin:0 0 10px; font:400 15px var(--font-sans); color:var(--content-muted); }
     .tt { border:1px solid var(--surface-border); border-radius:10px; overflow:hidden; }
-    .tt__row { display:grid; grid-template-columns:minmax(120px,1fr) 2fr 2fr; gap:12px; padding:9px 12px; border-top:1px solid var(--surface-border); font:500 14px var(--font-sans); }
+    .tt__row { display:grid; grid-template-columns:minmax(120px,1fr) 2fr 2fr; gap:12px; padding:9px 12px; border-top:1px solid var(--surface-border); font:500 17px var(--font-sans); }
     .tt__row:first-child { border-top:0; }
-    .tt__row--head { background:var(--surface-muted); font:600 12px var(--font-sans); color:var(--content-muted); }
+    .tt__row--head { background:var(--surface-muted); font:600 15px var(--font-sans); color:var(--content-muted); }
     .tt__row--major { color:#b91c1c; font-weight:600; }
     .tt__place { font-weight:600; }
     .grid { display:grid; grid-template-columns:minmax(120px,1fr) 2fr 2fr 56px 112px; gap:8px; align-items:start; margin-bottom:8px; }
-    .grid--head { font:600 12px var(--font-sans); color:var(--content-muted); margin-bottom:4px; }
-    .in { width:100%; box-sizing:border-box; border:1px solid var(--surface-border); border-radius:8px; padding:8px 10px; font:400 14px var(--font-sans); background:var(--surface); color:inherit; resize:vertical; }
+    .grid--head { font:600 15px var(--font-sans); color:var(--content-muted); margin-bottom:4px; }
+    .in { width:100%; box-sizing:border-box; border:1px solid var(--surface-border); border-radius:8px; padding:8px 10px; font:400 17px var(--font-sans); background:var(--surface); color:inherit; resize:vertical; }
     .mv { display:flex; gap:4px; }
     .ic { height:34px; width:34px; border:1px solid var(--surface-border); background:transparent; border-radius:8px; cursor:pointer; color:var(--content-muted); }
     .ic:disabled { opacity:.4; cursor:default; } .ic--x:hover { color:var(--danger, #e11d48); border-color:currentColor; }

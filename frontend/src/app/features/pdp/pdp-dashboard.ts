@@ -146,22 +146,22 @@ const PICKUP_STAGES: { key: string; label: string }[] = [
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     .head__actions { display:flex; align-items:flex-end; gap:12px; }
     .head__actions app-select { min-width:240px; }
-    .sec { font:600 14px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.05em; margin:24px 0 10px; }
+    .sec { font:600 17px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.05em; margin:24px 0 10px; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; margin-bottom:16px; }
     .pipe { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:10px; }
     .pipe__cell { display:flex; flex-direction:column; gap:2px; padding:10px 12px; border:1px solid var(--surface-border); border-radius:10px; }
     .pipe__cell--zero { opacity:.5; }
-    .pipe__n { font:700 22px var(--font-sans); } .pipe__l { font:400 12px var(--font-sans); color:var(--content-muted); }
-    .notes { display:flex; flex-wrap:wrap; gap:8px 24px; font:400 13px var(--font-sans); color:var(--content-muted); margin:0 0 16px; }
+    .pipe__n { font:700 25px var(--font-sans); } .pipe__l { font:400 15px var(--font-sans); color:var(--content-muted); }
+    .notes { display:flex; flex-wrap:wrap; gap:8px 24px; font:400 16px var(--font-sans); color:var(--content-muted); margin:0 0 16px; }
     .notes strong { color:var(--content-fg); } .warn { color:#b45309; } .notes a { cursor:pointer; text-decoration:underline; }
     app-card { display:block; margin-bottom:16px; }
     .tbl__wrap { overflow-x:auto; }
-    .tbl { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
-    .tbl th { text-align:left; font:500 11px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; padding:0 10px 8px; }
+    .tbl { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); }
+    .tbl th { text-align:left; font:500 14px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; padding:0 10px 8px; }
     .tbl td { padding:8px 10px; border-top:1px solid var(--surface-border); white-space:nowrap; }
     .tbl .b { font-weight:600; } .tbl .r { text-align:right; } .tbl .click { cursor:pointer; } .tbl .click:hover { background:var(--surface-hover, rgba(0,0,0,.03)); }
     .qa { display:flex; flex-wrap:wrap; gap:10px; }
-    .empty { font:400 14px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
+    .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
   `]
 })
 export class PdpDashboardPage implements OnInit {

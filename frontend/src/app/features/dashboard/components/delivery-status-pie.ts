@@ -55,7 +55,7 @@ interface PieVm {
   styles: [`
     .dsp-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:8px; min-height:220px; color:var(--content-muted); }
-    .dsp-empty mat-icon { font-size:36px; width:36px; height:36px; opacity:.45; }
+    .dsp-empty mat-icon { font-size:39px; width:36px; height:36px; opacity:.45; }
   `]
 })
 export class DeliveryStatusPie {
@@ -77,8 +77,8 @@ export class DeliveryStatusPie {
       labels: LABELS,
       chart: { type: 'donut', height: 260, fontFamily: 'inherit', foreColor: INK[mode] },
       colors: COLORS[mode],
-      dataLabels: { enabled: true, style: { fontSize: '11px' } },
-      legend: { show: true, position: 'bottom', fontSize: '12px' },
+      dataLabels: { enabled: true, style: { fontSize: '14px' } },
+      legend: { show: true, position: 'bottom', fontSize: '15px' },
       tooltip: { theme: mode, y: { formatter: (v: number) => new Intl.NumberFormat('en-IN').format(v) } }
     };
   });

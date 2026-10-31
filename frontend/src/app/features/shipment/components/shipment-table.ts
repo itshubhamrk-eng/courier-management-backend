@@ -60,7 +60,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
     </app-table>
   `,
   styles: [`
-    .mono { font:600 13px var(--font-mono, ui-monospace); color:var(--content-fg); }
+    .mono { font:600 16px var(--font-mono, ui-monospace); color:var(--content-fg); }
     .awb { color:var(--brand-600); }
     .num { text-align:right; }
     .col-actions { text-align:right; width:56px; }

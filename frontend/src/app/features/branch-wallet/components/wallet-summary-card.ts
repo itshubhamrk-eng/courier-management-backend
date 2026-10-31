@@ -36,16 +36,16 @@ import { WalletResponse, formatMoney } from '@core/models/wallet.model';
     .ws { display:flex; gap:16px; align-items:center; }
     .ws__av { width:56px; height:56px; border-radius:14px; background:var(--brand-100); color:var(--brand-700);
       display:grid; place-items:center; flex:0 0 auto; }
-    .ws__av mat-icon { font-size:28px; width:28px; height:28px; }
+    .ws__av mat-icon { font-size:31px; width:28px; height:28px; }
     .ws__body { flex:1; min-width:0; }
     .ws__name { display:flex; align-items:center; gap:12px; }
     .ws__tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .tag { display:inline-flex; align-items:center; gap:3px; background:var(--surface-muted); border:1px solid var(--surface-border);
-      color:var(--content-muted); font:600 11px var(--font-sans); padding:2px 8px; border-radius:6px; }
-    .tag mat-icon { font-size:13px; width:13px; height:13px; }
+      color:var(--content-muted); font:600 14px var(--font-sans); padding:2px 8px; border-radius:6px; }
+    .tag mat-icon { font-size:16px; width:13px; height:13px; }
     .mono { font-family:var(--font-mono, ui-monospace); }
     .ws__bal { text-align:right; flex:0 0 auto; }
-    .ws__amt { font:700 24px/1.1 var(--font-sans); letter-spacing:-.02em; margin:2px 0 0; color:var(--brand-700); }
+    .ws__amt { font:700 27px/1.1 var(--font-sans); letter-spacing:-.02em; margin:2px 0 0; color:var(--brand-700); }
     @media (max-width:640px){ .ws { flex-wrap:wrap; } .ws__bal { text-align:left; } }
   `]
 })

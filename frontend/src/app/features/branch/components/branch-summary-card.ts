@@ -34,16 +34,16 @@ import { BranchResponse } from '@core/models/branch.model';
   styles: [`
     .bs__id { display:flex; gap:16px; align-items:flex-start; }
     .bs__av { width:56px; height:56px; border-radius:14px; background:var(--brand-100); color:var(--brand-700); display:grid; place-items:center; flex:0 0 auto; }
-    .bs__av mat-icon { font-size:28px; width:28px; height:28px; }
+    .bs__av mat-icon { font-size:31px; width:28px; height:28px; }
     .bs__name { display:flex; align-items:center; gap:12px; }
     .mono { font-family:var(--font-mono, ui-monospace); }
     .bs__tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .tag { display:inline-flex; align-items:center; gap:3px; background:var(--surface-muted); border:1px solid var(--surface-border);
-      color:var(--content-muted); font:600 11px var(--font-sans); padding:2px 8px; border-radius:6px; }
-    .tag mat-icon { font-size:13px; width:13px; height:13px; }
+      color:var(--content-muted); font:600 14px var(--font-sans); padding:2px 8px; border-radius:6px; }
+    .tag mat-icon { font-size:16px; width:13px; height:13px; }
     .tag--brand { background:var(--brand-50); color:var(--brand-700); border-color:var(--brand-100); }
     .bs__caps { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-    .chip { background:var(--success-bg); color:var(--success); font:600 11px var(--font-sans); padding:3px 9px; border-radius:999px; }
+    .chip { background:var(--success-bg); color:var(--success); font:600 14px var(--font-sans); padding:3px 9px; border-radius:999px; }
   `]
 })
 export class BranchSummaryCard {

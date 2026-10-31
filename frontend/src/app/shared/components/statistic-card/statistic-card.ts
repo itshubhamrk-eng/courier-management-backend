@@ -46,13 +46,13 @@ type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info';
     .stat__icon, .stat__body { position:relative; }
     .stat__icon { display:grid; place-items:center; width:52px; height:52px; border-radius:18px;
       box-shadow:var(--shadow-clay-sm); flex-shrink:0; }
-    .stat__icon mat-icon { font-size:24px; color:#fff; }
+    .stat__icon mat-icon { font-size:27px; color:#fff; }
     .stat__icon[data-tone="brand"]   { background:linear-gradient(155deg, var(--brand-400),   var(--brand-600)); }
     .stat__icon[data-tone="success"] { background:linear-gradient(155deg, #4ade80, var(--success)); }
     .stat__icon[data-tone="warning"] { background:linear-gradient(155deg, #fbbf24, var(--warning)); }
     .stat__icon[data-tone="danger"]  { background:linear-gradient(155deg, #f87171, var(--danger)); }
     .stat__icon[data-tone="info"]    { background:linear-gradient(155deg, #60a5fa, var(--info)); }
-    .stat__value { font:700 24px/1.1 var(--font-sans); margin:2px 0 0; letter-spacing:-.02em; }
+    .stat__value { font:700 27px/1.1 var(--font-sans); margin:2px 0 0; letter-spacing:-.02em; }
     .stat[data-tone="brand"]   .stat__value { color:var(--brand-600); }
     .stat[data-tone="success"] .stat__value { color:var(--success); }
     .stat[data-tone="warning"] .stat__value { color:var(--warning); }
@@ -61,9 +61,9 @@ type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info';
     .stat__skeleton { width:70px; height:24px; margin-top:4px; border-radius:6px;
       background:linear-gradient(90deg,var(--surface-muted),var(--surface-border),var(--surface-muted));
       background-size:200% 100%; animation:sh 1.2s infinite; }
-    .stat__delta { display:flex; align-items:center; gap:4px; margin:6px 0 0; font:600 12px var(--font-sans); color:var(--success); }
+    .stat__delta { display:flex; align-items:center; gap:4px; margin:6px 0 0; font:600 15px var(--font-sans); color:var(--success); }
     .stat__delta.down { color:var(--danger); }
-    .stat__delta mat-icon { font-size:16px; width:16px; height:16px; }
+    .stat__delta mat-icon { font-size:19px; width:16px; height:16px; }
     @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   `]
 })

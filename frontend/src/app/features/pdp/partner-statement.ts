@@ -92,14 +92,14 @@ import { PdpBillingService } from './pdp-billing.service';
     </ng-template>
   `,
   styles: [`
-    .lines { width:100%; border-collapse:collapse; font:400 13px var(--font-sans); }
-    .lines th { text-align:left; font:600 12px var(--font-sans); color:var(--content-muted); text-transform:uppercase; padding:6px 8px; }
+    .lines { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); }
+    .lines th { text-align:left; font:600 15px var(--font-sans); color:var(--content-muted); text-transform:uppercase; padding:6px 8px; }
     .lines td { padding:7px 8px; border-top:1px solid var(--surface-border); }
-    .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 24px; margin:0; font:400 14px var(--font-sans); }
+    .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 24px; margin:0; font:400 17px var(--font-sans); }
     .kv dt { color:var(--content-muted); } .kv dd { margin:0; font-weight:600; }
-    .kv .tot { color:var(--content-fg); font-weight:700; border-top:1px solid var(--surface-border); padding-top:8px; font-size:16px; }
+    .kv .tot { color:var(--content-fg); font-weight:700; border-top:1px solid var(--surface-border); padding-top:8px; font-size:19px; }
     .act { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-top:16px; }
-    .warn { font:500 13px var(--font-sans); color:var(--danger); } .empty { font:400 14px var(--font-sans); color:var(--content-muted); margin:0; }
+    .warn { font:500 16px var(--font-sans); color:var(--danger); } .empty { font:400 17px var(--font-sans); color:var(--content-muted); margin:0; }
     app-card { display:block; margin-bottom:16px; }
     @media print { .no-print { display:none !important; } }
   `]

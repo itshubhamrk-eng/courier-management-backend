@@ -70,7 +70,7 @@ interface ChartVm {
   styles: [`
     .chart-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:8px; color:var(--content-muted); }
-    .chart-empty mat-icon { font-size:36px; width:36px; height:36px; opacity:.45; }
+    .chart-empty mat-icon { font-size:39px; width:36px; height:36px; opacity:.45; }
     .chart-skeleton { border-radius:var(--r-card);
       background:linear-gradient(90deg,var(--surface-muted),var(--surface-border),var(--surface-muted));
       background-size:200% 100%; animation:sh 1.3s infinite; }
@@ -114,11 +114,11 @@ export class ChartCard {
       xaxis: {
         categories,
         axisBorder: { show: false }, axisTicks: { show: false },
-        labels: { style: { fontSize: '11px' } }
+        labels: { style: { fontSize: '14px' } }
       },
       yaxis: {
         labels: {
-          style: { fontSize: '11px' },
+          style: { fontSize: '14px' },
           formatter: (v: number) => prefix + compact(v)
         }
       },
@@ -128,7 +128,7 @@ export class ChartCard {
         : { opacity: 1 },
       grid: { borderColor: GRID[mode], strokeDashArray: 4, padding: { left: 4, right: 8 } },
       dataLabels: { enabled: false },
-      legend: { show: series.length > 1, position: 'top', horizontalAlign: 'right', fontSize: '12px' },
+      legend: { show: series.length > 1, position: 'top', horizontalAlign: 'right', fontSize: '15px' },
       tooltip: {
         theme: mode,
         y: { formatter: (v: number) => prefix + new Intl.NumberFormat('en-IN').format(v) }

@@ -46,20 +46,20 @@ const ICONS: Record<ActivityKind, string> = {
   `,
   styles: [`
     .tl-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 0; color:var(--content-muted); text-align:center; }
-    .tl-empty mat-icon { font-size:40px; width:40px; height:40px; opacity:.45; }
+    .tl-empty mat-icon { font-size:43px; width:40px; height:40px; opacity:.45; }
     .tl { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
     .tl__item { display:flex; align-items:flex-start; gap:12px; padding:10px 12px; border-radius:16px; }
     .tl__item:hover { background:var(--surface-muted); }
     .tl__dot { display:grid; place-items:center; width:36px; height:36px; border-radius:14px; flex:none;
       background:var(--brand-50); color:var(--brand-600); box-shadow:var(--shadow-clay-inset); }
-    .tl__dot mat-icon { font-size:18px; width:18px; height:18px; }
+    .tl__dot mat-icon { font-size:21px; width:18px; height:18px; }
     .tl__item[data-kind="DELIVERY"] .tl__dot { background:var(--success-bg); color:var(--success); }
     .tl__item[data-kind="WALLET"] .tl__dot { background:var(--info-bg); color:var(--info); }
     .tl__item[data-kind="SYSTEM"] .tl__dot { background:var(--warning-bg); color:var(--warning); }
     .tl__body { flex:1; min-width:0; }
-    .tl__title { font:600 14px var(--font-sans); margin:0; }
+    .tl__title { font:600 17px var(--font-sans); margin:0; }
     .tl__meta { display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex:none; white-space:nowrap; }
-    .tl__amt { font:700 13px var(--font-sans); }
+    .tl__amt { font:700 16px var(--font-sans); }
   `]
 })
 export class ActivityTimeline {

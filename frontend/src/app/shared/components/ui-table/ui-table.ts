@@ -83,21 +83,21 @@ export interface SortState { active: string; direction: 'asc' | 'desc'; }
   `,
   styles: [`
     .tbl__wrap { overflow:auto; }
-    .tbl { width:100%; border-collapse:collapse; font:400 14px var(--font-sans); }
+    .tbl { width:100%; border-collapse:collapse; font:400 17px var(--font-sans); }
     .tbl thead th { position:sticky; top:0; background:var(--surface-muted); color:var(--content-muted);
-      font:600 12px var(--font-sans); text-transform:uppercase; letter-spacing:.04em;
+      font:600 15px var(--font-sans); text-transform:uppercase; letter-spacing:.04em;
       padding:14px 16px; border-bottom:1px solid var(--surface-border); white-space:nowrap; }
     .tbl thead th:first-child { border-top-left-radius:var(--r-card); }
     .tbl thead th:last-child { border-top-right-radius:var(--r-card); }
     .tbl__th { display:inline-flex; align-items:center; gap:4px; }
     .tbl__th--sortable { cursor:pointer; user-select:none; }
-    .tbl__sort { font-size:14px; width:14px; height:14px; }
+    .tbl__sort { font-size:17px; width:14px; height:14px; }
     .tbl tbody td { padding:14px 16px; border-bottom:1px solid var(--surface-border); color:var(--content-fg); }
     .tbl__sno { color:var(--content-muted); text-align:right; }
     .tbl__row { transition:background .12s; cursor:default; }
     .tbl__row:hover { background:var(--surface-muted); }
     .tbl__empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:48px 0; color:var(--content-muted); }
-    .tbl__empty mat-icon { font-size:40px; width:40px; height:40px; opacity:.5; }
+    .tbl__empty mat-icon { font-size:43px; width:40px; height:40px; opacity:.5; }
   `]
 })
 export class UiTable<T = Record<string, unknown>> {
