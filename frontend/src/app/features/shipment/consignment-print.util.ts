@@ -258,10 +258,10 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   // the amount block for ToPay regardless of label.
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
-  // Paid: amount only on the Customer copy. ToPay: amount on the Customer and Delivery (POD) copies.
+  // Paid: amount only on the Customer copy. ToPay: amount on the Customer, Driver and Delivery (POD) copies.
   const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
     isPaid ? (label === 'Customer Copy' ? 'paid' : 'omitted') :
-    isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' ? 'collect' : 'omitted') :
+    isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' || label === 'Driver Copy' ? 'collect' : 'omitted') :
     label === 'Delivery Copy' ? 'collect' :
     'normal';
   const collectTotal = isPaid ? 0 : total;

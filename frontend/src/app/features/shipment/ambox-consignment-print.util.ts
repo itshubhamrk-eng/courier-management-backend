@@ -47,8 +47,8 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
 
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
-  // Paid: amounts only on the Consignor (customer) copy. ToPay: on the Consignor and P.O.D. copies.
-  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' || label === 'CONSIGNOR COPY' : true;
+  // Paid: amounts only on the Consignor (customer) copy. ToPay: on the Consignor, Driver and P.O.D. copies.
+  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' || label === 'CONSIGNOR COPY' || label === 'DRIVER COPY' : true;
 
   const rows: Array<[string, number]> = [
     ['FREIGHT', d.charges.freight],
