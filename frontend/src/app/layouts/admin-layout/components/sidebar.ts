@@ -20,7 +20,7 @@ import { environment } from '@env/environment';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive, MatIconModule],
   template: `
-    <nav class="sb app-scroll" [class.sb--collapsed]="rail()" [class.sb--open]="mobileOpen()"
+    <nav class="sb" [class.sb--collapsed]="rail()" [class.sb--open]="mobileOpen()"
          [style.--sb-fs.px]="fontSize()" aria-label="Primary">
       <div class="sb__brand">
         @if (logoUrl() && !logoBroken()) {
@@ -31,7 +31,7 @@ import { environment } from '@env/environment';
         @if (!rail()) { <span class="sb__brand-name">{{ companyName() }}</span> }
       </div>
 
-      <ul class="sb__list" role="list">
+      <ul class="sb__list app-scroll" role="list">
         @for (item of nav.menu(); track item.id) {
           <li>
             @if (item.children?.length) {
@@ -95,7 +95,7 @@ import { environment } from '@env/environment';
   styles: [`
     /* Floating crimson panel: 16px off the top/left/bottom, scrolls inside itself. */
     .sb { width:calc(var(--sidebar-w) + (var(--sb-fs, 17px) - 17px) * 10); height:calc(100vh - 32px); margin:16px 0 16px 16px; position:sticky; top:16px;
-      align-self:flex-start; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; flex-shrink:0;
+      align-self:flex-start; overflow:hidden; display:flex; flex-direction:column; flex-shrink:0;
       padding:20px 14px; border-radius:28px; color:#fff;
       background:linear-gradient(170deg, #e02550 0%, #b3123a 55%, #7a0e33 100%);
       box-shadow:0 10px 40px rgb(67 56 202 / 12%); transition:width .2s ease; }
@@ -108,6 +108,9 @@ import { environment } from '@env/environment';
     .sb__logo--img img { width:100%; height:100%; object-fit:contain; }
     .sb__brand-name { color:#fff; font:700 calc(var(--sb-fs, 17px) + 2px) var(--font-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .sb__list, .sb__children { list-style:none; margin:0; padding:0; }
+    /* Brand and size control stay pinned; only the menu list scrolls. Side padding keeps focus rings unclipped. */
+    .sb__list { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; margin:0 -8px; padding:2px 8px; overscroll-behavior:contain; }
+    .sb__brand { flex-shrink:0; }
     .sb__item { display:flex; align-items:center; gap:12px; min-height:44px; padding:0 14px; margin:4px 0; width:100%;
       border:0; border-radius:999px; background:transparent; color:rgb(255 255 255 / 88%); cursor:pointer; text-align:left;
       text-decoration:none; font:600 var(--sb-fs, 17px) 'Outfit', var(--font-sans); transition:background .12s, color .12s, box-shadow .12s; }
@@ -127,7 +130,7 @@ import { environment } from '@env/environment';
     .sb__badge { background:#fff; color:var(--brand-700); font:700 12px var(--font-sans); padding:1px 8px; border-radius:999px; }
     .sb__item--active .sb__badge { background:var(--brand-700); color:#fff; }
 
-    .sb__size { margin-top:auto; padding-top:12px; display:flex; align-items:center; justify-content:center; gap:10px; }
+    .sb__size { flex-shrink:0; padding-top:12px; display:flex; align-items:center; justify-content:center; gap:10px; }
     .sb__size-btn { min-width:44px; height:34px; border-radius:999px; border:1px solid rgb(255 255 255 / 45%); background:transparent;
       color:#fff; font:700 14px 'Outfit', var(--font-sans); cursor:pointer; }
     .sb__size-btn--lg { font-size:17px; }
