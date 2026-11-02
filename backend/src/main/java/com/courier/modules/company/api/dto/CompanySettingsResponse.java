@@ -49,7 +49,8 @@ public record CompanySettingsResponse(
                            boolean autoAssignTrackingNumber,
                            BigDecimal defaultChargeableWeightKg,
                            BigDecimal defaultAppointmentDeliveryCharge,
-                           BigDecimal toPayCharge) {
+                           BigDecimal toPayCharge,
+                           BigDecimal minOdaCharge) {
     }
 
     @Schema(name = "FinanceSettings")

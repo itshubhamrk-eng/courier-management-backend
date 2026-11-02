@@ -70,6 +70,9 @@ public record CompanySettingsRequest(
         @DecimalMin("0.0") @Digits(integer = 15, fraction = 4)
         @Schema(description = "Flat charge added (with GST) to every To-Pay booking; 0 disables it")
         BigDecimal toPayCharge,
+        @DecimalMin("0.0") @Digits(integer = 15, fraction = 4)
+        @Schema(description = "Lowest ODA Charge the booking desk may enter; 0 removes the floor")
+        BigDecimal minOdaCharge,
 
         // --- finance
         @DecimalMin("0.0") @DecimalMax("100.0") @Digits(integer = 3, fraction = 2)

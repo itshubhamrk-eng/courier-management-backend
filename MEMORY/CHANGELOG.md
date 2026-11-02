@@ -6,6 +6,9 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-02 - Minimum ODA Charge company setting (V137)
+Booking's ODA Charge was already editable up or down; now floored. `company_settings_config.min_oda_charge` (default 150, 0 = no floor), edited in Settings -> Shipment. Effective floor = `min(setting, calculated ODA)` so a calculated ODA under the minimum is never forced up (250 -> down to 150; 40 -> stays 40). Backend: `ShipmentServiceImpl.requireOdaNotBelowMinimum`, called beside `requireRateNotDecreased` on create and (admin) update, throws BusinessRuleException. Frontend: charge-summary `minOdaCharge` input clamps on blur and shows "min N"; shipment-create passes `odaFloor()`. mvn tests for company settings + shipment green, tsc clean; not browser-verified, not deployed.
+
 ## 2026-10-27 - Total Commission = branch commission only (V136)
 `ShipmentCharge.totalCommission` is now `commissionOnBasicFreight + branchCommissionOnOtherAmount`, no longer adding the company's `companyCommissionOnBasicFreight` (which keeps its own column). Every report/view reads the stored `total_commission` (Commission, Branch, Booking, Delivery, Vendor Audit paid/booking commission, shipment list/charges/view), so one change covers them all. V136 rewrites existing rows (`UPDATE shipment_charges SET total_commission = commission_on_basic_freight + branch_commission_on_other_amount`); local DB 1872 -> 0 mismatches, `commission-summary` totals check out. `ShipmentServiceImplTest` expectation 19 -> 9; 106 tests pass. Wallet credit amount unchanged (it already used only the branch's two lines). Not deployed.
 

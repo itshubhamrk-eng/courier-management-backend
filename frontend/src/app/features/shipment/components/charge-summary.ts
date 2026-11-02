@@ -78,10 +78,13 @@ export interface ChargeSummaryData {
         <dd class="mono">{{ charges().otherCharges | number: '1.2-2' }}</dd>
       }
       @if (editable()) {
-        <dt>ODA Charge</dt>
+        <dt>ODA Charge
+          @if (minOdaCharge() != null && minOdaCharge()! > 0) { <span class="hint">(min {{ minOdaCharge() | number: '1.0-2' }})</span> }
+        </dt>
         <dd class="mono">
-          <input class="net-input" type="number" step="0.01" min="0"
-                 [value]="charges().odaCharge" (input)="onOdaChargeInput($event)" />
+          <input class="net-input" type="number" step="0.01"
+                 [attr.min]="minOdaCharge() ?? 0"
+                 [value]="charges().odaCharge" (input)="onOdaChargeInput($event)" (change)="onOdaChargeCommit($event)" />
         </dd>
       } @else if (charges().odaCharge) {
         <dt>ODA</dt><dd class="mono">{{ charges().odaCharge | number: '1.2-2' }}</dd>
@@ -156,6 +159,9 @@ export class ChargeSummary {
   /** Emits the typed ODA Charge override — sent to the server, same as
    *  {@link otherChargesChange} (see `ShipmentCreate.odaCharge` form control). */
   readonly odaChargeChange = output<number>();
+  /** Lowest ODA Charge the desk may enter (null/0 = no floor). Enforced on blur, not per
+   *  keystroke, so typing "200" doesn't get clamped at "2". The server enforces it too. */
+  readonly minOdaCharge = input<number | null>(null);
   /** Emits the typed Appointment Delivery Charge — sent to the server, same as
    *  {@link otherChargesChange}. */
   readonly appointmentDeliveryChargeChange = output<number>();
@@ -189,6 +195,16 @@ export class ChargeSummary {
   protected onOdaChargeInput(e: Event): void {
     const v = Number((e.target as HTMLInputElement).value);
     if (!Number.isNaN(v)) this.odaChargeChange.emit(v);
+  }
+
+  protected onOdaChargeCommit(e: Event): void {
+    const el = e.target as HTMLInputElement;
+    const min = this.minOdaCharge();
+    const v = Number(el.value);
+    if (min != null && min > 0 && (el.value === '' || v < min)) {
+      el.value = String(min);
+      this.odaChargeChange.emit(min);
+    }
   }
 
   protected onAppointmentDeliveryChargeInput(e: Event): void {

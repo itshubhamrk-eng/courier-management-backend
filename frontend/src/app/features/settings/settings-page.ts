@@ -121,6 +121,15 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                   </div>
                 </div>
                 <div class="dcw">
+                  <label class="text-caption" for="moc-input">Minimum ODA Charge (booking desk can lower the calculated ODA down to this; 0 = no limit)</label>
+                  <div class="dcw__row">
+                    <input id="moc-input" class="dcw__i" type="number" step="0.01" min="0"
+                           [value]="minOdaChargeInput() ?? ''" (input)="onMinOdaChargeInput($event)" />
+                    <button type="button" class="dcw__save" [disabled]="savingMinOdaCharge() || minOdaChargeInput() == null"
+                            (click)="saveMinOdaCharge()">{{ savingMinOdaCharge() ? 'Saving…' : 'Save' }}</button>
+                  </div>
+                </div>
+                <div class="dcw">
                   <label class="rzp__check">
                     <input type="checkbox" [checked]="manualStatusOverrideInput()" [disabled]="savingManualOverride()"
                            (change)="onManualStatusOverrideToggle($event)" />
@@ -303,6 +312,8 @@ export class SettingsPage implements OnInit {
   readonly savingAppointmentCharge = signal(false);
   readonly toPayChargeInput = signal<number | null>(null);
   readonly savingToPayCharge = signal(false);
+  readonly minOdaChargeInput = signal<number | null>(null);
+  readonly savingMinOdaCharge = signal(false);
 
   /** Shipment's third inline field — a plain toggle, saved immediately on change (no
    *  separate Save button, unlike the two numeric fields above). Gates whether a
@@ -357,7 +368,7 @@ export class SettingsPage implements OnInit {
       next: (d) => {
         this.data.set(d ?? {});
         const shipment = (d as { shipment?: {
-          defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number;
+          defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number; minOdaCharge?: number;
           manualStatusOverrideEnabled?: boolean;
         } })?.shipment;
         if (shipment?.defaultChargeableWeightKg != null) {
@@ -367,6 +378,7 @@ export class SettingsPage implements OnInit {
           this.defaultAppointmentChargeInput.set(Number(shipment.defaultAppointmentDeliveryCharge));
         }
         if (shipment?.toPayCharge != null) this.toPayChargeInput.set(Number(shipment.toPayCharge));
+        if (shipment?.minOdaCharge != null) this.minOdaChargeInput.set(Number(shipment.minOdaCharge));
         this.manualStatusOverrideInput.set(shipment?.manualStatusOverrideEnabled === true);
         const finance = (d as { finance?: {
           gstPercentage?: number; roundOffRule?: string; commissionCreditTrigger?: string; netAmountMaxDecreasePercent?: number; netAmountMaxIncreasePercent?: number;
@@ -462,6 +474,26 @@ export class SettingsPage implements OnInit {
         this.notify.success('To-Pay charge updated');
       },
       error: () => this.savingToPayCharge.set(false)
+    });
+  }
+
+  onMinOdaChargeInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value;
+    this.minOdaChargeInput.set(v === '' ? null : Number(v));
+  }
+
+  saveMinOdaCharge(): void {
+    const value = this.minOdaChargeInput();
+    if (value == null || value < 0) return;
+    this.savingMinOdaCharge.set(true);
+    this.service.patchSection('shipment', { minOdaCharge: value }).subscribe({
+      next: (d) => {
+        const shipment = (d as { shipment?: unknown })?.shipment;
+        if (shipment) this.data.update((prev) => ({ ...prev, shipment }));
+        this.savingMinOdaCharge.set(false);
+        this.notify.success('Minimum ODA charge updated');
+      },
+      error: () => this.savingMinOdaCharge.set(false)
     });
   }
 

@@ -479,7 +479,7 @@ type FreightOutcome =
                   netAmount: manualNetAmount() ?? computedNetAmount()
                 }" [editable]="true" (netAmountChange)="onManualNetAmountChange($event)"
                   (otherChargesChange)="otherCharges.set($event)"
-                  (odaChargeChange)="odaChargeOverride.set($event)"
+                  [minOdaCharge]="odaFloor()" (odaChargeChange)="odaChargeOverride.set($event)"
                   (appointmentDeliveryChargeChange)="appointmentDeliveryCharge.set($event)"
                   (doorDeliveryChargeChange)="doorDeliveryCharge.set($event)" />
               }
@@ -740,6 +740,18 @@ export class ShipmentCreate implements OnInit {
    *  to the server, see {@link book}. */
   protected readonly odaChargeOverride = signal<number | null>(null);
 
+  /** Company's Min ODA Charge setting (Settings -> Shipment); 0 = no floor. */
+  private readonly minOdaChargeSetting = signal<number>(0);
+
+  /** Lowest ODA the desk may type: the setting, unless the calculated ODA is already below
+   *  it (then that is the floor). Mirrors `ShipmentServiceImpl.requireOdaNotBelowMinimum`. */
+  protected odaFloor(): number | null {
+    const min = this.minOdaChargeSetting();
+    if (min <= 0) return null;
+    const calculated = this.freightCalc()?.odaCharge ?? this.pricing()?.chargeBreakup.odaCharge ?? 0;
+    return Math.min(min, calculated);
+  }
+
   /** Manual, typed at booking time when Appointment Delivery is checked — deliberately
    *  GST-free (direct user request), unlike {@link otherCharges}. Prefilled from
    *  {@link defaultAppointmentDeliveryCharge} whenever the checkbox is checked, and reset
@@ -927,10 +939,11 @@ export class ShipmentCreate implements OnInit {
       ? [{ label: 'Operations' }, { label: 'Business Customer Booking' }]
       : [{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
     this.settings.get().subscribe((d) => {
-      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number } })?.shipment;
+      const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number; minOdaCharge?: number } })?.shipment;
       if (shipment?.defaultChargeableWeightKg != null) {
         this.defaultChargeableWeightKg.set(Number(shipment.defaultChargeableWeightKg));
       }
+      if (shipment?.minOdaCharge != null) this.minOdaChargeSetting.set(Number(shipment.minOdaCharge));
       if (shipment?.toPayCharge != null) this.toPayChargeSetting.set(Number(shipment.toPayCharge));
       if (shipment?.defaultAppointmentDeliveryCharge != null) {
         this.defaultAppointmentDeliveryCharge.set(Number(shipment.defaultAppointmentDeliveryCharge));

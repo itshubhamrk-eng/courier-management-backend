@@ -409,6 +409,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 weight.chargeableWeight(), command.businessCustomerId(), command.declaredValue());
         requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
         requireCustomerExtraCharges(command.otherCharges(), freightCalc);
+        requireOdaNotBelowMinimum(command.odaCharge(), freightCalc);
 
         // Delivery Branch is no longer picked, decided, or even resolved at booking —
         // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
@@ -515,6 +516,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (!chargesPinned) {
             requireRateNotDecreased(command.ratePerKgOverride(), freightCalc);
             requireCustomerExtraCharges(command.otherCharges(), freightCalc);
+            requireOdaNotBelowMinimum(command.odaCharge(), freightCalc);
         }
 
         // No delivery branch to resolve any more — pricing runs with none, same as
@@ -2756,6 +2758,21 @@ public class ShipmentServiceImpl implements ShipmentService {
                     "Rate/KG cannot be lowered below the calculated rate of %s/KG for %s -> %s."
                             .formatted(freightCalc.ratePerKg().toPlainString(), freightCalc.bookingBranchCode(),
                                     freightCalc.districtName()));
+        }
+    }
+
+    /** The operator may lower ODA from the calculated figure, but not below the company's
+     *  {@code minOdaCharge} (e.g. 250 -> 150). A calculated figure already under the minimum is
+     *  its own floor, so a cheap ODA is never forced up. No-op when ODA is not overridden. */
+    private void requireOdaNotBelowMinimum(BigDecimal odaCharge, FreightCalculationResult freightCalc) {
+        BigDecimal minimum = companySettingsService.get().getMinOdaCharge();
+        if (odaCharge == null || minimum == null || minimum.signum() <= 0) {
+            return;
+        }
+        BigDecimal floor = freightCalc.odaCharge().min(minimum);
+        if (odaCharge.compareTo(floor) < 0) {
+            throw new BusinessRuleException(
+                    "ODA Charge cannot be lowered below %s.".formatted(floor.stripTrailingZeros().toPlainString()));
         }
     }
 

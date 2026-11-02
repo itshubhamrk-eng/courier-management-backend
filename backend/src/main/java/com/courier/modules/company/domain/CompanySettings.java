@@ -172,6 +172,13 @@ public class CompanySettings extends CompanyOwnedEntity {
     @Builder.Default
     private BigDecimal toPayCharge = new BigDecimal("50.0000");
 
+    /** Lowest ODA Charge the booking desk may type over the calculated figure (calculated 250,
+     *  minimum 150 -> editable down to 150). A calculated ODA already below it is its own
+     *  floor. Zero removes the floor. */
+    @Column(name = "min_oda_charge", precision = 19, scale = 4, nullable = false)
+    @Builder.Default
+    private BigDecimal minOdaCharge = new BigDecimal("150.0000");
+
     // === Finance ============================================================
 
     /** Percentage, 0–100. {@code DECIMAL(5,2)} — money-adjacent, never a double. */
