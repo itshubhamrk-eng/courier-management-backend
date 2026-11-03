@@ -3160,10 +3160,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         // A freed serial gets re-issued and may be cancelled again, so "-CXL" can already be
         // taken (uk_shipments_company_number): pick the first free suffix.
         String renamed = number + "-CXL";
-        for (int n = 2; shipmentRepository.existsByCompanyIdAndShipmentNumber(shipment.getCompanyId(), renamed)
-                && n < 100; n++) {
+        byte[] companyBytes = TimeOrderedUuid.toBytes(shipment.getCompanyId());
+        for (int n = 2; shipmentRepository.countNumberRaw(companyBytes, renamed) > 0 && n < 100; n++) {
             renamed = number + "-CXL" + n;
         }
+        log.info("Releasing shipment number {} as {}", number, renamed);
         shipmentRepository.renameShipmentNumber(TimeOrderedUuid.toBytes(shipment.getId()), renamed);
         releasedShipmentNumberRepository.release(
                 TimeOrderedUuid.toBytes(shipment.getBookingBranchId()), Long.parseLong(m.group(1)));

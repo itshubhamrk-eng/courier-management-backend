@@ -51,6 +51,11 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     boolean existsByCompanyIdAndShipmentNumber(UUID companyId, String shipmentNumber);
 
+    /** Raw count (no Hibernate filter / derived-query layer) used when picking a free "-CXL" name. */
+    @Query(value = "SELECT COUNT(*) FROM shipments WHERE company_id = :companyId AND shipment_number = :number",
+            nativeQuery = true)
+    long countNumberRaw(@Param("companyId") byte[] companyId, @Param("number") String number);
+
     List<Shipment> findAllByCompanyIdAndIdIn(UUID companyId, Collection<UUID> ids);
 
     List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);
