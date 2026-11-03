@@ -3148,7 +3148,7 @@ public class ShipmentServiceImpl implements ShipmentService {
      *  {@code "<number>-CXL"}. Manually typed numbers are left alone. */
     private void releaseShipmentNumber(Shipment shipment) {
         String number = shipment.getShipmentNumber();
-        if (shipment.getBookingBranchId() == null || number.length() + 4 > 30) {
+        if (shipment.getBookingBranchId() == null || number.length() + 6 > 30) {
             return;
         }
         String branchCode = branchService.getById(shipment.getBookingBranchId()).getBranchCode();
@@ -3157,7 +3157,14 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (!m.matches()) {
             return;
         }
-        shipmentRepository.renameShipmentNumber(TimeOrderedUuid.toBytes(shipment.getId()), number + "-CXL");
+        // A freed serial gets re-issued and may be cancelled again, so "-CXL" can already be
+        // taken (uk_shipments_company_number): pick the first free suffix.
+        String renamed = number + "-CXL";
+        for (int n = 2; shipmentRepository.existsByCompanyIdAndShipmentNumber(shipment.getCompanyId(), renamed)
+                && n < 100; n++) {
+            renamed = number + "-CXL" + n;
+        }
+        shipmentRepository.renameShipmentNumber(TimeOrderedUuid.toBytes(shipment.getId()), renamed);
         releasedShipmentNumberRepository.release(
                 TimeOrderedUuid.toBytes(shipment.getBookingBranchId()), Long.parseLong(m.group(1)));
     }
