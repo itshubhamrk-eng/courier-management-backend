@@ -398,7 +398,7 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE')")
     public void removeShipment(UUID manifestId, UUID shipmentId) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(manifestId, companyId);

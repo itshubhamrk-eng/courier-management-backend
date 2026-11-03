@@ -1364,7 +1364,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public void requireFlowType(Collection<UUID> shipmentIds, FlowType flowType) {
         UUID companyId = requireCompany();
         for (UUID shipmentId : shipmentIds) {
@@ -1379,7 +1379,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
                                      UUID expectedDeliveryBranchId, String manifestDestinationCity) {
         return attachToManifest(shipmentId, manifestId, expectedBookingBranchId,
@@ -1388,7 +1388,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public Shipment attachToManifest(UUID shipmentId, UUID manifestId, UUID expectedBookingBranchId,
                                      UUID expectedDeliveryBranchId, String manifestDestinationCity,
                                      boolean hubTransfer) {
@@ -1456,7 +1456,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public Shipment detachFromManifest(UUID shipmentId, UUID manifestId) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
@@ -1515,7 +1515,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public List<Shipment> transitionToDispatched(List<UUID> shipmentIds, UUID manifestId, UUID vehicleId,
                                                  UUID bookingBranchId) {
         UUID companyId = requireCompany();
@@ -1537,7 +1537,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_CREATE') or hasAuthority('MANIFEST_DISPATCH')")
     public List<Shipment> markPickedUpForDirectDelivery(List<UUID> shipmentIds) {
         UUID companyId = requireCompany();
         List<Shipment> shipments = shipmentRepository.findAllByCompanyIdAndIdIn(companyId, shipmentIds);
@@ -1625,7 +1625,8 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    // Role tier OR the menu-granted In Scan permission (MANIFEST_RECEIVE) — role-only ignored overrides.
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE')")
     public BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers, String manifestNumber,
                                       List<String> missingTrackingNumbers, String remarks, String photoUrl) {
         UUID companyId = requireCompany();
@@ -1782,7 +1783,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_ASSIGN')")
     public BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId,
                                                     UUID vehicleId, BigDecimal fuelCost, BigDecimal deliveryCharge) {
         UUID companyId = requireCompany();
@@ -1849,7 +1850,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_ASSIGN')")
     public DeliveryOtpIssued requestDeliveryDispatchOtp(UUID deliveryUserId) {
         UUID companyId = requireCompany();
         // Same "any real user of this company" check assignOutForDelivery itself uses.
@@ -1886,7 +1887,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_ASSIGN')")
     public void verifyDeliveryDispatchOtp(UUID deliveryUserId, String otp) {
         UUID companyId = requireCompany();
         DeliveryDispatchOtp challenge = deliveryDispatchOtpRepository
@@ -2360,7 +2361,8 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    // Role tier OR the menu-granted In Scan permission (MANIFEST_RECEIVE) — role-only ignored overrides.
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE')")
     public String uploadInScanPhoto(UploadInScanPhotoCommand command) {
         UUID companyId = requireCompany();
 
