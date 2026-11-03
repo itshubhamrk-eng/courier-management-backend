@@ -1626,7 +1626,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     // Role tier OR the menu-granted In Scan permission (MANIFEST_RECEIVE) — role-only ignored overrides.
-    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE')")
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE') or hasAuthority('HUB_IN_SCAN')")
     public BulkMovementResult inScan(UUID receivingBranchId, List<String> trackingNumbers, String manifestNumber,
                                       List<String> missingTrackingNumbers, String remarks, String photoUrl) {
         UUID companyId = requireCompany();
@@ -2362,7 +2362,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional
     // Role tier OR the menu-granted In Scan permission (MANIFEST_RECEIVE) — role-only ignored overrides.
-    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE')")
+    @PreAuthorize(WRITERS + " or hasAuthority('MANIFEST_RECEIVE') or hasAuthority('HUB_IN_SCAN')")
     public String uploadInScanPhoto(UploadInScanPhotoCommand command) {
         UUID companyId = requireCompany();
 
