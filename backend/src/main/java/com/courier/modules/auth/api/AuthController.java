@@ -17,6 +17,7 @@ import com.courier.modules.auth.application.PasswordService;
 import com.courier.modules.auth.application.SessionService;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
 import com.courier.shared.api.ApiResponse;
+import com.courier.shared.security.ClientIpResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -54,6 +55,7 @@ public class AuthController {
     private final PasswordService passwordService;
     private final EmailVerificationService emailVerificationService;
     private final CompanyDirectoryPort companyDirectory;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/login")
     @Operation(summary = "Sign in",
@@ -215,16 +217,11 @@ public class AuthController {
     /**
      * Client address for audit and throttling.
      *
-     * <p>{@code X-Forwarded-For} is client-controllable, so this is evidence for an
-     * investigation, never an authorisation input. Behind a trusted proxy the first
-     * entry is the real client; without one, the socket address is used.
+     * <p>Delegates to {@link ClientIpResolver}: {@code X-Real-IP} (set by nginx) is
+     * trusted only when the socket peer is the private-network proxy; client-supplied
+     * {@code X-Forwarded-For} is never used.
      */
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            String first = forwarded.split(",")[0].trim();
-            return first.length() <= 45 ? first : first.substring(0, 45);
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 }
