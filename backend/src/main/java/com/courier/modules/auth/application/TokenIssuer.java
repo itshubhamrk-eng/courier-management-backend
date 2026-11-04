@@ -47,7 +47,8 @@ import java.util.UUID;
  *       tell which, so the entire family is destroyed and both parties must
  *       re-authenticate. A <i>rotated</i> token replayed this way also raises a
  *       REFRESH_TOKEN_REUSE security incident (auto-ban), except within the
- *       concurrent-refresh grace window (same IP, within {@code graceSeconds}), which
+ *       concurrent-refresh grace window (old or successor token's IP, within
+ *       {@code graceSeconds}), which
  *       is rejected without destroying anything.</li>
  * </ol>
  *
@@ -210,18 +211,32 @@ public class TokenIssuer {
     }
 
     /**
-     * A rotated token presented again within {@code graceSeconds} of its rotation, from
-     * the IP it was issued to, is a concurrent refresh rather than theft. The session
-     * half of "same session" holds by construction: a refresh request carries no
-     * session identifier of its own, the session is the presented token's
+     * A rotated token presented again within {@code graceSeconds} of its rotation, by
+     * the same client, is a concurrent refresh (parallel tabs/requests, a retry) rather
+     * than theft. "Same client" means the presenting IP equals either the IP the old
+     * token was issued to, or the IP of the successor token, i.e. the request that won
+     * the rotation, since the user's IP may have changed since the old token was issued
+     * (mobile data, CGNAT). If the successor row is missing, only the old token's IP counts.
+     *
+     * <p>The session half of "same session" holds by construction: a refresh request
+     * carries no session identifier of its own, the session is the presented token's
      * {@code sessionId}, and rotation always mints the successor into that same session.
-     * An unknown IP never matches, so it cannot buy the grace window.
+     * An unknown IP never matches, and a negative elapsed time (revokedAt in the future,
+     * clock skew) is outside grace, so neither can buy the grace window.
      */
     private boolean isConcurrentRefresh(RefreshToken stored, String ipAddress) {
         Duration sinceRotation = Duration.between(stored.getRevokedAt(), Instant.now());
-        return sinceRotation.compareTo(Duration.ofSeconds(securityProperties.getGraceSeconds())) <= 0
-                && ipAddress != null
-                && ipAddress.equals(stored.getIpAddress());
+        if (ipAddress == null
+                || sinceRotation.isNegative()
+                || sinceRotation.compareTo(Duration.ofSeconds(securityProperties.getGraceSeconds())) > 0) {
+            return false;
+        }
+        if (ipAddress.equals(stored.getIpAddress())) {
+            return true;
+        }
+        return refreshTokenRepository.findByJti(stored.getReplacedByJti())
+                .map(successor -> ipAddress.equals(successor.getIpAddress()))
+                .orElse(false);
     }
 
     /**
@@ -239,6 +254,7 @@ public class TokenIssuer {
         evidence.put("presentedFromIp", ipAddress);
         evidence.put("originalIp", stored.getIpAddress());
         evidence.put("userAgent", userAgent);
+        evidence.put("originalUserAgent", stored.getUserAgent());
         evidence.put("revokedAt", String.valueOf(stored.getRevokedAt()));
         try {
             securityIncidentService.raise(new IncidentRequest(

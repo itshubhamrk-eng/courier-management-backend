@@ -134,6 +134,91 @@ class TokenIssuerReuseTest {
         return token;
     }
 
+    private static final String SUCCESSOR_IP = "198.51.100.7";
+    private static final String STRANGER_IP = "203.0.113.9";
+
+    /** The token that performed the rotation, issued to the IP the rotating request came from. */
+    private void successorIssuedTo(String ip) {
+        RefreshToken successor = RefreshToken.builder()
+                .userId(userId).sessionId(sessionId).familyId(familyId).jti("jti-2")
+                .tokenHash("successor-hash").expiresAt(Instant.now().plus(Duration.ofDays(7)))
+                .ipAddress(ip).userAgent("Original-UA").build();
+        when(refreshTokenRepository.findByJti("jti-2")).thenReturn(Optional.of(successor));
+    }
+
+    private void assertNoIncidentFamilyIntact() {
+        verify(refreshTokenRepository, never()).revokeFamily(any(), anyString(), any());
+        verify(incidentRepository, never()).save(any());
+        verify(userBanService, never()).ban(any(), anyString());
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    private void assertIncidentAndBan() {
+        assertThat(savedIncident().getRule()).isEqualTo(IncidentRule.REFRESH_TOKEN_REUSE);
+        assertThat(user.getStatus()).isEqualTo(UserStatus.DISABLED);
+        verify(refreshTokenRepository).revokeFamily(
+                eq(familyId), eq(RefreshToken.RevokeReason.REUSE_DETECTED), any());
+    }
+
+    @Test
+    void i_withinGraceFromSuccessorIp_isConcurrentRefresh() {
+        presented(Duration.ofSeconds(3), "jti-2");
+        successorIssuedTo(SUCCESSOR_IP);
+
+        assertInvalidRefresh(SUCCESSOR_IP);
+
+        assertNoIncidentFamilyIntact();
+    }
+
+    @Test
+    void ii_withinGraceFromStoredIp_withSuccessorElsewhere_isConcurrentRefresh() {
+        presented(Duration.ofSeconds(3), "jti-2");
+        successorIssuedTo(SUCCESSOR_IP);
+
+        assertInvalidRefresh(ORIGINAL_IP);
+
+        assertNoIncidentFamilyIntact();
+    }
+
+    @Test
+    void iii_withinGraceFromNeitherIp_raisesIncident() {
+        presented(Duration.ofSeconds(3), "jti-2");
+        successorIssuedTo(SUCCESSOR_IP);
+
+        assertInvalidRefresh(STRANGER_IP);
+
+        assertIncidentAndBan();
+    }
+
+    @Test
+    void iv_successorRowMissing_fallsBackToStoredIpRule() {
+        presented(Duration.ofSeconds(3), "jti-2");
+        when(refreshTokenRepository.findByJti("jti-2")).thenReturn(Optional.empty());
+
+        assertInvalidRefresh(SUCCESSOR_IP);
+
+        assertIncidentAndBan();
+    }
+
+    @Test
+    void v_beyondGraceFromSuccessorIp_raisesIncident() {
+        presented(Duration.ofSeconds(60), "jti-2");
+        successorIssuedTo(SUCCESSOR_IP);
+
+        assertInvalidRefresh(SUCCESSOR_IP);
+
+        assertIncidentAndBan();
+    }
+
+    @Test
+    void revokedAtInTheFuture_clockSkew_isOutsideGrace() {
+        presented(Duration.ofSeconds(-5), "jti-2");
+
+        assertInvalidRefresh(ORIGINAL_IP);
+
+        assertIncidentAndBan();
+    }
+
     private void assertInvalidRefresh(String ip) {
         assertThatThrownBy(() -> tokenIssuer.rotate(RAW_TOKEN, ip, "Replay-UA"))
                 .isInstanceOf(UnauthorizedException.class)
@@ -164,6 +249,7 @@ class TokenIssuerReuseTest {
                 .contains("\"presentedFromIp\":\"203.0.113.9\"")
                 .contains("\"originalIp\":\"" + ORIGINAL_IP + "\"")
                 .contains("\"userAgent\":\"Replay-UA\"")
+                .contains("\"originalUserAgent\":\"Original-UA\"")
                 .contains("\"revokedAt\":");
         assertThat(user.getStatus()).isEqualTo(UserStatus.DISABLED);
         verify(refreshTokenRepository).revokeFamily(
