@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.UUID;
 
 /**
  * Redis-backed access-token denylist.
@@ -38,6 +39,8 @@ public class RedisTokenRevocationChecker
 
     private static final String KEY_PREFIX = "auth:denylist:";
 
+    private static final String BANNED_USER_PREFIX = "banned-user:";
+
     private final StringRedisTemplate redisTemplate;
 
     @Override
@@ -51,6 +54,45 @@ public class RedisTokenRevocationChecker
             log.error("Redis unavailable; access-token revocation is NOT being enforced "
                     + "for jti {}. Tokens remain valid until their natural expiry.", tokenId, e);
             return false;
+        }
+    }
+
+    @Override
+    public boolean isUserBanned(UUID userId) {
+        if (userId == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(BANNED_USER_PREFIX + userId));
+        } catch (Exception e) {
+            log.error("Redis unavailable; user-level ban is NOT being enforced for user {}.", userId, e);
+            return false;
+        }
+    }
+
+    @Override
+    public void banUser(UUID userId, Duration ttl) {
+        if (userId == null || ttl == null || ttl.isNegative() || ttl.isZero()) {
+            return;
+        }
+        try {
+            redisTemplate.opsForValue().set(BANNED_USER_PREFIX + userId, "banned", ttl);
+        } catch (Exception e) {
+            log.error("Redis unavailable; could not write user-level ban for {}. Live access "
+                    + "tokens stay valid for up to {}.", userId, ttl, e);
+        }
+    }
+
+    @Override
+    public void unbanUser(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            redisTemplate.delete(BANNED_USER_PREFIX + userId);
+        } catch (Exception e) {
+            log.error("Redis unavailable; could not remove user-level ban for {}. It expires on its own.",
+                    userId, e);
         }
     }
 

@@ -63,14 +63,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isNotRevoked(AuthenticatedUser user) {
-        if (revocationChecker.isEmpty() || user.tokenId() == null) {
+        if (revocationChecker.isEmpty()) {
             return true;
         }
-        boolean revoked = revocationChecker.get().isRevoked(user.tokenId());
+        var checker = revocationChecker.get();
+        boolean revoked = user.tokenId() != null && checker.isRevoked(user.tokenId());
         if (revoked) {
             log.debug("Rejected revoked access token for user {}", user.userId());
+            return false;
         }
-        return !revoked;
+        if (user.userId() != null && checker.isUserBanned(user.userId())) {
+            log.debug("Rejected access token of banned user {}", user.userId());
+            return false;
+        }
+        return true;
     }
 
     private void authenticate(AuthenticatedUser user, HttpServletRequest request) {

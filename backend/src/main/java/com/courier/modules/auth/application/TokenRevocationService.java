@@ -70,5 +70,11 @@ public class TokenRevocationService {
      */
     public interface RevocableTokenStore {
         boolean revoke(String tokenId, Duration ttl);
+
+        /** Rejects every access token of the user for {@code ttl} (use the access-token TTL). Never throws. */
+        void banUser(java.util.UUID userId, Duration ttl);
+
+        /** Lifts a user-level ban. Never throws. */
+        void unbanUser(java.util.UUID userId);
     }
 }

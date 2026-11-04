@@ -13,7 +13,6 @@ package com.courier.shared.security;
  * from {@code modules}. When no implementation is present — as during the
  * foundation-only phase — the filter simply skips the check.
  */
-@FunctionalInterface
 public interface AccessTokenRevocationChecker {
 
     /**
@@ -21,4 +20,12 @@ public interface AccessTokenRevocationChecker {
      * @return true if the token has been revoked and must be rejected
      */
     boolean isRevoked(String tokenId);
+
+    /**
+     * User-level ban: cuts every live access token of the user at once, since
+     * access-token ids are not tracked per user.
+     *
+     * @return true if the user is banned and the request must be rejected
+     */
+    boolean isUserBanned(java.util.UUID userId);
 }
