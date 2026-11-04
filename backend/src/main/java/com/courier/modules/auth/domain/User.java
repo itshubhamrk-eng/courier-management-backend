@@ -223,6 +223,18 @@ public class User extends CompanyOwnedEntity {
         }
     }
 
+    /** Administrative disable (e.g. a security ban). Reversed only by {@link #reactivate()}. */
+    public void disable() {
+        this.status = UserStatus.DISABLED;
+    }
+
+    /** Re-enables the account and clears failed-login state. */
+    public void reactivate() {
+        this.status = UserStatus.ACTIVE;
+        this.failedAttempts = 0;
+        this.lockedUntil = null;
+    }
+
     public boolean hasRole(Role role) {
         return roles.contains(role);
     }

@@ -357,6 +357,11 @@ public enum AuditAction {
     HUB_EXCEPTION_RAISED,
     HUB_EXCEPTION_RESOLVED,
 
+    // --- Security incidents: detection, and the ban/unban that follows.
+    USER_BANNED,
+    USER_UNBANNED,
+    SECURITY_INCIDENT_RAISED,
+
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,
     UPDATED,
