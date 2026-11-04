@@ -28,6 +28,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    /**
+     * Row-locks the user for the rest of the transaction. Serialises concurrent security
+     * incident raises for one user so the dedup check and the insert cannot interleave.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findByIdForUpdate(@Param("id") UUID id);
+
     @Query("select u from User u where u.id in :ids")
     List<User> findAllByIdIn(@Param("ids") Collection<UUID> ids);
 

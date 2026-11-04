@@ -3,6 +3,7 @@ package com.courier.modules.security.application;
 import com.courier.modules.auth.domain.Role;
 import com.courier.modules.auth.domain.User;
 import com.courier.modules.auth.domain.UserRepository;
+import com.courier.modules.auth.domain.UserStatus;
 import com.courier.modules.security.domain.AutoAction;
 import com.courier.modules.security.domain.IncidentSeverity;
 import com.courier.modules.security.domain.IncidentStatus;
@@ -10,6 +11,8 @@ import com.courier.modules.security.domain.SecurityIncident;
 import com.courier.modules.security.domain.SecurityIncidentRepository;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
+import com.courier.shared.exception.BusinessRuleException;
+import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ForbiddenException;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.AuthenticatedUser;
@@ -33,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -42,6 +46,9 @@ public class SecurityIncidentService {
 
     /** A dismissed (user, rule) stays quiet this long before it may be raised again. */
     static final Duration DISMISSAL_QUIET_PERIOD = Duration.ofHours(24);
+
+    /** An incident in one of these states already covers the (user, rule). */
+    private static final Set<IncidentStatus> LIVE_STATUSES = Set.of(IncidentStatus.OPEN, IncidentStatus.BANNED);
 
     private final SecurityIncidentRepository incidentRepository;
     private final UserRepository userRepository;
@@ -53,13 +60,27 @@ public class SecurityIncidentService {
      * Runs in its own transaction so an auto-ban survives the caller rolling back
      * (a detector firing inside a request that then fails must not undo the ban).
      *
+     * <p><b>Caller contract:</b> callers must not hold uncommitted writes or locks on the
+     * target user's row or its sessions/refresh tokens. This method opens a new
+     * transaction (REQUIRES_NEW) that locks the user row and revokes sessions, so it would
+     * wait on the caller's locks until the InnoDB lock timeout. Raise before such writes,
+     * or after commit.
+     *
+     * <p>The user row is locked first, serialising concurrent raises for one user so the
+     * dedup checks and the insert cannot interleave.
+     *
      * @return the new incident, or empty when deduplicated
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<SecurityIncident> raise(IncidentRequest request) {
+        boolean autoBan = request.rule().autoBan();
+        User target = request.userId() == null
+                ? null
+                : userRepository.findByIdForUpdate(request.userId()).orElse(null);
+
         if (request.userId() != null) {
-            if (incidentRepository.existsByUserIdAndRuleAndStatus(
-                    request.userId(), request.rule(), IncidentStatus.OPEN)) {
+            if (incidentRepository.existsByUserIdAndRuleAndStatusIn(
+                    request.userId(), request.rule(), LIVE_STATUSES)) {
                 return Optional.empty();
             }
             if (incidentRepository.existsByUserIdAndRuleAndStatusAndResolvedAtAfter(
@@ -67,9 +88,11 @@ public class SecurityIncidentService {
                     Instant.now().minus(DISMISSAL_QUIET_PERIOD))) {
                 return Optional.empty();
             }
+            if (autoBan && target != null && target.getStatus() == UserStatus.DISABLED) {
+                return Optional.empty();
+            }
         }
 
-        boolean autoBan = request.rule().autoBan();
         SecurityIncident incident = SecurityIncident.builder()
                 .companyId(request.companyId())
                 .userId(request.userId())
@@ -81,7 +104,7 @@ public class SecurityIncidentService {
                 .detectedAt(Instant.now())
                 .build();
 
-        if (autoBan && request.userId() != null && isBannable(request.userId())) {
+        if (autoBan && target != null && isBannable(target)) {
             userBanService.ban(request.userId(), "Auto-ban: " + request.rule());
             incident.setAutoAction(AutoAction.USER_DISABLED);
             incident.setStatus(IncidentStatus.BANNED);
@@ -113,15 +136,29 @@ public class SecurityIncidentService {
     @Transactional
     public SecurityIncident unban(UUID incidentId, UUID actorId, String note) {
         SecurityIncident incident = getVisible(incidentId);
-        if (incident.getUserId() != null) {
-            userBanService.unban(incident.getUserId());
+        if (incident.getStatus() != IncidentStatus.BANNED) {
+            throw new BusinessRuleException(ErrorCode.INVALID_STATE_TRANSITION,
+                    "Only a BANNED incident can be unbanned; this one is " + incident.getStatus());
         }
-        return resolve(incident, IncidentStatus.UNBANNED, actorId, note);
+        String resolutionNote = note;
+        if (incident.getUserId() != null) {
+            if (incidentRepository.existsByUserIdAndStatusAndIdNot(
+                    incident.getUserId(), IncidentStatus.BANNED, incident.getId())) {
+                resolutionNote = (note == null ? "" : note + " ")
+                        + "(user stays banned: another incident is still BANNED)";
+            } else {
+                userBanService.unban(incident.getUserId());
+            }
+        }
+        return resolve(incident, IncidentStatus.UNBANNED, actorId, resolutionNote);
     }
 
     @Transactional(readOnly = true)
     public Page<SecurityIncident> list(IncidentFilter filter, Pageable pageable) {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (!caller.isPlatformAdmin() && caller.companyId() == null) {
+            return Page.empty(pageable);
+        }
         Specification<SecurityIncident> spec = (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             if (!caller.isPlatformAdmin()) {
@@ -150,7 +187,8 @@ public class SecurityIncidentService {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
         SecurityIncident incident = incidentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SecurityIncident", id));
-        if (!caller.isPlatformAdmin() && !Objects.equals(caller.companyId(), incident.getCompanyId())) {
+        if (!caller.isPlatformAdmin()
+                && (caller.companyId() == null || !Objects.equals(caller.companyId(), incident.getCompanyId()))) {
             throw new ResourceNotFoundException("SecurityIncident", id);
         }
         return incident;
@@ -165,9 +203,8 @@ public class SecurityIncidentService {
     }
 
     /** Platform-tier accounts are never auto-banned: locking them out could lock out the operators. */
-    private boolean isBannable(UUID userId) {
-        User user = userRepository.findById(userId).orElse(null);
-        return user != null && !user.hasRole(Role.SUPER_ADMIN) && !user.hasRole(Role.PLATFORM_ADMIN);
+    private boolean isBannable(User user) {
+        return !user.hasRole(Role.SUPER_ADMIN) && !user.hasRole(Role.PLATFORM_ADMIN);
     }
 
     private String toJson(Map<String, Object> evidence) {

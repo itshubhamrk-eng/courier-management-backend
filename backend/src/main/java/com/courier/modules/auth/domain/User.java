@@ -228,9 +228,12 @@ public class User extends CompanyOwnedEntity {
         this.status = UserStatus.DISABLED;
     }
 
-    /** Re-enables the account and clears failed-login state. */
+    /**
+     * Re-enables the account and clears failed-login state. An account whose email was
+     * never verified returns to PENDING, not ACTIVE.
+     */
     public void reactivate() {
-        this.status = UserStatus.ACTIVE;
+        this.status = emailVerified ? UserStatus.ACTIVE : UserStatus.PENDING;
         this.failedAttempts = 0;
         this.lockedUntil = null;
     }

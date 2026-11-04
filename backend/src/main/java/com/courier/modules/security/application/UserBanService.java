@@ -67,11 +67,18 @@ public class UserBanService {
                 Map.of("reason", reason == null ? "" : reason));
     }
 
+    /**
+     * Lifts a ban. Only a DISABLED (or LOCKED) user is touched; an unverified email is
+     * restored to PENDING rather than ACTIVE so unbanning never skips verification.
+     */
     @Transactional
     public void unban(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
+        if (user.getStatus() != UserStatus.DISABLED && user.getStatus() != UserStatus.LOCKED) {
+            return;
+        }
         user.reactivate();
         userRepository.save(user);
 

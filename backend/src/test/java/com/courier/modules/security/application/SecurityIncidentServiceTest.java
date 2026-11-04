@@ -67,10 +67,15 @@ class SecurityIncidentServiceTest {
                 new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
     }
 
-    private void targetHolds(Role... roles) {
-        User user = User.builder().email("t@y.com").status(UserStatus.ACTIVE)
+    private User targetHolds(Role... roles) {
+        return targetHolds(UserStatus.ACTIVE, roles);
+    }
+
+    private User targetHolds(UserStatus status, Role... roles) {
+        User user = User.builder().email("t@y.com").status(status)
                 .roles(EnumSet.of(roles[0], roles)).build();
-        when(users.findById(targetId)).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate(targetId)).thenReturn(Optional.of(user));
+        return user;
     }
 
     private IncidentRequest request(IncidentRule rule) {
@@ -112,7 +117,8 @@ class SecurityIncidentServiceTest {
 
     @Test
     void secondRaiseForSameOpenUserAndRuleReturnsEmptyAndSavesNothing() {
-        when(incidents.existsByUserIdAndRuleAndStatus(targetId, IncidentRule.SESSION_MULTI_IP, IncidentStatus.OPEN))
+        when(incidents.existsByUserIdAndRuleAndStatusIn(
+                targetId, IncidentRule.SESSION_MULTI_IP, Set.of(IncidentStatus.OPEN, IncidentStatus.BANNED)))
                 .thenReturn(true);
 
         assertThat(service.raise(request(IncidentRule.SESSION_MULTI_IP))).isEmpty();
@@ -128,9 +134,64 @@ class SecurityIncidentServiceTest {
                 org.mockito.ArgumentMatchers.eq(IncidentStatus.DISMISSED), any(Instant.class)))
                 .thenReturn(true);
 
+        Instant before = Instant.now();
         assertThat(service.raise(request(IncidentRule.SESSION_MULTI_IP))).isEmpty();
+        Instant after = Instant.now();
+
+        org.mockito.ArgumentCaptor<Instant> cutoff = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(incidents).existsByUserIdAndRuleAndStatusAndResolvedAtAfter(
+                any(), any(), org.mockito.ArgumentMatchers.eq(IncidentStatus.DISMISSED), cutoff.capture());
+        assertThat(cutoff.getValue()).isBetween(
+                before.minus(java.time.Duration.ofHours(24)), after.minus(java.time.Duration.ofHours(24)));
+        verify(incidents, never()).save(any());
+    }
+
+    @Test
+    void raiseLocksUserRowBeforeDedupChecks() {
+        targetHolds(Role.OPERATOR);
+
+        service.raise(request(IncidentRule.SESSION_MULTI_IP));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(users, incidents);
+        order.verify(users).findByIdForUpdate(targetId);
+        order.verify(incidents).existsByUserIdAndRuleAndStatusIn(any(), any(), any());
+        order.verify(incidents).save(any());
+    }
+
+    @Test
+    void openAndBannedIncidentsSuppressButUnbannedDoesNot() {
+        targetHolds(Role.OPERATOR);
+
+        service.raise(request(IncidentRule.SESSION_MULTI_IP));
+
+        verify(incidents).existsByUserIdAndRuleAndStatusIn(
+                targetId, IncidentRule.SESSION_MULTI_IP, Set.of(IncidentStatus.OPEN, IncidentStatus.BANNED));
+    }
+
+    @Test
+    void autoBanRuleForAlreadyDisabledUserReturnsEmpty() {
+        targetHolds(UserStatus.DISABLED, Role.OPERATOR);
+
+        assertThat(service.raise(request(IncidentRule.FOREIGN_TOKEN_USE))).isEmpty();
 
         verify(incidents, never()).save(any());
+        verify(banService, never()).ban(any(), any());
+    }
+
+    @Test
+    void nonAutoBanRuleStillRaisesForDisabledUser() {
+        targetHolds(UserStatus.DISABLED, Role.OPERATOR);
+
+        assertThat(service.raise(request(IncidentRule.SESSION_MULTI_IP))).isPresent();
+    }
+
+    @Test
+    void raiseRunsInItsOwnTransaction() throws Exception {
+        var raise = SecurityIncidentService.class.getMethod("raise", IncidentRequest.class);
+        var tx = raise.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(tx).isNotNull();
+        assertThat(tx.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
     }
 
     @Test
@@ -234,5 +295,50 @@ class SecurityIncidentServiceTest {
         SecurityIncident own = stored(companyA, UUID.randomUUID(), IncidentStatus.OPEN);
 
         assertThat(service.get(own.getId())).isSameAs(own);
+    }
+
+    @Test
+    void callerWithNullCompanyCannotGetNullCompanyIncident() {
+        actAs(UUID.randomUUID(), null, Role.COMPANY_ADMIN.name());
+        SecurityIncident noCompany = stored(null, UUID.randomUUID(), IncidentStatus.OPEN);
+
+        assertThatThrownBy(() -> service.get(noCompany.getId())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.dismiss(noCompany.getId(), UUID.randomUUID(), "n"))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void callerWithNullCompanyListsNothing() {
+        actAs(UUID.randomUUID(), null, Role.COMPANY_ADMIN.name());
+
+        assertThat(service.list(null, org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+
+        verify(incidents, never()).findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<SecurityIncident>>any(),
+                any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void unbanRejectedUnlessIncidentIsBanned() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.OPEN);
+
+        assertThatThrownBy(() -> service.unban(incident.getId(), UUID.randomUUID(), "n"))
+                .isInstanceOf(com.courier.shared.exception.BusinessRuleException.class);
+
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
+        verify(banService, never()).unban(any());
+    }
+
+    @Test
+    void unbanKeepsUserDisabledWhenAnotherIncidentIsStillBanned() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.BANNED);
+        when(incidents.existsByUserIdAndStatusAndIdNot(targetId, IncidentStatus.BANNED, incident.getId()))
+                .thenReturn(true);
+
+        SecurityIncident result = service.unban(incident.getId(), UUID.randomUUID(), "ok");
+
+        assertThat(result.getStatus()).isEqualTo(IncidentStatus.UNBANNED);
+        assertThat(result.getResolutionNote()).contains("another incident");
+        verify(banService, never()).unban(any());
     }
 }

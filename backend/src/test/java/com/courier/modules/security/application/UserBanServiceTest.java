@@ -72,6 +72,8 @@ class UserBanServiceTest {
         assertThatCode(() -> service.ban(userId, "again")).doesNotThrowAnyException();
 
         assertThat(user.getStatus()).isEqualTo(UserStatus.DISABLED);
+        verify(sessionService).revokeAllSessions(eq(userId), any());
+        verify(store).banUser(userId, Duration.ofMinutes(20));
     }
 
     @Test
@@ -82,6 +84,8 @@ class UserBanServiceTest {
         assertThatCode(() -> service.ban(userId, "x")).doesNotThrowAnyException();
 
         assertThat(user.getStatus()).isEqualTo(UserStatus.DISABLED);
+        verify(sessionService).revokeAllSessions(eq(userId), any());
+        verify(audit).record(eq(AuditAction.USER_BANNED), eq("User"), eq(userId), anyMap());
     }
 
     @Test
@@ -97,6 +101,7 @@ class UserBanServiceTest {
     @Test
     void unbanReactivatesResetsCountersClearsKeyAndAudits() {
         User user = userWith(UserStatus.DISABLED);
+        user.setEmailVerified(true);
         user.setFailedAttempts(7);
         user.setLockedUntil(Instant.now().plusSeconds(600));
 
@@ -107,5 +112,29 @@ class UserBanServiceTest {
         assertThat(user.getLockedUntil()).isNull();
         verify(store).unbanUser(userId);
         verify(audit).record(AuditAction.USER_UNBANNED, "User", userId);
+    }
+
+    @Test
+    void unbanRestoresPendingWhenEmailNotVerified() {
+        User user = userWith(UserStatus.DISABLED);
+        user.setEmailVerified(false);
+
+        service.unban(userId);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING);
+        verify(store).unbanUser(userId);
+    }
+
+    @Test
+    void unbanLeavesActiveUserUntouched() {
+        User user = userWith(UserStatus.ACTIVE);
+        user.setEmailVerified(true);
+        user.setFailedAttempts(3);
+
+        service.unban(userId);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(user.getFailedAttempts()).isEqualTo(3);
+        verify(userRepository, org.mockito.Mockito.never()).save(any());
     }
 }
