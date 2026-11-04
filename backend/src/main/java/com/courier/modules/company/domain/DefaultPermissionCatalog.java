@@ -193,6 +193,8 @@ public final class DefaultPermissionCatalog {
         MATRIX.put(PermissionModule.NOTIFICATION, CRUD);
         // The audit trail is append-only by design; it is read and exported, nothing more.
         MATRIX.put(PermissionModule.AUDIT, EnumSet.of(READ, SEARCH, EXPORT));
+        // Security incidents: view/list, and UPDATE = ban / dismiss / unban (V139).
+        MATRIX.put(PermissionModule.SECURITY_INCIDENT, EnumSet.of(READ, SEARCH, UPDATE));
     }
 
     /**

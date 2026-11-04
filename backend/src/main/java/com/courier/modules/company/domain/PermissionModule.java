@@ -108,7 +108,9 @@ public enum PermissionModule {
     DASHBOARD("Dashboard", 250),
     SETTINGS("Settings", 260),
     NOTIFICATION("Notifications", 270),
-    AUDIT("Audit", 280);
+    AUDIT("Audit", 280),
+    /** Detected account-compromise incidents and the ban / dismiss / unban decision. COMPANY_ADMIN-only. */
+    SECURITY_INCIDENT("Security Incidents", 285);
 
     private final String displayName;
     private final int displayOrder;
