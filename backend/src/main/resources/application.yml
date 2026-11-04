@@ -336,3 +336,14 @@ logging:
   # a log line — see RequestIdFilter and TenantResolutionFilter.
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{companyId:-}] %logger{36} - %msg%n"
+
+courier:
+  security:
+    # Incident detection. Geo checks use an offline MaxMind GeoLite2-Country file;
+    # without one every lookup is UNKNOWN (fail-open).
+    grace-seconds: 10
+    scan-interval: PT2M
+    geo:
+      enabled: false
+      db-path:
+      allowed-country: IN

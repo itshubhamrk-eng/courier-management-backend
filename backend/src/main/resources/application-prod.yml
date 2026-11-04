@@ -38,3 +38,10 @@ logging:
   level:
     root: WARN
     com.courier: INFO
+
+courier:
+  security:
+    geo:
+      enabled: true
+      # Blank when unset: lookups then stay UNKNOWN rather than failing startup.
+      db-path: ${GEO_DB_PATH:}

@@ -9,6 +9,7 @@ import com.courier.modules.finance.infrastructure.RazorpayProperties;
 import com.courier.modules.pod.application.PodVerificationProperties;
 import com.courier.modules.pod.application.provider.PodAiVisionProperties;
 import com.courier.modules.pricing.application.PricingProperties;
+import com.courier.modules.security.application.SecurityProperties;
 import com.courier.modules.shipment.infrastructure.S3Properties;
 import com.courier.shared.config.CorsProperties;
 import com.courier.shared.security.JwtProperties;
@@ -29,7 +30,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         RazorpayProperties.class, PricingProperties.class, S3Properties.class,
         GeocodingProperties.class, RoutingProperties.class, SecretsEncryptionProperties.class,
         PodVerificationProperties.class, PodAiVisionProperties.class, CommunicationRetryProperties.class,
-        EwayBillGspProperties.class})
+        EwayBillGspProperties.class, SecurityProperties.class})
 public class CourierApplication {
 
     public static void main(String[] args) {
