@@ -52,23 +52,59 @@ public class ClientIpResolver {
         if (value == null || value.isEmpty() || value.length() > MAX_LENGTH) {
             return null;
         }
-        boolean hasSeparator = false;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c == '.' || c == ':') {
-                hasSeparator = true;
-            } else if (Character.digit(c, 16) < 0) {
+        try {
+            if (value.indexOf(':') < 0) {
+                byte[] v4 = parseIpv4(value);
+                return v4 == null ? null : InetAddress.getByAddress(v4);
+            }
+            // Shape check first: hex digits, ':' and a trailing embedded IPv4 only.
+            // A string containing ':' is always parsed as an IPv6 literal by the JDK
+            // (never resolved as a hostname), and a malformed one just throws.
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c != ':' && c != '.' && Character.digit(c, 16) < 0) {
+                    return null;
+                }
+            }
+            String tail = value.substring(value.lastIndexOf(':') + 1);
+            if (value.indexOf('.') >= 0 && parseIpv4(tail) == null) {
                 return null;
             }
-        }
-        if (!hasSeparator) {
-            return null;
-        }
-        try {
+            if (value.indexOf('.') >= 0 && value.indexOf('.') < value.lastIndexOf(':')) {
+                return null;
+            }
             return InetAddress.getByName(value);
         } catch (UnknownHostException e) {
             return null;
         }
+    }
+
+    /** Exactly four dot-separated decimal octets 0-255, digits only; else null. */
+    private static byte[] parseIpv4(String value) {
+        String[] parts = value.split("\\.", -1);
+        if (parts.length != 4) {
+            return null;
+        }
+        byte[] out = new byte[4];
+        for (int i = 0; i < 4; i++) {
+            String p = parts[i];
+            if (p.isEmpty() || p.length() > 3) {
+                return null;
+            }
+            int n = 0;
+            for (int j = 0; j < p.length(); j++) {
+                char c = p.charAt(j);
+                if (c < '0' || c > '9') {
+                    return null;
+                }
+                n = n * 10 + (c - '0');
+            }
+            if (n > 255) {
+                return null;
+            }
+            out[i] = (byte) n;
+        }
+        return out;
     }
 
     private static String truncate(String value) {

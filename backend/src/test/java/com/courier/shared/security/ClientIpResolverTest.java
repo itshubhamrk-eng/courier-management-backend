@@ -49,6 +49,50 @@ class ClientIpResolverTest {
         assertThat(resolver.resolve(request)).isEqualTo("10.0.0.2");
     }
 
+    private String viaProxy(String xRealIp) {
+        MockHttpServletRequest request = request("172.18.0.5");
+        request.addHeader("X-Real-IP", xRealIp);
+        return resolver.resolve(request);
+    }
+
+    @Test
+    void ipv4MappedPrivatePeerIsTrusted() {
+        MockHttpServletRequest request = request("::ffff:172.18.0.5");
+        request.addHeader("X-Real-IP", "49.36.1.1");
+        assertThat(resolver.resolve(request)).isEqualTo("49.36.1.1");
+    }
+
+    @Test
+    void ipv6UniqueLocalPeerIsTrusted() {
+        MockHttpServletRequest request = request("fd00::1");
+        request.addHeader("X-Real-IP", "49.36.1.1");
+        assertThat(resolver.resolve(request)).isEqualTo("49.36.1.1");
+    }
+
+    @Test
+    void hostnameLikeAndMalformedRealIpsFallBackToSocketAddress() {
+        for (String bad : new String[] {"dead.beef", "ab.cd", "bad.cafe", "1.2.3.4.5", "999.1.1.1",
+                "1.2.3", "0x7f.1", "1.1.1.1, 2.2.2.2", "fe80::1%eth0", "1.2:1.2.3.4"}) {
+            assertThat(viaProxy(bad)).as(bad).isEqualTo("172.18.0.5");
+        }
+    }
+
+    @Test
+    void overLongRealIpFallsBackToSocketAddress() {
+        assertThat(viaProxy("1".repeat(46))).isEqualTo("172.18.0.5");
+        assertThat(viaProxy("2001:db8:" + "0:".repeat(20) + "1")).isEqualTo("172.18.0.5");
+    }
+
+    @Test
+    void whitespacePaddedRealIpIsTrimmedThenAccepted() {
+        assertThat(viaProxy(" 49.36.1.1 ")).isEqualTo("49.36.1.1");
+    }
+
+    @Test
+    void embeddedIpv4RealIpIsAccepted() {
+        assertThat(viaProxy("::ffff:1.2.3.4")).isEqualTo("::ffff:1.2.3.4");
+    }
+
     @Test
     void noHeadersReturnsSocketAddress() {
         assertThat(resolver.resolve(request("172.18.0.5"))).isEqualTo("172.18.0.5");
