@@ -81,6 +81,12 @@ class AuthServiceTest {
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private AuditService auditService;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private com.courier.modules.security.application.SecurityIncidentService securityIncidentService;
+
+    /** Geo disabled (the non-prod default): every verdict is UNKNOWN, so login is unchanged. */
+    private final com.courier.modules.security.application.GeoCountryService geoCountryService =
+            new com.courier.modules.security.application.GeoCountryService(
+                    new com.courier.modules.security.application.SecurityProperties(), address -> Optional.empty());
 
     private AuthProperties properties;
     private AuthService authService;
@@ -95,7 +101,8 @@ class AuthServiceTest {
         authService = new AuthService(
                 authenticationManager, userRepository, refreshTokenRepository, companyDirectory, branchDirectory,
                 userPermissionsPort, sessionService, tokenIssuer, loginAttemptService,
-                tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder);
+                tokenRevocationService, jwtTokenProvider, properties, auditService, passwordEncoder,
+                geoCountryService, securityIncidentService);
         when(userPermissionsPort.resolveEffectivePermissions(any(), any())).thenReturn(Set.of());
 
         companyId = UUID.randomUUID();

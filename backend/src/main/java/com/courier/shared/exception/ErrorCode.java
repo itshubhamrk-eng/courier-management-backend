@@ -35,6 +35,7 @@ public enum ErrorCode {
     ACCOUNT_DISABLED(HttpStatus.FORBIDDEN, "Account is disabled"),
     EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "Email address has not been verified"),
     PASSWORD_EXPIRED(HttpStatus.FORBIDDEN, "Password has expired and must be changed"),
+    GEO_RESTRICTED(HttpStatus.FORBIDDEN, "Sign-in is not available from your location"),
 
     // 404
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),

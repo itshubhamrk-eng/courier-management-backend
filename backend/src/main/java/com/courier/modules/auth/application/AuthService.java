@@ -12,6 +12,11 @@ import com.courier.modules.auth.domain.UserRepository;
 import com.courier.modules.auth.domain.UserSession;
 import com.courier.modules.auth.domain.UserStatus;
 import com.courier.modules.auth.infrastructure.security.AuthUserDetails;
+import com.courier.modules.security.application.GeoCountryService;
+import com.courier.modules.security.application.IncidentRequest;
+import com.courier.modules.security.application.SecurityIncidentService;
+import com.courier.modules.security.domain.GeoVerdict;
+import com.courier.modules.security.domain.IncidentRule;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.ErrorCode;
@@ -79,6 +84,14 @@ public class AuthService {
     private final AuthProperties properties;
     private final AuditService auditService;
     private final PasswordEncoder passwordEncoder;
+    private final GeoCountryService geoCountryService;
+    private final SecurityIncidentService securityIncidentService;
+
+    /** Same message for every foreign outcome, so the response never reveals whether the password was right. */
+    static final String GEO_RESTRICTED_MESSAGE = "Sign-in is not available from your location.";
+
+    /** Lazily encoded hash compared against when a foreign attempt names no real user (timing parity). */
+    private volatile String dummyPasswordHash;
 
     /**
      * Deliberately short — this is an impersonation session, not a normal login, and
@@ -119,6 +132,15 @@ public class AuthService {
      */
     public AuthResult login(LoginCommand command) {
         String identifier = command.email() == null ? null : command.email().trim();
+
+        // First, before any write: the foreign branch raises a REQUIRES_NEW incident that
+        // row-locks the user and may revoke its sessions, so nothing here may hold such
+        // locks yet (this method is not transactional, see above). UNKNOWN/ALLOWED and a
+        // disabled geo check fall through to the normal flow untouched.
+        if (geoCountryService.check(command.ipAddress()) == GeoVerdict.FOREIGN) {
+            rejectForeignLogin(command, identifier);
+        }
+
         UUID companyId = resolveCompany(command, User.normaliseEmail(identifier));
 
         // Bind before the first repository call — everything below is company-scoped.
@@ -223,6 +245,83 @@ public class AuthService {
 
         return new AuthResult(user, tokens, session, companyBrand(companyId),
                 userPermissionsPort.resolveEffectivePermissions(user.getId(), user.roleNames()));
+    }
+
+    /**
+     * A sign-in from outside the allowed country. Never opens a session or issues tokens,
+     * and always ends in the same {@code 403 GEO_RESTRICTED}, whatever happened inside.
+     *
+     * <p>A correct password from abroad means the credentials are in someone else's hands,
+     * so it raises the auto-banning {@code FOREIGN_LOGIN_CORRECT_PASSWORD}; a wrong one
+     * against a real user raises the flag-only {@code FOREIGN_LOGIN_ATTEMPT}; an unknown
+     * user (or company) raises nothing. The password is checked directly with the encoder,
+     * not through {@code AuthenticationManager}/{@link LoginAttemptService}, so a foreign
+     * attempt never touches the lockout counter or login history — an attacker abroad
+     * cannot lock the real user out, and only reads happen before the raise.
+     *
+     * <p>Transactions: {@code login} runs with no outer transaction, so the incident's
+     * {@code REQUIRES_NEW} raise commits on its own and the exception thrown here rolls
+     * nothing back. A failed raise is logged and swallowed (it rolls back only itself),
+     * so the response is identical either way.
+     */
+    private void rejectForeignLogin(LoginCommand command, String identifier) {
+        User candidate = null;
+        UUID companyId = null;
+        try {
+            companyId = resolveCompany(command, User.normaliseEmail(identifier));
+            CompanyContext.setCompanyId(companyId);
+            String email = resolveLoginEmail(identifier, command.password());
+            candidate = userRepository.findByEmailWithinCompany(email, companyId).orElse(null);
+        } catch (RuntimeException e) {
+            // Unknown/inactive company or a non-platform email without one: same answer.
+            log.debug("Foreign login could not resolve a user: {}", e.toString());
+        }
+
+        boolean passwordCorrect = false;
+        if (candidate != null && candidate.getPasswordHash() != null && command.password() != null) {
+            passwordCorrect = passwordEncoder.matches(command.password(), candidate.getPasswordHash());
+        } else if (command.password() != null) {
+            // Same BCrypt cost as a real check, so response time does not reveal the email exists.
+            String dummy = dummyPasswordHash();
+            if (dummy != null) {
+                passwordEncoder.matches(command.password(), dummy);
+            }
+        }
+
+        if (candidate != null) {
+            IncidentRule rule = passwordCorrect
+                    ? IncidentRule.FOREIGN_LOGIN_CORRECT_PASSWORD
+                    : IncidentRule.FOREIGN_LOGIN_ATTEMPT;
+            Map<String, Object> evidence = new java.util.LinkedHashMap<>();
+            putIfPresent(evidence, "ip", command.ipAddress());
+            putIfPresent(evidence, "country", geoCountryService.countryOf(command.ipAddress()).orElse(null));
+            putIfPresent(evidence, "userAgent", command.userAgent());
+            putIfPresent(evidence, "attemptedEmail", identifier);
+            try {
+                securityIncidentService.raise(new IncidentRequest(
+                        candidate.getCompanyId(), candidate.getId(), rule, evidence));
+            } catch (RuntimeException e) {
+                log.error("Could not raise {} for user {}: {}", rule, candidate.getId(), e.getMessage(), e);
+            }
+            log.warn("Foreign sign-in refused for user {} from {} ({})", candidate.getId(), command.ipAddress(), rule);
+        }
+
+        throw new ForbiddenException(ErrorCode.GEO_RESTRICTED, GEO_RESTRICTED_MESSAGE);
+    }
+
+    private String dummyPasswordHash() {
+        String hash = dummyPasswordHash;
+        if (hash == null) {
+            hash = passwordEncoder.encode("foreign-login-timing-parity");
+            dummyPasswordHash = hash;
+        }
+        return hash;
+    }
+
+    private static void putIfPresent(Map<String, Object> map, String key, Object value) {
+        if (value != null) {
+            map.put(key, value);
+        }
     }
 
     /**

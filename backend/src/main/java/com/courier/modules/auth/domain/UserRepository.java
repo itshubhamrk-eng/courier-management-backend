@@ -72,6 +72,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByIdWithinCompany(@Param("id") UUID id, @Param("companyId") UUID companyId);
 
     /**
+     * Email lookup with an explicit company predicate, for callers that may run outside
+     * a transaction (where the Hibernate filter is not guaranteed to be on the session
+     * the query uses) — the foreign-login check in {@code AuthService#login}.
+     */
+    @Query("select u from User u where u.email = :email and u.companyId = :companyId")
+    Optional<User> findByEmailWithinCompany(@Param("email") String email, @Param("companyId") UUID companyId);
+
+    /**
      * Bulk lock clear, used when a password reset unlocks an account. Written as a
      * modifying query so it cannot be defeated by a stale in-memory copy.
      */
