@@ -5,6 +5,8 @@ import com.courier.modules.auth.application.port.UserCompanyRolesPort;
 import com.courier.modules.auth.application.port.UserPermissionsPort;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
+import com.courier.modules.security.application.SecurityIncidentService;
+import com.courier.modules.security.application.SecurityProperties;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.ErrorCode;
@@ -19,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,6 +54,8 @@ class TokenIssuerTest {
     @Mock private CompanyDirectoryPort companyDirectory;
     @Mock private UserPermissionsPort userPermissionsPort;
     @Mock private UserCompanyRolesPort userCompanyRolesPort;
+    @Mock private SecurityIncidentService securityIncidentService;
+    @Mock private PlatformTransactionManager transactionManager;
     @Mock private Claims claims;
 
     private TokenIssuer tokenIssuer;
@@ -63,7 +68,7 @@ class TokenIssuerTest {
     void setUp() {
         tokenIssuer = new TokenIssuer(
                 jwtTokenProvider, refreshTokenRepository, auditService, companyDirectory, userPermissionsPort,
-                userCompanyRolesPort);
+                userCompanyRolesPort, securityIncidentService, new SecurityProperties(), transactionManager);
         userId = UUID.randomUUID();
         familyId = UUID.randomUUID();
 
