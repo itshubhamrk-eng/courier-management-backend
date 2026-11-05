@@ -45,7 +45,7 @@ class RevokedTokenReplayRuleTest {
 
     @Test
     void queriesWithConfiguredThresholdAndRaisesForEachUserAboveIt() {
-        when(loginHistoryRepository.findUsersWithSessionExpiredAbove(from, to, 3L))
+        when(loginHistoryRepository.findUsersWithRevokedSessionRefreshAbove(from, to, 3L))
                 .thenReturn(List.of(new UserEventCount(company, user, 4)));
 
         List<IncidentRequest> out = rule(3).scan(from, to);
@@ -63,7 +63,7 @@ class RevokedTokenReplayRuleTest {
 
     @Test
     void nobodyAboveThresholdRaisesNothing() {
-        when(loginHistoryRepository.findUsersWithSessionExpiredAbove(from, to, 5L)).thenReturn(List.of());
+        when(loginHistoryRepository.findUsersWithRevokedSessionRefreshAbove(from, to, 5L)).thenReturn(List.of());
 
         assertThat(rule(5).scan(from, to)).isEmpty();
     }

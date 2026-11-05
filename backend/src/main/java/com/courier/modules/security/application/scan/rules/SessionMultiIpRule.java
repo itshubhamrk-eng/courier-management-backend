@@ -1,29 +1,39 @@
 package com.courier.modules.security.application.scan.rules;
 
+import com.courier.modules.auth.domain.RefreshTokenRepository;
+import com.courier.modules.auth.domain.SessionRefreshEvent;
 import com.courier.modules.security.application.IncidentRequest;
 import com.courier.modules.security.application.scan.ScanRule;
 import com.courier.modules.security.domain.IncidentRule;
-import com.courier.shared.activity.domain.ActivityLogRepository;
-import com.courier.shared.activity.domain.SessionIpSummary;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
-/** One session whose requests in the window came from two or more distinct client IPs. */
+/**
+ * One session refreshed from two or more distinct networks inside the window.
+ *
+ * <p>What it measures: refresh tokens issued in the window ({@code refresh_tokens} rows, one
+ * per login/rotation, each stamped with the requesting IP) grouped by session; a session
+ * with 2+ distinct IP prefixes (IPv4 /24, IPv6 /64) fires. Loopback, private, link-local,
+ * carrier-grade-NAT and unparseable addresses are ignored. Access-token request activity is
+ * not used: {@code activity_logs.session_id} is never populated. One request per user.
+ */
 @Component
 @RequiredArgsConstructor
 public class SessionMultiIpRule implements ScanRule {
 
-    /** Evidence lists at most this many IPs. */
-    private static final int MAX_IPS_IN_EVIDENCE = 5;
+    /** Evidence lists at most this many prefixes. */
+    private static final int MAX_PREFIXES_IN_EVIDENCE = 5;
 
-    private final ActivityLogRepository activityLogRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
     public IncidentRule code() {
@@ -32,22 +42,32 @@ public class SessionMultiIpRule implements ScanRule {
 
     @Override
     public List<IncidentRequest> scan(Instant from, Instant to) {
-        Map<UUID, IncidentRequest> byUser = new LinkedHashMap<>();
-        for (SessionIpSummary summary : activityLogRepository.findMultiIpSessions(from, to)) {
-            if (byUser.containsKey(summary.userId())) {
+        Map<UUID, Set<String>> prefixesBySession = new LinkedHashMap<>();
+        Map<UUID, SessionRefreshEvent> ownerBySession = new LinkedHashMap<>();
+        for (SessionRefreshEvent event : refreshTokenRepository.findSessionRefreshEvents(from, to)) {
+            Optional<String> prefix = IpPrefix.of(event.ipAddress());
+            if (prefix.isEmpty()) {
                 continue;
             }
-            List<String> ips = activityLogRepository.findDistinctIps(
-                    summary.sessionId(), from, to, PageRequest.of(0, MAX_IPS_IN_EVIDENCE));
+            prefixesBySession.computeIfAbsent(event.sessionId(), k -> new LinkedHashSet<>()).add(prefix.get());
+            ownerBySession.putIfAbsent(event.sessionId(), event);
+        }
+
+        Map<UUID, IncidentRequest> byUser = new LinkedHashMap<>();
+        prefixesBySession.forEach((sessionId, prefixes) -> {
+            SessionRefreshEvent owner = ownerBySession.get(sessionId);
+            if (prefixes.size() < 2 || byUser.containsKey(owner.userId())) {
+                return;
+            }
             Map<String, Object> evidence = new LinkedHashMap<>();
-            evidence.put("sessionId", summary.sessionId().toString());
-            evidence.put("distinctIpCount", summary.distinctIpCount());
-            evidence.put("ips", ips);
+            evidence.put("sessionId", sessionId.toString());
+            evidence.put("distinctPrefixCount", prefixes.size());
+            evidence.put("prefixes", prefixes.stream().limit(MAX_PREFIXES_IN_EVIDENCE).toList());
             evidence.put("windowFrom", from.toString());
             evidence.put("windowTo", to.toString());
-            byUser.put(summary.userId(),
-                    new IncidentRequest(summary.companyId(), summary.userId(), IncidentRule.SESSION_MULTI_IP, evidence));
-        }
+            byUser.put(owner.userId(), new IncidentRequest(
+                    owner.companyId(), owner.userId(), IncidentRule.SESSION_MULTI_IP, evidence));
+        });
         return List.copyOf(byUser.values());
     }
 }

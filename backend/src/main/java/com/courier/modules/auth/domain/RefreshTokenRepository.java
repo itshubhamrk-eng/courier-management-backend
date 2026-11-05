@@ -23,6 +23,19 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     List<RefreshToken> findByFamilyId(UUID familyId);
 
+    /**
+     * Scanner input: every token issued in {@code [from, to)} (login and each rotation), as
+     * the (session, user agent, ip) it was issued to. Cross-company on purpose — the scanner
+     * runs with no company bound. Needs {@code idx_refresh_tokens_created_at} (V141).
+     */
+    @Query("""
+           select distinct new com.courier.modules.auth.domain.SessionRefreshEvent(
+                      t.companyId, t.userId, t.sessionId, t.userAgent, t.ipAddress)
+             from RefreshToken t
+            where t.createdAt >= :from and t.createdAt < :to
+           """)
+    List<SessionRefreshEvent> findSessionRefreshEvents(@Param("from") Instant from, @Param("to") Instant to);
+
     List<RefreshToken> findByUserIdAndRevokedAtIsNull(UUID userId);
 
     List<RefreshToken> findBySessionIdAndRevokedAtIsNull(UUID sessionId);

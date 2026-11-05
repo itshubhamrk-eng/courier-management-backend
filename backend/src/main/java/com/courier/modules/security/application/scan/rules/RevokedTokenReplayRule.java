@@ -15,16 +15,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Repeated use of credentials for a session that is already dead.
+ * Repeated use of credentials for a session that was explicitly revoked.
  *
- * <p>What it measures: the number of {@code SESSION_EXPIRED} rows in {@code login_history}
- * per user inside the window, i.e. refresh attempts against a session that was revoked or
- * expired ({@code AuthService#refresh} records one each time). It fires when a user has MORE
- * than {@link SecurityProperties#getRevokedReplayThreshold()} of them.
+ * <p>What it measures: {@code SESSION_EXPIRED} rows in {@code login_history} (written by
+ * {@code AuthService#refresh} each time a valid refresh token is presented for an inactive
+ * session) per user inside the window, counting ONLY sessions whose {@code user_sessions.
+ * revoked_at} is set. Sessions that merely aged out are not counted. Fires when the count is
+ * strictly greater than {@link SecurityProperties#getRevokedReplayThreshold()} per scan
+ * window.
  *
  * <p>What it does NOT measure: rejected revoked <em>access</em> tokens. The JWT filter only
  * logs those at debug level and persists nothing, and this rule intentionally adds no new
- * per-request write to change that.
+ * per-request write. Reuse of a rotated refresh token is the REFRESH_TOKEN_REUSE rule.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,7 +43,7 @@ public class RevokedTokenReplayRule implements ScanRule {
     @Override
     public List<IncidentRequest> scan(Instant from, Instant to) {
         int threshold = properties.getRevokedReplayThreshold();
-        return loginHistoryRepository.findUsersWithSessionExpiredAbove(from, to, threshold).stream()
+        return loginHistoryRepository.findUsersWithRevokedSessionRefreshAbove(from, to, threshold).stream()
                 .map(row -> toRequest(row, threshold, from, to))
                 .toList();
     }

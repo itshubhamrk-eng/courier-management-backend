@@ -33,21 +33,25 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, UUID
 
     /**
      * Scanner input: users with more than {@code threshold} SESSION_EXPIRED events in
-     * {@code [from, to)} — refresh attempts against a session that was revoked or expired.
-     * Cross-company on purpose (the scanner runs with no company bound).
+     * {@code [from, to)} whose session was explicitly REVOKED ({@code user_sessions.revoked_at}
+     * set — logout, admin revoke, eviction, ban). A session that merely aged out has no
+     * {@code revoked_at} and is not counted. Cross-company on purpose (the scanner runs with
+     * no company bound). Needs {@code idx_login_history_occurred_at} (V141).
      */
     @Query("""
            select new com.courier.modules.auth.domain.UserEventCount(h.companyId, h.userId, count(h))
-             from LoginHistory h
-            where h.eventType = com.courier.modules.auth.domain.LoginEventType.SESSION_EXPIRED
+             from LoginHistory h, UserSession s
+            where s.id = h.sessionId
+              and s.revokedAt is not null
+              and h.eventType = com.courier.modules.auth.domain.LoginEventType.SESSION_EXPIRED
               and h.userId is not null
               and h.occurredAt >= :from and h.occurredAt < :to
             group by h.companyId, h.userId
            having count(h) > :threshold
            """)
-    List<UserEventCount> findUsersWithSessionExpiredAbove(@Param("from") Instant from,
-                                                          @Param("to") Instant to,
-                                                          @Param("threshold") long threshold);
+    List<UserEventCount> findUsersWithRevokedSessionRefreshAbove(@Param("from") Instant from,
+                                                                 @Param("to") Instant to,
+                                                                 @Param("threshold") long threshold);
 
     Page<LoginHistory> findByUserIdOrderByOccurredAtDesc(UUID userId, Pageable pageable);
 
