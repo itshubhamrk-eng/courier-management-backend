@@ -47,6 +47,8 @@ const BRANCH_REPORT_READERS = [...MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DE
 /** Company Settings / Branches / the company's own six Masters catalogues: the back
  * office's own setup work — no platform operator, no branch role. */
 const COMPANY_ONLY = [AppRole.COMPANY_ADMIN];
+/** Security incident review: the company's own admin, or a platform admin. */
+const SECURITY_ADMINS = [AppRole.COMPANY_ADMIN, AppRole.PLATFORM_ADMIN];
 /** The shared geography (Country..Pincode): read by the platform and by the company that
  * looks it up while booking; written by the platform alone (see master.config's
  * `GLOBAL_MASTER_WRITERS`, which the create/edit screens gate on, not this nav bridge). */
@@ -386,6 +388,17 @@ export const NAVIGATION: NavNode[] = [
       { id: 'exception-report', title: 'Shipment Exceptions', icon: 'report_problem', route: '/reports/exceptions', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'cancelled-orders-report', title: 'Cancelled Orders', icon: 'cancel', route: '/reports/cancelled-orders', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'bulk-tracking-report', title: 'Bulk Shipment Tracking', icon: 'checklist', route: '/reports/bulk-tracking', permission: 'REPORT_READ', roles: SHIPMENT_READERS }
+    ]
+  },
+
+  // Security Incidents: COMPANY_ADMIN and PLATFORM_ADMIN only (SUPER_ADMIN excluded, same as the
+  // backend gate). No `permission` on the leaf: NavigationService ANDs role with permission, and
+  // PLATFORM_ADMIN passes the backend on the role alone, holding no SECURITY_INCIDENT_* code.
+  // The route itself (securityIncidentGuard) still checks SECURITY_INCIDENT_READ for COMPANY_ADMIN.
+  {
+    id: 'security', title: 'Security', icon: 'shield', order: 7.5, roles: SECURITY_ADMINS,
+    children: [
+      { id: 'security-incidents', title: 'Security Incidents', icon: 'gpp_maybe', route: '/security/incidents', roles: SECURITY_ADMINS }
     ]
   },
 

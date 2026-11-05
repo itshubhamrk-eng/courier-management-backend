@@ -4,23 +4,22 @@ import { Router } from '@angular/router';
 import { EMPTY, catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { TokenService } from '../auth/token.service';
-import { SessionService } from '../auth/session.service';
-import { ApiService, SILENT_ERRORS } from '../services/api.service';
+import { TokenRefreshService } from '../auth/token-refresh.service';
+import { SILENT_ERRORS } from '../services/api.service';
 import { NotificationService } from '../services/notification.service';
 import { API } from '../config/api-endpoints';
-import { LoginResponse } from '../models/auth.model';
 
 /**
  * Maps the ApiResponse error envelope to a toast, and — on a 401 with a usable refresh
- * token — rotates the pair once and replays the request. A failed refresh signs out.
+ * token — rotates the pair (one shared refresh for all parallel 401s, see TokenRefreshService)
+ * and replays the request. A failed refresh signs out.
  * Validation (400/422) messages are left for the form to render field-by-field.
  */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const auth = inject(AuthService);
   const tokens = inject(TokenService);
-  const session = inject(SessionService);
-  const api = inject(ApiService);
+  const refresher = inject(TokenRefreshService);
   const notify = inject(NotificationService);
 
   return next(req).pipe(
@@ -35,17 +34,19 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isAuthCall = req.url.includes(API.auth.login) || req.url.includes(API.auth.refresh);
 
       if (err.status === 401 && !isAuthCall && tokens.refreshToken) {
-        return api.post<LoginResponse>(API.auth.refresh, { refreshToken: tokens.refreshToken }).pipe(
-          switchMap((res) => {
-            tokens.setTokens(res.accessToken, res.refreshToken);
-            session.syncExpiry();
-            return next(req.clone({ headers: req.headers.set('Authorization', `Bearer ${res.accessToken}`) }));
-          }),
-          catchError(() => {
-            auth.clearSession();
-            router.navigate(['/login']);
-            return EMPTY;
-          })
+        const retry = (access: string) =>
+          next(req.clone({ headers: req.headers.set('Authorization', `Bearer ${access}`) }));
+        // Another request already rotated the pair after this one was sent: just replay with
+        // the current token. Refreshing again would present an already-rotated refresh token.
+        const current = tokens.accessToken;
+        if (current && req.headers.get('Authorization') !== `Bearer ${current}`) {
+          return retry(current);
+        }
+        // The shared refresh signs out (once) on failure; waiters then complete silently.
+        // The retry is outside that catchError so its own errors surface to the caller.
+        return refresher.refresh().pipe(
+          catchError(() => EMPTY),
+          switchMap((res) => retry(res.accessToken))
         );
       }
 
@@ -62,6 +63,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       } else if (err.status === 401 && !isAuthCall) {
         auth.clearSession();
         router.navigate(['/login']);
+      } else if (isAuthCall && (envelope.errorCode === 'GEO_RESTRICTED' || envelope.errorCode === 'RATE_LIMIT_EXCEEDED')) {
+        // The login page renders these inline; a "no permission" toast would be misleading.
       } else if (silent) {
         // Expected-to-sometimes-fail lookup (e.g. resolving a user id that may belong
         // to another tenant/platform tier) — the caller's own catchError handles it.

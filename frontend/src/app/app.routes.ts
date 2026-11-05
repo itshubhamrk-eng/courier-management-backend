@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from '@core/guards/auth.guard';
 import { guestGuard } from '@core/guards/guest.guard';
 import { roleGuard } from '@core/guards/role.guard';
+import { securityIncidentGuard } from '@core/guards/security-incident.guard';
 import { hubLandingGuard } from '@core/guards/hub-landing.guard';
 import { AppRole } from '@core/models/role.model';
 
@@ -918,6 +919,18 @@ export const routes: Routes = [
       {
         path: 'activity-logs/users', title: 'User Activity', canActivate: [roleGuard], data: { roles: ADMINS },
         loadComponent: () => import('@features/activity-log/user-activity').then((m) => m.UserActivity)
+      },
+      {
+        // PLATFORM_ADMIN by role, COMPANY_ADMIN by the SECURITY_INCIDENT_READ code (V-backfilled);
+        // see securityIncidentGuard. SUPER_ADMIN is deliberately not admitted.
+        path: 'security/incidents', title: 'Security Incidents', canActivate: [securityIncidentGuard],
+        data: { permissions: ['SECURITY_INCIDENT_READ'] },
+        loadComponent: () => import('@features/security-incidents/incident-list').then((m) => m.IncidentList)
+      },
+      {
+        path: 'security/incidents/:id', title: 'Security Incident', canActivate: [securityIncidentGuard],
+        data: { permissions: ['SECURITY_INCIDENT_READ'] },
+        loadComponent: () => import('@features/security-incidents/incident-detail').then((m) => m.IncidentDetail)
       }
     ]
   },

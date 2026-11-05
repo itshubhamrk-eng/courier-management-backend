@@ -137,3 +137,11 @@ describe('NAVIGATION — SUPER_ADMIN excluded from company-side sections', () =>
     }
   });
 });
+
+describe('NAVIGATION — security incidents', () => {
+  it('is visible to COMPANY_ADMIN and PLATFORM_ADMIN only, not SUPER_ADMIN or branch roles', () => {
+    expect(leaf('security-incidents').roles).toEqual([AppRole.COMPANY_ADMIN, AppRole.PLATFORM_ADMIN]);
+    expect(leaf('security').roles).toEqual([AppRole.COMPANY_ADMIN, AppRole.PLATFORM_ADMIN]);
+    expect(leaf('security-incidents').route).toBe('/security/incidents');
+  });
+});

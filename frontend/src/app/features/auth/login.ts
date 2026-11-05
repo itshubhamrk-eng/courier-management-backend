@@ -10,6 +10,16 @@ import { environment } from '@env/environment';
 import { companyCodeForHostname } from '@core/config/company-domain-map';
 import { PUBLIC_PAGE_LINKS } from '@features/public/public-page.content';
 
+/** Sign-in failures the backend answers with a dedicated code get a fixed, clear message. */
+function loginErrorMessage(err: HttpErrorResponse): string {
+  const code = err.error?.errorCode;
+  if (code === 'GEO_RESTRICTED') return 'Sign-in is not available from your location.';
+  if (code === 'RATE_LIMIT_EXCEEDED' || err.status === 429) {
+    return 'Too many sign-in attempts. Please wait a few minutes and try again.';
+  }
+  return err.error?.message ?? 'Invalid credentials. Please try again.';
+}
+
 /** Sign-in. Company slug (company code) is optional — the backend resolves it. The
  *  identifier field accepts either an email or a registered mobile number. */
 @Component({
@@ -179,7 +189,7 @@ export class Login {
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.error.set(err.error?.message ?? 'Invalid credentials. Please try again.');
+        this.error.set(loginErrorMessage(err));
       }
     });
   }

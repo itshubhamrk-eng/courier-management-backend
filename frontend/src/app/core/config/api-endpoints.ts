@@ -117,5 +117,9 @@ export const API = {
   activityLogs: '/activity-logs',
   activityLogExport: '/activity-logs/export',
   activityLogFilterOptions: '/activity-logs/filter-options',
-  userActivity: (userId: string) => `/users/${userId}/activity`
+  userActivity: (userId: string) => `/users/${userId}/activity`,
+  /** Security incident detection — list, detail, summary and ban/dismiss/unban. */
+  securityIncidents: '/security/incidents',
+  securityIncidentSummary: '/security/incidents/summary',
+  securityIncidentAction: (id: string, action: 'ban' | 'dismiss' | 'unban') => `/security/incidents/${id}/${action}`
 } as const;
