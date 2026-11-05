@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,6 +47,9 @@ public class SecurityIncidentService {
 
     /** A dismissed (user, rule) stays quiet this long before it may be raised again. */
     static final Duration DISMISSAL_QUIET_PERIOD = Duration.ofHours(24);
+
+    /** security_incident.resolution_note is VARCHAR(500); the API accepts longer notes. */
+    private static final int RESOLUTION_NOTE_MAX = 500;
 
     /** An incident in one of these states already covers the (user, rule). */
     private static final Set<IncidentStatus> LIVE_STATUSES = Set.of(IncidentStatus.OPEN, IncidentStatus.BANNED);
@@ -123,6 +127,7 @@ public class SecurityIncidentService {
             throw new ForbiddenException("You cannot ban yourself");
         }
         if (incident.getUserId() != null) {
+            requirePlatformCallerForPlatformTarget(incident.getUserId());
             userBanService.ban(incident.getUserId(), "Incident " + incidentId + ": " + note);
         }
         return resolve(incident, IncidentStatus.BANNED, actorId, note);
@@ -159,11 +164,33 @@ public class SecurityIncidentService {
         if (!caller.isPlatformAdmin() && caller.companyId() == null) {
             return Page.empty(pageable);
         }
-        Specification<SecurityIncident> spec = (root, query, cb) -> {
+        Specification<SecurityIncident> spec = visibleTo(caller).and(matching(filter));
+        return incidentRepository.findAll(spec, pageable);
+    }
+
+    /** Incident counts per status within the caller's visibility; every status is present. */
+    @Transactional(readOnly = true)
+    public Map<IncidentStatus, Long> countByStatus() {
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        Map<IncidentStatus, Long> counts = new EnumMap<>(IncidentStatus.class);
+        boolean nothingVisible = !caller.isPlatformAdmin() && caller.companyId() == null;
+        for (IncidentStatus status : IncidentStatus.values()) {
+            counts.put(status, nothingVisible ? 0L : incidentRepository.count(
+                    visibleTo(caller).and((root, query, cb) -> cb.equal(root.get("status"), status))));
+        }
+        return counts;
+    }
+
+    /** The single visibility rule shared by list and summary: platform admin sees all, others their company. */
+    private Specification<SecurityIncident> visibleTo(AuthenticatedUser caller) {
+        return (root, query, cb) -> caller.isPlatformAdmin()
+                ? cb.conjunction()
+                : cb.equal(root.get("companyId"), caller.companyId());
+    }
+
+    private Specification<SecurityIncident> matching(IncidentFilter filter) {
+        return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
-            if (!caller.isPlatformAdmin()) {
-                p.add(cb.equal(root.get("companyId"), caller.companyId()));
-            }
             if (filter != null) {
                 if (filter.status() != null) p.add(cb.equal(root.get("status"), filter.status()));
                 if (filter.severity() != null) p.add(cb.equal(root.get("severity"), filter.severity()));
@@ -174,7 +201,19 @@ public class SecurityIncidentService {
             }
             return cb.and(p.toArray(new Predicate[0]));
         };
-        return incidentRepository.findAll(spec, pageable);
+    }
+
+    /** Only a PLATFORM_ADMIN may manually ban a SUPER_ADMIN / PLATFORM_ADMIN account. */
+    private void requirePlatformCallerForPlatformTarget(UUID targetUserId) {
+        AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
+        if (caller.isPlatformAdmin()) {
+            return;
+        }
+        userRepository.findById(targetUserId)
+                .filter(target -> !isBannable(target))
+                .ifPresent(target -> {
+                    throw new ForbiddenException("Only a platform admin can ban a platform-level account");
+                });
     }
 
     @Transactional(readOnly = true)
@@ -198,7 +237,8 @@ public class SecurityIncidentService {
         incident.setStatus(status);
         incident.setResolvedBy(actorId);
         incident.setResolvedAt(Instant.now());
-        incident.setResolutionNote(note);
+        incident.setResolutionNote(note != null && note.length() > RESOLUTION_NOTE_MAX
+                ? note.substring(0, RESOLUTION_NOTE_MAX) : note);
         return incidentRepository.save(incident);
     }
 

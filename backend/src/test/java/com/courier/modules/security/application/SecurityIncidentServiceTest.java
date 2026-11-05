@@ -341,4 +341,55 @@ class SecurityIncidentServiceTest {
         assertThat(result.getResolutionNote()).contains("another incident");
         verify(banService, never()).unban(any());
     }
+
+    @Test
+    void companyAdminCannotManuallyBanPlatformRoleTarget() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.OPEN);
+        User platformUser = User.builder().email("p@y.com").status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.PLATFORM_ADMIN)).build();
+        when(users.findById(targetId)).thenReturn(Optional.of(platformUser));
+
+        assertThatThrownBy(() -> service.ban(incident.getId(), UUID.randomUUID(), "n"))
+                .isInstanceOf(ForbiddenException.class);
+
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
+        verify(banService, never()).ban(any(), any());
+    }
+
+    @Test
+    void platformAdminMayManuallyBanSuperAdminTarget() {
+        actAs(UUID.randomUUID(), null, Role.PLATFORM_ADMIN.name());
+        SecurityIncident incident = stored(null, targetId, IncidentStatus.OPEN);
+        User superUser = User.builder().email("s@y.com").status(UserStatus.ACTIVE)
+                .roles(EnumSet.of(Role.SUPER_ADMIN)).build();
+        when(users.findById(targetId)).thenReturn(Optional.of(superUser));
+
+        SecurityIncident result = service.ban(incident.getId(), UUID.randomUUID(), "n");
+
+        assertThat(result.getStatus()).isEqualTo(IncidentStatus.BANNED);
+        verify(banService).ban(org.mockito.ArgumentMatchers.eq(targetId), anyString());
+    }
+
+    @Test
+    void summaryCountsEachStatusWithinVisibility() {
+        when(incidents.count(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<SecurityIncident>>any()))
+                .thenReturn(3L, 1L, 0L, 2L);
+
+        Map<IncidentStatus, Long> counts = service.countByStatus();
+
+        assertThat(counts).containsOnlyKeys(IncidentStatus.values());
+        assertThat(counts.values().stream().mapToLong(Long::longValue).sum()).isEqualTo(6L);
+    }
+
+    @Test
+    void summaryIsAllZeroForCallerWithNoCompany() {
+        actAs(UUID.randomUUID(), null, Role.COMPANY_ADMIN.name());
+
+        Map<IncidentStatus, Long> counts = service.countByStatus();
+
+        assertThat(counts).containsOnlyKeys(IncidentStatus.values());
+        assertThat(counts.values()).containsOnly(0L);
+        verify(incidents, never()).count(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<SecurityIncident>>any());
+    }
 }
