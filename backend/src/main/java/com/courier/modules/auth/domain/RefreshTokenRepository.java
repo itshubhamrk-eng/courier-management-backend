@@ -60,6 +60,19 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
            """)
     List<SessionRefreshEvent> findSessionRefreshEvents(@Param("from") Instant from, @Param("to") Instant to);
 
+    /**
+     * Same as {@link #findSessionRefreshEvents} but one entry per {@code refresh_tokens} row
+     * (no {@code distinct}), so two rotations from the same IP/agent count twice. Input to
+     * FOREIGN_TOKEN_USE's confirmation threshold. Uses {@code idx_refresh_tokens_created_at}.
+     */
+    @Query("""
+           select new com.courier.modules.auth.domain.SessionRefreshEvent(
+                      t.companyId, t.userId, t.sessionId, t.userAgent, t.ipAddress)
+             from RefreshToken t
+            where t.createdAt >= :from and t.createdAt < :to
+           """)
+    List<SessionRefreshEvent> findRefreshTokenEvents(@Param("from") Instant from, @Param("to") Instant to);
+
     List<RefreshToken> findByUserIdAndRevokedAtIsNull(UUID userId);
 
     List<RefreshToken> findBySessionIdAndRevokedAtIsNull(UUID sessionId);

@@ -1,5 +1,7 @@
 package com.courier.modules.security.application.scan.rules;
 
+import com.courier.modules.auth.domain.User;
+import com.courier.modules.auth.domain.UserRepository;
 import com.courier.modules.security.application.IncidentRequest;
 import com.courier.modules.security.application.SecurityProperties;
 import com.courier.modules.security.domain.IncidentRule;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.when;
 class AccessDeniedBurstRuleTest {
 
     @Mock ActivityLogRepository activityLogRepository;
+    @Mock UserRepository userRepository;
 
     final Instant from = Instant.parse("2026-11-05T10:00:00Z");
     final Instant to = Instant.parse("2026-11-05T10:10:00Z");
@@ -35,7 +38,7 @@ class AccessDeniedBurstRuleTest {
     static final String DENIED = "You do not have permission to perform this action";
 
     private AccessDeniedBurstRule rule() {
-        return new AccessDeniedBurstRule(activityLogRepository, props);
+        return new AccessDeniedBurstRule(activityLogRepository, userRepository, props);
     }
 
     private void stub(List<UserEndpointCount> rows) {
@@ -98,5 +101,26 @@ class AccessDeniedBurstRuleTest {
 
         assertThat(top).hasSize(5);
         assertThat(top.keySet().iterator().next()).isEqualTo("GET /api/v1/e7/{id}");
+    }
+
+    @Test
+    void incidentCompanyIsTheUsersHomeCompanyNotTheFirstRowsCompany() {
+        UUID home = UUID.randomUUID();
+        User u = User.builder().build();
+        u.setId(user);
+        u.setCompanyId(home);
+        stub(List.of(new UserEndpointCount(company, user, "PUT", "/api/v1/rates/{id}", 21)));
+        when(userRepository.findAllByIdIn(java.util.Set.of(user))).thenReturn(List.of(u));
+
+        assertThat(rule().scan(from, to)).singleElement()
+                .satisfies(r -> assertThat(r.companyId()).isEqualTo(home));
+    }
+
+    @Test
+    void unknownUserFallsBackToTheRowsCompany() {
+        stub(List.of(new UserEndpointCount(company, user, "PUT", "/api/v1/rates/{id}", 21)));
+
+        assertThat(rule().scan(from, to)).singleElement()
+                .satisfies(r -> assertThat(r.companyId()).isEqualTo(company));
     }
 }

@@ -353,6 +353,10 @@ courier:
     # credential-attack:
     #   distinct-accounts: 5           # CREDENTIAL_ATTACK: one IP failing on >= N accounts
     #   failures-per-account: 10       # CREDENTIAL_ATTACK: one account with >= N failed logins
+    # foreign-token-use:
+    #   min-foreign-refreshes: 1       # FOREIGN_TOKEN_USE (auto-ban): >= N foreign refresh rows per user.
+    #                                  # 1 = no confirmation; corporate/consumer VPNs exiting abroad or
+    #                                  # mis-geolocated IPs can be falsely banned. Raise to 2 to confirm.
     geo:
       enabled: false
       db-path:

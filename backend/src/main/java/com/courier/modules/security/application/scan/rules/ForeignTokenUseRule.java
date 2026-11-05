@@ -27,9 +27,18 @@ import java.util.UUID;
  * <p>What it measures: refresh tokens issued in the window ({@code refresh_tokens} rows,
  * one per login and per rotation, written by {@code TokenIssuer}) with their
  * {@code ip_address}, which comes from {@code ClientIpResolver} (nginx's X-Real-IP), not a
- * client-controlled header. Each distinct IP is geo-checked once; a user with at least one
- * FOREIGN verdict raises one request. ALLOWED and UNKNOWN (private, unparseable, not in the
- * database) raise nothing, and when geo checking is disabled the rule reads nothing.
+ * client-controlled header. Each distinct IP is geo-checked once; a user with at least
+ * {@code foreignTokenUse.minForeignRefreshes} (default 1, values below 1 count as 1)
+ * refresh_tokens rows with a FOREIGN verdict raises one request. Rows are counted one per
+ * token row, so two rotations from the same foreign IP count twice. ALLOWED and UNKNOWN
+ * (private, unparseable, not in the database) raise nothing, and when geo checking is
+ * disabled the rule reads nothing.
+ *
+ * <p>Exposure: with the default of 1 there is no confirmation, so one foreign-geolocated
+ * refresh auto-bans. Honest users behind a corporate VPN / secure web gateway that exits
+ * abroad, a mis-geolocated carrier block, a stale .mmdb or a consumer VPN can be falsely
+ * banned. Raise the property (e.g. 2) to require repeated foreign refreshes inside one scan
+ * window. A user genuinely roaming abroad is in-policy for a ban.
  *
  * <p>Since a foreign login is refused at the door, a foreign row here is in practice a
  * refresh from abroad: a refresh token minted at home and replayed elsewhere.
@@ -62,7 +71,7 @@ public class ForeignTokenUseRule implements ScanRule {
         }
         Map<String, Optional<String>> countryByIp = new HashMap<>();
         Map<UUID, Hit> byUser = new LinkedHashMap<>();
-        for (SessionRefreshEvent event : refreshTokenRepository.findSessionRefreshEvents(from, to)) {
+        for (SessionRefreshEvent event : refreshTokenRepository.findRefreshTokenEvents(from, to)) {
             String ip = event.ipAddress();
             if (ip == null || event.userId() == null) {
                 continue;
@@ -72,6 +81,7 @@ public class ForeignTokenUseRule implements ScanRule {
                 continue;
             }
             Hit hit = byUser.computeIfAbsent(event.userId(), k -> new Hit(event.companyId()));
+            hit.foreignRows++;
             hit.ips.add(ip);
             country.ifPresent(hit.countries::add);
             if (event.sessionId() != null) {
@@ -79,9 +89,12 @@ public class ForeignTokenUseRule implements ScanRule {
             }
         }
 
-        return byUser.entrySet().stream().map(e -> {
+        int minRows = Math.max(1, properties.getForeignTokenUse().getMinForeignRefreshes());
+        return byUser.entrySet().stream().filter(e -> e.getValue().foreignRows >= minRows).map(e -> {
             Hit hit = e.getValue();
             Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("foreignRefreshes", hit.foreignRows);
+            evidence.put("minForeignRefreshes", minRows);
             evidence.put("foreignIpCount", hit.ips.size());
             evidence.put("foreignIps", hit.ips.stream().limit(MAX_IN_EVIDENCE).toList());
             evidence.put("countries", hit.countries.stream().limit(MAX_IN_EVIDENCE).toList());
@@ -94,6 +107,7 @@ public class ForeignTokenUseRule implements ScanRule {
 
     private static final class Hit {
         final UUID companyId;
+        int foreignRows;
         final Set<String> ips = new LinkedHashSet<>();
         final Set<String> countries = new LinkedHashSet<>();
         final Set<String> sessions = new LinkedHashSet<>();

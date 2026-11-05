@@ -42,8 +42,15 @@ class ForeignTokenUseRuleTest {
     };
 
     private ForeignTokenUseRule rule(boolean geoEnabled) {
+        return rule(geoEnabled, null);
+    }
+
+    private ForeignTokenUseRule rule(boolean geoEnabled, Integer minForeignRefreshes) {
         SecurityProperties props = new SecurityProperties();
         props.getGeo().setEnabled(geoEnabled);
+        if (minForeignRefreshes != null) {
+            props.getForeignTokenUse().setMinForeignRefreshes(minForeignRefreshes);
+        }
         return new ForeignTokenUseRule(refreshTokenRepository, new GeoCountryService(props, STUB), props);
     }
 
@@ -60,7 +67,7 @@ class ForeignTokenUseRuleTest {
     @Test
     void foreignRefreshIpRaisesOneRequestForTheUser() {
         UUID otherSession = UUID.randomUUID();
-        when(refreshTokenRepository.findSessionRefreshEvents(from, to)).thenReturn(List.of(
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(
                 ev(user, session, "49.36.10.1"),
                 ev(user, session, "8.8.8.8"),
                 ev(user, otherSession, "8.8.4.4")));
@@ -83,7 +90,7 @@ class ForeignTokenUseRuleTest {
 
     @Test
     void allowedAndUnknownIpsRaiseNothing() {
-        when(refreshTokenRepository.findSessionRefreshEvents(from, to)).thenReturn(List.of(
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(
                 ev(user, session, "49.36.10.1"),   // ALLOWED (IN)
                 ev(user, session, "1.1.1.1"),      // UNKNOWN (lookup empty)
                 ev(user, session, "10.0.0.5"),     // UNKNOWN (private)
@@ -101,7 +108,7 @@ class ForeignTokenUseRuleTest {
 
     @Test
     void noRowsRaiseNothing() {
-        when(refreshTokenRepository.findSessionRefreshEvents(from, to)).thenReturn(List.of());
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of());
 
         assertThat(rule(true).scan(from, to)).isEmpty();
     }
@@ -114,7 +121,7 @@ class ForeignTokenUseRuleTest {
             rows.add(ev(user, UUID.randomUUID(), "8.8.8." + i));
         }
         rows.add(ev(other, UUID.randomUUID(), "49.36.1.1"));
-        when(refreshTokenRepository.findSessionRefreshEvents(from, to)).thenReturn(rows);
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(rows);
 
         List<IncidentRequest> out = rule(true).scan(from, to);
 
@@ -125,5 +132,44 @@ class ForeignTokenUseRuleTest {
             assertThat((List<?>) e.get("foreignIps")).hasSize(5);
             assertThat((List<?>) e.get("sessionIds")).hasSize(5);
         });
+    }
+
+    @Test
+    void defaultConfirmationThresholdIsOneSoASingleForeignRefreshRaises() {
+        assertThat(new SecurityProperties().getForeignTokenUse().getMinForeignRefreshes()).isEqualTo(1);
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(ev(user, session, "8.8.8.8")));
+
+        assertThat(rule(true).scan(from, to)).singleElement()
+                .satisfies(r -> assertThat(r.evidence()).containsEntry("foreignRefreshes", 1));
+    }
+
+    @Test
+    void thresholdTwoIgnoresASingleForeignRefresh() {
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(
+                ev(user, session, "49.36.10.1"), ev(user, session, "8.8.8.8")));
+
+        assertThat(rule(true, 2).scan(from, to)).isEmpty();
+    }
+
+    @Test
+    void thresholdTwoRaisesOnTwoForeignRefreshRowsEvenFromTheSameIpAndSession() {
+        // Two rotations of one session from one foreign IP: two refresh_tokens rows.
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(
+                ev(user, session, "8.8.8.8"), ev(user, session, "8.8.8.8")));
+
+        assertThat(rule(true, 2).scan(from, to)).singleElement().satisfies(r -> {
+            assertThat(r.userId()).isEqualTo(user);
+            assertThat(r.evidence()).containsEntry("foreignRefreshes", 2)
+                    .containsEntry("foreignIpCount", 1)
+                    .containsEntry("minForeignRefreshes", 2);
+        });
+    }
+
+    @Test
+    void thresholdBelowOneIsTreatedAsOne() {
+        when(refreshTokenRepository.findRefreshTokenEvents(from, to)).thenReturn(List.of(ev(user, session, "8.8.8.8")));
+
+        assertThat(rule(true, 0).scan(from, to)).hasSize(1);
+        assertThat(rule(true, -3).scan(from, to)).hasSize(1);
     }
 }

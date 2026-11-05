@@ -61,7 +61,24 @@ public class SecurityProperties {
 
     private CredentialAttack credentialAttack = new CredentialAttack();
 
+    private ForeignTokenUse foreignTokenUse = new ForeignTokenUse();
+
     private Geo geo = new Geo();
+
+    @Getter
+    @Setter
+    public static class ForeignTokenUse {
+        /**
+         * FOREIGN_TOKEN_USE (auto-ban) fires when one user has AT LEAST this many refresh_tokens
+         * rows with a FOREIGN geo verdict in one scan window. Default 1 keeps the design's
+         * "existing token used from abroad => revoke + ban" with no confirmation. Exposure: an
+         * honest user behind a corporate VPN / secure web gateway that exits abroad, a
+         * mis-geolocated carrier block, a stale .mmdb or a consumer VPN can be falsely banned;
+         * raise this (e.g. 2) to require repeated foreign refreshes. Roaming abroad is in-policy
+         * for a ban. Values below 1 are treated as 1.
+         */
+        private int minForeignRefreshes = 1;
+    }
 
     @Getter
     @Setter

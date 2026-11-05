@@ -52,8 +52,8 @@ public interface ActivityLogRepository
 
     /**
      * Scanner input (BULK_ACTIVITY rate edits): successful rows in {@code [from, to)} in one of
-     * {@code modules} with one of {@code actions}, skipping endpoint templates that match
-     * {@code excludedEndpointPattern} (SQL LIKE), per user and (module, action). Cross-company
+     * {@code modules} with one of {@code actions}, skipping rows whose endpoint template is in
+     * {@code excludedEndpoints} (exact match), per user and (module, action). Cross-company
      * on purpose; uses {@code idx_activity_logs_module_time (module, occurred_at)}.
      */
     @Query("""
@@ -65,19 +65,20 @@ public interface ActivityLogRepository
               and a.action in :actions
               and a.status = com.courier.shared.activity.domain.ActivityStatus.SUCCESS
               and a.userId is not null
-              and (a.apiEndpoint is null or a.apiEndpoint not like :excludedEndpointPattern)
+              and (a.apiEndpoint is null or a.apiEndpoint not in :excludedEndpoints)
             group by a.companyId, a.userId, a.module, a.action
            """)
     List<UserActionCount> findSuccessCountsByModuleAndAction(@Param("from") Instant from, @Param("to") Instant to,
                                                              @Param("modules") Collection<String> modules,
                                                              @Param("actions") Collection<String> actions,
-                                                             @Param("excludedEndpointPattern")
-                                                             String excludedEndpointPattern);
+                                                             @Param("excludedEndpoints")
+                                                             Collection<String> excludedEndpoints);
 
     /**
      * Scanner input (ACCESS_DENIED_BURST): FAILURE rows in {@code [from, to)} whose stored
-     * {@code error_message} equals {@code errorMessage} exactly, per user and (method, endpoint
-     * template). Cross-company on purpose; uses {@code idx_activity_logs_status_time} (V143).
+     * {@code error_message} equals {@code errorMessage} exactly, per user and (method,
+     * {@code api_endpoint}). {@code api_endpoint} is the route template for requests that reached
+     * a handler, but the raw URI for ones the security chain rejected before handler mapping. Cross-company on purpose; uses {@code idx_activity_logs_status_time} (V143).
      */
     @Query("""
            select new com.courier.shared.activity.domain.UserEndpointCount(

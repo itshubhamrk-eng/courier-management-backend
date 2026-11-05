@@ -1,5 +1,6 @@
 package com.courier.modules.security.application.scan.rules;
 
+import com.courier.modules.auth.domain.UserRepository;
 import com.courier.modules.security.application.IncidentRequest;
 import com.courier.modules.security.application.SecurityProperties;
 import com.courier.modules.security.application.scan.ScanRule;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -35,9 +37,13 @@ import java.util.stream.Stream;
  *       excludes); matched so a future export endpoint counts without a rule change.</li>
  *   <li>rate edits: module {@code Rates}, {@code Customer Rates}, {@code Pdp Rates} or
  *       {@code Pricing Zones} with action {@code CREATE}, {@code UPDATE}, {@code DELETE},
- *       {@code ACTIVATE} or {@code DEACTIVATE}, excluding endpoint templates ending in
- *       {@code /calculate} (a price lookup the filter logs as CREATE).</li>
+ *       {@code ACTIVATE} or {@code DEACTIVATE}, excluding the endpoint templates in
+ *       {@link #EXCLUDED_ENDPOINTS}: the three {@code /calculate} price lookups (logged as
+ *       CREATE) and {@code POST /pricing-zones/{id}/locations} /
+ *       {@code DELETE /pricing-zones/{id}/locations/{locationId}} (zone setup, not pricing).</li>
  * </ul>
+ * The incident's company is the user's home company ({@code users.company_id}), falling back
+ * to the rows' company when the user is not found.
  * GETs of lists are never logged by the filter, so bulk reading is not measured.
  */
 @Component
@@ -47,12 +53,20 @@ public class BulkActivityRule implements ScanRule {
     static final List<String> BULK_ACTIONS = List.of("CANCEL", "EXPORT");
     static final List<String> RATE_MODULES = List.of("Rates", "Customer Rates", "Pdp Rates", "Pricing Zones");
     static final List<String> RATE_EDIT_ACTIONS = List.of("CREATE", "UPDATE", "DELETE", "ACTIVATE", "DEACTIVATE");
-    static final String EXCLUDED_ENDPOINT_PATTERN = "%/calculate";
+    /**
+     * Endpoint templates in the rate modules that are not rate edits: the price lookups (POST
+     * {@code /calculate}, logged as CREATE) and adding/removing a pricing zone's locations,
+     * which is ordinary zone setup. Successful requests always store the handler's template.
+     */
+    static final List<String> EXCLUDED_ENDPOINTS = List.of(
+            "/api/v1/rates/calculate", "/api/v1/customer-rates/calculate", "/api/v1/pdp-rates/calculate",
+            "/api/v1/pricing-zones/{id}/locations", "/api/v1/pricing-zones/{id}/locations/{locationId}");
 
     /** Evidence breaks the total down into at most this many (module, action) pairs. */
     private static final int MAX_BREAKDOWN = 10;
 
     private final ActivityLogRepository activityLogRepository;
+    private final UserRepository userRepository;
     private final SecurityProperties properties;
 
     @Override
@@ -67,11 +81,14 @@ public class BulkActivityRule implements ScanRule {
         Stream.concat(
                 activityLogRepository.findSuccessCountsByAction(from, to, BULK_ACTIONS).stream(),
                 activityLogRepository.findSuccessCountsByModuleAndAction(
-                        from, to, RATE_MODULES, RATE_EDIT_ACTIONS, EXCLUDED_ENDPOINT_PATTERN).stream()
+                        from, to, RATE_MODULES, RATE_EDIT_ACTIONS, EXCLUDED_ENDPOINTS).stream()
         ).forEach(row -> byUser.computeIfAbsent(row.userId(), k -> new Tally(row.companyId())).add(row));
 
-        return byUser.entrySet().stream()
-                .filter(e -> e.getValue().total > threshold)
+        List<UUID> flagged = byUser.entrySet().stream()
+                .filter(e -> e.getValue().total > threshold).map(Map.Entry::getKey).toList();
+        Map<UUID, UUID> homeCompany = HomeCompany.of(userRepository, Set.copyOf(flagged));
+        return flagged.stream()
+                .map(userId -> Map.entry(userId, byUser.get(userId)))
                 .map(e -> {
                     Tally t = e.getValue();
                     Map<String, Object> evidence = new LinkedHashMap<>();
@@ -80,7 +97,8 @@ public class BulkActivityRule implements ScanRule {
                     evidence.put("byModuleAction", t.breakdown);
                     evidence.put("windowFrom", from.toString());
                     evidence.put("windowTo", to.toString());
-                    return new IncidentRequest(t.companyId, e.getKey(), IncidentRule.BULK_ACTIVITY, evidence);
+                    UUID companyId = homeCompany.getOrDefault(e.getKey(), t.companyId);
+                    return new IncidentRequest(companyId, e.getKey(), IncidentRule.BULK_ACTIVITY, evidence);
                 })
                 .toList();
     }

@@ -101,6 +101,24 @@ class ScanQueriesRepositoryTest {
                 .containsExactly("1.1.1.1");
     }
 
+    @Test
+    void refreshTokenEventsKeepOneEntryPerRowEvenWhenIdentical() {
+        relaxFks();
+        UUID user = TimeOrderedUuid.generate();
+        UUID session = TimeOrderedUuid.generate();
+        token(user, session, "8.8.8.8", "ua", from.plusSeconds(5));
+        token(user, session, "8.8.8.8", "ua", from.plusSeconds(65));       // same shape, second rotation
+        token(user, session, "8.8.8.8", "ua", to);                         // end-exclusive
+        em.clear();
+
+        assertThat(refreshTokens.findRefreshTokenEvents(from, to))
+                .filteredOn(e -> session.equals(e.sessionId()))
+                .hasSize(2);
+        assertThat(refreshTokens.findSessionRefreshEvents(from, to))      // the distinct one collapses them
+                .filteredOn(e -> session.equals(e.sessionId()))
+                .hasSize(1);
+    }
+
     /**
      * Rows exactly as TokenIssuer writes them: a replayed, already-revoked refresh token plus
      * an audit row REFRESH_TOKEN_REUSE_DETECTED whose entity_id is that token's id (user and
@@ -272,16 +290,23 @@ class ScanQueriesRepositoryTest {
         activity(user, "Customer Rates", "DELETE", "DELETE", "/api/v1/customer-rates/zone/{zoneId}",
                 ActivityStatus.SUCCESS, null, t);
         activity(user, "Rates", "CREATE", "POST", "/api/v1/rates/calculate", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Pricing Zones", "CREATE", "POST", "/api/v1/pricing-zones/{id}/locations",
+                ActivityStatus.SUCCESS, null, t);
+        activity(user, "Pricing Zones", "DELETE", "DELETE", "/api/v1/pricing-zones/{id}/locations/{locationId}",
+                ActivityStatus.SUCCESS, null, t);
+        activity(user, "Pricing Zones", "UPDATE", "PUT", "/api/v1/pricing-zones/{id}", ActivityStatus.SUCCESS, null, t);
         activity(user, "Shipments", "UPDATE", "PUT", "/api/v1/shipments/{id}", ActivityStatus.SUCCESS, null, t);
         em.flush();
         em.clear();
 
         assertThat(activityLogs.findSuccessCountsByModuleAndAction(from, to,
                 List.of("Rates", "Customer Rates", "Pdp Rates", "Pricing Zones"),
-                List.of("CREATE", "UPDATE", "DELETE", "ACTIVATE", "DEACTIVATE"), "%/calculate"))
+                List.of("CREATE", "UPDATE", "DELETE", "ACTIVATE", "DEACTIVATE"),
+                List.of("/api/v1/rates/calculate", "/api/v1/pricing-zones/{id}/locations",
+                        "/api/v1/pricing-zones/{id}/locations/{locationId}")))
                 .filteredOn(r -> user.equals(r.userId()))
                 .extracting(r -> r.module() + " " + r.action() + "=" + r.count())
-                .containsExactlyInAnyOrder("Rates UPDATE=1", "Customer Rates DELETE=1");
+                .containsExactlyInAnyOrder("Rates UPDATE=1", "Customer Rates DELETE=1", "Pricing Zones UPDATE=1");
     }
 
     @Test

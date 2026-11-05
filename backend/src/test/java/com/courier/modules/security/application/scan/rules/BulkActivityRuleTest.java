@@ -1,5 +1,7 @@
 package com.courier.modules.security.application.scan.rules;
 
+import com.courier.modules.auth.domain.User;
+import com.courier.modules.auth.domain.UserRepository;
 import com.courier.modules.security.application.IncidentRequest;
 import com.courier.modules.security.application.SecurityProperties;
 import com.courier.modules.security.domain.IncidentRule;
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.when;
 class BulkActivityRuleTest {
 
     @Mock ActivityLogRepository activityLogRepository;
+    @Mock UserRepository userRepository;
 
     final Instant from = Instant.parse("2026-11-05T10:00:00Z");
     final Instant to = Instant.parse("2026-11-05T10:10:00Z");
@@ -30,14 +33,14 @@ class BulkActivityRuleTest {
     final SecurityProperties props = new SecurityProperties();
 
     private BulkActivityRule rule() {
-        return new BulkActivityRule(activityLogRepository, props);
+        return new BulkActivityRule(activityLogRepository, userRepository, props);
     }
 
     private void stub(List<UserActionCount> byAction, List<UserActionCount> rateEdits) {
         when(activityLogRepository.findSuccessCountsByAction(from, to, BulkActivityRule.BULK_ACTIONS))
                 .thenReturn(byAction);
         when(activityLogRepository.findSuccessCountsByModuleAndAction(from, to, BulkActivityRule.RATE_MODULES,
-                BulkActivityRule.RATE_EDIT_ACTIONS, BulkActivityRule.EXCLUDED_ENDPOINT_PATTERN))
+                BulkActivityRule.RATE_EDIT_ACTIONS, BulkActivityRule.EXCLUDED_ENDPOINTS))
                 .thenReturn(rateEdits);
     }
 
@@ -55,7 +58,10 @@ class BulkActivityRuleTest {
                 .containsExactlyInAnyOrder("Rates", "Customer Rates", "Pdp Rates", "Pricing Zones");
         assertThat(BulkActivityRule.RATE_EDIT_ACTIONS)
                 .containsExactlyInAnyOrder("CREATE", "UPDATE", "DELETE", "ACTIVATE", "DEACTIVATE");
-        assertThat(BulkActivityRule.EXCLUDED_ENDPOINT_PATTERN).isEqualTo("%/calculate");
+        // price lookups (logged as CREATE) and ordinary zone setup are not rate edits
+        assertThat(BulkActivityRule.EXCLUDED_ENDPOINTS).containsExactlyInAnyOrder(
+                "/api/v1/rates/calculate", "/api/v1/customer-rates/calculate", "/api/v1/pdp-rates/calculate",
+                "/api/v1/pricing-zones/{id}/locations", "/api/v1/pricing-zones/{id}/locations/{locationId}");
     }
 
     @Test
@@ -103,5 +109,26 @@ class BulkActivityRuleTest {
                 List.of());
 
         assertThat(rule().scan(from, to)).isEmpty();
+    }
+
+    @Test
+    void incidentCompanyIsTheUsersHomeCompanyNotTheFirstRowsCompany() {
+        UUID home = UUID.randomUUID();
+        User u = User.builder().build();
+        u.setId(user);
+        u.setCompanyId(home);
+        stub(List.of(new UserActionCount(company, user, "Shipments", "CANCEL", 31)), List.of());
+        when(userRepository.findAllByIdIn(java.util.Set.of(user))).thenReturn(List.of(u));
+
+        assertThat(rule().scan(from, to)).singleElement()
+                .satisfies(r -> assertThat(r.companyId()).isEqualTo(home));
+    }
+
+    @Test
+    void unknownUserFallsBackToTheRowsCompany() {
+        stub(List.of(new UserActionCount(company, user, "Shipments", "CANCEL", 31)), List.of());
+
+        assertThat(rule().scan(from, to)).singleElement()
+                .satisfies(r -> assertThat(r.companyId()).isEqualTo(company));
     }
 }
