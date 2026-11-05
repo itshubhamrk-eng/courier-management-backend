@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, catchError, finalize, shareReplay, tap, throwError } from 'rxjs';
+import { Observable, catchError, finalize, of, shareReplay, tap, throwError } from 'rxjs';
 import { ApiService } from '../services/api.service';
 import { API } from '../config/api-endpoints';
 import { LoginResponse } from '../models/auth.model';
@@ -14,8 +14,8 @@ import { SessionService } from './session.service';
  * ONE POST /auth/refresh instead of each replaying the same refresh token.
  *
  * Everyone who asks while a refresh is in flight gets the same Observable. On success the new
- * pair is stored once; on failure the session is cleared and the user sent to /login once,
- * and every waiter receives the same error.
+ * pair is stored once; on a genuine failure the session is cleared and the user sent to /login
+ * once, and every waiter receives the same error.
  */
 @Injectable({ providedIn: 'root' })
 export class TokenRefreshService {
@@ -29,16 +29,26 @@ export class TokenRefreshService {
 
   refresh(): Observable<LoginResponse> {
     if (!this.inFlight) {
+      const sent = this.tokens.refreshToken;
       this.inFlight = this.api
-        .post<LoginResponse>(API.auth.refresh, { refreshToken: this.tokens.refreshToken })
+        .post<LoginResponse>(API.auth.refresh, { refreshToken: sent })
         .pipe(
           tap((res) => {
             this.tokens.setTokens(res.accessToken, res.refreshToken);
             this.session.syncExpiry();
           }),
           catchError((err) => {
-            this.auth.clearSession();
-            this.router.navigate(['/login']);
+            // Tokens live in shared storage. If another tab rotated the pair while this
+            // refresh was failing (the backend rejects the concurrent loser), the stored
+            // refresh token is no longer the one we sent: that tab won, so adopt its pair
+            // instead of wiping it and signing the user out everywhere.
+            const stored = this.tokens.refreshToken;
+            const access = this.tokens.accessToken;
+            if (stored && access && stored !== sent) {
+              this.session.syncExpiry();
+              return of({ accessToken: access, refreshToken: stored } as LoginResponse);
+            }
+            this.signOut();
             return throwError(() => err);
           }),
           finalize(() => { this.inFlight = null; }),
@@ -46,5 +56,15 @@ export class TokenRefreshService {
         );
     }
     return this.inFlight;
+  }
+
+  /**
+   * Clears the session and goes to /login, at most once per session: a second caller finds
+   * the tokens already gone and does nothing (no double navigation).
+   */
+  signOut(): void {
+    if (!this.tokens.accessToken && !this.tokens.refreshToken) return;
+    this.auth.clearSession();
+    this.router.navigate(['/login']);
   }
 }
