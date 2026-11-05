@@ -21,6 +21,17 @@ public class SecurityProperties {
     /** How often the incident scanner runs. */
     private Duration scanInterval = Duration.ofMinutes(2);
 
+    /** Master switch for the scheduled scanner; tests and one-off tooling can turn it off. */
+    private boolean scanEnabled = true;
+
+    /**
+     * REVOKED_TOKEN_REPLAY fires when one user racks up MORE than this many refresh
+     * attempts against a dead (revoked/expired) session inside a single scan window
+     * (~scan-interval). A well-behaved client stops after the first rejection, so a
+     * handful of retries is tolerated; 5+ in two minutes is a replay loop.
+     */
+    private int revokedReplayThreshold = 5;
+
     private Geo geo = new Geo();
 
     @Getter

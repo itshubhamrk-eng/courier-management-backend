@@ -31,6 +31,43 @@ public interface ActivityLogRepository
            """)
     List<String> findDistinctModulesFor(@Param("companyId") UUID companyId, @Param("userId") UUID userId);
 
+    /**
+     * Scanner input: distinct (session, browser, os) seen in {@code [from, to)}. Rows with no
+     * resolved session or user are skipped — there is nothing to compare them against.
+     * Cross-company on purpose (the scanner runs with no company bound).
+     */
+    @Query("""
+           select new com.courier.shared.activity.domain.SessionFingerprint(
+                      a.companyId, a.userId, a.sessionId, a.browser, a.os)
+             from ActivityLog a
+            where a.sessionId is not null and a.userId is not null
+              and a.occurredAt >= :from and a.occurredAt < :to
+            group by a.companyId, a.userId, a.sessionId, a.browser, a.os
+           """)
+    List<SessionFingerprint> findSessionFingerprints(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** Scanner input: sessions whose activity in {@code [from, to)} came from 2+ distinct IPs. */
+    @Query("""
+           select new com.courier.shared.activity.domain.SessionIpSummary(
+                      a.companyId, a.userId, a.sessionId, count(distinct a.ipAddress))
+             from ActivityLog a
+            where a.sessionId is not null and a.userId is not null and a.ipAddress is not null
+              and a.occurredAt >= :from and a.occurredAt < :to
+            group by a.companyId, a.userId, a.sessionId
+           having count(distinct a.ipAddress) >= 2
+           """)
+    List<SessionIpSummary> findMultiIpSessions(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** A few of the IPs behind a multi-IP session, for incident evidence; bound with {@code pageable}. */
+    @Query("""
+           select distinct a.ipAddress from ActivityLog a
+            where a.sessionId = :sessionId and a.ipAddress is not null
+              and a.occurredAt >= :from and a.occurredAt < :to
+            order by a.ipAddress
+           """)
+    List<String> findDistinctIps(@Param("sessionId") UUID sessionId, @Param("from") Instant from,
+                                 @Param("to") Instant to, Pageable pageable);
+
     /** Supports the retention job noted alongside {@code AuditLogRepository}'s own. */
     long deleteByOccurredAtBefore(Instant cutoff);
 
