@@ -4,6 +4,9 @@ import com.courier.modules.auth.application.TokenRevocationService.RevocableToke
 import com.courier.modules.auth.application.port.BranchDirectoryPort;
 import com.courier.modules.auth.application.port.CompanyDirectoryPort;
 import com.courier.modules.auth.application.port.UserPermissionsPort;
+import com.courier.modules.auth.domain.LoginFailureReason;
+import com.courier.modules.auth.domain.LoginHistory;
+import com.courier.modules.auth.domain.LoginHistoryRepository;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.Role;
 import com.courier.modules.auth.domain.User;
@@ -20,6 +23,7 @@ import com.courier.modules.security.domain.SecurityIncident;
 import com.courier.modules.security.domain.SecurityIncidentRepository;
 import com.courier.shared.audit.application.AuditService;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.exception.ForbiddenException;
 import com.courier.shared.security.JwtTokenProvider;
@@ -37,7 +41,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -51,7 +57,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /**
@@ -74,7 +80,9 @@ class AuthServiceGeoLoginTest {
     private final UserPermissionsPort userPermissionsPort = mock(UserPermissionsPort.class);
     private final SessionService sessionService = mock(SessionService.class);
     private final TokenIssuer tokenIssuer = mock(TokenIssuer.class);
-    private final LoginAttemptService loginAttemptService = mock(LoginAttemptService.class);
+    private final LoginHistoryRepository loginHistoryRepository = mock(LoginHistoryRepository.class);
+    /** What the (real) LoginAttemptService persisted; the throttle counts these. */
+    private final List<LoginHistory> history = new ArrayList<>();
     private final JwtTokenProvider jwtTokenProvider = mock(JwtTokenProvider.class);
     private final AuditService auditService = mock(AuditService.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
@@ -101,6 +109,17 @@ class AuthServiceGeoLoginTest {
                 userRepository, sessionService, noStore, jwtTokenProvider, auditService);
         SecurityIncidentService incidents = new SecurityIncidentService(
                 incidentRepository, userRepository, banService, auditService, new ObjectMapper());
+
+        LoginAttemptService loginAttemptService =
+                new LoginAttemptService(loginHistoryRepository, userRepository, properties, auditService);
+        when(loginHistoryRepository.save(any(LoginHistory.class))).thenAnswer(inv -> {
+            history.add(inv.getArgument(0));
+            return inv.getArgument(0);
+        });
+        when(loginHistoryRepository.countRecentFailures(anyString(), anyString(), any())).thenAnswer(inv ->
+                history.stream().filter(h -> !h.isSuccess()
+                        && h.getAttemptedEmail().equals(inv.getArgument(0))
+                        && h.getIpAddress().equals(inv.getArgument(1))).count());
 
         authService = new AuthService(
                 authenticationManager, userRepository, mock(RefreshTokenRepository.class), companyDirectory,
@@ -159,7 +178,13 @@ class AuthServiceGeoLoginTest {
         verify(authenticationManager, never()).authenticate(any());
         verify(sessionService, never()).openSession(any(), any(), anyBoolean(), any());
         verify(tokenIssuer, never()).issueForNewSession(any(), any(), any(), any(), any());
-        verifyNoInteractions(loginAttemptService);
+        assertThat(history).noneMatch(LoginHistory::isSuccess);
+        assertThat(user.getFailedAttempts()).isZero();
+        assertThat(user.getLockedUntil()).isNull();
+    }
+
+    private List<LoginHistory> failureRows() {
+        return history.stream().filter(h -> !h.isSuccess()).toList();
     }
 
     private void stubSuccessfulAuthentication() {
@@ -192,6 +217,7 @@ class AuthServiceGeoLoginTest {
                 .contains("\"ip\":\"8.8.8.8\"", "\"country\":\"US\"",
                         "\"userAgent\":\"Mozilla/5.0 JUnit\"", "\"attemptedEmail\":\"ops@acme.test\"");
         verify(sessionService).revokeAllSessions(eq(userId), anyString());
+        assertThat(failureRows()).as("a correct password writes no failure row").isEmpty();
         assertNoSessionOrTokens();
     }
 
@@ -209,6 +235,12 @@ class AuthServiceGeoLoginTest {
         assertThat(incident.getUserId()).isEqualTo(userId);
         verify(passwordEncoder).matches(WRONG, "$2a$12$hash");
         verify(sessionService, never()).revokeAllSessions(any(), anyString());
+        assertThat(failureRows()).singleElement().satisfies(row -> {
+            assertThat(row.getFailureReason()).isEqualTo(LoginFailureReason.GEO_RESTRICTED);
+            assertThat(row.getUserId()).isEqualTo(userId);
+            assertThat(row.getAttemptedEmail()).isEqualTo(EMAIL);
+            assertThat(row.getIpAddress()).isEqualTo(FOREIGN_IP);
+        });
         assertNoSessionOrTokens();
     }
 
@@ -233,7 +265,77 @@ class AuthServiceGeoLoginTest {
         assertThat(e.getMessage()).isEqualTo(GEO_MESSAGE);
         verify(incidentRepository, never()).save(any());
         verify(passwordEncoder).matches(eq(RIGHT), anyString());
+        assertThat(failureRows()).singleElement().satisfies(row -> {
+            assertThat(row.getFailureReason()).isEqualTo(LoginFailureReason.GEO_RESTRICTED);
+            assertThat(row.getUserId()).isNull();
+            assertThat(row.getAttemptedEmail()).isEqualTo("ghost@acme.test");
+        });
         assertNoSessionOrTokens();
+    }
+
+    @Test
+    @DisplayName("repeated foreign failures from one email+IP hit the throttle before any password check")
+    void foreignFailuresAreThrottled() {
+        for (int i = 0; i < properties.getThrottleMaxAttempts(); i++) {
+            assertThat(loginFails(command(EMAIL, WRONG, FOREIGN_IP)).getErrorCode())
+                    .isEqualTo(ErrorCode.GEO_RESTRICTED);
+        }
+        assertThat(failureRows()).hasSize(properties.getThrottleMaxAttempts());
+        org.mockito.Mockito.clearInvocations(passwordEncoder);
+
+        // Even the right password: the throttle depends only on the failure count.
+        BusinessRuleException throttled = catchThrowableOfType(
+                () -> authService.login(command(EMAIL, RIGHT, FOREIGN_IP)), BusinessRuleException.class);
+
+        assertThat(throttled).isNotNull();
+        assertThat(throttled.getErrorCode()).isEqualTo(ErrorCode.RATE_LIMIT_EXCEEDED);
+        verify(passwordEncoder, never()).matches(any(), any());
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(user.getFailedAttempts()).isZero();
+        assertNoSessionOrTokens();
+    }
+
+    @Test
+    @DisplayName("the throttle is consulted exactly once per foreign attempt, keyed on the resolved email + IP")
+    void foreignBranchConsultsThrottleOnce() {
+        loginFails(command(EMAIL, WRONG, FOREIGN_IP));
+
+        verify(loginHistoryRepository, times(1)).countRecentFailures(eq(EMAIL), eq(FOREIGN_IP), any());
+    }
+
+    @Test
+    @DisplayName("normal (ALLOWED) login still consults the throttle exactly once, unchanged")
+    void normalPathThrottleUnchanged() {
+        stubSuccessfulAuthentication();
+
+        authService.login(command(EMAIL, RIGHT, HOME_IP));
+
+        verify(loginHistoryRepository, times(1)).countRecentFailures(eq(EMAIL), eq(HOME_IP), any());
+    }
+
+    @Test
+    @DisplayName("a failing failure-row write is swallowed: same GEO_RESTRICTED, incident still raised")
+    void recordFailureErrorSwallowed() {
+        when(loginHistoryRepository.save(any(LoginHistory.class))).thenThrow(new IllegalStateException("db down"));
+
+        ForbiddenException e = loginFails(command(EMAIL, WRONG, FOREIGN_IP));
+
+        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.GEO_RESTRICTED);
+        assertThat(e.getMessage()).isEqualTo(GEO_MESSAGE);
+        assertThat(savedIncident().getRule()).isEqualTo(IncidentRule.FOREIGN_LOGIN_ATTEMPT);
+        assertNoSessionOrTokens();
+    }
+
+    @Test
+    @DisplayName("incident evidence truncates the user agent to 255 characters")
+    void evidenceUserAgentTruncated() {
+        String longAgent = "x".repeat(300);
+
+        loginFails(new AuthService.LoginCommand(companyId, null, EMAIL, RIGHT, false, FOREIGN_IP, longAgent, null));
+
+        String evidence = savedIncident().getEvidence();
+        assertThat(evidence).contains("\"userAgent\":\"" + "x".repeat(255) + "\"");
+        assertThat(evidence).doesNotContain("x".repeat(256));
     }
 
     @Test
@@ -248,6 +350,8 @@ class AuthServiceGeoLoginTest {
         assertThat(e.getErrorCode()).isEqualTo(ErrorCode.GEO_RESTRICTED);
         assertThat(e.getMessage()).isEqualTo(GEO_MESSAGE);
         verify(incidentRepository, never()).save(any());
+        // login_history.company_id is NOT NULL: with no company there is nothing to attribute the row to.
+        assertThat(failureRows()).isEmpty();
         assertNoSessionOrTokens();
     }
 

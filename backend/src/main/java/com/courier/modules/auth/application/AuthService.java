@@ -46,6 +46,7 @@ import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -137,8 +138,9 @@ public class AuthService {
         // row-locks the user and may revoke its sessions, so nothing here may hold such
         // locks yet (this method is not transactional, see above). UNKNOWN/ALLOWED and a
         // disabled geo check fall through to the normal flow untouched.
-        if (geoCountryService.check(command.ipAddress()) == GeoVerdict.FOREIGN) {
-            rejectForeignLogin(command, identifier);
+        Optional<String> country = geoCountryService.countryOf(command.ipAddress());
+        if (geoCountryService.verdictFor(country) == GeoVerdict.FOREIGN) {
+            rejectForeignLogin(command, identifier, country.orElse(null));
         }
 
         UUID companyId = resolveCompany(command, User.normaliseEmail(identifier));
@@ -249,32 +251,55 @@ public class AuthService {
 
     /**
      * A sign-in from outside the allowed country. Never opens a session or issues tokens,
-     * and always ends in the same {@code 403 GEO_RESTRICTED}, whatever happened inside.
+     * and always ends in the same {@code 403 GEO_RESTRICTED} whatever the password —
+     * except when the email+IP is throttled, which answers {@code RATE_LIMIT_EXCEEDED}
+     * (that depends only on the failure count, never on the password).
      *
      * <p>A correct password from abroad means the credentials are in someone else's hands,
-     * so it raises the auto-banning {@code FOREIGN_LOGIN_CORRECT_PASSWORD}; a wrong one
-     * against a real user raises the flag-only {@code FOREIGN_LOGIN_ATTEMPT}; an unknown
-     * user (or company) raises nothing. The password is checked directly with the encoder,
-     * not through {@code AuthenticationManager}/{@link LoginAttemptService}, so a foreign
-     * attempt never touches the lockout counter or login history — an attacker abroad
-     * cannot lock the real user out, and only reads happen before the raise.
+     * so it raises the auto-banning {@code FOREIGN_LOGIN_CORRECT_PASSWORD} and writes no
+     * failure row. A wrong password, or an unknown user, writes one {@code login_history}
+     * failure with reason {@link LoginFailureReason#GEO_RESTRICTED}. That row feeds the
+     * throttle and the credential-attack detector but never advances the account lock
+     * counter (only {@code BAD_PASSWORD} does), so an attacker abroad cannot lock the real
+     * user out. A wrong password against a real user also raises the flag-only
+     * {@code FOREIGN_LOGIN_ATTEMPT}. The password is checked with the encoder directly,
+     * after the throttle, so a throttled attempt costs no BCrypt.
      *
-     * <p>Transactions: {@code login} runs with no outer transaction, so the incident's
-     * {@code REQUIRES_NEW} raise commits on its own and the exception thrown here rolls
-     * nothing back. A failed raise is logged and swallowed (it rolls back only itself),
-     * so the response is identical either way.
+     * <p>Locks and transactions: {@code login} has no outer transaction, and everything
+     * before the writes is a plain read. {@code recordFailure} is {@code REQUIRES_NEW},
+     * writes only a {@code login_history} row for this reason and commits before
+     * returning, so it holds nothing on the user row when {@code raise} (also
+     * {@code REQUIRES_NEW}, row-locks the user) runs after it. Both writes are
+     * best-effort: a failure is logged and swallowed and the client gets the same
+     * {@code GEO_RESTRICTED}. The final exception rolls nothing back.
      */
-    private void rejectForeignLogin(LoginCommand command, String identifier) {
-        User candidate = null;
+    private void rejectForeignLogin(LoginCommand command, String identifier, String country) {
         UUID companyId = null;
+        String throttleKey = null;
         try {
             companyId = resolveCompany(command, User.normaliseEmail(identifier));
             CompanyContext.setCompanyId(companyId);
-            String email = resolveLoginEmail(identifier, command.password());
-            candidate = userRepository.findByEmailWithinCompany(email, companyId).orElse(null);
+            // Password-blind resolution: no BCrypt before the throttle check below.
+            throttleKey = resolveLoginEmail(identifier, null);
         } catch (RuntimeException e) {
             // Unknown/inactive company or a non-platform email without one: same answer.
-            log.debug("Foreign login could not resolve a user: {}", e.toString());
+            log.debug("Foreign login could not resolve a company: {}", e.toString());
+        }
+
+        // Outside the catch on purpose: a throttled attempt answers RATE_LIMIT_EXCEEDED.
+        if (throttleKey != null) {
+            loginAttemptService.assertNotThrottled(throttleKey, command.ipAddress());
+        }
+
+        String email = throttleKey;
+        User candidate = null;
+        if (companyId != null) {
+            try {
+                email = resolveLoginEmail(identifier, command.password());
+                candidate = userRepository.findByEmailWithinCompany(email, companyId).orElse(null);
+            } catch (RuntimeException e) {
+                log.debug("Foreign login could not resolve a user: {}", e.toString());
+            }
         }
 
         boolean passwordCorrect = false;
@@ -288,14 +313,26 @@ public class AuthService {
             }
         }
 
+        // login_history.company_id is NOT NULL, so an unknown company has nothing to attribute to.
+        // Runs before raise(): its REQUIRES_NEW commit releases the user-row FK lock first.
+        if (!passwordCorrect && companyId != null && email != null) {
+            try {
+                loginAttemptService.recordFailure(companyId, candidate == null ? null : candidate.getId(), email,
+                        LoginFailureReason.GEO_RESTRICTED, command.ipAddress(), command.userAgent());
+            } catch (RuntimeException e) {
+                log.error("Foreign login-failure bookkeeping failed for {} (company {}): {}",
+                        email, companyId, e.getMessage(), e);
+            }
+        }
+
         if (candidate != null) {
             IncidentRule rule = passwordCorrect
                     ? IncidentRule.FOREIGN_LOGIN_CORRECT_PASSWORD
                     : IncidentRule.FOREIGN_LOGIN_ATTEMPT;
             Map<String, Object> evidence = new java.util.LinkedHashMap<>();
             putIfPresent(evidence, "ip", command.ipAddress());
-            putIfPresent(evidence, "country", geoCountryService.countryOf(command.ipAddress()).orElse(null));
-            putIfPresent(evidence, "userAgent", command.userAgent());
+            putIfPresent(evidence, "country", country);
+            putIfPresent(evidence, "userAgent", truncate(command.userAgent(), MAX_EVIDENCE_USER_AGENT));
             putIfPresent(evidence, "attemptedEmail", identifier);
             try {
                 securityIncidentService.raise(new IncidentRequest(
@@ -307,6 +344,12 @@ public class AuthService {
         }
 
         throw new ForbiddenException(ErrorCode.GEO_RESTRICTED, GEO_RESTRICTED_MESSAGE);
+    }
+
+    private static final int MAX_EVIDENCE_USER_AGENT = 255;
+
+    private static String truncate(String value, int max) {
+        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
     private String dummyPasswordHash() {

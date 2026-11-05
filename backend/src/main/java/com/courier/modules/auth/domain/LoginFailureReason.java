@@ -22,5 +22,12 @@ public enum LoginFailureReason {
     COMPANY_INACTIVE,
 
     /** Too many attempts for this email+IP inside the throttle window. */
-    THROTTLED
+    THROTTLED,
+
+    /**
+     * Refused because the request came from outside the allowed country (wrong password,
+     * unknown user). Counts toward the email+IP throttle but never advances the account
+     * lock counter: a foreign attacker must not be able to lock the real user out.
+     */
+    GEO_RESTRICTED
 }

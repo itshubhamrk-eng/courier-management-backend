@@ -28,8 +28,12 @@ public class GeoCountryService {
     }
 
     public GeoVerdict check(String ip) {
-        Optional<String> country = countryOf(ip);
-        if (country.isEmpty()) {
+        return verdictFor(countryOf(ip));
+    }
+
+    /** The verdict for a {@link #countryOf} result, so a caller needing both looks up once. */
+    public GeoVerdict verdictFor(Optional<String> country) {
+        if (country == null || country.isEmpty()) {
             return GeoVerdict.UNKNOWN;
         }
         String allowed = properties.getGeo().getAllowedCountry();
