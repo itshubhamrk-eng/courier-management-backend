@@ -89,6 +89,10 @@ class SecurityIncidentServiceTest {
                 .detectedAt(Instant.now()).build();
         incident.setId(UUID.randomUUID());
         when(incidents.findById(incident.getId())).thenReturn(Optional.of(incident));
+        if (user != null) {
+            when(users.findById(user)).thenReturn(Optional.of(User.builder().email("u@y.com")
+                    .status(UserStatus.ACTIVE).roles(EnumSet.of(Role.OPERATOR)).build()));
+        }
         return incident;
     }
 
@@ -391,5 +395,81 @@ class SecurityIncidentServiceTest {
         assertThat(counts.values()).containsOnly(0L);
         verify(incidents, never()).count(
                 org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<SecurityIncident>>any());
+    }
+
+    // ---- state transitions
+
+    private void assertInvalidTransition(Runnable action) {
+        assertThatThrownBy(action::run)
+                .isInstanceOf(com.courier.shared.exception.BusinessRuleException.class);
+    }
+
+    @Test
+    void dismissOnlyFromOpen() {
+        for (IncidentStatus from : new IncidentStatus[]{IncidentStatus.BANNED, IncidentStatus.DISMISSED, IncidentStatus.UNBANNED}) {
+            SecurityIncident incident = stored(companyA, targetId, from);
+            assertInvalidTransition(() -> service.dismiss(incident.getId(), UUID.randomUUID(), "n"));
+            assertThat(incident.getStatus()).isEqualTo(from);
+        }
+        SecurityIncident open = stored(companyA, targetId, IncidentStatus.OPEN);
+        assertThat(service.dismiss(open.getId(), UUID.randomUUID(), "n").getStatus()).isEqualTo(IncidentStatus.DISMISSED);
+    }
+
+    @Test
+    void banOnlyFromOpenOrDismissed() {
+        for (IncidentStatus from : new IncidentStatus[]{IncidentStatus.BANNED, IncidentStatus.UNBANNED}) {
+            SecurityIncident incident = stored(companyA, targetId, from);
+            assertInvalidTransition(() -> service.ban(incident.getId(), UUID.randomUUID(), "n"));
+            assertThat(incident.getStatus()).isEqualTo(from);
+        }
+        verify(banService, never()).ban(any(), any());
+        for (IncidentStatus from : new IncidentStatus[]{IncidentStatus.OPEN, IncidentStatus.DISMISSED}) {
+            SecurityIncident incident = stored(companyA, targetId, from);
+            assertThat(service.ban(incident.getId(), UUID.randomUUID(), "n").getStatus()).isEqualTo(IncidentStatus.BANNED);
+        }
+    }
+
+    @Test
+    void unbanFromBannedStillWorks() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.BANNED);
+        assertThat(service.unban(incident.getId(), UUID.randomUUID(), "n").getStatus()).isEqualTo(IncidentStatus.UNBANNED);
+    }
+
+    // ---- notes
+
+    @Test
+    void thousandCharNoteWithUnbanSuffixIsStoredInFull() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.BANNED);
+        when(incidents.existsByUserIdAndStatusAndIdNot(targetId, IncidentStatus.BANNED, incident.getId()))
+                .thenReturn(true);
+        String note = "a".repeat(1000);
+
+        SecurityIncident result = service.unban(incident.getId(), UUID.randomUUID(), note);
+
+        assertThat(result.getResolutionNote()).startsWith(note).contains("another incident");
+        assertThat(result.getResolutionNote().length()).isGreaterThan(1000).isLessThan(2000);
+    }
+
+    @Test
+    void banReasonHasNoNullLiteralWhenNoteMissingOrBlank() {
+        SecurityIncident a = stored(companyA, targetId, IncidentStatus.OPEN);
+        service.ban(a.getId(), UUID.randomUUID(), null);
+        SecurityIncident b = stored(companyA, targetId, IncidentStatus.OPEN);
+        service.ban(b.getId(), UUID.randomUUID(), "   ");
+
+        org.mockito.ArgumentCaptor<String> reason = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(banService, org.mockito.Mockito.times(2)).ban(org.mockito.ArgumentMatchers.eq(targetId), reason.capture());
+        assertThat(reason.getAllValues()).noneMatch(r -> r.contains("null"));
+    }
+
+    @Test
+    void banFailsClosedWhenTargetUserDoesNotExist() {
+        SecurityIncident incident = stored(companyA, targetId, IncidentStatus.OPEN);
+        when(users.findById(targetId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.ban(incident.getId(), UUID.randomUUID(), "n"))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(banService, never()).ban(any(), any());
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
     }
 }

@@ -72,7 +72,12 @@ public class IncidentResponseAssembler {
         boolean unreadable = false;
         if (i.getEvidence() != null && !i.getEvidence().isBlank()) {
             try {
-                evidence = objectMapper.readTree(i.getEvidence());
+                JsonNode parsed = objectMapper.readTree(i.getEvidence());
+                if (parsed != null && parsed.isObject()) {
+                    evidence = parsed;
+                } else {
+                    unreadable = true;
+                }
             } catch (Exception e) {
                 log.warn("Unreadable evidence on security incident {}: {}", i.getId(), e.toString());
                 unreadable = true;

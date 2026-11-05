@@ -48,9 +48,6 @@ public class SecurityIncidentService {
     /** A dismissed (user, rule) stays quiet this long before it may be raised again. */
     static final Duration DISMISSAL_QUIET_PERIOD = Duration.ofHours(24);
 
-    /** security_incident.resolution_note is VARCHAR(500); the API accepts longer notes. */
-    private static final int RESOLUTION_NOTE_MAX = 500;
-
     /** An incident in one of these states already covers the (user, rule). */
     private static final Set<IncidentStatus> LIVE_STATUSES = Set.of(IncidentStatus.OPEN, IncidentStatus.BANNED);
 
@@ -123,19 +120,24 @@ public class SecurityIncidentService {
     @Transactional
     public SecurityIncident ban(UUID incidentId, UUID actorId, String note) {
         SecurityIncident incident = getVisible(incidentId);
+        requireStatusIn(incident, "ban", IncidentStatus.OPEN, IncidentStatus.DISMISSED);
         if (actorId != null && actorId.equals(incident.getUserId())) {
             throw new ForbiddenException("You cannot ban yourself");
         }
         if (incident.getUserId() != null) {
             requirePlatformCallerForPlatformTarget(incident.getUserId());
-            userBanService.ban(incident.getUserId(), "Incident " + incidentId + ": " + note);
+            boolean hasNote = note != null && !note.isBlank();
+            userBanService.ban(incident.getUserId(),
+                    "Incident " + incidentId + (hasNote ? ": " + note.trim() : ""));
         }
         return resolve(incident, IncidentStatus.BANNED, actorId, note);
     }
 
     @Transactional
     public SecurityIncident dismiss(UUID incidentId, UUID actorId, String note) {
-        return resolve(getVisible(incidentId), IncidentStatus.DISMISSED, actorId, note);
+        SecurityIncident incident = getVisible(incidentId);
+        requireStatusIn(incident, "dismiss", IncidentStatus.OPEN);
+        return resolve(incident, IncidentStatus.DISMISSED, actorId, note);
     }
 
     @Transactional
@@ -206,14 +208,18 @@ public class SecurityIncidentService {
     /** Only a PLATFORM_ADMIN may manually ban a SUPER_ADMIN / PLATFORM_ADMIN account. */
     private void requirePlatformCallerForPlatformTarget(UUID targetUserId) {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
-        if (caller.isPlatformAdmin()) {
-            return;
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", targetUserId));
+        if (!caller.isPlatformAdmin() && !isBannable(target)) {
+            throw new ForbiddenException("Only a platform admin can ban a platform-level account");
         }
-        userRepository.findById(targetUserId)
-                .filter(target -> !isBannable(target))
-                .ifPresent(target -> {
-                    throw new ForbiddenException("Only a platform admin can ban a platform-level account");
-                });
+    }
+
+    private void requireStatusIn(SecurityIncident incident, String action, IncidentStatus... allowed) {
+        if (!Set.of(allowed).contains(incident.getStatus())) {
+            throw new BusinessRuleException(ErrorCode.INVALID_STATE_TRANSITION,
+                    "Cannot " + action + " an incident that is " + incident.getStatus());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -237,8 +243,7 @@ public class SecurityIncidentService {
         incident.setStatus(status);
         incident.setResolvedBy(actorId);
         incident.setResolvedAt(Instant.now());
-        incident.setResolutionNote(note != null && note.length() > RESOLUTION_NOTE_MAX
-                ? note.substring(0, RESOLUTION_NOTE_MAX) : note);
+        incident.setResolutionNote(note);
         return incidentRepository.save(incident);
     }
 

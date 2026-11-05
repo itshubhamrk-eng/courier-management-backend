@@ -76,6 +76,6 @@ public class SecurityIncident extends BaseEntity {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
-    @Column(name = "resolution_note", length = 500)
+    @Column(name = "resolution_note", length = 2000)
     private String resolutionNote;
 }

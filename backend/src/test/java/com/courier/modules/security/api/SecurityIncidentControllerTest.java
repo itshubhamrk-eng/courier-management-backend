@@ -429,4 +429,54 @@ class SecurityIncidentControllerTest {
                 .andExpect(jsonPath("$.data.OPEN").value(0));
         verify(incidents, never()).count(any(Specification.class));
     }
+
+    // ---- review follow-ups
+
+    @Test
+    void nonObjectEvidenceIsTreatedAsUnreadable() throws Exception {
+        SecurityIncident arr = incident(companyA, null, IncidentStatus.OPEN, "[1,2]");
+        SecurityIncident text = incident(companyA, null, IncidentStatus.OPEN, "\"just text\"");
+
+        for (SecurityIncident i : List.of(arr, text)) {
+            mvc.perform(get("/api/v1/security/incidents/{id}", i.getId()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.evidence").isMap())
+                    .andExpect(jsonPath("$.data.evidence").isEmpty())
+                    .andExpect(jsonPath("$.data.evidenceUnreadable").value(true));
+        }
+    }
+
+    @Test
+    void actionsOnAnotherCompanysIncidentAreNotFoundAndNeverTouchBanService() throws Exception {
+        SecurityIncident other = incident(companyB, targetId, IncidentStatus.BANNED, null);
+        for (String action : List.of("ban", "dismiss", "unban")) {
+            mvc.perform(post("/api/v1/security/incidents/{id}/" + action, other.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isNotFound());
+        }
+        verify(banService, never()).ban(any(), any());
+        verify(banService, never()).unban(any());
+    }
+
+    @Test
+    void branchManagerWithoutPermissionCannotBanOrUnban() throws Exception {
+        actAs(actorId, companyA, Set.of("BRANCH_MANAGER"), Set.of("SHIPMENT_READ"));
+        SecurityIncident i = incident(companyA, targetId, IncidentStatus.BANNED, null);
+        for (String action : List.of("ban", "unban")) {
+            mvc.perform(post("/api/v1/security/incidents/{id}/" + action, i.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden());
+        }
+        verify(banService, never()).ban(any(), any());
+        verify(banService, never()).unban(any());
+    }
+
+    @Test
+    void invalidTransitionMapsToUnprocessableEntity() throws Exception {
+        SecurityIncident i = incident(companyA, null, IncidentStatus.BANNED, null);
+
+        mvc.perform(post("/api/v1/security/incidents/{id}/dismiss", i.getId())
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnprocessableEntity());
+    }
 }
