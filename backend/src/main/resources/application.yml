@@ -343,6 +343,16 @@ courier:
     # without one every lookup is UNKNOWN (fail-open).
     grace-seconds: 10
     scan-interval: PT2M
+    # Scanner rule thresholds. All are counted over one scan window (scan-window, default
+    # PT10M); there is no per-rule window. Defaults shown commented out.
+    # revoked-replay-threshold: 3      # REVOKED_TOKEN_REPLAY: > N revoked-token replays per user
+    # bulk-activity:
+    #   threshold: 30                  # BULK_ACTIVITY: > N cancels/exports/rate edits per user
+    # access-denied:
+    #   threshold: 20                  # ACCESS_DENIED_BURST: > N 403 access-denied rows per user
+    # credential-attack:
+    #   distinct-accounts: 5           # CREDENTIAL_ATTACK: one IP failing on >= N accounts
+    #   failures-per-account: 10       # CREDENTIAL_ATTACK: one account with >= N failed logins
     geo:
       enabled: false
       db-path:

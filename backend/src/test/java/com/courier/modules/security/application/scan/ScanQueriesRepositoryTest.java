@@ -1,8 +1,22 @@
 package com.courier.modules.security.application.scan;
 
+import com.courier.modules.auth.domain.LoginEventType;
+import com.courier.modules.auth.domain.LoginFailureReason;
+import com.courier.modules.auth.domain.LoginHistory;
+import com.courier.modules.auth.domain.LoginHistoryRepository;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.SessionRefreshEvent;
+import com.courier.modules.security.domain.AutoAction;
+import com.courier.modules.security.domain.IncidentRule;
+import com.courier.modules.security.domain.IncidentSeverity;
+import com.courier.modules.security.domain.IncidentStatus;
+import com.courier.modules.security.domain.SecurityIncident;
+import com.courier.modules.security.domain.SecurityIncidentRepository;
+import com.courier.shared.activity.domain.ActivityLog;
+import com.courier.shared.activity.domain.ActivityLogRepository;
+import com.courier.shared.activity.domain.ActivityStatus;
+import com.courier.shared.exception.ErrorCode;
 import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.audit.domain.AuditLog;
 import com.courier.shared.config.JpaAuditingConfig;
@@ -17,6 +31,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,6 +54,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ScanQueriesRepositoryTest {
 
     @Autowired RefreshTokenRepository refreshTokens;
+    @Autowired LoginHistoryRepository loginHistory;
+    @Autowired ActivityLogRepository activityLogs;
+    @Autowired SecurityIncidentRepository incidents;
     @Autowired ScanCursorRepository cursors;
     @Autowired TestEntityManager em;
 
@@ -125,6 +143,165 @@ class ScanQueriesRepositoryTest {
         // rotated-token replays belong to REFRESH_TOKEN_REUSE: never counted here
         assertThat(refreshTokens.findUsersWithRevokedTokenReplaysAbove(from, to, 0))
                 .noneMatch(r -> rotatedUser.equals(r.userId()));
+    }
+
+    // ------------------------------------------------------------ CREDENTIAL_ATTACK
+
+    /** Shaped like LoginAttemptService.recordFailure / recordSessionEnd rows. */
+    private void loginRow(String email, String ip, LoginEventType type, boolean success,
+                          LoginFailureReason reason, Instant at) {
+        relaxFks();
+        LoginHistory h = LoginHistory.builder().attemptedEmail(email).ipAddress(ip)
+                .eventType(type).success(success).failureReason(reason).occurredAt(at).build();
+        h.setCompanyId(company);
+        em.persist(h);
+    }
+
+    private void failure(String email, String ip, LoginFailureReason reason, Instant at) {
+        loginRow(email, ip, LoginEventType.LOGIN_FAILED, false, reason, at);
+    }
+
+    @Test
+    void loginFailuresGroupByIpAndCompanyCountingOnlyLoginFailedRowsInWindow() {
+        String ip = "203.0.113.7";
+        failure("a@x.in", ip, LoginFailureReason.UNKNOWN_USER, from.plusSeconds(1));
+        failure("b@x.in", ip, LoginFailureReason.BAD_PASSWORD, from.plusSeconds(2));
+        failure("b@x.in", ip, LoginFailureReason.BAD_PASSWORD, from.plusSeconds(3));
+        failure("c@x.in", ip, LoginFailureReason.GEO_RESTRICTED, from.plusSeconds(4));
+        // SESSION_EXPIRED rows are success=false too, but they are not login failures
+        loginRow("d@x.in", ip, LoginEventType.SESSION_EXPIRED, false, null, from.plusSeconds(5));
+        loginRow("e@x.in", ip, LoginEventType.LOGIN_SUCCESS, true, null, from.plusSeconds(6));
+        failure("f@x.in", ip, LoginFailureReason.UNKNOWN_USER, to);                  // end-exclusive
+        failure("g@x.in", ip, LoginFailureReason.UNKNOWN_USER, from.minusSeconds(1));
+        em.flush();
+        em.clear();
+
+        assertThat(loginHistory.findLoginFailuresByIp(from, to))
+                .filteredOn(r -> company.equals(r.companyId()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.ipAddress()).isEqualTo(ip);
+                    assertThat(r.distinctEmails()).isEqualTo(3L);
+                    assertThat(r.failures()).isEqualTo(4L);
+                });
+    }
+
+    @Test
+    void accountFailuresAreCountedPerCompanyEmailWithThreshold() {
+        for (int i = 0; i < 4; i++) {
+            failure("ops@x.in", "198.51.100." + (i % 2), LoginFailureReason.BAD_PASSWORD, from.plusSeconds(i + 1));
+        }
+        failure("ops@x.in", "198.51.100.9", LoginFailureReason.ACCOUNT_LOCKED, from.plusSeconds(10));
+        loginRow("ops@x.in", "198.51.100.9", LoginEventType.SESSION_EXPIRED, false, null, from.plusSeconds(11));
+        em.flush();
+        em.clear();
+
+        assertThat(loginHistory.findAccountsWithLoginFailuresAtLeast(from, to, 6))
+                .noneMatch(r -> company.equals(r.companyId()));
+        assertThat(loginHistory.findAccountsWithLoginFailuresAtLeast(from, to, 5))
+                .filteredOn(r -> company.equals(r.companyId())).singleElement()
+                .satisfies(r -> {
+                    assertThat(r.attemptedEmail()).isEqualTo("ops@x.in");
+                    assertThat(r.failures()).isEqualTo(5L);
+                    assertThat(r.distinctIps()).isEqualTo(3L);
+                });
+    }
+
+    private SecurityIncident incident(IncidentRule rule, UUID companyId, String evidence, Instant detectedAt) {
+        relaxFks();
+        return incidents.saveAndFlush(SecurityIncident.builder().companyId(companyId).rule(rule)
+                .severity(IncidentSeverity.MEDIUM).status(IncidentStatus.OPEN).evidence(evidence)
+                .autoAction(AutoAction.NONE).detectedAt(detectedAt).build());
+    }
+
+    @Test
+    void recentIncidentIsFoundByEvidenceIpDespiteMysqlJsonReformatting() {
+        Instant since = to.minusSeconds(1200);
+        incident(IncidentRule.CREDENTIAL_ATTACK, company,
+                "{\"ip\":\"203.0.113.7\",\"distinctAccounts\":6}", to.minusSeconds(60));
+        em.clear();
+
+        assertThat(incidents.existsRecentForEvidenceIp(IncidentRule.CREDENTIAL_ATTACK, company, "203.0.113.7", since))
+                .isTrue();
+        assertThat(incidents.existsRecentForEvidenceIp(IncidentRule.CREDENTIAL_ATTACK, company, "203.0.113.8", since))
+                .isFalse();
+        assertThat(incidents.existsRecentForEvidenceIp(
+                IncidentRule.CREDENTIAL_ATTACK, TimeOrderedUuid.generate(), "203.0.113.7", since)).isFalse();
+        assertThat(incidents.existsRecentForEvidenceIp(IncidentRule.SESSION_MULTI_IP, company, "203.0.113.7", since))
+                .isFalse();
+        assertThat(incidents.existsRecentForEvidenceIp(
+                IncidentRule.CREDENTIAL_ATTACK, company, "203.0.113.7", to)).isFalse();     // older than lookback
+    }
+
+    // ------------------------------------------------- BULK_ACTIVITY / ACCESS_DENIED_BURST
+
+    /** Shaped like ActivityLoggingFilter rows: module from the URL, action from verb/keyword. */
+    private void activity(UUID user, String module, String action, String method, String endpoint,
+                          ActivityStatus status, String errorMessage, Instant at) {
+        relaxFks();
+        em.persist(ActivityLog.builder().companyId(company).userId(user).username("u@x.in")
+                .module(module).action(action).requestMethod(method).apiEndpoint(endpoint)
+                .status(status).errorMessage(errorMessage).ipAddress("10.0.0.1").occurredAt(at).build());
+    }
+
+    @Test
+    void successCountsByActionIgnoreFailuresAndOtherActions() {
+        UUID user = TimeOrderedUuid.generate();
+        Instant t = from.plusSeconds(5);
+        activity(user, "Shipments", "CANCEL", "POST", "/api/v1/shipments/{id}/cancel", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Shipments", "CANCEL", "POST", "/api/v1/shipments/{id}/cancel", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Pickups", "CANCEL", "PATCH", "/api/v1/pickups/{id}/cancel", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Shipments", "CANCEL", "POST", "/api/v1/shipments/{id}/cancel",
+                ActivityStatus.FAILURE, "Shipment cannot be cancelled", t);
+        activity(user, "Shipments", "CREATE", "POST", "/api/v1/shipments", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Shipments", "CANCEL", "POST", "/api/v1/shipments/{id}/cancel", ActivityStatus.SUCCESS, null, to);
+        em.flush();
+        em.clear();
+
+        assertThat(activityLogs.findSuccessCountsByAction(from, to, List.of("CANCEL", "EXPORT")))
+                .filteredOn(r -> user.equals(r.userId()))
+                .extracting(r -> r.module() + " " + r.action() + "=" + r.count())
+                .containsExactlyInAnyOrder("Shipments CANCEL=2", "Pickups CANCEL=1");
+    }
+
+    @Test
+    void rateEditCountsExcludeCalculateAndOtherModules() {
+        UUID user = TimeOrderedUuid.generate();
+        Instant t = from.plusSeconds(5);
+        activity(user, "Rates", "UPDATE", "PUT", "/api/v1/rates/{id}", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Customer Rates", "DELETE", "DELETE", "/api/v1/customer-rates/zone/{zoneId}",
+                ActivityStatus.SUCCESS, null, t);
+        activity(user, "Rates", "CREATE", "POST", "/api/v1/rates/calculate", ActivityStatus.SUCCESS, null, t);
+        activity(user, "Shipments", "UPDATE", "PUT", "/api/v1/shipments/{id}", ActivityStatus.SUCCESS, null, t);
+        em.flush();
+        em.clear();
+
+        assertThat(activityLogs.findSuccessCountsByModuleAndAction(from, to,
+                List.of("Rates", "Customer Rates", "Pdp Rates", "Pricing Zones"),
+                List.of("CREATE", "UPDATE", "DELETE", "ACTIVATE", "DEACTIVATE"), "%/calculate"))
+                .filteredOn(r -> user.equals(r.userId()))
+                .extracting(r -> r.module() + " " + r.action() + "=" + r.count())
+                .containsExactlyInAnyOrder("Rates UPDATE=1", "Customer Rates DELETE=1");
+    }
+
+    @Test
+    void deniedCountsMatchOnlyTheAccessDeniedMessageSo404sNeverCount() {
+        UUID user = TimeOrderedUuid.generate();
+        String denied = ErrorCode.ACCESS_DENIED.getDefaultMessage();
+        Instant t = from.plusSeconds(5);
+        activity(user, "Rates", "UPDATE", "PUT", "/api/v1/rates/{id}", ActivityStatus.FAILURE, denied, t);
+        activity(user, "Rates", "UPDATE", "PUT", "/api/v1/rates/{id}", ActivityStatus.FAILURE, denied, t);
+        activity(user, "Users", "VIEW", "GET", "/api/v1/users/{id}", ActivityStatus.FAILURE, denied, t);
+        activity(user, "Users", "VIEW", "GET", "/api/v1/users/{id}", ActivityStatus.FAILURE, "Resource not found", t);
+        activity(user, "Users", "VIEW", "GET", "/api/v1/users/{id}", ActivityStatus.FAILURE, "Endpoint not found", t);
+        activity(user, "Rates", "UPDATE", "PUT", "/api/v1/rates/{id}", ActivityStatus.FAILURE, denied, to);
+        em.flush();
+        em.clear();
+
+        assertThat(activityLogs.findFailureCountsByErrorMessage(from, to, denied))
+                .filteredOn(r -> user.equals(r.userId()))
+                .extracting(r -> r.requestMethod() + " " + r.apiEndpoint() + "=" + r.count())
+                .containsExactlyInAnyOrder("PUT /api/v1/rates/{id}=2", "GET /api/v1/users/{id}=1");
     }
 
     @Test

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +31,66 @@ public interface ActivityLogRepository
             where a.companyId = :companyId and a.userId = :userId and a.module is not null
            """)
     List<String> findDistinctModulesFor(@Param("companyId") UUID companyId, @Param("userId") UUID userId);
+
+    /**
+     * Scanner input (BULK_ACTIVITY): successful rows in {@code [from, to)} whose action is one
+     * of {@code actions}, per user and (module, action). Cross-company on purpose; uses
+     * {@code idx_activity_logs_action_time (action, occurred_at)}.
+     */
+    @Query("""
+           select new com.courier.shared.activity.domain.UserActionCount(
+                      a.companyId, a.userId, a.module, a.action, count(a))
+             from ActivityLog a
+            where a.action in :actions
+              and a.occurredAt >= :from and a.occurredAt < :to
+              and a.status = com.courier.shared.activity.domain.ActivityStatus.SUCCESS
+              and a.userId is not null
+            group by a.companyId, a.userId, a.module, a.action
+           """)
+    List<UserActionCount> findSuccessCountsByAction(@Param("from") Instant from, @Param("to") Instant to,
+                                                    @Param("actions") Collection<String> actions);
+
+    /**
+     * Scanner input (BULK_ACTIVITY rate edits): successful rows in {@code [from, to)} in one of
+     * {@code modules} with one of {@code actions}, skipping endpoint templates that match
+     * {@code excludedEndpointPattern} (SQL LIKE), per user and (module, action). Cross-company
+     * on purpose; uses {@code idx_activity_logs_module_time (module, occurred_at)}.
+     */
+    @Query("""
+           select new com.courier.shared.activity.domain.UserActionCount(
+                      a.companyId, a.userId, a.module, a.action, count(a))
+             from ActivityLog a
+            where a.module in :modules
+              and a.occurredAt >= :from and a.occurredAt < :to
+              and a.action in :actions
+              and a.status = com.courier.shared.activity.domain.ActivityStatus.SUCCESS
+              and a.userId is not null
+              and (a.apiEndpoint is null or a.apiEndpoint not like :excludedEndpointPattern)
+            group by a.companyId, a.userId, a.module, a.action
+           """)
+    List<UserActionCount> findSuccessCountsByModuleAndAction(@Param("from") Instant from, @Param("to") Instant to,
+                                                             @Param("modules") Collection<String> modules,
+                                                             @Param("actions") Collection<String> actions,
+                                                             @Param("excludedEndpointPattern")
+                                                             String excludedEndpointPattern);
+
+    /**
+     * Scanner input (ACCESS_DENIED_BURST): FAILURE rows in {@code [from, to)} whose stored
+     * {@code error_message} equals {@code errorMessage} exactly, per user and (method, endpoint
+     * template). Cross-company on purpose; uses {@code idx_activity_logs_status_time} (V143).
+     */
+    @Query("""
+           select new com.courier.shared.activity.domain.UserEndpointCount(
+                      a.companyId, a.userId, a.requestMethod, a.apiEndpoint, count(a))
+             from ActivityLog a
+            where a.status = com.courier.shared.activity.domain.ActivityStatus.FAILURE
+              and a.occurredAt >= :from and a.occurredAt < :to
+              and a.errorMessage = :errorMessage
+              and a.userId is not null
+            group by a.companyId, a.userId, a.requestMethod, a.apiEndpoint
+           """)
+    List<UserEndpointCount> findFailureCountsByErrorMessage(@Param("from") Instant from, @Param("to") Instant to,
+                                                            @Param("errorMessage") String errorMessage);
 
     /** Supports the retention job noted alongside {@code AuditLogRepository}'s own. */
     long deleteByOccurredAtBefore(Instant cutoff);
