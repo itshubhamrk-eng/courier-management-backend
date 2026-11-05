@@ -41,11 +41,13 @@ public class SecurityProperties {
     private boolean scanEnabled = true;
 
     /**
-     * REVOKED_TOKEN_REPLAY fires when one user has MORE than this many refresh attempts
-     * against an explicitly revoked session inside one scan window ({@link #scanWindow}).
-     * A well-behaved client stops after the first rejection, so a few retries are tolerated.
+     * REVOKED_TOKEN_REPLAY fires when one user has MORE than this many replays of an
+     * already-revoked refresh token (no rotation successor: logout/eviction/ban) inside one
+     * scan window ({@link #scanWindow}). A well-behaved client stops after the first
+     * rejection, so a couple of retries are tolerated; every replay also kills the token
+     * family, so more than 3 in 10 minutes means something is hammering stale credentials.
      */
-    private int revokedReplayThreshold = 5;
+    private int revokedReplayThreshold = 3;
 
     private Geo geo = new Geo();
 

@@ -1,14 +1,10 @@
 package com.courier.modules.security.application.scan;
 
-import com.courier.modules.auth.domain.LoginEventType;
-import com.courier.modules.auth.domain.LoginHistory;
-import com.courier.modules.auth.domain.LoginHistoryRepository;
 import com.courier.modules.auth.domain.RefreshToken;
 import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.SessionRefreshEvent;
-import com.courier.modules.auth.domain.UserEventCount;
-import com.courier.modules.auth.domain.UserSession;
-import com.courier.modules.auth.domain.UserSessionRepository;
+import com.courier.shared.audit.domain.AuditAction;
+import com.courier.shared.audit.domain.AuditLog;
 import com.courier.shared.config.JpaAuditingConfig;
 import com.courier.shared.domain.TimeOrderedUuid;
 import org.junit.jupiter.api.Test;
@@ -43,8 +39,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ScanQueriesRepositoryTest {
 
     @Autowired RefreshTokenRepository refreshTokens;
-    @Autowired LoginHistoryRepository loginHistory;
-    @Autowired UserSessionRepository sessions;
     @Autowired ScanCursorRepository cursors;
     @Autowired TestEntityManager em;
 
@@ -52,7 +46,6 @@ class ScanQueriesRepositoryTest {
     final Instant to = Instant.parse("2026-11-05T10:10:00Z");
     final UUID company = TimeOrderedUuid.generate();
 
-    /** refresh_tokens has an FK to users, so FK checks are relaxed for the test transaction. */
     private RefreshToken token(UUID user, UUID session, String ip, String ua, Instant createdAt) {
         RefreshToken t = RefreshToken.builder().userId(user).sessionId(session)
                 .familyId(TimeOrderedUuid.generate()).jti(UUID.randomUUID().toString())
@@ -69,6 +62,7 @@ class ScanQueriesRepositoryTest {
         return t;
     }
 
+    /** refresh_tokens has an FK to users, so FK checks are relaxed for the test transaction. */
     private void relaxFks() {
         em.getEntityManager().createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate();
     }
@@ -89,49 +83,48 @@ class ScanQueriesRepositoryTest {
                 .containsExactly("1.1.1.1");
     }
 
+    /**
+     * Rows exactly as TokenIssuer writes them: a replayed, already-revoked refresh token plus
+     * an audit row REFRESH_TOKEN_REUSE_DETECTED whose entity_id is that token's id (user and
+     * company come from the token; the audit row's details JSON is not queried).
+     */
+    private void replay(UUID user, String revokedReason, String successorJti, Instant at) {
+        RefreshToken t = token(user, TimeOrderedUuid.generate(), "8.8.8.8", "ua", at);
+        em.getEntityManager().createNativeQuery(
+                        "update refresh_tokens set revoked_at = ?1, revoked_reason = ?2, replaced_by_jti = ?3 where id = ?4")
+                .setParameter(1, java.sql.Timestamp.from(at.minusSeconds(60)))
+                .setParameter(2, revokedReason)
+                .setParameter(3, successorJti)
+                .setParameter(4, t.getId()).executeUpdate();
+        em.persist(AuditLog.builder().action(AuditAction.REFRESH_TOKEN_REUSE_DETECTED)
+                .entityType("RefreshToken").entityId(t.getId()).success(false).occurredAt(at).build());
+        em.flush();
+    }
+
     @Test
-    void onlyRevokedSessionsCountTowardReplayAndThresholdIsStrict() {
+    void replaysOfTokensWithoutSuccessorCountAndThresholdIsStrict() {
         relaxFks();
         UUID user = TimeOrderedUuid.generate();
-        UUID revoked = sessionRow(user, true);
-        UUID expired = sessionRow(user, false);
+        UUID rotatedUser = TimeOrderedUuid.generate();
         for (int i = 0; i < 3; i++) {
-            expiredEvent(user, revoked, from.plusSeconds(i + 1));
+            replay(user, "LOGOUT", null, from.plusSeconds(i + 1));
+            replay(rotatedUser, "ROTATED", "successor-jti", from.plusSeconds(i + 1));
         }
-        UUID other = TimeOrderedUuid.generate();
-        for (int i = 0; i < 3; i++) {
-            expiredEvent(other, expired, from.plusSeconds(i + 1));
-        }
+        replay(user, "LOGOUT", null, to);                                  // end-exclusive
+        replay(user, "SESSION_EVICTED", null, from.minusSeconds(1));       // before window
         em.clear();
 
-        assertThat(loginHistory.findUsersWithRevokedSessionRefreshAbove(from, to, 3))
+        assertThat(refreshTokens.findUsersWithRevokedTokenReplaysAbove(from, to, 3))
                 .noneMatch(r -> user.equals(r.userId()));
-        assertThat(loginHistory.findUsersWithRevokedSessionRefreshAbove(from, to, 2))
+        assertThat(refreshTokens.findUsersWithRevokedTokenReplaysAbove(from, to, 2))
                 .filteredOn(r -> user.equals(r.userId())).singleElement()
-                .extracting(UserEventCount::count).isEqualTo(3L);
-        // naturally expired (never revoked) session: not counted at all
-        assertThat(loginHistory.findUsersWithRevokedSessionRefreshAbove(from, to, 0))
-                .noneMatch(r -> other.equals(r.userId()));
-    }
-
-    private UUID sessionRow(UUID user, boolean revoked) {
-        UserSession s = UserSession.builder().userId(user).lastSeenAt(from)
-                .expiresAt(from.plusSeconds(3600)).build();
-        s.setCompanyId(company);
-        if (revoked) {
-            s.revoke("LOGOUT");
-        }
-        em.persist(s);
-        em.flush();
-        return s.getId();
-    }
-
-    private void expiredEvent(UUID user, UUID session, Instant at) {
-        LoginHistory h = LoginHistory.builder().userId(user).attemptedEmail("a@b.c").success(false)
-                .eventType(LoginEventType.SESSION_EXPIRED).sessionId(session).occurredAt(at).build();
-        h.setCompanyId(company);
-        em.persist(h);
-        em.flush();
+                .satisfies(r -> {
+                    assertThat(r.count()).isEqualTo(3L);
+                    assertThat(r.companyId()).isEqualTo(company);
+                });
+        // rotated-token replays belong to REFRESH_TOKEN_REUSE: never counted here
+        assertThat(refreshTokens.findUsersWithRevokedTokenReplaysAbove(from, to, 0))
+                .noneMatch(r -> rotatedUser.equals(r.userId()));
     }
 
     @Test

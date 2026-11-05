@@ -39,5 +39,6 @@ class IpPrefixTest {
         assertThat(IpPrefix.of("")).isEmpty();
         assertThat(IpPrefix.of("example.com")).isEmpty();
         assertThat(IpPrefix.of("999.1.1.1")).isEmpty();
+        assertThat(IpPrefix.of("1.1.1.256")).isEmpty();
     }
 }

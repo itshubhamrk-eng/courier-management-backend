@@ -25,6 +25,11 @@ import java.util.UUID;
  * with 2+ distinct IP prefixes (IPv4 /24, IPv6 /64) fires. Loopback, private, link-local,
  * carrier-grade-NAT and unparseable addresses are ignored. Access-token request activity is
  * not used: {@code activity_logs.session_id} is never populated. One request per user.
+ *
+ * <p>Sensitivity is LOW: a client refreshes only about every 15 minutes (access-token TTL)
+ * while the scan window is 10 minutes, so a session usually has at most one token in any
+ * window and 2+ prefixes needs a login plus a refresh, or two refreshes, close together.
+ * It catches concurrent use of a stolen refresh token, not slow drift.
  */
 @Component
 @RequiredArgsConstructor

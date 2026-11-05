@@ -30,6 +30,15 @@ final class IpPrefix {
         if (!v4 && !(s.contains(":") && V6.matcher(s).matches())) {
             return Optional.empty();
         }
+        if (v4) {
+            // Reject out-of-range octets up front: InetAddress would otherwise treat the
+            // string as a hostname and attempt a DNS lookup.
+            for (String octet : s.split("\\.")) {
+                if (Integer.parseInt(octet) > 255) {
+                    return Optional.empty();
+                }
+            }
+        }
         InetAddress addr;
         try {
             addr = InetAddress.getByName(s);

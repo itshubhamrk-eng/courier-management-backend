@@ -1,6 +1,6 @@
 package com.courier.modules.security.application.scan.rules;
 
-import com.courier.modules.auth.domain.LoginHistoryRepository;
+import com.courier.modules.auth.domain.RefreshTokenRepository;
 import com.courier.modules.auth.domain.UserEventCount;
 import com.courier.modules.security.application.IncidentRequest;
 import com.courier.modules.security.application.SecurityProperties;
@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RevokedTokenReplayRuleTest {
 
-    @Mock LoginHistoryRepository loginHistoryRepository;
+    @Mock RefreshTokenRepository refreshTokenRepository;
 
     final Instant from = Instant.parse("2026-11-05T10:00:00Z");
     final Instant to = Instant.parse("2026-11-05T10:02:00Z");
@@ -30,12 +30,12 @@ class RevokedTokenReplayRuleTest {
     private RevokedTokenReplayRule rule(int threshold) {
         SecurityProperties props = new SecurityProperties();
         props.setRevokedReplayThreshold(threshold);
-        return new RevokedTokenReplayRule(loginHistoryRepository, props);
+        return new RevokedTokenReplayRule(refreshTokenRepository, props);
     }
 
     @Test
-    void defaultThresholdIsFive() {
-        assertThat(new SecurityProperties().getRevokedReplayThreshold()).isEqualTo(5);
+    void defaultThresholdIsThree() {
+        assertThat(new SecurityProperties().getRevokedReplayThreshold()).isEqualTo(3);
     }
 
     @Test
@@ -45,7 +45,7 @@ class RevokedTokenReplayRuleTest {
 
     @Test
     void queriesWithConfiguredThresholdAndRaisesForEachUserAboveIt() {
-        when(loginHistoryRepository.findUsersWithRevokedSessionRefreshAbove(from, to, 3L))
+        when(refreshTokenRepository.findUsersWithRevokedTokenReplaysAbove(from, to, 3L))
                 .thenReturn(List.of(new UserEventCount(company, user, 4)));
 
         List<IncidentRequest> out = rule(3).scan(from, to);
@@ -63,7 +63,7 @@ class RevokedTokenReplayRuleTest {
 
     @Test
     void nobodyAboveThresholdRaisesNothing() {
-        when(loginHistoryRepository.findUsersWithRevokedSessionRefreshAbove(from, to, 5L)).thenReturn(List.of());
+        when(refreshTokenRepository.findUsersWithRevokedTokenReplaysAbove(from, to, 5L)).thenReturn(List.of());
 
         assertThat(rule(5).scan(from, to)).isEmpty();
     }
