@@ -620,12 +620,27 @@ export class ShipmentView implements OnInit {
 
   id = '';
 
+  /** `?labels=1` (from the Track page's Print Labels): open the labels dialog once the shipment
+   *  and the three masters the label text needs (branch/service/payment names) have all arrived. */
+  private wantLabels = false;
+  private labelsWaiting = 4;
+  private labelsPartReady(): void {
+    if (this.wantLabels && --this.labelsWaiting === 0 && this.shipment()) {
+      this.wantLabels = false;
+      // Drop ?labels=1 so a refresh / Back doesn't reopen the dialog.
+      this.router.navigate([], { queryParams: { labels: null }, queryParamsHandling: 'merge', replaceUrl: true });
+      this.printLabels();
+    }
+  }
+
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
-    this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
-    this.masters.options('service-types').subscribe((o) => this.serviceTypeOptions.set(o));
+    this.wantLabels = this.route.snapshot.queryParamMap.get('labels') === '1';
+    // A failed master still counts as "arrived" so the dialog opens (names fall back) instead of silently never opening.
+    this.masters.options('branches').subscribe({ next: (o) => { this.branchOptions.set(o); this.labelsPartReady(); }, error: () => this.labelsPartReady() });
+    this.masters.options('service-types').subscribe({ next: (o) => { this.serviceTypeOptions.set(o); this.labelsPartReady(); }, error: () => this.labelsPartReady() });
     this.masters.options('package-types').subscribe((o) => this.packageTypeOptions.set(o));
-    this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
+    this.masters.options('payment-modes').subscribe({ next: (o) => { this.paymentModeOptions.set(o); this.labelsPartReady(); }, error: () => this.labelsPartReady() });
     this.load();
   }
 
@@ -640,8 +655,9 @@ export class ShipmentView implements OnInit {
         this.loadPaymentMode();
         this.loadRelated();
         this.loadMovement(s.manifestId ?? null);
+        this.labelsPartReady();
       },
-      error: () => { this.shipment.set(null); this.loading.set(false); }
+      error: () => { this.shipment.set(null); this.loading.set(false); this.wantLabels = false; }
     });
   }
 
@@ -822,7 +838,7 @@ export class ShipmentView implements OnInit {
         routing: s.fromCity && s.toCity ? `${s.fromCity} → ${s.toCity}` : null,
         numberOfPackages: Math.max(1, s.numberOfPackages || 1)
       };
-      this.matDialog.open(ShipmentLabelsDialog, { data, width: '560px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
+      this.matDialog.open(ShipmentLabelsDialog, { data, width: '860px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
     });
   }
 

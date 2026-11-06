@@ -121,24 +121,55 @@ const LABEL_CSS = `
   td.addr{font-size:8pt}
 `;
 
+/** `thermal` = one 100x150mm label per page; `a4` = 6 labels (2 x 3) per A4 sheet. */
+export type LabelSize = 'a4' | 'thermal';
+
+/** A4 sheet: 6 mm page margin leaves 198x285mm, i.e. a 2 x 3 grid of 99x95mm cells. Same label
+ *  markup as thermal, just scaled down to fit; the dashed border is the cut line. */
+const A4_CSS = `
+  @page{size:A4 portrait;margin:6mm}
+  .sheet{display:grid;grid-template-columns:99mm 99mm;grid-template-rows:95mm 95mm 95mm;width:198mm;height:285mm;page-break-after:always;break-after:page}
+  .sheet:last-child{page-break-after:auto;break-after:auto}
+  .sheet .label{width:99mm;height:95mm;margin:0;border:1.5px dashed #000;padding:1.5mm;gap:1mm;page-break-after:auto;break-after:auto}
+  .label .brand{font-size:10pt}.label .brand img{max-height:8mm}
+  .label .svc{font-size:8pt}
+  .label .awb-no{font-size:16pt}
+  .label .bar svg{height:11mm}.label .pid{font-size:8pt}
+  .label .qr svg{width:17mm;height:17mm}
+  .label .dest-city{font-size:14pt}.label .dest-pin{font-size:14pt}
+  .label .pkg{padding:.5mm 2mm;border-width:2px}.label .pkg-no{font-size:18pt}
+  .label td{font-size:7pt;padding:.4mm 1mm}.label td.k{font-size:6pt;width:11mm}.label td.addr{font-size:6.5pt}
+  @media screen{body{background:#e9e9e9;padding:8px}.sheet{background:#fff;margin:0 auto 10px;box-shadow:0 0 4px #888}}
+`;
+
+const THERMAL_PAGE_CSS = `
+  @media screen{body{background:#e9e9e9;padding:8px}.label{background:#fff;margin:0 auto 10px}}
+  @page{size:100mm 150mm;margin:0}
+`;
+
 /** Full document for the given 1-based package numbers (all of them when omitted). Pure
  *  string so it can be previewed in an iframe or printed without touching the app DOM. */
-export function renderLabelsHtml(d: ShipmentLabelData, packages?: number[], autoPrint = false): string {
+export function renderLabelsHtml(d: ShipmentLabelData, packages?: number[], autoPrint = false, size: LabelSize = 'a4'): string {
   const nums = packages?.length ? packages : Array.from({ length: Math.max(1, d.numberOfPackages) }, (_, i) => i + 1);
+  const labels = nums.map((n) => label(d, n));
+  let body = labels.join('');
+  if (size === 'a4') {
+    body = '';
+    for (let i = 0; i < labels.length; i += 6) body += `<div class="sheet">${labels.slice(i, i + 6).join('')}</div>`;
+  }
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(d.trackingNumber)} labels</title>
 <style>
 ${LABEL_CSS}
-  @media screen{body{background:#e9e9e9;padding:8px}.label{background:#fff;margin:0 auto 10px}}
-  @page{size:100mm 150mm;margin:0}
+${size === 'a4' ? A4_CSS : THERMAL_PAGE_CSS}
 </style></head><body>
-  ${nums.map((n) => label(d, n)).join('')}
+  ${body}
   ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 50);</script>' : ''}
 </body></html>`;
 }
 
 /** Prints via a hidden iframe (same approach as `printConsignmentCopies`) so no app UI,
  *  sidebar or browser chrome is in the print job; `@page margin:0` drops headers/footers. */
-export function printLabels(d: ShipmentLabelData, packages?: number[]): void {
+export function printLabels(d: ShipmentLabelData, packages?: number[], size: LabelSize = 'a4'): void {
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(iframe);
@@ -148,6 +179,6 @@ export function printLabels(d: ShipmentLabelData, packages?: number[]): void {
   const doc = iframe.contentWindow?.document;
   if (!doc) { cleanup(); return; }
   doc.open();
-  doc.write(renderLabelsHtml(d, packages, true));
+  doc.write(renderLabelsHtml(d, packages, true, size));
   doc.close();
 }

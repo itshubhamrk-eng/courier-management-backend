@@ -22,6 +22,17 @@ describe('shipment labels', () => {
     expect(one).toContain('AWB10001-002');
     expect(one).toContain('2/3');
   });
+  it('A4 puts 6 labels on a sheet and starts a new sheet for the 7th', () => {
+    const sheets = (h: string) => (h.match(/<div class="sheet">/g) ?? []).length;
+    expect(sheets(renderLabelsHtml({ ...data, numberOfPackages: 6 }))).toBe(1);
+    expect(sheets(renderLabelsHtml({ ...data, numberOfPackages: 7 }))).toBe(2);
+    expect(renderLabelsHtml(data)).toContain('size:A4 portrait');
+  });
+  it('thermal keeps one 100x150mm label per page with no sheets', () => {
+    const h = renderLabelsHtml(data, undefined, false, 'thermal');
+    expect(h).not.toContain('class="sheet"');
+    expect(h).toContain('size:100mm 150mm');
+  });
   it('matches a scanned package id, AWB or shipment no. to its shipment', () => {
     const ship = { trackingNumber: 'AWB10001', shipmentNumber: 'SHP-1' };
     expect(matchesScan(ship, 'awb10001-002')).toBe(true);
