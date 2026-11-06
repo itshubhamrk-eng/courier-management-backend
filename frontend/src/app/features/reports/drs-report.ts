@@ -1,3 +1,4 @@
+import { PrintLogService } from '@features/print-log/print-log.service';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
@@ -56,6 +57,7 @@ import { Lookup } from '@features/users/user.service';
           <td class="num">{{ r.shipmentCount }}</td>
           <td class="num">{{ r.deliveredCount }}</td>
           <td class="num">{{ r.pendingCount }}</td>
+          <td class="num">{{ r.drsNumber ? (printCounts()[r.drsNumber] ?? 0) : '—' }}</td>
         </ng-template>
       </app-table>
     </div>
@@ -89,6 +91,8 @@ export class DrsReport implements OnInit {
   protected readonly visibleRows = computed(() =>
     this.pendingOnly() ? this.rows().filter((r) => r.pendingCount > 0) : this.rows());
 
+  private readonly printLog = inject(PrintLogService);
+  protected readonly printCounts = signal<Record<string, number>>({});
   private readonly branches = signal<Map<string, string>>(new Map());
   private readonly users = signal<Map<string, string>>(new Map());
   private readonly userContacts = signal<Map<string, { name: string; mobile: string }>>(new Map());
@@ -101,7 +105,8 @@ export class DrsReport implements OnInit {
     { key: 'runDate', header: 'Date', width: '130px' },
     { key: 'shipmentCount', header: 'Shipments', align: 'right', width: '110px' },
     { key: 'deliveredCount', header: 'Delivered', align: 'right', width: '110px' },
-    { key: 'pendingCount', header: 'Pending', align: 'right', width: '100px' }
+    { key: 'pendingCount', header: 'Pending', align: 'right', width: '100px' },
+    { key: 'prints', header: 'Prints', align: 'right', width: '90px' }
   ];
 
   ngOnInit(): void {
@@ -117,7 +122,11 @@ export class DrsReport implements OnInit {
   load(): void {
     this.loading.set(true);
     this.movementService.listDrs(this.from() || null, this.to() || null, this.myBranchId).subscribe({
-      next: (list) => { this.rows.set(list); this.loading.set(false); },
+      next: (list) => {
+        this.rows.set(list); this.loading.set(false);
+        const nos = list.map((r) => r.drsNumber).filter((n): n is string => !!n);
+        if (nos.length) this.printLog.counts('DRS', nos).subscribe({ next: (c) => this.printCounts.set(c), error: () => undefined });
+      },
       error: () => { this.rows.set([]); this.loading.set(false); }
     });
   }

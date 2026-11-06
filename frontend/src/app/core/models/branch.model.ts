@@ -29,6 +29,7 @@ export interface Branch {
   postalCode?: string | null;
   managerId?: string | null;
   assignedHubId?: string | null;
+  mobile?: string | null;
   allowBooking: boolean;
   allowDelivery: boolean;
   createdDate?: string | null;

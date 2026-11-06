@@ -10,7 +10,11 @@ import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { AuthService } from '@core/auth/auth.service';
 import { CompanyProfileService, CompanyLetterhead } from '@features/company/company-profile.service';
-import { companyAddressLine, renderPrintHeader, PRINT_HEADER_CSS } from '@features/shipment/consignment-print.util';
+import { companyAddressLine } from '@features/shipment/consignment-print.util';
+import { renderDrsHtml } from './drs-print.util';
+import { MatDialog } from '@angular/material/dialog';
+import { PrintLogService } from '@features/print-log/print-log.service';
+import { PrintHistoryDialog, PrintHistoryData } from '@features/print-log/print-history-dialog';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -160,7 +164,10 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
             </div>
             @if (printableShipments().length) {
               <div class="df__bar">
-                <app-button variant="stroked" icon="print" (pressed)="printDrs()">Print DRS</app-button>
+                <app-button variant="stroked" icon="print" (pressed)="printDrs()">{{ drsPrintCount() ? 'Reprint DRS (' + drsPrintCount() + ')' : 'Print DRS' }}</app-button>
+                @if (drsNumber() && drsPrintCount()) {
+                  <app-button variant="stroked" icon="history" (pressed)="drsPrintHistory()">Print History</app-button>
+                }
               </div>
             }
           </app-card>
@@ -234,6 +241,14 @@ export class OutForDelivery implements OnInit, OnDestroy {
   readonly branchNames = signal<Map<string, string>>(new Map());
   readonly outcomes = signal<MovementOutcome[]>([]);
   readonly drsNumber = signal<string | null>(null);
+  private readonly printLog = inject(PrintLogService);
+  private readonly dialog = inject(MatDialog);
+  readonly drsPrintCount = signal(0);
+  drsPrintHistory(): void {
+    const no = this.drsNumber();
+    if (!no) return;
+    this.dialog.open<PrintHistoryDialog, PrintHistoryData>(PrintHistoryDialog, { data: { docType: 'DRS', docRef: no, title: no } });
+  }
   readonly printableShipments = signal<Shipment[]>([]);
   readonly successCount = computed(() => this.outcomes().filter((o) => o.success).length);
   readonly selectedIds = signal<Set<string>>(new Set());
@@ -424,6 +439,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
         this.assigning.set(false);
         this.outcomes.set(r.results);
         this.drsNumber.set(r.drsNumber);
+        this.drsPrintCount.set(0);
         const assignedNumbers = new Set(r.results.filter((o) => o.success).map((o) => o.reference));
         this.printableShipments.set(selected.filter((s) => assignedNumbers.has(s.shipmentNumber)));
         this.deliveryUserLabel = this.label(v.deliveryUserId, this.userOptions());
@@ -443,127 +459,32 @@ export class OutForDelivery implements OnInit, OnDestroy {
     return options.find((o) => o.value === id)?.label ?? id ?? '—';
   }
 
-  private esc(s: string | null | undefined): string {
-    return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
   printDrs(): void {
     const rows = this.printableShipments();
     if (!rows.length) return;
     const win = window.open('', '_blank', 'width=800,height=900');
     if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the DRS.'); return; }
     const company = this.companyLetterhead();
-    const companyName = company?.companyName ?? this.auth.companyName() ?? '';
-    const companyLogo = company?.logo ?? this.auth.companyLogo();
-    const companyAddress = companyAddressLine(company);
-    const companyGst = company?.gstNumber ?? null;
-    const companyContact = company?.mobile ?? null;
-    const drsNo = this.drsNumber() ?? '—';
     const collectIds = this.collectAtDeliveryModeIds();
-    const collectAmount = (s: Shipment): number | null => collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null;
-    const totalAmount = rows.reduce((sum, s) => sum + (collectAmount(s) ?? 0), 0);
-    const tableRows = rows.map((s, i) => `<tr>
-      <td class="center">${i + 1}</td>
-      <td>${this.esc(s.shipmentNumber)}</td>
-      <td>${this.esc(s.ewayBillNumber) || '—'}</td>
-      <td>${this.esc(s.receiverName)}</td>
-      <td>${this.esc(s.receiverContact)}</td>
-      <td>${this.esc(s.fromCity) || '—'}</td>
-      <td>${this.esc(s.toCity) || '—'}</td>
-      <td>${this.esc(this.label(s.paymentModeId, this.paymentModeOptions()))}</td>
-      <td class="right">${collectAmount(s) ?? '—'}</td>
-      <td class="c-sign"></td>
-      <td class="c-stamp"></td>
-    </tr>`).join('');
-    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>DRS ${this.esc(this.deliveryUserLabel)}</title>
-      <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
-        .toolbar { width: 900px; margin: 0 auto 10px; }
-        button { padding: 5px 12px; margin-right: 5px; border: 1px solid #000; background: #eee; cursor: pointer; font-size: 15px; }
-        .sheet { width: 900px; margin: auto; background: #fff; border: 1px solid #000; }
-        .title { text-align: center; font-size: 18px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #000; }
-        ${PRINT_HEADER_CSS}
-        .head, .head .co, .head .lrbox { border-color: #000; border-width: 1px; }
-        .meta { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #000; }
-        .meta div { padding: 4px 6px; border-right: 1px solid #000; }
-        .meta div:nth-child(4n) { border-right: 0; }
-        .label { font-weight: bold; display: block; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 4px; vertical-align: middle; min-height: 19px; word-wrap: break-word; overflow-wrap: break-word; }
-        th:last-child, td:last-child { border-right: 0; }
-        th { font-weight: bold; text-align: center; background: #fafafa; font-size: 11px; }
-        td { font-size: 11px; }
-        td.center, th.center { text-align: center; }
-        td.right, th.right { text-align: right; }
-        .c-sr { width: 26px; }
-        .c-amount { width: 60px; }
-        .c-sign, .c-stamp { width: 100px; }
-        td.c-sign, td.c-stamp { min-height: 34px; height: 34px; }
-        .total-row td { font-weight: bold; min-height: 22px; }
-        .footer { display: grid; grid-template-columns: 1fr 150px; min-height: 38px; }
-        .footer-left { padding: 5px; border-right: 1px solid #000; }
-        .footer-right { text-align: center; padding: 5px; font-weight: bold; }
-        .signature { height: 22px; margin-top: 2px; }
-        @media print {
-          body { background: #fff; padding: 0; margin: 0; }
-          .toolbar { display: none; }
-          .sheet { width: 100%; }
-          @page { size: A4 portrait; margin: 8mm; }
-        }
-        @media screen and (max-width: 950px) { .sheet, .toolbar { width: 100%; overflow-x: auto; } }
-      </style></head><body>
-
-      <div class="toolbar">
-        <button onclick="window.print()">Print</button>
-        <button onclick="window.print()">Download PDF</button>
-      </div>
-
-      <div class="sheet">
-        <div class="title">DELIVERY RUN SHEET (DRS)</div>
-
-        ${renderPrintHeader(
-          { companyName, companyLogo, companyAddress, companyGst, companyContact, companyWebsite: null },
-          { label: 'DRS No', value: drsNo, barcodeValue: drsNo !== '—' ? drsNo : undefined, qrValue: drsNo !== '—' ? drsNo : undefined }
-        )}
-
-        <div class="meta">
-          <div><span class="label">BRANCH</span>${this.esc(this.branchLabel())}</div>
-          <div><span class="label">DELIVERY BOY</span>${this.esc(this.deliveryUserLabel)}</div>
-          <div><span class="label">DATE</span>${this.esc(new Date().toLocaleDateString('en-GB'))}</div>
-          <div><span class="label">SHIPMENTS</span>${rows.length}</div>
-        </div>
-
-        <table>
-          <thead><tr>
-            <th class="c-sr">SR<br>NO.</th>
-            <th>SHIPMENT NO.</th>
-            <th>E-WAY BILL NO.</th>
-            <th>RECEIVER</th>
-            <th>CONTACT</th>
-            <th>FROM CITY</th>
-            <th>TO CITY</th>
-            <th>PAYMENT</th>
-            <th class="c-amount right">AMOUNT</th>
-            <th class="c-sign">RECEIVER SIGN</th>
-            <th class="c-stamp">STAMP</th>
-          </tr></thead>
-          <tbody>${tableRows || '<tr><td colspan="11" class="center">No shipments</td></tr>'}</tbody>
-          <tfoot><tr class="total-row">
-            <td colspan="8" class="right">Total to Collect</td>
-            <td class="right">${totalAmount}</td>
-            <td></td>
-            <td></td>
-          </tr></tfoot>
-        </table>
-
-        <div class="footer">
-          <div class="footer-left"><strong>${this.esc(companyName)}</strong></div>
-          <div class="footer-right">SIGNATURE<div class="signature"></div></div>
-        </div>
-      </div>
-    </body></html>`);
-    win.document.close();
-    win.focus();
+    const html = renderDrsHtml({
+      rows: rows.map((s) => ({
+        shipmentNumber: s.shipmentNumber, ewayBillNumber: s.ewayBillNumber, receiverName: s.receiverName,
+        receiverContact: s.receiverContact, fromCity: s.fromCity, toCity: s.toCity,
+        paymentLabel: this.label(s.paymentModeId, this.paymentModeOptions()),
+        collectAmount: collectIds.has(s.paymentModeId) ? (s.netAmount ?? 0) : null
+      })),
+      drsNumber: this.drsNumber() ?? '—',
+      branchLabel: this.branchLabel(),
+      deliveryUserLabel: this.deliveryUserLabel,
+      dateLabel: new Date().toLocaleDateString('en-GB'),
+      companyName: company?.companyName ?? this.auth.companyName() ?? '',
+      companyLogo: company?.logo ?? this.auth.companyLogo() ?? null,
+      companyAddress: companyAddressLine(company),
+      companyGst: company?.gstNumber ?? null,
+      companyContact: company?.mobile ?? null
+    });
+    const drsNo = this.drsNumber();
+    if (drsNo) this.printLog.printWindow(win, html, 'DRS', drsNo, drsNo, (count) => this.drsPrintCount.set(count));
+    else { win.document.write(html); win.document.close(); win.focus(); }
   }
 }

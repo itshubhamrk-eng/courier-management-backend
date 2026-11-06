@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, effect, inject, signal } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { PrintLogService } from '@features/print-log/print-log.service';
+import { PrintHistoryDialog, PrintHistoryData } from '@features/print-log/print-history-dialog';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -104,7 +107,10 @@ import { SettingsService } from '@features/settings/settings.service';
               <span class="text-caption">{{ branchNames().get(m.bookingBranchId) || '—' }} → {{ manifestToLabel(m) }} &nbsp;·&nbsp; Status: {{ m.status }}</span></div>
             <div class="mh__actions">
               @if (m.status !== 'CREATED') {
-                <app-button variant="stroked" icon="visibility" [loading]="previewing()" (pressed)="previewThc()">Preview THC</app-button>
+                <app-button variant="stroked" icon="print" [loading]="previewing()" (pressed)="previewThc()">{{ thcPrintCount() ? 'Reprint THC (' + thcPrintCount() + ')' : 'Preview THC' }}</app-button>
+                @if (thcPrintCount()) {
+                  <app-button variant="stroked" icon="history" (pressed)="thcPrintHistory()">Print History</app-button>
+                }
               }
               <app-button variant="stroked" icon="close" (pressed)="reset()">Change Manifest</app-button>
             </div>
@@ -291,6 +297,23 @@ export class TripHireChallan implements OnInit, OnDestroy {
   private readonly settingsService = inject(SettingsService);
 
   readonly manifest = signal<Manifest | null>(null);
+  private readonly printLog = inject(PrintLogService);
+  private readonly dialog = inject(MatDialog);
+  readonly thcPrintCount = signal(0);
+  private lastCountedManifest: string | null = null;
+  private readonly loadThcCount = effect(() => {
+    const m = this.manifest();
+    if (!m || m.id === this.lastCountedManifest) return;
+    this.lastCountedManifest = m.id;
+    this.thcPrintCount.set(0);
+    this.printLog.history('THC', m.id).subscribe({ next: (h) => this.thcPrintCount.set(h.count), error: () => undefined });
+  });
+  thcPrintHistory(): void {
+    const m = this.manifest();
+    if (!m) return;
+    this.dialog.open<PrintHistoryDialog, PrintHistoryData>(PrintHistoryDialog, {
+      data: { docType: 'THC', docRef: m.id, title: this.thcNumber(m) } });
+  }
   readonly result = signal<DispatchManifestResponse | null>(null);
   readonly searching = signal(false);
   readonly dispatching = signal(false);
@@ -835,8 +858,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
   private openThcTab(m: Manifest, shipments: Shipment[]): void {
     const win = window.open('', '_blank');
     if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to preview the THC.'); return; }
-    win.document.write(this.renderThcHtml(m, shipments));
-    win.document.close();
-    win.focus();
+    this.printLog.printWindow(win, this.renderThcHtml(m, shipments), 'THC', m.id, this.thcNumber(m),
+      (count) => this.thcPrintCount.set(count));
   }
 }
