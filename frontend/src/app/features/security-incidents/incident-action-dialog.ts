@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -23,7 +23,7 @@ export interface IncidentActionResult { note: string | null; }
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, MatDialogModule, MatIconModule, UiButton],
   template: `
-    <form class="ad" role="alertdialog" aria-labelledby="ad-title" aria-describedby="ad-msg" (ngSubmit)="submit()">
+    <form class="ad" role="alertdialog" aria-labelledby="ad-title" aria-describedby="ad-msg" [formGroup]="form" (ngSubmit)="submit()">
       <div class="ad__head">
         <mat-icon class="ad__icon" [class.danger]="data.danger" aria-hidden="true">{{ data.danger ? 'warning' : 'help' }}</mat-icon>
         <div>
@@ -60,6 +60,9 @@ export class IncidentActionDialog {
   readonly data = inject<IncidentActionDialogData>(MAT_DIALOG_DATA);
   readonly max = NOTE_MAX;
   readonly note = new FormControl<string>('', { nonNullable: true, validators: [Validators.maxLength(NOTE_MAX)] });
+
+  /** Needed so `(ngSubmit)` has a form directive to fire from. */
+  readonly form = new FormGroup({ note: this.note });
 
   submit(): void {
     if (this.note.invalid) return;
