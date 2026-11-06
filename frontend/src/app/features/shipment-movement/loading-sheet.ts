@@ -1,3 +1,6 @@
+import { MatDialog } from '@angular/material/dialog';
+import { PrintLogService } from '@features/print-log/print-log.service';
+import { PrintHistoryDialog, PrintHistoryData } from '@features/print-log/print-history-dialog';
 import { forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
@@ -120,8 +123,8 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
       } @else {
         @for (m of openManifests(); track m.id) {
           <app-manifest-card [manifest]="m" [branchNames]="branchNames()"
-            [showDispatchAction]="true" [showRemoveAction]="true" [showPrintAction]="true"
-            (dispatch)="goToDispatch($event)" (removed)="onShipmentRemoved()" (print)="printLoadingSheet($event)" />
+            [showDispatchAction]="true" [showRemoveAction]="true" [showPrintAction]="true" [printCount]="printCounts()[m.id] ?? 0"
+            (dispatch)="goToDispatch($event)" (removed)="onShipmentRemoved()" (print)="printLoadingSheet($event)" (printHistory)="openPrintHistory($event)" />
         }
       }
     </div>
@@ -154,6 +157,9 @@ export class LoadingSheet implements OnInit {
   private readonly masterData = inject(MasterDataService);
   private readonly shipmentService = inject(ShipmentService);
   private readonly manifestService = inject(ManifestService);
+  private readonly printLog = inject(PrintLogService);
+  private readonly dialog = inject(MatDialog);
+  protected readonly printCounts = signal<Record<string, number>>({});
 
   protected readonly myBranchId = this.auth.user()?.branchId ?? null;
 
@@ -323,7 +329,7 @@ export class LoadingSheet implements OnInit {
       deliveryBranchId: this.filterBranchControl.value ?? undefined,
       flowType: 'STANDARD'
     }).subscribe({
-      next: (p) => { this.openManifests.set(p.content); this.loadingManifests.set(false); },
+      next: (p) => { this.openManifests.set(p.content); this.loadingManifests.set(false); this.refreshPrintCounts(); },
       error: () => { this.openManifests.set([]); this.loadingManifests.set(false); }
     });
   }
@@ -529,8 +535,19 @@ export class LoadingSheet implements OnInit {
   private openLoadingSheetTab(m: Manifest, shipments: Shipment[]): void {
     const win = window.open('', '_blank');
     if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the loading sheet.'); return; }
-    win.document.write(this.renderLoadingSheetHtml(m, shipments));
-    win.document.close();
-    win.focus();
+    this.printLog.printWindow(win, this.renderLoadingSheetHtml(m, shipments), 'LOADING_SHEET', m.id, m.manifestNumber,
+      (count) => this.printCounts.update((c) => ({ ...c, [m.id]: count })));
+  }
+
+  private refreshPrintCounts(): void {
+    const ids = this.openManifests().map((m) => m.id);
+    if (!ids.length) return;
+    this.printLog.counts('LOADING_SHEET', ids).subscribe({ next: (c) => this.printCounts.set(c), error: () => undefined });
+  }
+
+  protected openPrintHistory(m: Manifest): void {
+    this.dialog.open<PrintHistoryDialog, PrintHistoryData>(PrintHistoryDialog, {
+      data: { docType: 'LOADING_SHEET', docRef: m.id, title: m.manifestNumber }
+    });
   }
 }

@@ -204,9 +204,9 @@ export class BranchList implements OnInit {
   }
 
   private download(rows: Branch[]): void {
-    const header = ['branchCode', 'branchName', 'branchType', 'city', 'state', 'postalCode', 'manager', 'allowBooking', 'allowDelivery', 'status'];
+    const header = ['branchCode', 'branchName', 'branchType', 'city', 'state', 'postalCode', 'contactNumber', 'manager', 'allowBooking', 'allowDelivery', 'status'];
     const lines = rows.map((r) => [
-      r.branchCode, r.branchName, r.branchType, r.city, r.state, r.postalCode,
+      r.branchCode, r.branchName, r.branchType, r.city, r.state, r.postalCode, r.mobile ?? '',
       r.managerId ? (this.managerNames().get(r.managerId) ?? r.managerId) : '', r.allowBooking, r.allowDelivery, r.status
     ]);
     downloadCsv(`branches-${new Date().toISOString().slice(0, 10)}.csv`, header, lines);

@@ -48,7 +48,10 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
             <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">THC</app-button>
           }
           @if (showPrintAction()) {
-            <app-button variant="stroked" icon="print" (pressed)="print.emit(manifest())">Print</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="print.emit(manifest())">{{ printCount() ? 'Reprint (' + printCount() + ')' : 'Print' }}</app-button>
+            @if (printCount()) {
+              <app-button variant="stroked" icon="history" (pressed)="printHistory.emit(manifest())">Print History</app-button>
+            }
           }
           @if (showInScanAction()) {
             <app-button icon="qr_code_scanner" [loading]="inScanLoading()"
@@ -122,11 +125,14 @@ export class ManifestCard implements OnInit {
   readonly showInScanAction = input(false);
   readonly showRemoveAction = input(false);
   readonly showPrintAction = input(false);
+  /** How many times this manifest's Loading Sheet has been printed (0 = never). */
+  readonly printCount = input(0);
   readonly inScanLoading = input(false);
   readonly dispatch = output<Manifest>();
   readonly inScan = output<Manifest>();
   readonly removed = output<Manifest>();
   readonly print = output<Manifest>();
+  readonly printHistory = output<Manifest>();
 
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);

@@ -32,6 +32,7 @@ export type BranchAction = 'view' | 'edit' | 'activate' | 'deactivate' | 'assign
         <td><div class="cs">{{ b.branchName }}</div></td>
         <td>{{ pretty(b.branchType) }}</td>
         <td>{{ location(b) }}</td>
+        <td>{{ b.mobile || '—' }}</td>
         <td>{{ managerName(b.managerId) }}</td>
         <td>
           @if (b.allowBooking) { <span class="tag tag--ok">Booking</span> }
@@ -92,6 +93,7 @@ export class BranchTable {
     { key: 'branchName', header: 'Branch Name', sortable: true },
     { key: 'branchType', header: 'Type', sortable: true },
     { key: 'location', header: 'Location' },
+    { key: 'mobile', header: 'Contact No.' },
     { key: 'manager', header: 'Manager' },
     { key: 'capabilities', header: 'Capabilities' },
     { key: 'status', header: 'Status', sortable: true, width: '120px' },
