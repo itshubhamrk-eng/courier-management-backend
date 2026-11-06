@@ -145,9 +145,11 @@ REFRESH_TOKEN_REUSE.
 
 - Incident detail `userRoles` reads only the legacy `user_roles` enum table, so users with
   only company roles (`user_company_roles`, e.g. BOOKING_OPERATOR) show Roles "—".
-- **UI confirm dialog does not submit (found 2026-11-05):** `IncidentActionDialog` uses
-  `(ngSubmit)` on a `<form>` with no `[formGroup]`/NgForm, so the confirm button does a
-  native form submit and reloads the page; Ban/Dismiss/Unban from the UI do nothing. API works.
+- UI confirm dialog did not submit (no `[formGroup]`, native submit reloaded the page);
+  fixed in 9b32536 and retested 2026-11-06 by real clicks: Dismiss, Ban, Unban all POST 200,
+  note saved, detail page updates.
+- Incident keeps only the latest resolution (by/at/note); after Ban then Unban the
+  timeline shows only the unban, so the ban step's note and time are lost.
 - Expired-token branch of refresh still rolls back its family revoke (pre-existing).
 - `refresh` has no inline geo check; FOREIGN_TOKEN_USE catches it on the next scan.
 - Ban-as-password-oracle: after a foreign correct guess the user is DISABLED, visible as
