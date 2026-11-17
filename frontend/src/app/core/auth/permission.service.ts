@@ -1,5 +1,8 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { AuthService } from './auth.service';
+import { AppRole } from '../models/role.model';
+
+const BUILT_IN_ROLES = new Set<string>(Object.values(AppRole));
 
 /** What a guard or template asks about: any-of roles and/or any-of permission codes. */
 export interface AccessRequirement {
@@ -45,7 +48,12 @@ export class PermissionService {
     const roles = req.roles ?? [];
     const perms = req.permissions ?? [];
     if (roles.length === 0 && perms.length === 0) return true;
-    const roleOk = roles.length === 0 || this.hasAnyRole(roles);
+    // A user whose roles are all company-defined custom roles (none of the built-in ones the
+    // `roles` bridge lists) is governed by their permission grants alone: the bridge only
+    // narrows built-in roles, and would otherwise hide every menu a custom-role user was granted.
+    const customOnly = perms.length > 0 && this.auth.roles().length > 0
+      && this.auth.roles().every((r) => !BUILT_IN_ROLES.has(r));
+    const roleOk = roles.length === 0 || customOnly || this.hasAnyRole(roles);
     const permOk = perms.length === 0 || this.hasAnyPermission(perms);
     return roleOk && permOk;
   }
