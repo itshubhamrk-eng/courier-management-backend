@@ -53,7 +53,7 @@ public class CountryServiceImpl extends AbstractMasterDataService<Country> imple
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_CREATE')")
     public Country create(CountryCommand command) {
         Country country = new Country();
         applyCommonFields(country, command.code(), command.name(), command.description(),
@@ -64,7 +64,7 @@ public class CountryServiceImpl extends AbstractMasterDataService<Country> imple
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Country update(UUID id, CountryCommand command) {
         return updateEntity(id, command.expectedVersion(), country -> {
             applyCommonFields(country, null, command.name(), command.description(),
@@ -89,21 +89,21 @@ public class CountryServiceImpl extends AbstractMasterDataService<Country> imple
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Country activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Country deactivate(UUID id) {
         return doDeactivate(id);
     }

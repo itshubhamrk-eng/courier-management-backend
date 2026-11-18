@@ -72,7 +72,7 @@ public class StateServiceImpl extends AbstractMasterDataService<State> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_CREATE')")
     public State create(StateCommand command) {
         UUID companyId = requireCompany();
         requireCountry(command.countryId(), companyId, true);
@@ -87,7 +87,7 @@ public class StateServiceImpl extends AbstractMasterDataService<State> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public State update(UUID id, StateCommand command) {
         UUID companyId = requireCompany();
         return updateEntity(id, command.expectedVersion(), state -> {
@@ -117,21 +117,21 @@ public class StateServiceImpl extends AbstractMasterDataService<State> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public State activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public State deactivate(UUID id) {
         return doDeactivate(id);
     }

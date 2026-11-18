@@ -37,7 +37,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
 
     @Override
     @Transactional
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public List<CommunicationSetting> list() {
         UUID companyId = requireCompany();
         List<CommunicationSetting> existing = repository.findAllByCompanyId(companyId);
@@ -57,7 +57,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
 
     @Override
     @Transactional
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public CommunicationSetting get(CommunicationChannel channel) {
         UUID companyId = requireCompany();
         return repository.findByCompanyIdAndChannel(companyId, channel).orElseGet(() -> {
@@ -70,7 +70,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationSetting upsert(UpsertCommunicationSettingCommand command) {
         UUID companyId = requireCompany();
         CommunicationSetting setting = repository.findByCompanyIdAndChannel(companyId, command.channel())
@@ -99,7 +99,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public ConnectionTestResult testConnection(CommunicationChannel channel) {
         CommunicationSetting setting = get(channel);
         if (!setting.isEnabled()) {

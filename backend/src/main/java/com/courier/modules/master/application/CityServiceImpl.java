@@ -58,7 +58,7 @@ public class CityServiceImpl extends AbstractMasterDataService<City> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_CREATE')")
     public City create(CityCommand command) {
         UUID companyId = requireCompany();
         requireDistrict(command.districtId(), companyId, true);
@@ -74,7 +74,7 @@ public class CityServiceImpl extends AbstractMasterDataService<City> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public City update(UUID id, CityCommand command) {
         UUID companyId = requireCompany();
         return updateEntity(id, command.expectedVersion(), city -> {
@@ -105,21 +105,21 @@ public class CityServiceImpl extends AbstractMasterDataService<City> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public City activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public City deactivate(UUID id) {
         return doDeactivate(id);
     }

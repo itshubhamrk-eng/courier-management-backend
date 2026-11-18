@@ -58,7 +58,7 @@ public class DistrictServiceImpl extends AbstractMasterDataService<District> imp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_CREATE')")
     public District create(DistrictCommand command) {
         UUID companyId = requireCompany();
         requireState(command.stateId(), companyId, true);
@@ -72,7 +72,7 @@ public class DistrictServiceImpl extends AbstractMasterDataService<District> imp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public District update(UUID id, DistrictCommand command) {
         UUID companyId = requireCompany();
         return updateEntity(id, command.expectedVersion(), district -> {
@@ -101,21 +101,21 @@ public class DistrictServiceImpl extends AbstractMasterDataService<District> imp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public District activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public District deactivate(UUID id) {
         return doDeactivate(id);
     }

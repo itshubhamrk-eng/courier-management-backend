@@ -63,7 +63,7 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public CommunicationDashboardSummary summary(Period period) {
         UUID companyId = requireCompany();
         ZoneId z = ZoneId.of(zone);

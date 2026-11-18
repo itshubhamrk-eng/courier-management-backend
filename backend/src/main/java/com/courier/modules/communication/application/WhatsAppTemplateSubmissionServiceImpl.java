@@ -44,7 +44,7 @@ public class WhatsAppTemplateSubmissionServiceImpl implements WhatsAppTemplateSu
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationTemplate submit(UUID templateId, String category, String language) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadWhatsAppTemplate(templateId, companyId);
@@ -97,7 +97,7 @@ public class WhatsAppTemplateSubmissionServiceImpl implements WhatsAppTemplateSu
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationTemplate refreshStatus(UUID templateId) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadWhatsAppTemplate(templateId, companyId);

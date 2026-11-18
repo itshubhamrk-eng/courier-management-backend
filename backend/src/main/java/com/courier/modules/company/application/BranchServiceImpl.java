@@ -87,7 +87,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_CREATE')")
     public BranchCreation create(CreateBranchCommand command) {
         UUID companyId = requireCompany();
         String code = Branch.normaliseCode(command.branchCode());
@@ -292,7 +292,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN_OR_BRANCH_MANAGER)
+    @PreAuthorize(ADMIN_OR_BRANCH_MANAGER + " or hasAuthority('BRANCH_UPDATE')")
     public Branch update(UUID id, UpdateBranchCommand command) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -435,7 +435,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_UPDATE')")
     public Branch activate(UUID id) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -452,7 +452,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_UPDATE')")
     public Branch deactivate(UUID id) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -469,7 +469,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_DELETE')")
     public void delete(UUID id) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -491,7 +491,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_UPDATE')")
     public Branch assignManager(UUID id, UUID managerId) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -519,7 +519,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(COMPANY_ADMIN_ONLY)
+    @PreAuthorize(COMPANY_ADMIN_ONLY + " or hasAuthority('BRANCH_UPDATE')")
     public Branch assignHub(UUID id, UUID hubId) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);
@@ -551,7 +551,7 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN_OR_BRANCH_MANAGER)
+    @PreAuthorize(ADMIN_OR_BRANCH_MANAGER + " or hasAuthority('BRANCH_UPDATE')")
     public AssignUsersResult assignUsers(UUID id, Collection<UUID> userIds) {
         UUID companyId = requireCompany();
         Branch branch = loadOrThrow(id, companyId);

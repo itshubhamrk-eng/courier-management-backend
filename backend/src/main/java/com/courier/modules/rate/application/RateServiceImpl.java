@@ -76,7 +76,7 @@ public class RateServiceImpl implements RateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('RATE_MASTER_CREATE')")
     public Rate create(CreateRateCommand command) {
         UUID companyId = requireCompany();
 
@@ -127,7 +127,7 @@ public class RateServiceImpl implements RateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('RATE_MASTER_UPDATE')")
     public Rate update(UUID id, UpdateRateCommand command) {
         UUID companyId = requireCompany();
         Rate rate = loadOrThrow(id, companyId);
@@ -192,7 +192,7 @@ public class RateServiceImpl implements RateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('RATE_MASTER_UPDATE')")
     public Rate activate(UUID id) {
         UUID companyId = requireCompany();
         Rate rate = loadOrThrow(id, companyId);
@@ -210,7 +210,7 @@ public class RateServiceImpl implements RateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('RATE_MASTER_UPDATE')")
     public Rate deactivate(UUID id) {
         UUID companyId = requireCompany();
         Rate rate = loadOrThrow(id, companyId);

@@ -39,7 +39,7 @@ public class CommunicationLogServiceImpl implements CommunicationLogService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public Page<CommunicationLog> search(CommunicationLogCriteria criteria, Pageable pageable) {
         CommunicationLogCriteria safe = criteria == null ? CommunicationLogCriteria.empty() : criteria;
         return repository.findAll(CommunicationLogSpecifications.matching(safe), pageable);
@@ -47,21 +47,21 @@ public class CommunicationLogServiceImpl implements CommunicationLogService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public CommunicationLog getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public List<CommunicationLog> forShipment(UUID shipmentId) {
         return repository.findAllByShipmentIdAndCompanyIdOrderByEventTypeAscChannelAsc(shipmentId, requireCompany());
     }
 
     @Override
     @Transactional
-    @PreAuthorize(RETRY)
+    @PreAuthorize(RETRY + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationLog retry(UUID id) {
         UUID companyId = requireCompany();
         CommunicationLog logRow = loadOrThrow(id, companyId);

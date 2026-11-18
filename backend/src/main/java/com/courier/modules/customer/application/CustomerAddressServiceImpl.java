@@ -65,7 +65,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('CUSTOMER_CREATE')")
     public CustomerAddress create(UUID customerId, CreateCustomerAddressCommand command) {
         UUID companyId = requireCompany();
         Customer customer = requireCustomer(customerId, companyId);
@@ -114,7 +114,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('CUSTOMER_UPDATE')")
     public CustomerAddress update(UUID customerId, UUID addressId, UpdateCustomerAddressCommand command) {
         UUID companyId = requireCompany();
         Customer customer = requireCustomer(customerId, companyId);
@@ -161,7 +161,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
 
     @Override
     @Transactional
-    @PreAuthorize(DELETE_ONLY)
+    @PreAuthorize(DELETE_ONLY + " or hasAuthority('CUSTOMER_DELETE')")
     public void delete(UUID customerId, UUID addressId) {
         UUID companyId = requireCompany();
         Customer customer = requireCustomer(customerId, companyId);

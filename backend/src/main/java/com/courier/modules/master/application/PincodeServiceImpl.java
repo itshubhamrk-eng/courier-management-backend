@@ -101,7 +101,7 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
      */
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_CREATE')")
     public Pincode create(PincodeCommand command) {
         return withOwner(() -> {
             UUID companyId = requireCompany();
@@ -120,7 +120,7 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_UPDATE')")
     public Pincode update(UUID id, PincodeCommand command) {
         UUID companyId = requireCompany();
         Pincode saved = updateEntity(id, command.expectedVersion(), pincode -> {
@@ -191,7 +191,7 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
      */
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_READ')")
     public Optional<PincodeAreaLookupResult> lookupPostalArea(String pincode) {
         if (pincode == null || !pincode.matches("^[0-9]{4,10}$")) {
             throw new BusinessRuleException("Enter a valid pincode (4 to 10 digits) before looking up its area.");
@@ -214,21 +214,21 @@ public class PincodeServiceImpl extends AbstractMasterDataService<Pincode> imple
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_UPDATE')")
     public Pincode activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PINCODE_UPDATE')")
     public Pincode deactivate(UUID id) {
         return doDeactivate(id);
     }

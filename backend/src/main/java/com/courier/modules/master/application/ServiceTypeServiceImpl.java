@@ -35,7 +35,7 @@ public class ServiceTypeServiceImpl extends AbstractMasterDataService<ServiceTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_CREATE')")
     public ServiceType create(ServiceTypeCommand command) {
         ServiceType serviceType = new ServiceType();
         applyCommonFields(serviceType, command.code(), command.name(), command.description(),
@@ -46,7 +46,7 @@ public class ServiceTypeServiceImpl extends AbstractMasterDataService<ServiceTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public ServiceType update(UUID id, ServiceTypeCommand command) {
         return updateEntity(id, command.expectedVersion(), serviceType -> {
             applyCommonFields(serviceType, null, command.name(), command.description(),
@@ -71,21 +71,21 @@ public class ServiceTypeServiceImpl extends AbstractMasterDataService<ServiceTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public ServiceType activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public ServiceType deactivate(UUID id) {
         return doDeactivate(id);
     }

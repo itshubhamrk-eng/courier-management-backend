@@ -50,7 +50,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public List<CommunicationTemplate> list() {
         UUID companyId = requireCompany();
         seedMissingDefaults(companyId);
@@ -59,14 +59,14 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public CommunicationTemplate getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_CREATE')")
     public CommunicationTemplate create(CreateCommunicationTemplateCommand command) {
         UUID companyId = requireCompany();
         if (repository.findByCompanyIdAndEventTypeAndChannel(companyId, command.eventType(), command.channel())
@@ -94,7 +94,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationTemplate update(UUID id, UpdateCommunicationTemplateCommand command) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadOrThrow(id, companyId);
@@ -157,7 +157,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     }
 
     @Override
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public StarterTemplate starter(CommunicationEventType eventType, CommunicationChannel channel) {
         if (eventType == null || channel == null) {
             throw new BusinessRuleException("Event and channel are required.");
@@ -169,7 +169,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationTemplate resetToDefault(UUID id) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadOrThrow(id, companyId);
@@ -196,7 +196,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public CommunicationTemplate setStatus(UUID id, TemplateStatus status) {
         if (status == null) {
             throw new BusinessRuleException("Status is required.");
@@ -217,7 +217,7 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(READERS)
+    @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public RenderedPreview preview(UUID id) {
         CommunicationTemplate template = loadOrThrow(id, requireCompany());
         if (template.getEventType() == CommunicationEventType.DAILY_BUSINESS_SUMMARY) {

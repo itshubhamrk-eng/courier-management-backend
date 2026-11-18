@@ -60,7 +60,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('CUSTOMER_CREATE')")
     public Customer create(CreateCustomerCommand command) {
         UUID companyId = requireCompany();
 
@@ -113,7 +113,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('CUSTOMER_UPDATE') or hasAuthority('SHIPMENT_CREATE')")
     public Customer findOrCreateForBooking(String fullName, String mobile) {
         String trimmedMobile = trimOrNull(mobile);
         if (trimmedMobile == null || trimmedMobile.isBlank()) {
@@ -160,7 +160,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('CUSTOMER_UPDATE')")
     public Customer update(UUID id, UpdateCustomerCommand command) {
         UUID companyId = requireCompany();
         Customer customer = loadOrThrow(id, companyId);
@@ -225,7 +225,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    @PreAuthorize(LIFECYCLE)
+    @PreAuthorize(LIFECYCLE + " or hasAuthority('CUSTOMER_UPDATE')")
     public Customer activate(UUID id) {
         UUID companyId = requireCompany();
         Customer customer = loadOrThrow(id, companyId);
@@ -241,7 +241,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    @PreAuthorize(LIFECYCLE)
+    @PreAuthorize(LIFECYCLE + " or hasAuthority('CUSTOMER_UPDATE')")
     public Customer deactivate(UUID id) {
         UUID companyId = requireCompany();
         Customer customer = loadOrThrow(id, companyId);

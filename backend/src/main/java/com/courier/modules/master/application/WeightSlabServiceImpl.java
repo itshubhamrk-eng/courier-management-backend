@@ -58,7 +58,7 @@ public class WeightSlabServiceImpl extends AbstractMasterDataService<WeightSlab>
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_CREATE')")
     public WeightSlab create(WeightSlabCommand command) {
         WeightSlab slab = new WeightSlab();
         applyCommonFields(slab, command.code(), command.name(), command.description(),
@@ -69,7 +69,7 @@ public class WeightSlabServiceImpl extends AbstractMasterDataService<WeightSlab>
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public WeightSlab update(UUID id, WeightSlabCommand command) {
         return updateEntity(id, command.expectedVersion(), slab -> {
             applyCommonFields(slab, null, command.name(), command.description(),
@@ -94,21 +94,21 @@ public class WeightSlabServiceImpl extends AbstractMasterDataService<WeightSlab>
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public WeightSlab activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public WeightSlab deactivate(UUID id) {
         return doDeactivate(id);
     }

@@ -35,7 +35,7 @@ public class PaymentModeServiceImpl extends AbstractMasterDataService<PaymentMod
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_CREATE')")
     public PaymentMode create(PaymentModeCommand command) {
         PaymentMode paymentMode = new PaymentMode();
         applyCommonFields(paymentMode, command.code(), command.name(), command.description(),
@@ -46,7 +46,7 @@ public class PaymentModeServiceImpl extends AbstractMasterDataService<PaymentMod
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PaymentMode update(UUID id, PaymentModeCommand command) {
         return updateEntity(id, command.expectedVersion(), paymentMode -> {
             applyCommonFields(paymentMode, null, command.name(), command.description(),
@@ -71,21 +71,21 @@ public class PaymentModeServiceImpl extends AbstractMasterDataService<PaymentMod
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PaymentMode activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PaymentMode deactivate(UUID id) {
         return doDeactivate(id);
     }

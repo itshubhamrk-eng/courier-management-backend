@@ -58,7 +58,7 @@ public class AreaServiceImpl extends AbstractMasterDataService<Area> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_CREATE')")
     public Area create(AreaCommand command) {
         UUID companyId = requireCompany();
         requireCity(command.cityId(), companyId, true);
@@ -72,7 +72,7 @@ public class AreaServiceImpl extends AbstractMasterDataService<Area> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Area update(UUID id, AreaCommand command) {
         UUID companyId = requireCompany();
         return updateEntity(id, command.expectedVersion(), area -> {
@@ -101,21 +101,21 @@ public class AreaServiceImpl extends AbstractMasterDataService<Area> implements 
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Area activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('GLOBAL_MASTER_UPDATE')")
     public Area deactivate(UUID id) {
         return doDeactivate(id);
     }

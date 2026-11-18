@@ -35,7 +35,7 @@ public class PackageTypeServiceImpl extends AbstractMasterDataService<PackageTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_CREATE')")
     public PackageType create(PackageTypeCommand command) {
         PackageType packageType = new PackageType();
         applyCommonFields(packageType, command.code(), command.name(), command.description(),
@@ -46,7 +46,7 @@ public class PackageTypeServiceImpl extends AbstractMasterDataService<PackageTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PackageType update(UUID id, PackageTypeCommand command) {
         return updateEntity(id, command.expectedVersion(), packageType -> {
             applyCommonFields(packageType, null, command.name(), command.description(),
@@ -71,21 +71,21 @@ public class PackageTypeServiceImpl extends AbstractMasterDataService<PackageTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PackageType activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public PackageType deactivate(UUID id) {
         return doDeactivate(id);
     }

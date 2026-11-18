@@ -476,7 +476,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public Shipment update(UUID id, UpdateShipmentCommand command) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(id, companyId);
@@ -1287,7 +1287,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_DELETE')")
     public Shipment cancel(UUID id, String remarks) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(id, companyId);
@@ -1326,7 +1326,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public ShipmentDocument addDocument(UUID shipmentId, AddDocumentCommand command) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
@@ -1935,7 +1935,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_UPDATE')")
     public Shipment deliver(UUID shipmentId, DeliverCommand command) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
@@ -2011,7 +2011,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_UPDATE')")
     public DeliveryAttemptResult recordFailedDelivery(UUID shipmentId, FailedDeliveryCommand command) {
         UUID companyId = requireCompany();
         if (command == null || command.reason() == null) {
@@ -2292,7 +2292,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public void markPodApproved(UUID shipmentId) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
@@ -2319,7 +2319,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public ShipmentAsset attachPodAsset(UUID shipmentId, String kind, String url) {
         UUID companyId = requireCompany();
         loadOrThrow(shipmentId, companyId);
@@ -2336,7 +2336,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public String uploadShipmentImage(UUID shipmentId, UploadShipmentImageCommand command) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);
@@ -2389,7 +2389,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('SHIPMENT_UPDATE')")
     public String uploadPodFile(UUID shipmentId, UploadPodFileCommand command) {
         UUID companyId = requireCompany();
         Shipment shipment = loadOrThrow(shipmentId, companyId);

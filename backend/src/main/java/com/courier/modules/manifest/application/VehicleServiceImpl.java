@@ -38,7 +38,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('VEHICLE_CREATE')")
     public Vehicle create(CreateVehicleCommand command) {
         UUID companyId = requireCompany();
 
@@ -80,7 +80,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('VEHICLE_UPDATE')")
     public Vehicle update(UUID id, UpdateVehicleCommand command) {
         UUID companyId = requireCompany();
         Vehicle vehicle = loadOrThrow(id, companyId);
@@ -147,7 +147,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('VEHICLE_UPDATE')")
     public Vehicle activate(UUID id) {
         UUID companyId = requireCompany();
         Vehicle vehicle = loadOrThrow(id, companyId);
@@ -160,7 +160,7 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('VEHICLE_UPDATE')")
     public Vehicle deactivate(UUID id) {
         UUID companyId = requireCompany();
         Vehicle vehicle = loadOrThrow(id, companyId);

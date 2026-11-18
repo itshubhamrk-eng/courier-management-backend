@@ -35,7 +35,7 @@ public class VehicleTypeServiceImpl extends AbstractMasterDataService<VehicleTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_CREATE')")
     public VehicleType create(VehicleTypeCommand command) {
         VehicleType vehicleType = new VehicleType();
         applyCommonFields(vehicleType, command.code(), command.name(), command.description(),
@@ -46,7 +46,7 @@ public class VehicleTypeServiceImpl extends AbstractMasterDataService<VehicleTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public VehicleType update(UUID id, VehicleTypeCommand command) {
         return updateEntity(id, command.expectedVersion(), vehicleType -> {
             applyCommonFields(vehicleType, null, command.name(), command.description(),
@@ -71,21 +71,21 @@ public class VehicleTypeServiceImpl extends AbstractMasterDataService<VehicleTyp
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public VehicleType activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('MASTER_DATA_UPDATE')")
     public VehicleType deactivate(UUID id) {
         return doDeactivate(id);
     }

@@ -50,7 +50,7 @@ public class WhatsAppRateSyncServiceImpl implements WhatsAppRateSyncService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public FetchedRates fetchAndSave() {
         UUID companyId = CompanyContext.getCompanyId().orElseThrow(() -> new BusinessRuleException(
                 "No company is bound to this request."));
