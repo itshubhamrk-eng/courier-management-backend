@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import {
   ApexAxisChartSeries, ApexChart, ApexDataLabels, ApexFill, ApexGrid, ApexLegend,
   ApexStroke, ApexTooltip, ApexXAxis, ApexYAxis, NgApexchartsModule
@@ -43,7 +43,7 @@ interface ChartVm {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgApexchartsModule, MatIconModule, UiCard],
   template: `
-    <app-card [title]="title()" [subtitle]="subtitle()">
+    <app-card [title]="title()" [subtitle]="subtitle()" [class.chart-clickable]="clickable()">
       @if (loading()) {
         <div class="chart-skeleton" [style.height.px]="height()"></div>
       } @else if (isEmpty()) {
@@ -74,6 +74,7 @@ interface ChartVm {
     .chart-skeleton { border-radius:var(--r-card);
       background:linear-gradient(90deg,var(--surface-muted),var(--surface-border),var(--surface-muted));
       background-size:200% 100%; animation:sh 1.3s infinite; }
+    .chart-clickable { cursor:pointer; }
     @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   `]
 })
@@ -90,6 +91,9 @@ export class ChartCard {
   /** Prefixed to y-axis / tooltip values, e.g. a currency symbol. */
   readonly valuePrefix = input('');
   readonly stacked = input(false);
+  /** When true a click on a point/bar emits {@link pointPick} with the series name and x label. */
+  readonly clickable = input(false);
+  readonly pointPick = output<{ series: string; label: string; index: number }>();
 
   readonly isEmpty = computed(() =>
     this.data().length === 0 || this.data().every((s) => s.points.length === 0)
@@ -108,7 +112,15 @@ export class ChartCard {
       chart: {
         type: kind, height: this.height(), stacked: this.stacked(),
         fontFamily: 'inherit', foreColor: INK[mode], toolbar: { show: false },
-        animations: { enabled: true, speed: 400 }
+        animations: { enabled: true, speed: 400 },
+        events: this.clickable() ? {
+          click: (_e: unknown, _c: unknown, cfg: { seriesIndex: number; dataPointIndex: number }) => {
+            if (cfg.dataPointIndex == null || cfg.dataPointIndex < 0) return;
+            const s = this.data()[Math.max(cfg.seriesIndex, 0)];
+            const label = s?.points[cfg.dataPointIndex]?.label;
+            if (s && label) this.pointPick.emit({ series: s.name, label, index: cfg.dataPointIndex });
+          }
+        } : {}
       },
       colors,
       xaxis: {

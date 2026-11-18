@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { ApexChart, ApexDataLabels, ApexLegend, ApexTooltip, NgApexchartsModule } from 'ng-apexcharts';
 import { MatIconModule } from '@angular/material/icon';
 import { UiCard } from '@shared/components/ui-card/ui-card';
@@ -53,6 +53,7 @@ interface PieVm {
     </app-card>
   `,
   styles: [`
+    :host { cursor:pointer; }
     .dsp-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:8px; min-height:220px; color:var(--content-muted); }
     .dsp-empty mat-icon { font-size:39px; width:36px; height:36px; opacity:.45; }
@@ -67,6 +68,8 @@ export class DeliveryStatusPie {
   readonly delivered = input(0);
   readonly pending = input(0);
   readonly loading = input(false);
+  /** Emits the clicked slice: 0 = Delivered, 1 = Pending. */
+  readonly slicePick = output<number>();
 
   readonly isEmpty = computed(() => this.delivered() + this.pending() === 0);
 
@@ -75,7 +78,12 @@ export class DeliveryStatusPie {
     return {
       series: [this.delivered(), this.pending()],
       labels: LABELS,
-      chart: { type: 'donut', height: 260, fontFamily: 'inherit', foreColor: INK[mode] },
+      chart: {
+        type: 'donut', height: 260, fontFamily: 'inherit', foreColor: INK[mode],
+        events: { dataPointSelection: (_e: unknown, _c: unknown, cfg: { dataPointIndex: number }) => {
+          if (cfg.dataPointIndex >= 0) this.slicePick.emit(cfg.dataPointIndex);
+        } }
+      },
       colors: COLORS[mode],
       dataLabels: { enabled: true, style: { fontSize: '14px' } },
       legend: { show: true, position: 'bottom', fontSize: '15px' },

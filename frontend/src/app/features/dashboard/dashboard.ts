@@ -36,6 +36,32 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
  * figures come exclusively from DashboardService (API only). Loading, empty and error
  * states are all handled — no mock data anywhere.
  */
+const DELIVERED_STATUSES = 'DELIVERED';
+const IN_TRANSIT_STATUSES = 'DISPATCHED,IN_SCAN,OUT_FOR_DELIVERY';
+const PENDING_STATUSES = 'BOOKED,READY_FOR_MANIFEST,MANIFEST_CREATED';
+
+const isoDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Booking-date range of the current month, as the backend counts month-to-date. */
+function monthRange(): { bookingDateFrom: string; bookingDateTo: string } {
+  const now = new Date();
+  return { bookingDateFrom: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), bookingDateTo: isoDate(now) };
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Chart x labels are "d MMM" (no year) over the trailing days — resolve to the latest such date. */
+function dayFromLabel(label: string): string | null {
+  const m = /^(\d{1,2})\s+([A-Za-z]{3})$/.exec(label.trim());
+  const month = m ? MONTHS.indexOf(m[2]) : -1;
+  if (!m || month < 0) return null;
+  const now = new Date();
+  let d = new Date(now.getFullYear(), month, Number(m[1]));
+  if (d.getTime() > now.getTime() + 86_400_000) d = new Date(now.getFullYear() - 1, month, Number(m[1]));
+  return isoDate(d);
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -106,7 +132,8 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
                 subtitle="This month, delivered vs pending"
                 [loading]="loading()"
                 [delivered]="data()?.statistics?.delivered ?? 0"
-                [pending]="data()?.statistics?.pending ?? 0" />
+                [pending]="data()?.statistics?.pending ?? 0"
+                (slicePick)="openDeliverySlice($event)" />
             } @else if (layout().sections.branchOverview) {
               <app-pod-status-pie title="POD Overview — This Branch"
                 subtitle="This branch, current state"
@@ -114,17 +141,20 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
             }
             @if (layout().sections.shipmentTrend) {
               <app-chart-card title="Shipment Trend" subtitle="Bookings over time" type="area"
-                [colorKeys]="['brand']" [loading]="loading()" [data]="data()?.charts?.shipmentTrend ?? []" />
+                [colorKeys]="['brand']" [loading]="loading()" [data]="data()?.charts?.shipmentTrend ?? []"
+                [clickable]="true" (pointPick)="openTrendPoint($event)" />
             }
             @if (layout().sections.deliveryPerformance) {
               <app-chart-card title="Delivery Performance" subtitle="Delivered vs in-transit vs pending" type="bar"
                 [stacked]="true" [colorKeys]="['success','info','warning']"
-                [loading]="loading()" [data]="data()?.charts?.deliveryPerformance ?? []" />
+                [loading]="loading()" [data]="data()?.charts?.deliveryPerformance ?? []"
+                [clickable]="true" (pointPick)="openTrendPoint($event)" />
             }
             @if (layout().sections.revenueTrend) {
               <app-chart-card title="Revenue Trend" subtitle="Collections over time" type="area"
                 [colorKeys]="['success']" valuePrefix="₹"
-                [loading]="loading()" [data]="data()?.charts?.revenueTrend ?? []" />
+                [loading]="loading()" [data]="data()?.charts?.revenueTrend ?? []"
+                [clickable]="true" (pointPick)="openTrendPoint($event)" />
             }
           </section>
         }
@@ -306,14 +336,27 @@ export class Dashboard implements OnInit {
     const l = t.link;
     if (!l) return;
     const query: Record<string, string> = { ...(l.query ?? {}) };
-    if (l.month) {
-      const now = new Date();
-      const iso = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      query['bookingDateFrom'] = iso(new Date(now.getFullYear(), now.getMonth(), 1));
-      query['bookingDateTo'] = iso(now);
-    }
+    if (l.month) Object.assign(query, monthRange());
     this.router.navigate([l.route], { queryParams: query });
+  }
+
+  /** Delivery pie: Delivered / Pending slice → that month's shipments in those statuses. */
+  openDeliverySlice(index: number): void {
+    const status = index === 0 ? DELIVERED_STATUSES : PENDING_STATUSES;
+    this.router.navigate(['/shipments'], { queryParams: { status, ...monthRange() } });
+  }
+
+  /** Trend charts: a point is one booking day, so open that day's shipments (narrowed to the
+   *  clicked series' statuses on the Delivery Performance bars). */
+  openTrendPoint(p: { series: string; label: string }): void {
+    const day = dayFromLabel(p.label);
+    if (!day) return;
+    const status = p.series === 'Delivered' ? DELIVERED_STATUSES
+      : p.series === 'In Transit' ? IN_TRANSIT_STATUSES
+      : p.series === 'Pending' ? PENDING_STATUSES : null;
+    this.router.navigate(['/shipments'], {
+      queryParams: { ...(status ? { status } : {}), bookingDateFrom: day, bookingDateTo: day }
+    });
   }
 
   onAction(a: QuickActionDef): void {
