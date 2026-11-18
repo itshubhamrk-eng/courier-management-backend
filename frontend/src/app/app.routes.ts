@@ -421,6 +421,10 @@ export const routes: Routes = [
       // on the backend) for reads, COMPANY_ADMIN-only for writes, mirroring Rate Master's
       // own split. 'new' declared before ':id' so it isn't swallowed by the parameter.
       {
+        path: 'legacy-import', title: 'Legacy Import', canActivate: [roleGuard], data: { roles: [AppRole.COMPANY_ADMIN] },
+        loadComponent: () => import('@features/legacy-import/legacy-import-page').then((m) => m.LegacyImportPage)
+      },
+      {
         path: 'district-level-freight', title: 'District Level Freight', canActivate: [roleGuard], data: { roles: RATE_READERS },
         loadComponent: () => import('@features/district-level-freight/district-freight-list').then((m) => m.DistrictFreightList)
       },

@@ -402,5 +402,8 @@ export const NAVIGATION: NavNode[] = [
     ]
   },
 
+  // One-off import of the old software's consignment export as history-only shipments.
+  { id: 'legacy-import', title: 'Legacy Import', icon: 'history', route: '/legacy-import', permission: 'LEGACY_IMPORT_READ', roles: COMPANY_ONLY, order: 7.8 },
+
   { id: 'settings', title: 'Settings', icon: 'settings', route: '/settings', permission: 'SETTINGS_READ', roles: COMPANY_ONLY, order: 8 }
 ];

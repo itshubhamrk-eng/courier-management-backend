@@ -95,6 +95,11 @@ export const API = {
   districtLevelFreightImportPreview: '/district-level-freight/import/preview',
   districtLevelFreightImport: '/district-level-freight/import',
   districtLevelFreightCalculate: '/district-level-freight/calculate',
+  /** Legacy consignment import — history-only shipments from the old software's export. */
+  legacyImportPreview: '/legacy-import/preview',
+  legacyImportCommit: '/legacy-import/commit',
+  legacyImportOriginMap: '/legacy-import/origin-map',
+  legacyImportBatches: '/legacy-import/batches',
   /** Ticket Support — lifecycle, conversation, categories, SLA rules. See MEMORY. */
   supportTickets: '/support/tickets',
   supportCategories: '/support/categories',
