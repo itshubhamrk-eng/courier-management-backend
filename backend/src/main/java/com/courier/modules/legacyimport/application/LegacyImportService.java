@@ -87,6 +87,11 @@ public class LegacyImportService {
                 count(rows, RowOutcome.INVALID), origins, rows);
     }
 
+    @Transactional(readOnly = true)
+    public List<LegacyImportBatch> listBatches() {
+        return batchRepository.findAllByCompanyIdOrderByCreatedAtDesc(requireCompany());
+    }
+
     /** Remembers which of our branches a legacy "From" text books into. */
     @Transactional
     public void saveOriginMapping(String originText, UUID branchId) {
