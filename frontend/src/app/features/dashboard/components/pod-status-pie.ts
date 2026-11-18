@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { ApexChart, ApexDataLabels, ApexLegend, ApexTooltip, NgApexchartsModule } from 'ng-apexcharts';
 import { MatIconModule } from '@angular/material/icon';
 import { UiCard } from '@shared/components/ui-card/ui-card';
@@ -56,6 +56,7 @@ interface PieVm {
     </app-card>
   `,
   styles: [`
+    :host { cursor:pointer; }
     .pod-pie-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
       gap:8px; min-height:220px; color:var(--content-muted); }
     .pod-pie-empty mat-icon { font-size:39px; width:36px; height:36px; opacity:.45; }
@@ -69,6 +70,8 @@ export class PodStatusPie {
   readonly tone = input<'brand' | 'warning' | 'danger' | 'info' | 'success' | 'none'>('none');
   readonly data = input<PodOverview | null>(null);
   readonly loading = input(false);
+  /** Emits the clicked slice: 0 Pending Upload, 1 Pending Verification, 2 Approved, 3 Rejected. */
+  readonly slicePick = output<number>();
 
   readonly isEmpty = computed(() => {
     const d = this.data();
@@ -83,7 +86,12 @@ export class PodStatusPie {
     return {
       series,
       labels: LABELS,
-      chart: { type: 'donut', height: 260, fontFamily: 'inherit', foreColor: INK[mode] },
+      chart: {
+        type: 'donut', height: 260, fontFamily: 'inherit', foreColor: INK[mode],
+        events: { dataPointSelection: (_e: unknown, _c: unknown, cfg: { dataPointIndex: number }) => {
+          if (cfg.dataPointIndex >= 0) this.slicePick.emit(cfg.dataPointIndex);
+        } }
+      },
       colors: COLORS[mode],
       dataLabels: { enabled: true, style: { fontSize: '14px' } },
       legend: { show: true, position: 'bottom', fontSize: '15px' },

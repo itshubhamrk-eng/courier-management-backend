@@ -183,13 +183,20 @@ public class PodVerificationController {
     @GetMapping("/api/v1/pod/delivered")
     @Operation(summary = "POD Review — every delivered shipment, with its latest POD verification if any",
             description = "Same filters as GET /shipments (branch, date range, search) — "
-                    + "status is always forced to DELIVERED regardless of what's passed. "
+                    + "status is always forced to DELIVERED regardless of what's passed, unless "
+                    + "podStatus (NONE, PENDING, PASS or FAIL) is given: then the list is the POD "
+                    + "Overview's own population (OUT_FOR_DELIVERY and DELIVERED) narrowed to that "
+                    + "bucket, so it always matches the dashboard pie slice it was opened from. "
                     + "Every delivered shipment appears exactly once, whether or not POD Auto "
                     + "Verification ever ran against it.")
     public ApiResponse<PageResponse<DeliveredShipmentPodResponse>> delivered(
             @Valid @ParameterObject ShipmentSearchRequest search,
             @ParameterObject @PageableDefault(size = 20, sort = "createdDate", direction = Sort.Direction.DESC)
-            Pageable pageable) {
+            Pageable pageable,
+            @RequestParam(required = false) String podStatus) {
+        if (podStatus != null && !podStatus.isBlank()) {
+            return ApiResponse.success(deliveredByPodStatus(search, sanitise(pageable), podStatus.trim().toUpperCase()));
+        }
         ShipmentCriteria base = shipmentMapper.toCriteria(search);
         ShipmentCriteria criteria = new ShipmentCriteria(Set.of(ShipmentStatus.DELIVERED),
                 base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
@@ -207,6 +214,62 @@ public class PodVerificationController {
         return ApiResponse.success(PageResponse.from(page, s -> mapper.toDeliveredRow(
                 s, verifications.get(s.getId()), receivedAt.get(s.getId()), deliveredAt.get(s.getId()),
                 podAssets.getOrDefault(s.getId(), List.of()))));
+    }
+
+
+    /** The POD Overview pie's buckets as a list: every OUT_FOR_DELIVERY/DELIVERED shipment
+     *  (the pie's own population) whose latest verification is in the requested bucket —
+     *  {@code NONE} meaning no POD run yet ("Pending Upload"). Filtered in memory over the
+     *  caller's already-scoped candidates, then sliced to the requested page. */
+    private PageResponse<DeliveredShipmentPodResponse> deliveredByPodStatus(
+            ShipmentSearchRequest search, Pageable pageable, String podStatus) {
+        com.courier.modules.pod.domain.PodVerificationStatus wanted = null;
+        if (!"NONE".equals(podStatus)) {
+            try {
+                wanted = com.courier.modules.pod.domain.PodVerificationStatus.valueOf(podStatus);
+            } catch (IllegalArgumentException e) {
+                throw new BusinessRuleException("podStatus must be one of NONE, PENDING, PASS, FAIL.");
+            }
+        }
+        ShipmentCriteria base = shipmentMapper.toCriteria(search);
+        ShipmentCriteria criteria = new ShipmentCriteria(
+                Set.of(ShipmentStatus.DELIVERED, ShipmentStatus.OUT_FOR_DELIVERY),
+                base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
+                base.manifestId(), base.bookingDateFrom(), base.bookingDateTo(),
+                base.deliveredDateFrom(), base.deliveredDateTo(), base.paymentModeId(), base.search(),
+                base.toCity(), base.unassignedDeliveryBranch());
+
+        List<Shipment> candidates = new java.util.ArrayList<>();
+        Pageable chunk = org.springframework.data.domain.PageRequest.of(0, 500,
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Shipment> chunkPage;
+        do {
+            chunkPage = shipmentService.search(criteria, chunk);
+            candidates.addAll(chunkPage.getContent());
+            chunk = chunk.next();
+        } while (chunkPage.hasNext());
+
+        Map<UUID, PodVerification> latest = podVerificationService.latestByShipmentIds(
+                candidates.stream().map(Shipment::getId).toList());
+        final com.courier.modules.pod.domain.PodVerificationStatus bucket = wanted;
+        List<Shipment> matching = candidates.stream()
+                .filter(s -> {
+                    PodVerification v = latest.get(s.getId());
+                    return bucket == null ? v == null : v != null && v.getVerificationStatus() == bucket;
+                })
+                .toList();
+
+        int from = (int) Math.min(pageable.getOffset(), matching.size());
+        int to = Math.min(from + pageable.getPageSize(), matching.size());
+        List<Shipment> slice = matching.subList(from, to);
+        List<UUID> ids = slice.stream().map(Shipment::getId).toList();
+        Map<UUID, List<ShipmentAsset>> podAssets = shipmentService.podAssetsFor(ids);
+        Map<UUID, Instant> deliveredAt = shipmentService.deliveredAtFor(ids);
+        Map<UUID, Instant> receivedAt = shipmentService.receivedAtFor(ids);
+        Page<Shipment> page = new org.springframework.data.domain.PageImpl<>(slice, pageable, matching.size());
+        return PageResponse.from(page, s -> mapper.toDeliveredRow(
+                s, latest.get(s.getId()), receivedAt.get(s.getId()), deliveredAt.get(s.getId()),
+                podAssets.getOrDefault(s.getId(), List.of())));
     }
 
     private Pageable sanitise(Pageable pageable) {

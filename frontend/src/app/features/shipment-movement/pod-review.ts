@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -41,6 +42,12 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
           <p class="text-caption">Every delivered order and its captured proof of delivery — PENDING ones need a decision.</p></div>
         </div>
         @if (!selected()) {
+          <div class="pod-filter" role="group" aria-label="Filter by POD status">
+            @for (f of podFilters; track f.value) {
+              <button type="button" class="pod-filter__chip" [class.is-active]="podStatus() === f.value"
+                (click)="setPodStatus(f.value)">{{ f.label }}</button>
+            }
+          </div>
           <div class="page__actions">
             <app-search placeholder="Search tracking no. or shipment no…" (changed)="onSearch($event)" />
             <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
@@ -52,7 +59,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
         @if (loading()) {
           <app-loader [minHeight]="120" caption="Loading…" />
         } @else if (!page().content.length) {
-          <app-card><p class="empty">No delivered orders yet.</p></app-card>
+          <app-card><p class="empty">{{ podStatus() ? 'No orders in this POD status.' : 'No delivered orders yet.' }}</p></app-card>
         } @else {
           <app-card>
             <div class="tbl__wrap">
@@ -167,6 +174,10 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
     </div>
   `,
   styles: [`
+    .pod-filter { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; }
+    .pod-filter__chip { border:1px solid var(--surface-border); background:var(--surface); color:var(--content-muted);
+      padding:6px 14px; border-radius:999px; font:600 14px var(--font-sans); cursor:pointer; }
+    .pod-filter__chip.is-active { background:var(--brand-600); border-color:var(--brand-600); color:#fff; }
     .page__head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     .page__actions { display:flex; align-items:center; gap:10px; }
     .empty { font:400 17px var(--font-sans); color:var(--content-muted); text-align:center; padding:20px; }
@@ -203,6 +214,7 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
 })
 export class PodReview implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthService);
@@ -221,6 +233,14 @@ export class PodReview implements OnInit {
    *  Delivery worklist and Shipment list already apply. */
   private readonly myBranchId = this.auth.user()?.branchId ?? null;
 
+  /** The POD Overview buckets, in the dashboard pie's own order. Empty = every delivered order. */
+  readonly podFilters: { value: string; label: string }[] = [
+    { value: '', label: 'All delivered' }, { value: 'NONE', label: 'Pending Upload' },
+    { value: 'PENDING', label: 'Pending Verification' }, { value: 'PASS', label: 'Approved' },
+    { value: 'FAIL', label: 'Rejected' }
+  ];
+  readonly podStatus = signal('');
+
   readonly page = signal<Page<DeliveredShipmentPod>>(emptyPage<DeliveredShipmentPod>());
   readonly loading = signal(true);
   readonly selected = signal<DeliveredShipmentPod | null>(null);
@@ -238,6 +258,18 @@ export class PodReview implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Operations' }, { label: 'POD Review' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+    const linked = (this.route.snapshot.queryParamMap.get('podStatus') ?? '').toUpperCase();
+    if (this.podFilters.some((f) => f.value && f.value === linked)) {
+      this.podStatus.set(linked);
+      this.query = { ...this.query, podStatus: linked };
+    }
+    this.load();
+  }
+
+  setPodStatus(value: string): void {
+    this.podStatus.set(value);
+    const { podStatus: _drop, ...rest } = this.query;
+    this.query = { ...rest, page: 0, ...(value ? { podStatus: value } : {}) };
     this.load();
   }
 

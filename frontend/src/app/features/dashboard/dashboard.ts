@@ -127,7 +127,8 @@ function dayFromLabel(label: string): string | null {
             @if (layout().sections.companyOverview) {
               <app-pod-status-pie title="POD Overview — All Branches"
                 subtitle="Every branch, current state"
-                [loading]="loading()" [data]="data()?.companyOverview?.podOverview ?? null" />
+                [loading]="loading()" [data]="data()?.companyOverview?.podOverview ?? null"
+                (slicePick)="openPodSlice($event)" />
               <app-delivery-status-pie title="Delivery Status — All Branches"
                 subtitle="This month, delivered vs pending"
                 [loading]="loading()"
@@ -137,7 +138,8 @@ function dayFromLabel(label: string): string | null {
             } @else if (layout().sections.branchOverview) {
               <app-pod-status-pie title="POD Overview — This Branch"
                 subtitle="This branch, current state"
-                [loading]="loading()" [data]="data()?.branchOverview?.podOverview ?? null" />
+                [loading]="loading()" [data]="data()?.branchOverview?.podOverview ?? null"
+                (slicePick)="openPodSlice($event)" />
             }
             @if (layout().sections.shipmentTrend) {
               <app-chart-card title="Shipment Trend" subtitle="Bookings over time" type="area"
@@ -338,6 +340,12 @@ export class Dashboard implements OnInit {
     const query: Record<string, string> = { ...(l.query ?? {}) };
     if (l.month) Object.assign(query, monthRange());
     this.router.navigate([l.route], { queryParams: query });
+  }
+
+  /** POD pie: each slice opens POD Review filtered to exactly that bucket. */
+  openPodSlice(index: number): void {
+    const podStatus = ['NONE', 'PENDING', 'PASS', 'FAIL'][index];
+    if (podStatus) this.router.navigate(['/movement/pod-review'], { queryParams: { podStatus } });
   }
 
   /** Delivery pie: Delivered / Pending slice → that month's shipments in those statuses. */
