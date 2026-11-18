@@ -39,6 +39,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     Optional<Shipment> findByCompanyIdAndTrackingNumber(UUID companyId, String trackingNumber);
 
+    /** Bulk existence check for the legacy consignment import. */
+    List<Shipment> findAllByCompanyIdAndTrackingNumberIn(UUID companyId, Collection<String> trackingNumbers);
+
     /** Shipment numbers are unique per company (see {@link #existsByCompanyIdAndShipmentNumber}). */
     Optional<Shipment> findByCompanyIdAndShipmentNumber(UUID companyId, String shipmentNumber);
 
