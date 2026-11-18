@@ -66,7 +66,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_READ')")
     public List<InvoiceSummary> search(UUID customerId, InvoiceStatus status, ApprovalStatus approval, LocalDate from, LocalDate to, String search) {
         UUID company = requireCompany();
         String pattern = search == null || search.isBlank() ? null : "%" + search.trim().toLowerCase() + "%";
@@ -77,7 +77,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_READ')")
     public InvoiceView get(UUID invoiceId) {
         UUID company = requireCompany();
         return view(company, load(invoiceId, company));
@@ -85,7 +85,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_READ')")
     public UnbilledSummary unbilled(UUID customerId, LocalDate asOf) {
         requireCompany();
         List<CustomerInvoiceGenerator.Unbilled> items = generator.unbilled(customerId, asOf == null ? today() : asOf);
@@ -100,7 +100,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_CREATE')")
     public InvoiceView generate(UUID customerId, LocalDate asOf) {
         UUID company = requireCompany();
         CustomerInvoice invoice = generator.generate(customerId, asOf == null ? today() : asOf, InvoiceSource.MANUAL)
@@ -109,7 +109,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
     }
 
     @Override
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_CREATE') or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public int runCycleNow() {
         requireCompany();
         return cycleService.runForBoundCompany(today());
@@ -117,7 +117,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView recordPayment(UUID invoiceId, BigDecimal amount, LocalDate paidOn, PaymentMethod method,
                                      String reference, String remarks, String proofUrl, String proofName) {
         UUID company = requireCompany();
@@ -137,7 +137,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView markPaid(UUID invoiceId, LocalDate paidOn, PaymentMethod method, String reference, String remarks,
                                 String proofUrl, String proofName) {
         UUID company = requireCompany();
@@ -150,7 +150,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView reversePayment(UUID invoiceId, UUID paymentId) {
         UUID company = requireCompany();
         CustomerInvoice invoice = load(invoiceId, company);
@@ -168,7 +168,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView attachProof(UUID invoiceId, UUID paymentId, String proofUrl, String proofName) {
         UUID company = requireCompany();
         CustomerInvoice invoice = load(invoiceId, company);
@@ -186,7 +186,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
     }
 
     @Override
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public UploadedProof uploadProof(UUID invoiceId, byte[] content, String originalName, String contentType) {
         UUID company = requireCompany();
         load(invoiceId, company);
@@ -209,7 +209,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView approve(UUID invoiceId) {
         UUID company = requireCompany();
         CustomerInvoice invoice = load(invoiceId, company);
@@ -227,7 +227,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView resendEmail(UUID invoiceId) {
         UUID company = requireCompany();
         CustomerInvoice invoice = load(invoiceId, company);
@@ -267,7 +267,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public InvoiceView cancel(UUID invoiceId) {
         UUID company = requireCompany();
         CustomerInvoice invoice = load(invoiceId, company);

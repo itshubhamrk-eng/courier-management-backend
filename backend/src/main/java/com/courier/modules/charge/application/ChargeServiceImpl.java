@@ -56,7 +56,7 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_CREATE')")
     public Charge create(CreateChargeCommand command) {
         UUID companyId = requireCompany();
         requireServiceTypeExists(command.serviceTypeId());
@@ -80,7 +80,7 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public Charge update(UUID id, UpdateChargeCommand command) {
         UUID companyId = requireCompany();
         Charge charge = loadOrThrow(id, companyId);
@@ -105,14 +105,14 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_READ')")
     public Charge getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_READ')")
     public Page<Charge> search(ChargeCriteria criteria, Pageable pageable) {
         ChargeCriteria safe = criteria == null ? ChargeCriteria.none() : criteria;
         return repository.findAll(ChargeSpecifications.matching(safe), pageable);
@@ -120,7 +120,7 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public Charge activate(UUID id) {
         UUID companyId = requireCompany();
         Charge charge = loadOrThrow(id, companyId);
@@ -136,7 +136,7 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public Charge deactivate(UUID id) {
         UUID companyId = requireCompany();
         Charge charge = loadOrThrow(id, companyId);
@@ -152,7 +152,7 @@ public class ChargeServiceImpl implements ChargeService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_DELETE')")
     public void delete(UUID id) {
         UUID companyId = requireCompany();
         Charge charge = loadOrThrow(id, companyId);

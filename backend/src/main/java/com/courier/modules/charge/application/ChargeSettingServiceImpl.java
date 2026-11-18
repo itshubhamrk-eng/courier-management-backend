@@ -53,7 +53,7 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_CREATE')")
     public ChargeSetting create(CreateChargeSettingCommand command) {
         UUID companyId = requireCompany();
         Charge charge = requireCharge(command.chargeId());
@@ -85,7 +85,7 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public ChargeSetting update(UUID id, UpdateChargeSettingCommand command) {
         UUID companyId = requireCompany();
         ChargeSetting setting = loadOrThrow(id, companyId);
@@ -115,14 +115,14 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_READ')")
     public ChargeSetting getById(UUID id) {
         return loadOrThrow(id, requireCompany());
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_READ')")
     public List<ChargeSetting> listByCharge(UUID chargeId) {
         UUID companyId = requireCompany();
         requireCharge(chargeId);
@@ -131,7 +131,7 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public ChargeSetting activate(UUID id) {
         UUID companyId = requireCompany();
         ChargeSetting setting = loadOrThrow(id, companyId);
@@ -147,7 +147,7 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_UPDATE')")
     public ChargeSetting deactivate(UUID id) {
         UUID companyId = requireCompany();
         ChargeSetting setting = loadOrThrow(id, companyId);
@@ -162,7 +162,7 @@ public class ChargeSettingServiceImpl implements ChargeSettingService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('CHARGE_DELETE')")
     public void delete(UUID id) {
         UUID companyId = requireCompany();
         ChargeSetting setting = loadOrThrow(id, companyId);

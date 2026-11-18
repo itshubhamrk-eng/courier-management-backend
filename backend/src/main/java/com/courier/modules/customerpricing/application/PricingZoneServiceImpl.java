@@ -70,7 +70,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_CREATE')")
     public PricingZoneView create(UUID customerId, String zoneName, String description, FallbackScope fallbackScope,
                                   List<LocationInput> locationInputs) {
         UUID companyId = requireCompany();
@@ -108,7 +108,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_UPDATE')")
     public PricingZoneView update(UUID zoneId, String zoneName, String description, Long expectedVersion) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
@@ -154,7 +154,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_CREATE')")
     public PricingZoneView addLocation(UUID zoneId, LocationInput input) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
@@ -167,7 +167,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_DELETE')")
     public PricingZoneView removeLocation(UUID zoneId, UUID locationId) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
@@ -183,7 +183,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_UPDATE')")
     public PricingZoneView activate(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
@@ -198,7 +198,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_UPDATE')")
     public PricingZoneView deactivate(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);
@@ -213,7 +213,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PRICING_ZONE_DELETE')")
     public void delete(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = load(zoneId, companyId);

@@ -55,7 +55,7 @@ public class RouteServiceImpl extends AbstractMasterDataService<Route> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('ROUTE_MASTER_CREATE')")
     public Route create(RouteCommand command) {
         UUID companyId = requireCompany();
         requireBranch(command.bookingBranchId(), companyId, "booking", true);
@@ -70,7 +70,7 @@ public class RouteServiceImpl extends AbstractMasterDataService<Route> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('ROUTE_MASTER_UPDATE')")
     public Route update(UUID id, RouteCommand command) {
         UUID companyId = requireCompany();
         return updateEntity(id, command.expectedVersion(), route -> {
@@ -103,7 +103,7 @@ public class RouteServiceImpl extends AbstractMasterDataService<Route> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('ROUTE_MASTER_DELETE')")
     public void delete(UUID id) {
         doDelete(id);
     }
@@ -126,14 +126,14 @@ public class RouteServiceImpl extends AbstractMasterDataService<Route> implement
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('ROUTE_MASTER_UPDATE')")
     public Route activate(UUID id) {
         return doActivate(id);
     }
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('ROUTE_MASTER_UPDATE')")
     public Route deactivate(UUID id) {
         return doDeactivate(id);
     }

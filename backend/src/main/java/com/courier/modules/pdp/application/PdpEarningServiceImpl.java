@@ -112,7 +112,7 @@ public class PdpEarningServiceImpl implements PdpEarningService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_UPDATE')")
     public PdpEarning reprice(UUID earningId) {
         UUID companyId = requireCompany();
         PdpEarning e = earnings.findByIdWithinCompany(earningId, companyId)

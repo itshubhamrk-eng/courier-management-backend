@@ -57,7 +57,7 @@ public class PickupServiceImpl implements PickupService {
 
     @Override
     @Transactional
-    @PreAuthorize(STAFF)
+    @PreAuthorize(STAFF + " or hasAuthority('PICKUP_CREATE')")
     public PickupRequest create(SaveCommand c) {
         UUID companyId = requireCompany();
         PickupRequest p = PickupRequest.builder().pickupNo(nextPickupNo(companyId)).build();
@@ -75,7 +75,7 @@ public class PickupServiceImpl implements PickupService {
 
     @Override
     @Transactional
-    @PreAuthorize(STAFF)
+    @PreAuthorize(STAFF + " or hasAuthority('PICKUP_UPDATE')")
     public PickupRequest update(UUID id, SaveCommand c) {
         PickupRequest p = load(id);
         if (p.getStatus() != PickupStatus.REQUESTED && p.getStatus() != PickupStatus.ASSIGNED) {
@@ -127,7 +127,7 @@ public class PickupServiceImpl implements PickupService {
 
     @Override
     @Transactional
-    @PreAuthorize(STAFF)
+    @PreAuthorize(STAFF + " or hasAuthority('PICKUP_UPDATE')")
     public PickupRequest assign(UUID id, UUID pdpBranchId) {
         PickupRequest p = load(id);
         requirePartner(pdpBranchId);
@@ -143,7 +143,7 @@ public class PickupServiceImpl implements PickupService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(STAFF)
+    @PreAuthorize(STAFF + " or hasAuthority('PICKUP_UPDATE')")
     public java.util.Optional<UUID> suggestPartner(UUID id) {
         PickupRequest p = load(id);
         return coverage.findByPincode(p.getPincode())
@@ -245,7 +245,7 @@ public class PickupServiceImpl implements PickupService {
 
     @Override
     @Transactional
-    @PreAuthorize(STAFF)
+    @PreAuthorize(STAFF + " or hasAuthority('PICKUP_UPDATE')")
     public PickupRequest cancel(UUID id, String reason) {
         PickupRequest p = load(id);
         p.setCancelReason(requireReason(reason, "A reason is required to cancel a pickup."));

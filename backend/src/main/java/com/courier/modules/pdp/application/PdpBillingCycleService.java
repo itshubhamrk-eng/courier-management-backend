@@ -61,14 +61,14 @@ public class PdpBillingCycleService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_CREATE') or hasAuthority('PDP_BILLING_UPDATE')")
     public List<ScheduleRow> schedule(LocalDate today) {
         UUID company = requireCompany();
         return partners(company).stream().map(p -> row(company, p, today)).toList();
     }
 
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_UPDATE')")
     public BillingFrequency setFrequency(UUID branchId, BillingFrequency frequency) {
         UUID company = requireCompany();
         Branch partner = branchService.getById(branchId);
@@ -88,7 +88,7 @@ public class PdpBillingCycleService {
     }
 
     /** The "Generate due statements now" button: the bound company, as of {@code today}. */
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_CREATE')")
     public int generateDue(LocalDate today) {
         return runForBoundCompany(today);
     }

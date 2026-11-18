@@ -56,7 +56,7 @@ public class ZoneRateServiceImpl implements ZoneRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('CUSTOMER_RATE_CREATE') or hasAuthority('CUSTOMER_RATE_UPDATE')")
     public ZoneRateView save(UUID zoneId, SaveCommand c) {
         UUID companyId = requireCompany();
         PricingZone zone = loadZone(zoneId, companyId);
@@ -129,7 +129,7 @@ public class ZoneRateServiceImpl implements ZoneRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('CUSTOMER_RATE_UPDATE')")
     public ZoneRateView activate(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = loadZone(zoneId, companyId);
@@ -144,7 +144,7 @@ public class ZoneRateServiceImpl implements ZoneRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('CUSTOMER_RATE_UPDATE')")
     public ZoneRateView deactivate(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = loadZone(zoneId, companyId);
@@ -159,7 +159,7 @@ public class ZoneRateServiceImpl implements ZoneRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('CUSTOMER_RATE_DELETE')")
     public void delete(UUID zoneId) {
         UUID companyId = requireCompany();
         PricingZone zone = loadZone(zoneId, companyId);

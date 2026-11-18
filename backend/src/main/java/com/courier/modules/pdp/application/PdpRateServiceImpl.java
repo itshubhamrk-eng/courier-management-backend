@@ -56,7 +56,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PDP_RATE_CREATE')")
     public PdpRateView create(SaveCommand c) {
         UUID companyId = requireCompany();
         Branch partner = requirePartner(c.branchId());
@@ -66,7 +66,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PDP_RATE_UPDATE')")
     public PdpRateView update(UUID id, SaveCommand c) {
         UUID companyId = requireCompany();
         PdpRateCard card = load(id, companyId);
@@ -108,7 +108,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PDP_RATE_UPDATE')")
     public PdpRateView activate(UUID id) {
         UUID companyId = requireCompany();
         PdpRateCard card = load(id, companyId);
@@ -122,7 +122,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PDP_RATE_UPDATE')")
     public PdpRateView deactivate(UUID id) {
         UUID companyId = requireCompany();
         PdpRateCard card = load(id, companyId);
@@ -135,7 +135,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITE)
+    @PreAuthorize(WRITE + " or hasAuthority('PDP_RATE_DELETE')")
     public void delete(UUID id) {
         UUID companyId = requireCompany();
         PdpRateCard card = load(id, companyId);

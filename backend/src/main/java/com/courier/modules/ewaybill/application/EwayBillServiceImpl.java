@@ -105,7 +105,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_CREATE')")
     public EwayBill generatePartAForShipment(UUID shipmentId, EwayBillDataCommand data, ShipmentEwayBillContext ctx) {
         if (data == null) {
             return null;
@@ -183,7 +183,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_UPDATE')")
     public void triggerPartBForShipments(Collection<UUID> shipmentIds, String vehicleNumber,
                                          String transporterId, String transportMode) {
         if (shipmentIds == null || shipmentIds.isEmpty()) {
@@ -255,7 +255,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_CREATE') or hasAuthority('EWAY_BILL_UPDATE')")
     public EwayBill upsertForShipment(UUID shipmentId, EwayBillDataCommand data) {
         if (data == null) {
             return null;
@@ -317,7 +317,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_CREATE')")
     public EwayBill create(CreateEwayBillCommand command) {
         UUID companyId = requireCompany();
         EwayBill bill = EwayBill.builder().shipmentId(command.shipmentId())
@@ -341,7 +341,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_UPDATE')")
     public EwayBill update(UUID id, UpdateEwayBillCommand command) {
         UUID companyId = requireCompany();
         EwayBill bill = loadOrThrow(id, companyId);
@@ -375,7 +375,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_UPDATE')")
     public EwayBill retry(UUID id) {
         UUID companyId = requireCompany();
         EwayBill bill = loadOrThrow(id, companyId);
@@ -449,7 +449,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_UPDATE')")
     public String upload(UUID id, UploadCommand command) {
         UUID companyId = requireCompany();
         EwayBill bill = loadOrThrow(id, companyId);
@@ -477,7 +477,7 @@ public class EwayBillServiceImpl implements EwayBillService {
 
     @Override
     @Transactional
-    @PreAuthorize(WRITERS)
+    @PreAuthorize(WRITERS + " or hasAuthority('EWAY_BILL_UPDATE')")
     public EwayBill cancel(UUID id, String remarks) {
         UUID companyId = requireCompany();
         EwayBill bill = loadOrThrow(id, companyId);

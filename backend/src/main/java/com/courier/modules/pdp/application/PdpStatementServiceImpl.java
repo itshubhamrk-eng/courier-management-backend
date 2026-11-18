@@ -52,7 +52,7 @@ public class PdpStatementServiceImpl implements PdpStatementService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_CREATE')")
     public StatementView generate(UUID branchId, LocalDate from, LocalDate to, String remarks) {
         return doGenerate(branchId, from, to, remarks);
     }
@@ -131,7 +131,7 @@ public class PdpStatementServiceImpl implements PdpStatementService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_UPDATE')")
     public StatementView approve(UUID id) {
         UUID companyId = requireCompany();
         PdpStatement s = load(id, companyId);
@@ -143,7 +143,7 @@ public class PdpStatementServiceImpl implements PdpStatementService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_UPDATE')")
     public StatementView markPaid(UUID id, LocalDate paidOn, String reference) {
         UUID companyId = requireCompany();
         PdpStatement s = load(id, companyId);
@@ -156,7 +156,7 @@ public class PdpStatementServiceImpl implements PdpStatementService {
 
     @Override
     @Transactional
-    @PreAuthorize(ADMIN)
+    @PreAuthorize(ADMIN + " or hasAuthority('PDP_BILLING_DELETE')")
     public void delete(UUID id) {
         UUID companyId = requireCompany();
         PdpStatement s = load(id, companyId);
