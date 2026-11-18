@@ -109,7 +109,9 @@ public class UserServiceImpl implements UserService {
     // make a DRS needs the same picker (mobile app, docs G4). Same branch/hub scoping applies.
     private static final String LIST_READERS = READERS + " or hasAnyRole('" + DefaultRoleCatalog.BOOKING_OPERATOR
             + "', '" + DefaultRoleCatalog.DELIVERY_OPERATOR + "', '" + Roles.OPERATOR + "')"
-            + " or hasAnyAuthority('MANIFEST_DISPATCH', 'DELIVERY_ASSIGN', 'DELIVERY_DISPATCH')";
+            + " or hasAnyAuthority('MANIFEST_DISPATCH', 'DELIVERY_ASSIGN', 'DELIVERY_DISPATCH',"
+            // The branch create/edit screens pick a manager and assign staff from this list.
+            + " 'BRANCH_CREATE', 'BRANCH_UPDATE')";
 
     private final CompanyUserRepository userRepository;
     private final BranchRepository branchRepository;
