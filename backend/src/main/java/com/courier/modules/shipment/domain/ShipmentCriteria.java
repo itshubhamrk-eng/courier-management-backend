@@ -39,6 +39,9 @@ import java.util.UUID;
  *                         resolved yet — Load Sheet's own eligibility filter, paired with
  *                         {@code toCity}
  * @param flowType         only shipments of this flow; null means both
+ * @param excludeLegacy    when true, shipments imported from the old software
+ *                         ({@code Shipment.legacyImport}) are left out — the POD Review views use
+ *                         this so history-only rows never show up as "pending POD upload"
  */
 public record ShipmentCriteria(
         Set<ShipmentStatus> statuses,
@@ -55,8 +58,27 @@ public record ShipmentCriteria(
         String search,
         String toCity,
         Boolean unassignedDeliveryBranch,
-        FlowType flowType
+        FlowType flowType,
+        Boolean excludeLegacy
 ) {
+    /** Before the legacy import: no legacy filter. */
+    public ShipmentCriteria(Set<ShipmentStatus> statuses, UUID bookingBranchId, UUID deliveryBranchId,
+                            UUID currentLocationId, UUID nextLocationId, UUID manifestId,
+                            LocalDate bookingDateFrom, LocalDate bookingDateTo, LocalDate deliveredDateFrom,
+                            LocalDate deliveredDateTo, UUID paymentModeId, String search, String toCity,
+                            Boolean unassignedDeliveryBranch, FlowType flowType) {
+        this(statuses, bookingBranchId, deliveryBranchId, currentLocationId, nextLocationId, manifestId,
+                bookingDateFrom, bookingDateTo, deliveredDateFrom, deliveredDateTo, paymentModeId, search,
+                toCity, unassignedDeliveryBranch, flowType, null);
+    }
+
+    /** The same criteria with legacy-imported shipments excluded. */
+    public ShipmentCriteria withoutLegacy() {
+        return new ShipmentCriteria(statuses, bookingBranchId, deliveryBranchId, currentLocationId,
+                nextLocationId, manifestId, bookingDateFrom, bookingDateTo, deliveredDateFrom, deliveredDateTo,
+                paymentModeId, search, toCity, unassignedDeliveryBranch, flowType, Boolean.TRUE);
+    }
+
     /** The original shape, before MSRTC: no flow filter. */
     public ShipmentCriteria(Set<ShipmentStatus> statuses, UUID bookingBranchId, UUID deliveryBranchId,
                             UUID currentLocationId, UUID nextLocationId, UUID manifestId,
@@ -65,12 +87,12 @@ public record ShipmentCriteria(
                             Boolean unassignedDeliveryBranch) {
         this(statuses, bookingBranchId, deliveryBranchId, currentLocationId, nextLocationId, manifestId,
                 bookingDateFrom, bookingDateTo, deliveredDateFrom, deliveredDateTo, paymentModeId, search,
-                toCity, unassignedDeliveryBranch, null);
+                toCity, unassignedDeliveryBranch, null, null);
     }
 
 
     public static ShipmentCriteria none() {
         return new ShipmentCriteria(null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null);
+                null, null, null, null);
     }
 }

@@ -182,12 +182,14 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
     /** Id-only projections for the POD Dashboard pie (pending upload / pending verification /
      *  approved / rejected) — avoids materialising every OUT_FOR_DELIVERY/DELIVERED shipment
      *  as a full row just to cross-reference against {@code pod_verification} by id. */
-    @Query("select s.id from Shipment s where s.companyId = :companyId and s.status in :statuses")
+    /** The dashboard POD pie's candidates: legacy-imported history rows never need a POD. */
+    @Query("select s.id from Shipment s where s.companyId = :companyId and s.status in :statuses "
+            + "and s.legacyImport = false")
     List<UUID> findIdsByCompanyIdAndStatusIn(@Param("companyId") UUID companyId,
                                               @Param("statuses") Collection<ShipmentStatus> statuses);
 
     @Query("select s.id from Shipment s where s.companyId = :companyId "
-            + "and s.deliveryBranchId = :deliveryBranchId and s.status in :statuses")
+            + "and s.deliveryBranchId = :deliveryBranchId and s.status in :statuses and s.legacyImport = false")
     List<UUID> findIdsByCompanyIdAndDeliveryBranchIdAndStatusIn(@Param("companyId") UUID companyId,
                                                                  @Param("deliveryBranchId") UUID deliveryBranchId,
                                                                  @Param("statuses") Collection<ShipmentStatus> statuses);

@@ -202,7 +202,7 @@ public class PodVerificationController {
                 base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
                 base.manifestId(), base.bookingDateFrom(), base.bookingDateTo(),
                 base.deliveredDateFrom(), base.deliveredDateTo(), base.paymentModeId(), base.search(),
-                base.toCity(), base.unassignedDeliveryBranch());
+                base.toCity(), base.unassignedDeliveryBranch()).withoutLegacy();
 
         Page<Shipment> page = shipmentService.search(criteria, sanitise(pageable));
         List<UUID> ids = page.getContent().stream().map(Shipment::getId).toList();
@@ -237,7 +237,7 @@ public class PodVerificationController {
                 base.bookingBranchId(), base.deliveryBranchId(), base.currentLocationId(), base.nextLocationId(),
                 base.manifestId(), base.bookingDateFrom(), base.bookingDateTo(),
                 base.deliveredDateFrom(), base.deliveredDateTo(), base.paymentModeId(), base.search(),
-                base.toCity(), base.unassignedDeliveryBranch());
+                base.toCity(), base.unassignedDeliveryBranch()).withoutLegacy();
 
         List<Shipment> candidates = new java.util.ArrayList<>();
         Pageable chunk = org.springframework.data.domain.PageRequest.of(0, 500,

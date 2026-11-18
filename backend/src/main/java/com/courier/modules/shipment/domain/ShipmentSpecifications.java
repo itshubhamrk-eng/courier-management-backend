@@ -57,6 +57,9 @@ public final class ShipmentSpecifications {
             if (safe.flowType() != null) {
                 predicates.add(cb.equal(root.get("flowType"), safe.flowType()));
             }
+            if (Boolean.TRUE.equals(safe.excludeLegacy())) {
+                predicates.add(cb.isFalse(root.get("legacyImport")));
+            }
             if (Boolean.TRUE.equals(safe.unassignedDeliveryBranch())) {
                 predicates.add(cb.isNull(root.get("deliveryBranchId")));
             }
