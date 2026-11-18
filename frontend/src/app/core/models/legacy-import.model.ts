@@ -29,7 +29,7 @@ export interface LegacyPreviewResult {
 }
 
 export interface LegacyCommitResult {
-  batchId: string;
+  batchId: string | null;
   created: number;
   skippedExisting: number;
   invalid: number;

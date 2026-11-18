@@ -123,6 +123,9 @@ class LegacyImportCommitTest {
         CommitResult second = service.commit("a.xls", file(tr("N1", "BHOSARI")));
 
         assertThat(second.created()).isZero();
+        assertThat(second.batchId()).isNull();
+        // the first commit saves its batch twice (create, then final counts); the no-op re-run adds none
+        verify(batches, times(2)).save(any(LegacyImportBatch.class));
         verify(writer, times(1)).insert(any(), any(), any(), any(), any());
     }
 

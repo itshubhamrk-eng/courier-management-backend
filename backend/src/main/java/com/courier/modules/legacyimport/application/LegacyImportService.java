@@ -24,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -141,6 +142,11 @@ public class LegacyImportService {
             serviceTypeId = defaultServiceType(companyId).getId();
         }
 
+        if (!anyNew) {
+            // Nothing to book (a re-run of an already-imported file): no batch row, no audit entry.
+            return new CommitResult(null, 0, count(classified, RowOutcome.EXISTING),
+                    count(classified, RowOutcome.INVALID), classified);
+        }
         LegacyImportBatch batch = batchRepository.save(LegacyImportBatch.builder()
                 .fileName(fileName == null ? "upload" : fileName).fileHash(sha256(bytes)).build());
 
@@ -242,7 +248,9 @@ public class LegacyImportService {
         if (s.getNumberOfPackages() == null || r.packages() != s.getNumberOfPackages()) {
             d.add("packages: ours %s / file %d".formatted(s.getNumberOfPackages(), r.packages()));
         }
-        if (!sameNumber(s.getActualWeight(), r.weight())) {
+        // A file weight of 0 was stored as the 0.001 placeholder (ck_shipments_actual_weight needs > 0).
+        BigDecimal fileWeight = r.weight().signum() > 0 ? r.weight() : LegacyShipmentWriter.MIN_WEIGHT_PLACEHOLDER;
+        if (!sameNumber(s.getActualWeight(), fileWeight)) {
             d.add("weight: ours %s / file %s".formatted(String.valueOf(s.getActualWeight()), r.weight().toPlainString()));
         }
         if (charge != null && !sameNumber(charge.getNetAmount(), r.total())) {

@@ -7,6 +7,8 @@
 
 ## Current Version
 
+**2026-11-18 — Legacy consignment import (V145/V146):** `/legacy-import` brings the old software's `Consignments_*.xls` in as history-only DELIVERED shipments (no wallet/commission/WhatsApp), existing consignments never touched, per-origin branch mapping. See `MEMORY/modules/legacy-import.md`, `CHANGELOG.md` 2026-11-18. Branch `feat/legacy-consignment-import`, not deployed.
+
 **2026-10-23 — mobile app backend gaps (V135):** booking preview `POST /shipments/preview` (shares `quote()` with create), user list open to THC/DRS permissions, failed delivery attempts with RTO on the 3rd (`delivery_attempts`). See `CHANGELOG.md` 2026-10-23.
 
 `0.68.2` — **PDP phase 3: earnings, billing statements, mandatory POD, partner login/menu** (`V117`; see `MEMORY/modules/pdp.md`, `CHANGELOG.md` 2026-10-14). Before that, `0.68.1` — **PDP phase 2: Pickup Requests** (`V116`, `com.courier.modules.pickup`, `/pdp/pickups`; see `CHANGELOG.md` 2026-10-14). Earlier in 0.68: **Pickup-Delivery Partner (PDP), phase 1.** New branch type `PICKUP_DELIVERY_PARTNER` (replaced unused `VENDOR`), permission modules `PDP`/`PDP_RATE`/`PDP_BILLING`, top-level menu "Pickup Delivery Partner Management" (Partners, Partner Rates), separate per-partner Pickup and Delivery rate cards with min weight + per-kg slabs (`V115`, `com.courier.modules.pdp`, `/api/v1/pdp-rates`). **Pickup requests, earnings, billing statement and mandatory-POD gate are planned, not built** — see `MEMORY/modules/pdp.md` and `CHANGELOG.md` 2026-10-14.

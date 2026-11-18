@@ -104,6 +104,16 @@ class LegacyImportServicePreviewTest {
     }
 
     @Test
+    void fileWeightZeroMatchesTheStoredPlaceholder() {
+        Shipment s = existing("A1", "RAM", "PUNE", 1, "0.001");
+        when(shipments.findAllByCompanyIdAndTrackingNumberIn(any(), any())).thenReturn(List.of(s));
+
+        PreviewResult r = service.preview("a.xls", file(tr("15/11/2026", "A1", "RAM", "BHOSARI", "PUNE", "1", "0.00", "0")));
+
+        assertThat(r.rows().get(0).differences()).isEmpty();
+    }
+
+    @Test
     void existingWithDifferentWeightListsDifference() {
         Shipment s = existing("A1", "RAM", "PUNE", 1, "9.00");
         when(shipments.findAllByCompanyIdAndTrackingNumberIn(any(), any())).thenReturn(List.of(s));
