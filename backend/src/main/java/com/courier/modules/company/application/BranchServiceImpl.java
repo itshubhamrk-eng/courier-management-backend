@@ -416,7 +416,7 @@ public class BranchServiceImpl implements BranchService {
 
         // A non-admin sees only the branches they may: the one they are placed at, plus
         // any they manage. Pinned here, never taken from the request.
-        if (!caller.isSuperAdmin() && !caller.hasRole(Roles.COMPANY_ADMIN)) {
+        if (!seesWholeCompany(caller)) {
             effective = effective.withBranchIds(visibleBranchIds(caller));
         }
 
@@ -617,12 +617,27 @@ public class BranchServiceImpl implements BranchService {
 
     /** Read visibility for a non-admin: the branch they manage or are placed at. */
     private void requireVisible(AuthenticatedUser caller, Branch branch) {
-        if (caller.isSuperAdmin() || caller.hasRole(Roles.COMPANY_ADMIN)) {
+        if (seesWholeCompany(caller)) {
             return;
         }
         if (!visibleBranchIds(caller).contains(branch.getId())) {
             throw new ResourceNotFoundException(ENTITY, branch.getId());
         }
+    }
+
+    /**
+     * Admins see every branch. So does a user holding only company-defined custom roles who was
+     * explicitly granted BRANCH_READ: they have no placement or managed branch to scope by, so the
+     * grant itself is the company-wide read. Built-in roles keep their placement scoping.
+     */
+    private boolean seesWholeCompany(AuthenticatedUser caller) {
+        if (caller.isSuperAdmin() || caller.hasRole(Roles.COMPANY_ADMIN)) {
+            return true;
+        }
+        java.util.Set<String> builtIn = com.courier.modules.company.domain.DefaultRoleCatalog.systemRoleCodes();
+        boolean customOnly = !caller.roles().isEmpty()
+                && caller.roles().stream().noneMatch(builtIn::contains);
+        return customOnly && caller.permissions() != null && caller.permissions().contains("BRANCH_READ");
     }
 
     /** The branches a non-admin caller may see: the one they manage, and their placement. */
