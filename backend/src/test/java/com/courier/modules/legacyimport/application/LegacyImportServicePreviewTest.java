@@ -37,7 +37,11 @@ class LegacyImportServicePreviewTest {
     private final ShipmentChargeRepository charges = mock(ShipmentChargeRepository.class);
     private final BranchRepository branches = mock(BranchRepository.class);
     private final LegacyOriginBranchRepository origins = mock(LegacyOriginBranchRepository.class);
-    private final LegacyImportService service = new LegacyImportService(shipments, charges, branches, origins);
+    private final LegacyImportService service = new LegacyImportService(shipments, charges, branches, origins,
+            mock(com.courier.modules.legacyimport.domain.LegacyImportBatchRepository.class),
+            mock(com.courier.modules.master.domain.PaymentModeRepository.class),
+            mock(com.courier.modules.master.domain.ServiceTypeRepository.class),
+            mock(LegacyShipmentWriter.class), mock(com.courier.shared.audit.application.AuditService.class));
     private final UUID company = TimeOrderedUuid.generate();
 
     @BeforeEach

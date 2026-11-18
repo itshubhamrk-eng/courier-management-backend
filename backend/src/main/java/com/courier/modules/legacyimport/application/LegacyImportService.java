@@ -2,16 +2,25 @@ package com.courier.modules.legacyimport.application;
 
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchRepository;
+import com.courier.modules.legacyimport.domain.LegacyImportBatch;
+import com.courier.modules.legacyimport.domain.LegacyImportBatchRepository;
 import com.courier.modules.legacyimport.domain.LegacyOriginBranch;
 import com.courier.modules.legacyimport.domain.LegacyOriginBranchRepository;
+import com.courier.modules.master.domain.MasterDataEntity;
+import com.courier.modules.master.domain.PaymentModeRepository;
+import com.courier.modules.master.domain.ServiceType;
+import com.courier.modules.master.domain.ServiceTypeRepository;
 import com.courier.modules.shipment.domain.Shipment;
 import com.courier.modules.shipment.domain.ShipmentCharge;
 import com.courier.modules.shipment.domain.ShipmentChargeRepository;
 import com.courier.modules.shipment.domain.ShipmentRepository;
 import com.courier.shared.company.CompanyContext;
+import com.courier.shared.audit.application.AuditService;
+import com.courier.shared.audit.domain.AuditAction;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +54,11 @@ public class LegacyImportService {
     private final ShipmentChargeRepository chargeRepository;
     private final BranchRepository branchRepository;
     private final LegacyOriginBranchRepository originRepository;
+    private final LegacyImportBatchRepository batchRepository;
+    private final PaymentModeRepository paymentModeRepository;
+    private final ServiceTypeRepository serviceTypeRepository;
+    private final LegacyShipmentWriter writer;
+    private final AuditService auditService;
 
     public static String originKey(String from) {
         return from == null ? "" : from.trim().toUpperCase(Locale.ROOT);
@@ -90,6 +104,79 @@ public class LegacyImportService {
                 .orElseGet(() -> LegacyOriginBranch.builder().originKey(key).build());
         row.setBranchId(branchId);
         originRepository.save(row);
+    }
+
+    /**
+     * Books every NEW row as a history-only DELIVERED shipment. Not one big transaction: the
+     * writer commits each row on its own, so one bad row is reported INVALID and the others
+     * still land. Re-running the same file books nothing — those rows are EXISTING by then.
+     * Refuses up front (nothing written) when a NEW row's origin is unmapped or the company
+     * has no PAID payment mode / active service type to stamp on the history rows.
+     */
+    public CommitResult commit(String fileName, byte[] bytes) {
+        UUID companyId = requireCompany();
+        List<LegacyRow> parsed = LegacyFileParser.parse(fileName, bytes);
+        List<PreviewRow> classified = classify(companyId, parsed);
+        Map<String, UUID> mapping = originRepository.findAllByCompanyId(companyId).stream()
+                .collect(Collectors.toMap(LegacyOriginBranch::getOriginKey, LegacyOriginBranch::getBranchId, (a, b) -> a));
+
+        List<String> unmapped = classified.stream().filter(r -> r.outcome() == RowOutcome.NEW)
+                .map(PreviewRow::origin).filter(o -> !mapping.containsKey(o)).distinct().sorted().toList();
+        if (!unmapped.isEmpty()) {
+            throw new BusinessRuleException("Map a branch for every origin before importing. Unmapped: "
+                    + String.join(", ", unmapped));
+        }
+        boolean anyNew = classified.stream().anyMatch(r -> r.outcome() == RowOutcome.NEW);
+        UUID paymentModeId = null;
+        UUID serviceTypeId = null;
+        if (anyNew) {
+            paymentModeId = paymentModeRepository.findByCodeWithinCompany("PAID", companyId)
+                    .orElseThrow(() -> new BusinessRuleException(
+                            "This company has no PAID payment mode; create it before importing.")).getId();
+            serviceTypeId = defaultServiceType(companyId).getId();
+        }
+
+        LegacyImportBatch batch = batchRepository.save(LegacyImportBatch.builder()
+                .fileName(fileName == null ? "upload" : fileName).fileHash(sha256(bytes)).build());
+
+        List<PreviewRow> result = new ArrayList<>(classified.size());
+        int created = 0;
+        for (int i = 0; i < classified.size(); i++) {
+            PreviewRow row = classified.get(i);
+            if (row.outcome() != RowOutcome.NEW) {
+                result.add(row);
+                continue;
+            }
+            try {
+                writer.insert(parsed.get(i), mapping.get(row.origin()), serviceTypeId, paymentModeId, batch.getId());
+                created++;
+                result.add(row);
+            } catch (DataIntegrityViolationException e) {
+                result.add(new PreviewRow(row.rowNo(), row.consignmentNo(), RowOutcome.EXISTING,
+                        "Already present (created meanwhile)", List.of(), row.origin()));
+            } catch (RuntimeException e) {
+                result.add(new PreviewRow(row.rowNo(), row.consignmentNo(), RowOutcome.INVALID,
+                        "Could not import: " + e.getMessage(), List.of(), row.origin()));
+            }
+        }
+        int existing = count(result, RowOutcome.EXISTING);
+        int invalid = count(result, RowOutcome.INVALID);
+        batch.setNewCount(created);
+        batch.setExistingCount(existing);
+        batch.setInvalidCount(invalid);
+        batchRepository.save(batch);
+        auditService.record(AuditAction.LEGACY_IMPORT_COMMITTED, "LegacyImportBatch", batch.getId(),
+                Map.of("fileName", batch.getFileName(), "created", created, "existing", existing, "invalid", invalid));
+        return new CommitResult(batch.getId(), created, existing, invalid, result);
+    }
+
+    private ServiceType defaultServiceType(UUID companyId) {
+        return serviceTypeRepository.findByCodeWithinCompany("STANDARD", companyId)
+                .filter(MasterDataEntity::isActive)
+                .or(() -> serviceTypeRepository.findAll().stream()
+                        .filter(t -> companyId.equals(t.getCompanyId())).filter(MasterDataEntity::isActive).findFirst())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "This company has no active service type; create one before importing."));
     }
 
     // ------------------------------------------------------------------ classification
@@ -150,13 +237,17 @@ public class LegacyImportService {
         if (s.getNumberOfPackages() == null || r.packages() != s.getNumberOfPackages()) {
             d.add("packages: ours %s / file %d".formatted(s.getNumberOfPackages(), r.packages()));
         }
-        if (s.getActualWeight().compareTo(r.weight()) != 0) {
-            d.add("weight: ours %s / file %s".formatted(s.getActualWeight().toPlainString(), r.weight().toPlainString()));
+        if (!sameNumber(s.getActualWeight(), r.weight())) {
+            d.add("weight: ours %s / file %s".formatted(String.valueOf(s.getActualWeight()), r.weight().toPlainString()));
         }
-        if (charge != null && charge.getNetAmount().compareTo(r.total()) != 0) {
-            d.add("total: ours %s / file %s".formatted(charge.getNetAmount().toPlainString(), r.total().toPlainString()));
+        if (charge != null && !sameNumber(charge.getNetAmount(), r.total())) {
+            d.add("total: ours %s / file %s".formatted(String.valueOf(charge.getNetAmount()), r.total().toPlainString()));
         }
         return d;
+    }
+
+    private static boolean sameNumber(java.math.BigDecimal a, java.math.BigDecimal b) {
+        return a != null && b != null && a.compareTo(b) == 0;
     }
 
     private static boolean same(String a, String b) {
