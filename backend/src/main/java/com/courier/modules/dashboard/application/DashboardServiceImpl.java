@@ -12,7 +12,7 @@ import com.courier.modules.dashboard.api.dto.DeliveryAgingBucketResponse;
 import com.courier.modules.dashboard.api.dto.PipelineStageResponse;
 import com.courier.modules.dashboard.api.dto.RecentShipmentResponse;
 import com.courier.modules.dashboard.api.dto.TopCustomerResponse;
-import com.courier.modules.dashboard.api.dto.TopRouteResponse;
+import com.courier.modules.dashboard.api.dto.TopBranchResponse;
 import com.courier.modules.dashboard.api.dto.PodOverviewResponse;
 import com.courier.modules.dashboard.api.dto.RejectedPodResponse;
 import com.courier.modules.dashboard.domain.DashboardBranchDirectoryPort;
@@ -400,7 +400,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         return new CompanyOverviewResponse(pipeline, readyForManifest, manifestsAwaitingDispatch,
                 pendingDeliveryCompanyWide, delayedShipments, totalWalletBalance, lowBalanceBranches,
-                topRoutes(companyId, monthStart, today), topCustomers(companyId, monthStart, today),
+                topBranches(companyId, monthStart, today), topCustomers(companyId, monthStart, today),
                 podOverview(companyId, null), toPayAwaitingDelivery);
     }
 
@@ -556,9 +556,9 @@ public class DashboardServiceImpl implements DashboardService {
                 new DeliveryAgingBucketResponse("72h+", since72));
     }
 
-    private List<TopRouteResponse> topRoutes(UUID companyId, LocalDate monthStart, LocalDate today) {
-        List<ShipmentRepository.TopRouteRow> rows = shipmentRepository
-                .findTopRoutesByCompanyIdAndBookingDateBetween(companyId, monthStart, today,
+    private List<TopBranchResponse> topBranches(UUID companyId, LocalDate monthStart, LocalDate today) {
+        List<ShipmentRepository.TopBranchRow> rows = shipmentRepository
+                .findTopBranchesByCompanyIdAndBookingDateBetween(companyId, monthStart, today,
                         PageRequest.of(0, TOP_N));
         List<UUID> branchIds = rows.stream()
                 .map(r -> TimeOrderedUuid.fromBytes(r.getBranchId()))
@@ -570,9 +570,9 @@ public class DashboardServiceImpl implements DashboardService {
                 .map(r -> {
                     UUID branchId = TimeOrderedUuid.fromBytes(r.getBranchId());
                     DashboardBranchDirectoryPort.BranchRef b = branchId == null ? null : branches.get(branchId);
-                    return new TopRouteResponse(branchId,
+                    return new TopBranchResponse(branchId,
                             b == null ? null : b.branchCode(), b == null ? "Unknown branch" : b.branchName(),
-                            r.getShipmentCount(), r.getRevenue());
+                            r.getShipmentCount(), r.getActualWeight(), r.getRevenue());
                 })
                 .toList();
     }

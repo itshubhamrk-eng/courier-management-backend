@@ -325,35 +325,37 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
             @Param("pending") Collection<ShipmentStatus> pending,
             @Param("start") LocalDate start, @Param("end") LocalDate end);
 
-    /** Backs the Company Overview "Top Routes" card: one row per destination branch,
-     *  ranked by month-to-date shipment count. Native — {@code Shipment}/{@code
-     *  ShipmentCharge} have no ORM association (see {@code ShipmentChargeRepository}'s own
-     *  class doc), so the revenue join has to be written as SQL. {@code Pageable} supplies
-     *  the "top N" limit; the query itself carries no {@code LIMIT} clause. */
+    /** Backs the Company Overview "Top Branches" card: one row per booking branch, ranked by
+     *  month-to-date actual weight. Native — {@code Shipment}/{@code ShipmentCharge} have no ORM
+     *  association (see {@code ShipmentChargeRepository}'s own class doc), so the revenue join has
+     *  to be written as SQL. Charges are summed per shipment in a derived table first, so a
+     *  shipment with several charge rows still contributes its weight once. {@code Pageable}
+     *  supplies the "top N" limit; the query itself carries no {@code LIMIT} clause. */
     @Query(value = """
-            SELECT s.delivery_branch_id AS branchId, COUNT(*) AS shipmentCount,
-                   COALESCE(SUM(c.net_amount), 0) AS revenue
+            SELECT s.booking_branch_id AS branchId, COUNT(*) AS shipmentCount,
+                   COALESCE(SUM(s.actual_weight), 0) AS actualWeight,
+                   COALESCE(SUM(c.net), 0) AS revenue
             FROM shipments s
-            LEFT JOIN shipment_charges c ON c.shipment_id = s.id AND c.company_id = :companyId
+            LEFT JOIN (SELECT shipment_id, SUM(net_amount) AS net
+                       FROM shipment_charges WHERE company_id = :companyId
+                       GROUP BY shipment_id) c ON c.shipment_id = s.id
             WHERE s.company_id = :companyId AND s.deleted = FALSE
               AND s.booking_date BETWEEN :start AND :end AND s.status <> 'CANCELLED'
-            GROUP BY s.delivery_branch_id
-            ORDER BY shipmentCount DESC
+            GROUP BY s.booking_branch_id
+            ORDER BY actualWeight DESC
             """, nativeQuery = true)
-    List<TopRouteRow> findTopRoutesByCompanyIdAndBookingDateBetween(
+    List<TopBranchRow> findTopBranchesByCompanyIdAndBookingDateBetween(
             @Param("companyId") UUID companyId, @Param("start") LocalDate start,
             @Param("end") LocalDate end, Pageable pageable);
 
-    /** Native-query projection for {@link #findTopRoutesByCompanyIdAndBookingDateBetween}.
+    /** Native-query projection for {@link #findTopBranchesByCompanyIdAndBookingDateBetween}.
      *  {@code branchId} comes back as the column's raw {@code BINARY(16)} bytes, not
      *  {@code UUID} — Spring Data has no byte[]-to-UUID converter for native-query
-     *  projections (unlike entity mapping, which Hibernate itself handles), so a
-     *  {@code UUID}-typed accessor here throws {@code UnsupportedOperationException} the
-     *  moment it's called. Convert with {@code TimeOrderedUuid.fromBytes} at the call
-     *  site instead. */
-    interface TopRouteRow {
+     *  projections, so convert with {@code TimeOrderedUuid.fromBytes} at the call site. */
+    interface TopBranchRow {
         byte[] getBranchId();
         long getShipmentCount();
+        BigDecimal getActualWeight();
         BigDecimal getRevenue();
     }
 

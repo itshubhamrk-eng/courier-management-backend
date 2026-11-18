@@ -12,7 +12,7 @@ const overview = (over: Partial<CompanyOverviewData> = {}): CompanyOverviewData 
     { stage: 'DELIVERED', count: 20 }
   ],
   readyForManifest: 0, manifestsAwaitingDispatch: 0, pendingDelivery: 0, delayedShipments: 0,
-  totalWalletBalance: 12500, lowBalanceBranches: 0, topRoutes: [], topCustomers: [],
+  totalWalletBalance: 12500, lowBalanceBranches: 0, topBranches: [], topCustomers: [],
   podOverview: { pendingUpload: 0, pendingVerification: 0, approved: 0, rejected: 0 },
   toPayAwaitingDelivery: 0,
   ...over
@@ -66,9 +66,9 @@ describe('CompanyOverview', () => {
     expect(component.stageLabel('DELIVERED')).toBe('Delivered');
   });
 
-  it('renders top routes and top customers when present', () => {
+  it('renders top branches and top customers when present', () => {
     build(overview({
-      topRoutes: [{ branchId: 'b-1', branchCode: 'BOM', branchName: 'Mumbai', shipmentCount: 9, revenue: 4500 }],
+      topBranches: [{ branchId: 'b-1', branchCode: 'BOM', branchName: 'Mumbai', shipmentCount: 9, actualWeight: 120.5, revenue: 4500 }],
       topCustomers: [{ customerName: 'Acme Traders', customerContact: '9999999999', shipmentCount: 6, revenue: 3000 }]
     }));
 

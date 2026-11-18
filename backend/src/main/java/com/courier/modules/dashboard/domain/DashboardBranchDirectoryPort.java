@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * What the dashboard needs to know about branches — just enough to label the Top Routes
+ * What the dashboard needs to know about branches — just enough to label the Top Branches
  * card. The same seam every other module uses ({@code finance.BranchDirectoryPort},
  * {@code crossing.CrossingBranchDirectoryPort}): this module owns the interface, {@code
  * modules/company} supplies the adapter, so the dashboard never imports {@code Branch} or

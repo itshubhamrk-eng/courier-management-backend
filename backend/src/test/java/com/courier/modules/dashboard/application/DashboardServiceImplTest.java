@@ -137,7 +137,7 @@ class DashboardServiceImplTest {
                 .thenReturn(List.of(toPayMode));
         when(shipmentRepository.countByCompanyIdAndStatusInAndPaymentModeIdIn(
                 eq(COMPANY), any(Collection.class), eq(List.of(toPayMode.getId())))).thenReturn(9L);
-        when(shipmentRepository.findTopRoutesByCompanyIdAndBookingDateBetween(
+        when(shipmentRepository.findTopBranchesByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class), any(Pageable.class))).thenReturn(List.of());
         when(shipmentRepository.findTopCustomersByCompanyIdAndBookingDateBetween(
                 eq(COMPANY), any(LocalDate.class), any(LocalDate.class), any(Pageable.class))).thenReturn(List.of());
@@ -411,7 +411,7 @@ class DashboardServiceImplTest {
         // Never the company-wide Company Overview repository calls for a branch-scoped caller.
         verify(manifestRepository, never()).countByCompanyIdAndStatus(any(), any());
         verify(walletRepository, never()).sumAvailableBalanceByCompanyId(any());
-        verify(shipmentRepository, never()).findTopRoutesByCompanyIdAndBookingDateBetween(
+        verify(shipmentRepository, never()).findTopBranchesByCompanyIdAndBookingDateBetween(
                 any(), any(), any(), any());
 
         // The whole point of this fix: a branch-scoped caller must never reach the

@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
@@ -20,14 +21,14 @@ const money = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 /**
  * Company-wide operational overview for a COMPANY_ADMIN: the shipment pipeline, the
  * action-required backlog (each item routes to the real page that clears it), wallet
- * total across every branch, and Top Routes / Top Customers this month. Every figure
+ * total across every branch, and Top Branches / Top Customers this month. Every figure
  * comes from `DashboardSummaryResponse.companyOverview` — no client-side computation.
  */
 @Component({
   selector: 'app-company-overview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, RouterLink, UiCard, UiLoader],
+  imports: [DecimalPipe, MatIconModule, RouterLink, UiCard, UiLoader],
   template: `
     @if (loading()) {
       <app-card title="Company Overview">
@@ -101,18 +102,19 @@ const money = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
         }
       </app-card>
 
-      <!-- Top routes -->
-      <app-card tone="info" title="Top Routes" subtitle="This month, by shipment count">
-        @if (data()!.topRoutes.length === 0) {
-          <div class="co-empty"><mat-icon>alt_route</mat-icon><p class="text-caption">No bookings yet this month</p></div>
+      <!-- Top branches -->
+      <app-card tone="info" title="Top Branches" subtitle="This month, by actual weight">
+        @if (data()!.topBranches.length === 0) {
+          <div class="co-empty"><mat-icon>store</mat-icon><p class="text-caption">No bookings yet this month</p></div>
         } @else {
           <table class="co-table">
-            <thead><tr><th></th><th>Destination</th><th>Shipments</th><th>Revenue</th></tr></thead>
+            <thead><tr><th></th><th>Branch</th><th>Weight (kg)</th><th>Shipments</th><th>Revenue</th></tr></thead>
             <tbody>
-              @for (r of data()!.topRoutes; track r.branchId ?? r.branchName; let i = $index) {
+              @for (r of data()!.topBranches; track r.branchId ?? r.branchName; let i = $index) {
                 <tr>
                   <td><span class="co-rank" [attr.data-rank]="i + 1">{{ i + 1 }}</span></td>
                   <td class="co-table__name">{{ r.branchName }}</td>
+                  <td>{{ r.actualWeight | number: '1.0-2' }}</td>
                   <td>{{ r.shipmentCount }}</td>
                   <td class="co-table__money">₹{{ money(r.revenue) }}</td>
                 </tr>

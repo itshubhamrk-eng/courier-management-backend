@@ -109,12 +109,13 @@ export interface HubSummaryRow {
 /** One stage of the shipment lifecycle, with its month-to-date count. */
 export interface PipelineStage { stage: string; count: number; }
 
-/** A row in the Top Routes card. */
-export interface TopRoute {
+/** A row in the Top Branches card (booking branch, ranked by actual weight). */
+export interface TopBranch {
   branchId: string | null;
   branchCode: string | null;
   branchName: string;
   shipmentCount: number;
+  actualWeight: number;
   revenue: number;
 }
 
@@ -145,7 +146,7 @@ export interface RejectedPod {
 
 /**
  * Company-wide operational overview (COMPANY_ADMIN profile only) — pipeline, the
- * action-required backlog, wallet total across every branch, and top routes/customers.
+ * action-required backlog, wallet total across every branch, and top branches/customers.
  * `null` for a branch-scoped caller, whose layout never renders this section.
  */
 export interface CompanyOverview {
@@ -156,7 +157,7 @@ export interface CompanyOverview {
   delayedShipments: number;
   totalWalletBalance: number;
   lowBalanceBranches: number;
-  topRoutes: TopRoute[];
+  topBranches: TopBranch[];
   topCustomers: TopCustomer[];
   podOverview: PodOverview;
   /** Pending-delivery TO_PAY shipments — freight already debited from the delivery
@@ -167,7 +168,7 @@ export interface CompanyOverview {
 /**
  * Branch-scoped sibling of {@link CompanyOverview} — same pipeline/action-required shape
  * for a caller with an own branch (BRANCH_MANAGER/BRANCH_OPERATOR/hub roles). No wallet
- * total or top routes/customers: those are company-wide concepts, and the caller's own
+ * total or top branches/customers: those are company-wide concepts, and the caller's own
  * wallet balance is already a KPI tile. `null` for a company/platform-scoped caller,
  * whose layout renders `companyOverview` instead.
  */

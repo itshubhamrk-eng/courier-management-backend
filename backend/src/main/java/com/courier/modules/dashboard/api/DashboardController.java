@@ -34,7 +34,7 @@ public class DashboardController {
                     + "the frontend already derives those from the live list endpoints. A "
                     + "caller with no own branch (COMPANY_ADMIN) additionally receives "
                     + "companyOverview: the shipment pipeline, action-required backlog "
-                    + "counts, company-wide wallet total and top routes/customers.")
+                    + "counts, company-wide wallet total and top branches/customers.")
     public ApiResponse<DashboardSummaryResponse> summary() {
         return ApiResponse.success(service.summary());
     }

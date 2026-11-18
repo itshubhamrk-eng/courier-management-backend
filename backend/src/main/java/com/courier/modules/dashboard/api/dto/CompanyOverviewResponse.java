@@ -16,7 +16,7 @@ public record CompanyOverviewResponse(
         long delayedShipments,
         BigDecimal totalWalletBalance,
         long lowBalanceBranches,
-        List<TopRouteResponse> topRoutes,
+        List<TopBranchResponse> topBranches,
         List<TopCustomerResponse> topCustomers,
         PodOverviewResponse podOverview,
         long toPayAwaitingDelivery
