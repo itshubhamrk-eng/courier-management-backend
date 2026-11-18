@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
 import { PermissionService } from '@core/auth/permission.service';
@@ -74,6 +74,7 @@ export class ShipmentList implements OnInit {
   private readonly perms = inject(PermissionService);
   private readonly confirm = inject(DialogService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
 
   /** A branch-tier viewer sees only their own branch's bookings — booking branch is
@@ -105,7 +106,23 @@ export class ShipmentList implements OnInit {
     this.breadcrumb.set([{ label: 'Shipments' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
     this.masters.options('payment-modes').subscribe((o) => this.paymentModeOptions.set(o));
+    this.applyLinkedFilters();
     this.load();
+  }
+
+  /** A dashboard tile deep-links here with ?status=A,B&bookingDateFrom=..&bookingDateTo=.. */
+  private applyLinkedFilters(): void {
+    const q = this.route.snapshot.queryParamMap;
+    const status = q.get('status');
+    const from = q.get('bookingDateFrom');
+    const to = q.get('bookingDateTo');
+    if (!status && !from && !to) return;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    this.filters.set({
+      ...(status ? { status: status.split(',').filter(Boolean) as ShipmentSearchRequest['status'] } : {}),
+      ...(from && datePattern.test(from) ? { bookingDateFrom: from } : {}),
+      ...(to && datePattern.test(to) ? { bookingDateTo: to } : {})
+    });
   }
 
   private buildQuery(size?: number): PageQuery {

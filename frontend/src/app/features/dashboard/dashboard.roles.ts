@@ -24,6 +24,15 @@ export interface StatTileDef {
   tone: Tone;
   /** Prefixed to the value, e.g. the currency symbol. */
   prefix?: string;
+  /** Where a click on the tile goes — the page that lists exactly what the number counts. */
+  link?: TileLink;
+}
+
+/** `month` adds the current month's booking-date range, matching how the backend counts. */
+export interface TileLink {
+  route: string;
+  query?: Record<string, string>;
+  month?: boolean;
 }
 
 export interface QuickActionDef {
@@ -58,24 +67,24 @@ export interface DashboardLayout {
 
 // --- reusable tiles -------------------------------------------------------
 const T = {
-  todayShipments: { key: 'todayShipments', label: "This Month's Shipments", icon: 'local_shipping', tone: 'brand' },
-  delivered:      { key: 'delivered', label: 'Delivered This Month', icon: 'task_alt', tone: 'success' },
-  inTransit:      { key: 'inTransit', label: 'In Transit This Month', icon: 'moving', tone: 'info' },
-  pending:        { key: 'pending', label: 'Pending This Month', icon: 'pending_actions', tone: 'warning' },
-  revenue:        { key: 'totalRevenue', label: 'Total Revenue', icon: 'payments', tone: 'success', prefix: '₹' },
-  activeBranches: { key: 'activeBranches', label: 'Active Branches', icon: 'store', tone: 'brand' },
+  todayShipments: { key: 'todayShipments', label: "This Month's Shipments", icon: 'local_shipping', tone: 'brand', link: { route: '/shipments', month: true } },
+  delivered:      { key: 'delivered', label: 'Delivered This Month', icon: 'task_alt', tone: 'success', link: { route: '/shipments', query: { status: 'DELIVERED' }, month: true } },
+  inTransit:      { key: 'inTransit', label: 'In Transit This Month', icon: 'moving', tone: 'info', link: { route: '/shipments', query: { status: 'DISPATCHED,IN_SCAN,OUT_FOR_DELIVERY' }, month: true } },
+  pending:        { key: 'pending', label: 'Pending This Month', icon: 'pending_actions', tone: 'warning', link: { route: '/shipments', query: { status: 'BOOKED,READY_FOR_MANIFEST,MANIFEST_CREATED' }, month: true } },
+  revenue:        { key: 'totalRevenue', label: 'Total Revenue', icon: 'payments', tone: 'success', prefix: '₹', link: { route: '/shipments', month: true } },
+  activeBranches: { key: 'activeBranches', label: 'Active Branches', icon: 'store', tone: 'brand', link: { route: '/branches' } },
   // activeHubs: { key: 'activeHubs', label: 'Active Hubs', icon: 'hub', tone: 'info' }, // hub module not built yet
-  wallet:         { key: 'walletBalance', label: 'Wallet Balance', icon: 'account_balance_wallet', tone: 'brand', prefix: '₹' },
-  todayBookings:  { key: 'todayBookings', label: "This Month's Bookings", icon: 'add_box', tone: 'info' },
-  todayCollection:{ key: 'todayCollection', label: "This Month's Collection", icon: 'savings', tone: 'success', prefix: '₹' },
-  pendingDelivery:{ key: 'pendingDelivery', label: 'Pending Delivery', icon: 'local_shipping', tone: 'warning' },
-  toReceive:      { key: 'toReceive', label: 'To Receive', icon: 'call_received', tone: 'brand' },
-  toDispatch:     { key: 'toDispatch', label: 'Dispatch Queue', icon: 'send', tone: 'info' },
-  inSorting:      { key: 'inSorting', label: 'In Sorting', icon: 'sort', tone: 'warning' },
-  totalCompanies: { key: 'totalCompanies', label: 'Total Companies', icon: 'apartment', tone: 'brand' },
-  activeCompanies:{ key: 'activeCompanies', label: 'Active Companies', icon: 'domain_verification', tone: 'success' },
-  totalShipments: { key: 'totalShipments', label: 'Total Shipments', icon: 'inventory_2', tone: 'info' },
-  totalActualWeight: { key: 'totalActualWeight', label: 'Total Actual Weight (kg)', icon: 'scale', tone: 'info' },
+  wallet:         { key: 'walletBalance', label: 'Wallet Balance', icon: 'account_balance_wallet', tone: 'brand', prefix: '₹', link: { route: '/finance/branch-wallet' } },
+  todayBookings:  { key: 'todayBookings', label: "This Month's Bookings", icon: 'add_box', tone: 'info', link: { route: '/shipments', month: true } },
+  todayCollection:{ key: 'todayCollection', label: "This Month's Collection", icon: 'savings', tone: 'success', prefix: '₹', link: { route: '/shipments', month: true } },
+  pendingDelivery:{ key: 'pendingDelivery', label: 'Pending Delivery', icon: 'local_shipping', tone: 'warning', link: { route: '/movement/pending-delivery' } },
+  toReceive:      { key: 'toReceive', label: 'To Receive', icon: 'call_received', tone: 'brand', link: { route: '/hub-operations/in-scan' } },
+  toDispatch:     { key: 'toDispatch', label: 'Dispatch Queue', icon: 'send', tone: 'info', link: { route: '/hub-operations/dispatch' } },
+  inSorting:      { key: 'inSorting', label: 'In Sorting', icon: 'sort', tone: 'warning', link: { route: '/hub-operations/sorting' } },
+  totalCompanies: { key: 'totalCompanies', label: 'Total Companies', icon: 'apartment', tone: 'brand', link: { route: '/companies' } },
+  activeCompanies:{ key: 'activeCompanies', label: 'Active Companies', icon: 'domain_verification', tone: 'success', link: { route: '/companies' } },
+  totalShipments: { key: 'totalShipments', label: 'Total Shipments', icon: 'inventory_2', tone: 'info', link: { route: '/shipments' } },
+  totalActualWeight: { key: 'totalActualWeight', label: 'Total Actual Weight (kg)', icon: 'scale', tone: 'info', link: { route: '/shipments', month: true } },
   ratePerKg:      { key: 'ratePerKg', label: 'Rate per KG', icon: 'currency_rupee', tone: 'brand', prefix: '₹' }
 } satisfies Record<string, StatTileDef>;
 

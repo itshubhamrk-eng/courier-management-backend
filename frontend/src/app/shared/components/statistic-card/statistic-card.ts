@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 
 type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info';
@@ -10,7 +10,9 @@ type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatIconModule],
   template: `
-    <div class="app-card stat" [attr.data-tone]="tone()">
+    <div class="app-card stat" [class.stat--link]="clickable()" [attr.data-tone]="tone()"
+         [attr.role]="clickable() ? 'link' : null" [attr.tabindex]="clickable() ? 0 : null"
+         (click)="clickable() && activate.emit()" (keydown.enter)="clickable() && activate.emit()">
       <div class="stat__icon" [attr.data-tone]="tone()"><mat-icon>{{ icon() }}</mat-icon></div>
       <div class="stat__body">
         <p class="text-caption">{{ label() }}</p>
@@ -32,6 +34,8 @@ type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info';
     .stat { position:relative; display:flex; align-items:center; gap:16px; padding:20px 22px;
       overflow:hidden; transition:transform .15s ease, box-shadow .15s ease; }
     .stat::before { content:''; position:absolute; inset:0; opacity:.5; pointer-events:none; }
+    .stat--link { cursor:pointer; }
+    .stat--link:focus-visible { outline:2px solid var(--brand-500); outline-offset:2px; }
     .stat:hover { transform:translateY(-2px); box-shadow:var(--shadow-clay-hover) !important; }
     .stat[data-tone="brand"]::before   { background:linear-gradient(135deg, var(--brand-50), transparent 70%); }
     .stat[data-tone="success"]::before { background:linear-gradient(135deg, var(--success-bg), transparent 70%); }
@@ -76,4 +80,7 @@ export class StatisticCard {
   readonly loading = input(false);
   readonly delta = input<number | null>(null);
   readonly deltaLabel = input('');
+  /** When true the tile acts as a link: click or Enter emits {@link activate}. */
+  readonly clickable = input(false);
+  readonly activate = output<void>();
 }

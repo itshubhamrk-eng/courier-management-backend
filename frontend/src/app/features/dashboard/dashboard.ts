@@ -85,7 +85,8 @@ const WEIGHT_KEYS: ReadonlySet<keyof DashboardStatistics> = new Set(['totalActua
           @for (t of layout().stats; track t.key) {
             <app-statistic-card
               [label]="t.label" [icon]="t.icon" [tone]="t.tone" [prefix]="t.prefix ?? ''"
-              [loading]="loading()" [value]="statValue(t)" />
+              [loading]="loading()" [value]="statValue(t)"
+              [clickable]="!!t.link" (activate)="openStat(t)" />
           }
         </section>
 
@@ -298,6 +299,21 @@ export class Dashboard implements OnInit {
     if (WEIGHT_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
     if (RATE_KEYS.has(t.key)) return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
     return v;
+  }
+
+  /** Open the page behind a tile, filtered the same way the backend counted it. */
+  openStat(t: StatTileDef): void {
+    const l = t.link;
+    if (!l) return;
+    const query: Record<string, string> = { ...(l.query ?? {}) };
+    if (l.month) {
+      const now = new Date();
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      query['bookingDateFrom'] = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+      query['bookingDateTo'] = iso(now);
+    }
+    this.router.navigate([l.route], { queryParams: query });
   }
 
   onAction(a: QuickActionDef): void {
