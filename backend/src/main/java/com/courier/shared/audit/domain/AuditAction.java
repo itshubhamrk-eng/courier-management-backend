@@ -230,6 +230,7 @@ public enum AuditAction {
     // The wallet debit for a PREPAID booking is its own WALLET_DEBITED entry, written by
     // Finance — see the branch wallet section above — not duplicated here.
     SHIPMENT_BOOKED,
+    LEGACY_IMPORT_COMMITTED,
     SHIPMENT_UPDATED,
     SHIPMENT_CANCELLED,
     SHIPMENT_DOCUMENT_UPLOADED,

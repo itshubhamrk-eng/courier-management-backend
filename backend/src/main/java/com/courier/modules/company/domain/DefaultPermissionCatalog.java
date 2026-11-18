@@ -134,6 +134,8 @@ public final class DefaultPermissionCatalog {
                 EnumSet.of(CREATE, READ, UPDATE, DELETE, SEARCH, EXPORT, PRINT));
         MATRIX.put(PermissionModule.ROUTE_MASTER, MASTER);
 
+        MATRIX.put(PermissionModule.LEGACY_IMPORT, EnumSet.of(CREATE, READ));
+
         // Operations.
         // UPLOAD added for Shipment Booking's POST /shipments/{id}/documents (Invoice,
         // E-Way Bill, Packing List, LR Copy, POD) — 2026-07-30.

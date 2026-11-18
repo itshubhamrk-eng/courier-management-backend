@@ -46,11 +46,12 @@ class DefaultPermissionCatalogTest {
         // PRICING_ZONE and CUSTOMER_RATE modules, 9 MASTER-shaped rights each), and V110 a further 7 (the new
         // CUSTOMER_BILLING module: CREATE/READ/UPDATE/DELETE/SEARCH/EXPORT/PRINT), and V115 a further 23
         // (the new PDP, PDP_RATE and PDP_BILLING modules: 7 + 9 + 7), and V139 a further 3
-        // (the new SECURITY_INCIDENT module: READ/SEARCH/UPDATE). All generated
+        // (the new SECURITY_INCIDENT module: READ/SEARCH/UPDATE), and V145 a further 2
+        // (the new LEGACY_IMPORT module: CREATE/READ). All generated
         // from this matrix.
         // If someone adds a module or action here without a follow-up migration, this is
         // the tripwire.
-        assertThat(DefaultPermissionCatalog.size()).isEqualTo(304);
+        assertThat(DefaultPermissionCatalog.size()).isEqualTo(306);
     }
 
     @Test

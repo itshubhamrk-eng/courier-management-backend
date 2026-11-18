@@ -302,6 +302,18 @@ public class Shipment extends CompanyOwnedEntity {
     @Builder.Default
     private FlowType flowType = FlowType.STANDARD;
 
+    /** True for a shipment brought in from the old software's export — history only: no
+     *  pricing, wallet, commission or notification ever ran for it. See
+     *  {@code com.courier.modules.legacyimport}. */
+    @Column(name = "legacy_import", nullable = false, updatable = false)
+    @Builder.Default
+    private boolean legacyImport = false;
+
+    /** The import batch that created this shipment; null for every ordinary booking. */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "legacy_batch_id", columnDefinition = "BINARY(16)", updatable = false)
+    private UUID legacyBatchId;
+
     // ---------------------------------------------------------------- behaviour
 
     public boolean isEditable() {

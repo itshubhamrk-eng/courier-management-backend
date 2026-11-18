@@ -82,6 +82,10 @@ public enum PermissionModule {
     CUSTOMER_BILLING("Customer Billing", 128),
     ROUTE_MASTER("Route Master", 120),
 
+    /** One-off import of the old software's consignment export as history-only shipments.
+     *  COMPANY_ADMIN-only; see {@code com.courier.modules.legacyimport}. */
+    LEGACY_IMPORT("Legacy Import", 131),
+
     SHIPMENT("Shipments", 130),
     /** One row per E-Way Bill raised against a shipment. See {@code com.courier.modules.ewaybill}. */
     EWAY_BILL("E-Way Bill", 135),
