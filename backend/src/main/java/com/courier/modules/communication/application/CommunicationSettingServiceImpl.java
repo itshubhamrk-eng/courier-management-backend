@@ -143,6 +143,10 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
                     credentials);
             log.info("WhatsApp test message sent in company {} by {}, message id {}", CompanyContext.getCompanyId().orElse(null),
                     currentActor(), result.providerMessageId());
+            if (result.providerMessageId() != null && result.providerMessageId().startsWith("log-whatsapp-")) {
+                return new ConnectionTestResult(false, "Nothing was sent: this server runs the log-only WhatsApp "
+                        + "provider. Set COMMUNICATION_WHATSAPP_ENABLED=true and restart the backend for real sends.");
+            }
             return new ConnectionTestResult(true, "Meta accepted the test message"
                     + (result.providerMessageId() == null ? "." : " (id " + result.providerMessageId() + "). Check the phone."));
         } catch (com.courier.modules.communication.application.provider.ProviderSendException e) {
