@@ -63,6 +63,7 @@ class UserPermissionServiceImplTest {
     @Mock private UserPermissionOverrideRepository overrideRepository;
     @Mock private MenuItemRepository menuItemRepository;
     @Mock private com.courier.modules.company.domain.UserMenuGrantRepository menuGrantRepository;
+    @Mock private com.courier.modules.company.domain.RoleMenuRepository roleMenuRepository;
     @Mock private AuditService auditService;
 
     private UserPermissionServiceImpl service;
@@ -75,7 +76,7 @@ class UserPermissionServiceImplTest {
     void setUp() {
         service = new UserPermissionServiceImpl(userRepository, userRoleRepository,
                 rolePermissionRepository, permissionRepository, overrideRepository,
-                menuItemRepository, menuGrantRepository, auditService);
+                menuItemRepository, menuGrantRepository, roleMenuRepository, auditService);
         CompanyContext.setCompanyId(TENANT);
 
         targetUser = User.builder()
@@ -279,5 +280,73 @@ class UserPermissionServiceImplTest {
         assertThat(leaf.roleDefault()).doesNotContainKey(PermissionAction.UPDATE);
         assertThat(leaf.effective()).isEqualTo(leaf.roleDefault());
         assertThat(leaf.overridden().values()).allMatch(v -> !v);
+    }
+
+    // ------------------------------------------------------------- allowedMenuCodes
+
+    private MenuItem second;
+    private static final UUID ROLE_TWO = UUID.randomUUID();
+
+    private void withTwoMenusAndTwoRoles() {
+        second = MenuItem.builder().code("communication-logs").title("Logs")
+                .permissionModule(PermissionModule.NOTIFICATION).displayOrder(2).active(true).build();
+        second.setId(UUID.randomUUID());
+        when(menuItemRepository.findAllById(any())).thenAnswer(i -> {
+            java.util.Collection<UUID> ids = i.getArgument(0);
+            return java.util.stream.Stream.of(bookingLeaf, second).filter(m -> ids.contains(m.getId())).toList();
+        });
+        UserRole one = UserRole.builder().userId(USER_ID).roleId(ROLE_ID).roleCode("A").build();
+        UserRole two = UserRole.builder().userId(USER_ID).roleId(ROLE_TWO).roleCode("B").build();
+        when(userRoleRepository.findAllByUserIdOrderByRoleCodeAsc(USER_ID)).thenReturn(List.of(one, two));
+    }
+
+    private com.courier.modules.company.domain.RoleMenu roleMenu(UUID roleId, MenuItem menu, boolean read) {
+        return com.courier.modules.company.domain.RoleMenu.builder()
+                .roleId(roleId).menuItemId(menu.getId()).canRead(read).build();
+    }
+
+    @Test
+    void allowedMenuCodes_isUnionOfRoleMenusAcrossRoles() {
+        withTwoMenusAndTwoRoles();
+        when(roleMenuRepository.findAllByRoleIdIn(any())).thenReturn(List.of(
+                roleMenu(ROLE_ID, bookingLeaf, true), roleMenu(ROLE_TWO, second, true)));
+
+        assertThat(service.allowedMenuCodes(USER_ID)).containsExactlyInAnyOrder("booking", "communication-logs");
+    }
+
+    @Test
+    void allowedMenuCodes_excludesMenusWithoutReadFlag() {
+        withTwoMenusAndTwoRoles();
+        when(roleMenuRepository.findAllByRoleIdIn(any())).thenReturn(List.of(
+                roleMenu(ROLE_ID, bookingLeaf, true), roleMenu(ROLE_ID, second, false)));
+
+        assertThat(service.allowedMenuCodes(USER_ID)).containsExactly("booking");
+    }
+
+    @Test
+    void allowedMenuCodes_excludesMenusDeniedForThisUser() {
+        withTwoMenusAndTwoRoles();
+        when(roleMenuRepository.findAllByRoleIdIn(any())).thenReturn(List.of(
+                roleMenu(ROLE_ID, bookingLeaf, true), roleMenu(ROLE_TWO, second, true)));
+        when(menuGrantRepository.findAllByUserId(USER_ID)).thenReturn(List.of(
+                com.courier.modules.company.domain.UserMenuGrant.builder()
+                        .userId(USER_ID).menuItemId(bookingLeaf.getId()).canRead(false).build()));
+
+        assertThat(service.allowedMenuCodes(USER_ID)).containsExactly("communication-logs");
+    }
+
+    @Test
+    void allowedMenuCodes_emptyWhenRoleHasNoRoleMenuRows() {
+        withTwoMenusAndTwoRoles();
+        when(roleMenuRepository.findAllByRoleIdIn(any())).thenReturn(List.of());
+
+        assertThat(service.allowedMenuCodes(USER_ID)).isEmpty();
+    }
+
+    @Test
+    void allowedMenuCodes_emptyWhenUserHasNoRoles() {
+        when(userRoleRepository.findAllByUserIdOrderByRoleCodeAsc(USER_ID)).thenReturn(List.of());
+
+        assertThat(service.allowedMenuCodes(USER_ID)).isEmpty();
     }
 }

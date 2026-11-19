@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 /** What the signed-in user's own sidebar reads: menus an admin explicitly unticked for them. */
 @RestController
@@ -23,13 +24,16 @@ public class MyMenuGrantsController {
 
     private final UserPermissionService service;
 
-    public record DeniedMenusResponse(List<String> deniedMenus) { }
+    public record MyMenusResponse(List<String> deniedMenus, List<String> allowedMenus) { }
 
     @GetMapping("/me")
-    @Operation(summary = "Menus unticked for the caller",
-            description = "Node ids to hide from the caller's sidebar. Empty when nothing was unticked.")
-    public ApiResponse<DeniedMenusResponse> mine() {
-        return ApiResponse.success(new DeniedMenusResponse(
-                service.deniedMenuCodes(SecurityUtils.requireCurrentUser().userId())));
+    @Operation(summary = "The caller's menus",
+            description = "deniedMenus: node ids unticked for the caller personally (hide them). "
+                    + "allowedMenus: node ids their roles hold, minus those denied; "
+                    + "the sidebar of a custom-role user is exactly this list.")
+    public ApiResponse<MyMenusResponse> mine() {
+        UUID userId = SecurityUtils.requireCurrentUser().userId();
+        return ApiResponse.success(new MyMenusResponse(
+                service.deniedMenuCodes(userId), service.allowedMenuCodes(userId)));
     }
 }

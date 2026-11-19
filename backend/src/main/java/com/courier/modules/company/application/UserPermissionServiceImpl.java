@@ -4,6 +4,8 @@ import com.courier.modules.company.domain.CompanyUserRepository;
 import com.courier.modules.company.domain.MenuItem;
 import com.courier.modules.company.domain.MenuItemRepository;
 import com.courier.modules.company.domain.UserMenuGrant;
+import com.courier.modules.company.domain.RoleMenu;
+import com.courier.modules.company.domain.RoleMenuRepository;
 import com.courier.modules.company.domain.UserMenuGrantRepository;
 import com.courier.modules.company.domain.Permission;
 import com.courier.modules.company.domain.PermissionAction;
@@ -36,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +83,7 @@ public class UserPermissionServiceImpl implements UserPermissionService {
     private final UserPermissionOverrideRepository overrideRepository;
     private final MenuItemRepository menuItemRepository;
     private final UserMenuGrantRepository menuGrantRepository;
+    private final RoleMenuRepository roleMenuRepository;
     private final AuditService auditService;
 
     @Override
@@ -299,6 +303,32 @@ public class UserPermissionServiceImpl implements UserPermissionService {
             }
         }
         return denied;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> allowedMenuCodes(UUID userId) {
+        List<UUID> roleIds = userRoleRepository.findAllByUserIdOrderByRoleCodeAsc(userId).stream()
+                .map(UserRole::getRoleId)
+                .toList();
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> menuIds = roleMenuRepository.findAllByRoleIdIn(roleIds).stream()
+                .filter(RoleMenu::isCanRead)
+                .map(RoleMenu::getMenuItemId)
+                .distinct()
+                .toList();
+        if (menuIds.isEmpty()) {
+            return List.of();
+        }
+        Set<String> denied = new HashSet<>(deniedMenuCodes(userId));
+        return menuItemRepository.findAllById(menuIds).stream()
+                .filter(MenuItem::isActive)
+                .map(MenuItem::getCode)
+                .filter(code -> !denied.contains(code))
+                .sorted()
+                .toList();
     }
 
     // -------------------------------------------------------------------- helpers

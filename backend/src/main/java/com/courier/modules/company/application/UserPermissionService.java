@@ -52,6 +52,12 @@ public interface UserPermissionService {
      */
     List<String> deniedMenuCodes(UUID userId);
 
+    /**
+     * Menu codes the user may see: those their active roles hold in {@code role_menu} with READ,
+     * minus any an admin unticked for this one user. Empty when the roles hold no menus.
+     */
+    List<String> allowedMenuCodes(UUID userId);
+
     record MenuPermissionUpdateItem(UUID menuItemId, boolean create, boolean read,
                                     boolean update, boolean delete) {
     }
