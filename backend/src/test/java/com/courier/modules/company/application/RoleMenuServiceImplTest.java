@@ -159,6 +159,19 @@ class RoleMenuServiceImplTest {
     }
 
     @Test
+    void replace_alwaysGrantsReadWhenAnyActionIsTicked() {
+        service.replace(role.getId(), List.of(item(tickets, false, true, false, false)));
+
+        ArgumentCaptor<List<RoleMenu>> saved = ArgumentCaptor.forClass(List.class);
+        verify(roleMenuRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(row -> {
+            assertThat(row.isCanRead()).isTrue();
+            assertThat(row.isCanCreate()).isTrue();
+        });
+        assertThat(finalCodes()).contains("NOTIFICATION_READ", "NOTIFICATION_CREATE");
+    }
+
+    @Test
     void replace_ignoresGroupMenus() {
         service.replace(role.getId(), List.of(item(group, true, true, true, true)));
 

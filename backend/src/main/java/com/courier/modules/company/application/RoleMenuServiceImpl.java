@@ -64,7 +64,10 @@ public class RoleMenuServiceImpl implements RoleMenuService {
         Map<UUID, RoleMenuItem> desired = new LinkedHashMap<>();
         for (RoleMenuItem item : items) {
             if (item.anyTicked()) {
-                desired.put(item.menuItemId(), item);
+                // Holding a menu always includes READ: without it the menu is hidden and its list
+                // API answers 403, whatever else was ticked.
+                desired.put(item.menuItemId(), new RoleMenuItem(item.menuItemId(), item.canCreate(),
+                        true, item.canUpdate(), item.canDelete()));
             }
         }
         Map<UUID, RoleMenu> existing = roleMenuRepository.findAllByRoleId(roleId).stream()

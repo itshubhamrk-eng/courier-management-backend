@@ -44,7 +44,7 @@ public class BusinessCustomerDashboardServiceImpl implements BusinessCustomerDas
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "')")
+    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "') or hasAuthority('CUSTOMER_READ')")
     public BusinessCustomerDashboard overview() {
         UUID companyId = CompanyContext.getCompanyId().orElseThrow(() -> new BusinessRuleException(
                 "No company is bound to this request. The dashboard belongs to a company."));
