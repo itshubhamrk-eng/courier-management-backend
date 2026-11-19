@@ -94,7 +94,7 @@ export class SupportDashboard implements OnInit {
     this.breadcrumb.set([{ label: 'Support' }, { label: 'Dashboard' }]);
     this.masters.branchDirectory().subscribe((b) => this.branchNames.set(new Map(b.map((x) => [x.id, x.branchName]))));
     this.service.categories().subscribe((c) => this.categoryNames.set(new Map(c.map((x) => [x.id, x.name]))));
-    this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) =>
+    if (this.perms.canListUsers()) this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) =>
       this.agentNames.set(new Map(p.content.map((u) => [u.id, u.displayName]))));
 
     this.load();

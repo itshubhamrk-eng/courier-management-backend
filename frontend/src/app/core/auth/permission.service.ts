@@ -34,6 +34,13 @@ export class PermissionService {
     return roles.length > 0 && roles.every((r) => !BUILT_IN_ROLES.has(r));
   }
 
+  /**
+   * Whether a screen may call `GET /users` for a staff picker (agents, assignees). A built-in role
+   * is admitted by the backend on its role; a custom-role user only with `USER_READ`. Pages that
+   * merely *decorate* with names should skip the call otherwise, instead of toasting a 403.
+   */
+  canListUsers(): boolean { return !this.isCustomOnly() || this.hasPermission('USER_READ'); }
+
   hasPermission(code: string): boolean { return this.permissionSet().has(code); }
   hasAnyPermission(codes: string[]): boolean {
     return codes.length === 0 || codes.some((c) => this.permissionSet().has(c));

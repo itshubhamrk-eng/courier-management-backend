@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { UserService } from '@features/users/user.service';
+import { PermissionService } from '@core/auth/permission.service';
 import { TicketService } from '@core/services/ticket.service';
 import { PageQuery, emptyPage } from '@core/models/page.model';
 import {
@@ -112,6 +113,7 @@ export class TicketList implements OnInit {
   private readonly service = inject(TicketService);
   private readonly masters = inject(MasterDataService);
   private readonly users = inject(UserService);
+  private readonly perms = inject(PermissionService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly router = inject(Router);
 
@@ -159,7 +161,7 @@ export class TicketList implements OnInit {
       this.branchOptions.set(branches.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` })));
       this.branchNames.set(new Map(branches.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
     });
-    this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) => {
+    if (this.perms.canListUsers()) this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) => {
       this.agentOptions.set(p.content.map((u) => ({ value: u.id, label: u.displayName })));
       this.agentNames.set(new Map(p.content.map((u) => [u.id, u.displayName])));
     });

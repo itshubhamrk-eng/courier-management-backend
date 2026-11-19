@@ -318,7 +318,7 @@ export class TicketDetailPage implements OnInit {
       this.service.subCategories(categoryId).subscribe((subs) =>
         this.subCategoryOptions.set(subs.filter((s) => s.active).map((s) => ({ value: s.id, label: s.name }))));
     });
-    this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) => {
+    if (this.perms.canListUsers()) this.users.list({ page: 0, size: 200, sort: 'displayName,asc' }).subscribe((p) => {
       this.agentOptions.set(p.content.map((u) => ({ value: u.id, label: u.displayName })));
       this.userNames.update((m) => {
         const next = new Map(m);
