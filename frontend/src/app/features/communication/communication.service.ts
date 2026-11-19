@@ -82,6 +82,11 @@ export class CommunicationService {
     return this.api.post<ConnectionTestResult>(`${API.communicationSettings}/${channel}/test-connection`, {});
   }
 
+  /** Live send of Meta's hello_world template with the saved WhatsApp credentials. */
+  sendTestMessage(recipient: string) {
+    return this.api.post<ConnectionTestResult>(`${API.communicationSettings}/WHATSAPP/test-message`, { recipient });
+  }
+
   // ---------------------------------------------------------------- logs
 
   searchLogs(criteria: CommunicationLogSearchRequest, query?: PageQuery): Observable<Page<CommunicationLog>> {

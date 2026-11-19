@@ -84,6 +84,14 @@ const CARDS: ChannelCard[] = [
                   [placeholder]="secretConfigured(card.channel) ? 'Configured — leave blank to keep it' : 'Not set'" />
               }
 
+              @if (card.channel === 'WHATSAPP') {
+                <div class="testmsg">
+                  <app-input [control]="testRecipient" label="Test message to" placeholder="9876543210 — sends Meta's hello_world" />
+                  <app-button type="button" variant="stroked" icon="send" [loading]="sendingTest()" (pressed)="sendTest()">Send Test Message</app-button>
+                </div>
+                <span class="text-caption">Save your changes first — the test uses the saved credentials. A test-mode number can only message numbers added to its allowed list in Meta.</span>
+              }
+
               <div class="status">
                 @if (testResult(card.channel); as r) {
                   <span [class.ok]="r.ok" [class.bad]="!r.ok">{{ r.message }}</span>
@@ -106,6 +114,8 @@ const CARDS: ChannelCard[] = [
     .flag { display:flex; align-items:center; gap:12px; }
     .flag span { display:flex; flex-direction:column; }
     .flag em { font-style:normal; font-size:15px; color:var(--content-muted); }
+    .testmsg { display:flex; gap:10px; align-items:flex-start; }
+    .testmsg app-input { flex:1; }
     .status { min-height:18px; font:500 15px var(--font-sans); }
     .status .ok { color:var(--success); }
     .status .bad { color:var(--danger); }
@@ -122,6 +132,9 @@ export class ChannelSettings implements OnInit {
   protected readonly forms: Record<CommunicationChannel, FormGroup> = {
     WHATSAPP: this.buildForm(), SMS: this.buildForm(), EMAIL: this.buildForm()
   };
+
+  protected readonly testRecipient = new FormControl('', { nonNullable: true });
+  protected readonly sendingTest = signal(false);
 
   private readonly settings = signal<Map<CommunicationChannel, CommunicationSetting>>(new Map());
   private readonly savingState = signal<Set<CommunicationChannel>>(new Set());
@@ -198,6 +211,22 @@ export class ChannelSettings implements OnInit {
       error: (e) => {
         this.savingState.update((s) => { const n = new Set(s); n.delete(card.channel); return n; });
         this.notify.error(apiMessage(e, `Could not save the ${card.title} settings.`));
+      }
+    });
+  }
+
+  protected sendTest(): void {
+    const to = this.testRecipient.value.trim();
+    if (!to) { this.notify.error('Enter the number to send the test message to.'); return; }
+    this.sendingTest.set(true);
+    this.service.sendTestMessage(to).subscribe({
+      next: (result) => {
+        this.testResults.update((m) => new Map(m).set('WHATSAPP', result));
+        this.sendingTest.set(false);
+      },
+      error: (e) => {
+        this.sendingTest.set(false);
+        this.notify.error(apiMessage(e, 'Could not send the test message.'));
       }
     });
   }

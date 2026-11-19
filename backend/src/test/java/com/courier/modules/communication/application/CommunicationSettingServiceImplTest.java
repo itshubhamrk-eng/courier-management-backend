@@ -33,12 +33,13 @@ class CommunicationSettingServiceImplTest {
 
     @Mock private CommunicationSettingRepository repository;
     @Mock private AuditService auditService;
+    @Mock private com.courier.modules.communication.application.provider.WhatsAppProvider whatsAppProvider;
 
     private CommunicationSettingServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CommunicationSettingServiceImpl(repository, auditService, new ObjectMapper());
+        service = new CommunicationSettingServiceImpl(repository, auditService, new ObjectMapper(), whatsAppProvider);
         CompanyContext.setCompanyId(COMPANY);
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
     }
@@ -113,5 +114,30 @@ class CommunicationSettingServiceImplTest {
 
         assertThat(result.ok()).isFalse();
         assertThat(result.message()).contains("disabled");
+    }
+
+    @org.junit.jupiter.api.Test
+    void sendTestMessageSendsHelloWorldWithStoredCredentials() {
+        var setting = com.courier.modules.communication.domain.CommunicationSetting.builder()
+                .channel(com.courier.modules.communication.domain.CommunicationChannel.WHATSAPP).enabled(true)
+                .configJson("{\"phoneNumberId\":\"123456789012\"}").secret("tok").build();
+        setting.setCompanyId(COMPANY);
+        when(repository.findByCompanyIdAndChannel(COMPANY,
+                com.courier.modules.communication.domain.CommunicationChannel.WHATSAPP))
+                .thenReturn(java.util.Optional.of(setting));
+        when(whatsAppProvider.send(any(), any())).thenReturn(
+                new com.courier.modules.communication.application.provider.ProviderSendResult("wamid.1"));
+
+        var result = service.sendTestMessage("9876543210");
+
+        org.assertj.core.api.Assertions.assertThat(result.ok()).isTrue();
+        org.mockito.Mockito.verify(whatsAppProvider).send(org.mockito.ArgumentMatchers.argThat(
+                m -> "hello_world".equals(m.approvedTemplateName()) && m.templateParameters().isEmpty()), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    void sendTestMessageRejectsShortNumber() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.sendTestMessage("123"))
+                .isInstanceOf(com.courier.shared.exception.BusinessRuleException.class);
     }
 }

@@ -34,6 +34,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     private final CommunicationSettingRepository repository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final com.courier.modules.communication.application.provider.WhatsAppProvider whatsAppProvider;
 
     @Override
     @Transactional
@@ -116,6 +117,37 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
                     ? new ConnectionTestResult(true, "From Email is set (SMTP is platform-configured).")
                     : new ConnectionTestResult(false, "From Email is required.");
         };
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
+    public ConnectionTestResult sendTestMessage(String recipient) {
+        if (recipient == null || recipient.replaceAll("\\D", "").length() < 10) {
+            throw new BusinessRuleException("Enter a valid WhatsApp number, with country code if it is not Indian.");
+        }
+        CommunicationSetting setting = get(CommunicationChannel.WHATSAPP);
+        if (!setting.isEnabled()) {
+            throw new BusinessRuleException("WhatsApp is disabled for this company. Enable it and save first.");
+        }
+        Map<String, String> config = CommunicationConfigJson.read(objectMapper, setting.getConfigJson());
+        var credentials = new com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppCredentials(
+                config.get("phoneNumberId"), config.get("businessAccountId"), setting.getSecret());
+        if (!credentials.isComplete()) {
+            throw new BusinessRuleException("Phone Number ID and Access Token are required. Save them first.");
+        }
+        try {
+            var result = whatsAppProvider.send(
+                    new com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppMessage(
+                            recipient, "hello_world", List.of(), "en_US", null, List.of()),
+                    credentials);
+            log.info("WhatsApp test message sent in company {} by {}, message id {}", CompanyContext.getCompanyId().orElse(null),
+                    currentActor(), result.providerMessageId());
+            return new ConnectionTestResult(true, "Meta accepted the test message"
+                    + (result.providerMessageId() == null ? "." : " (id " + result.providerMessageId() + "). Check the phone."));
+        } catch (com.courier.modules.communication.application.provider.ProviderSendException e) {
+            return new ConnectionTestResult(false, e.getMessage());
+        }
     }
 
     @Override

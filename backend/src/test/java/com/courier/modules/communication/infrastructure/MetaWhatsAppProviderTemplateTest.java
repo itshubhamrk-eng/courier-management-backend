@@ -216,7 +216,7 @@ class MetaWhatsAppProviderTemplateTest {
     void sendFallsBackToTheDeploymentLanguageWhenTheMessageHasNone() {
         server.expect(requestTo("https://graph.facebook.com/v19.0/111/messages"))
                 .andExpect(jsonPath("$.template.language.code").value("en_US"))
-                .andExpect(jsonPath("$.template.components.length()").value(1))
+                .andExpect(jsonPath("$.template.components.length()").value(0))
                 .andRespond(withSuccess("{\"messages\":[{\"id\":\"wamid.2\"}]}", MediaType.APPLICATION_JSON));
 
         provider.send(new WhatsAppProvider.WhatsAppMessage("9123456780", "hello_world", List.of()), CREDS);

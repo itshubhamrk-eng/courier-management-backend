@@ -62,4 +62,15 @@ public class CommunicationSettingController {
         var result = service.testConnection(channel);
         return ApiResponse.success(new ConnectionTestResponse(result.ok(), result.message()));
     }
+
+    public record TestMessageRequest(@jakarta.validation.constraints.NotBlank String recipient) {
+    }
+
+    @PostMapping("/WHATSAPP/test-message")
+    @Operation(summary = "Send a WhatsApp test message", description = "Live send of Meta's built-in "
+            + "hello_world template to the given number with the saved credentials.")
+    public ApiResponse<ConnectionTestResponse> sendTestMessage(@Valid @RequestBody TestMessageRequest request) {
+        var result = service.sendTestMessage(request.recipient());
+        return ApiResponse.success(new ConnectionTestResponse(result.ok(), result.message()));
+    }
 }

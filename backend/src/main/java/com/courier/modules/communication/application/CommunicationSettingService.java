@@ -22,6 +22,11 @@ public interface CommunicationSettingService {
      *  validates the configured fields are complete enough to attempt a send. */
     ConnectionTestResult testConnection(CommunicationChannel channel);
 
+    /** Live send of Meta's built-in {@code hello_world} template to {@code recipient} using this
+     *  company's stored WhatsApp credentials — the only real end-to-end check of them.
+     *  @throws com.courier.shared.exception.BusinessRuleException with Meta's own reason on failure */
+    ConnectionTestResult sendTestMessage(String recipient);
+
     /** No {@code @PreAuthorize} — called from {@code CommunicationOrchestrator}/{@code
      *  CommunicationSendService} on the {@code AFTER_COMMIT} listener thread and the
      *  scheduler thread, neither of which carries an authenticated caller. Never exposed

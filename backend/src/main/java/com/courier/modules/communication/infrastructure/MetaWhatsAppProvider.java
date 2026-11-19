@@ -74,8 +74,10 @@ public class MetaWhatsAppProvider implements WhatsAppProvider {
                 components.add(Map.of("type", "header", "parameters",
                         List.of(Map.of("type", "text", "text", message.headerParameter()))));
             }
-            components.add(Map.of("type", "body", "parameters", message.templateParameters().stream()
-                    .map(p -> Map.of("type", "text", "text", p)).toList()));
+            if (!message.templateParameters().isEmpty()) {
+                components.add(Map.of("type", "body", "parameters", message.templateParameters().stream()
+                        .map(p -> Map.of("type", "text", "text", p)).toList()));
+            }
             for (ButtonParameter button : message.buttonParameters()) {
                 components.add(Map.of("type", "button", "sub_type", "url", "index", String.valueOf(button.index()),
                         "parameters", List.of(Map.of("type", "text", "text", button.text()))));
