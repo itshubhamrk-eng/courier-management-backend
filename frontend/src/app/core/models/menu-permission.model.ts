@@ -125,3 +125,62 @@ export function flattenLeaves(node: MenuPermissionNode): MenuPermissionNode[] {
   const own = node.module ? [node] : [];
   return own.concat(node.children.flatMap(flattenLeaves));
 }
+
+/** One menu a role holds — body entry of `PUT /roles/{id}/menus` and its response row. */
+export interface RoleMenuEntry {
+  menuItemId: string;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+/**
+ * Same tree shape as {@link buildRoleMenuTree}, but the ticks come from the role's own menu
+ * assignment (`role_menu`), keyed by menu item id — so two menus sharing a permission module
+ * (Tickets and Communication) are independent. `roleDefault`/`effective` carry the saved ticks.
+ */
+export function buildRoleMenuTreeByMenu(
+  items: MenuItemNode[],
+  moduleActions: ReadonlyMap<string, CrudAction[]>,
+  saved: ReadonlyMap<string, ActionState>
+): MenuPermissionNode[] {
+  return items.map((item) => {
+    const module = item.permissionModule;
+    const offered = module ? (moduleActions.get(module) ?? []) : [];
+    const state: Partial<Record<CrudAction, boolean>> = {};
+    for (const action of offered) state[action] = saved.get(item.id)?.[action] === true;
+    return {
+      id: item.id, code: item.code, title: item.title, icon: item.icon, route: item.route,
+      module, displayOrder: item.displayOrder,
+      roleDefault: state, effective: state, overridden: {},
+      children: buildRoleMenuTreeByMenu(item.children, moduleActions, saved)
+    };
+  });
+}
+
+/**
+ * One checkbox change on a menu. A menu is only shown when READ is held, so ticking a write
+ * action also ticks READ (when the module offers it) and unticking READ clears the rest.
+ */
+export function applyMenuToggle(
+  current: ActionState, action: CrudAction, checked: boolean, offered: readonly CrudAction[]
+): ActionState {
+  const next: ActionState = { ...current, [action]: checked };
+  if (checked && action !== 'READ' && offered.includes('READ')) next.READ = true;
+  if (!checked && action === 'READ') {
+    for (const a of CRUD_ACTIONS) next[a] = false;
+  }
+  return next;
+}
+
+/** The request body for saving: every menu with at least one tick. */
+export function toRoleMenuEntries(state: ReadonlyMap<string, ActionState>): RoleMenuEntry[] {
+  const out: RoleMenuEntry[] = [];
+  for (const [menuItemId, s] of state) {
+    if (s.CREATE || s.READ || s.UPDATE || s.DELETE) {
+      out.push({ menuItemId, canCreate: s.CREATE, canRead: s.READ, canUpdate: s.UPDATE, canDelete: s.DELETE });
+    }
+  }
+  return out;
+}

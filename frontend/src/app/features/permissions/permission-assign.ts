@@ -12,7 +12,7 @@ import {
 } from '@core/models/permission.model';
 import {
   ActionState, CRUD_ACTIONS, CrudAction, MenuItemNode, MenuPermissionNode,
-  buildRoleMenuTree, flattenLeaves, hasAction
+  applyMenuToggle, buildRoleMenuTreeByMenu, flattenLeaves, hasAction, toRoleMenuEntries
 } from '@core/models/menu-permission.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiLoader } from '@shared/components/ui-loader/ui-loader';
@@ -71,7 +71,7 @@ type ViewMode = 'tree' | 'matrix';
         <app-card><p class="empty"><mat-icon>rule</mat-icon>Choose a role above to begin assigning permissions.</p></app-card>
       } @else {
         <app-card [title]="'Permissions for ' + currentRole()!.roleName"
-                  [subtitle]="selected().size + ' of ' + grantable().length + ' granted' + (dirty() ? ' · unsaved changes' : '')">
+                  [subtitle]="summary() + (dirty() ? ' · unsaved changes' : '')">
           <div class="asg__toolbar">
             @if (view() === 'matrix') { <app-search placeholder="Filter permissions…" (changed)="onSearch($event)" /> }
             <div class="asg__spacer"></div>
@@ -86,7 +86,7 @@ type ViewMode = 'tree' | 'matrix';
           @if (loadingGrants() || loadingMenuTree()) {
             <app-loader [minHeight]="200" caption="Loading role permissions…" />
           } @else if (view() === 'tree') {
-            <app-menu-permission-tree [nodes]="permissionNodes()" [pending]="pending()"
+            <app-menu-permission-tree [nodes]="permissionNodes()" [pending]="menuSelected()" keyBy="menu"
                                        (toggle)="onMenuToggle($event)" (toggleMany)="onMenuToggleMany($event)" />
           } @else {
             <div class="asg__matrix-bar">
@@ -151,6 +151,10 @@ export class PermissionAssign implements OnInit {
   readonly grantable = signal<Permission[]>([]);
   readonly selected = signal<Set<string>>(new Set());
   private original = signal<Set<string>>(new Set());
+  /** Tree view: the role's menus, ticked per menu item (`role_menu`), independent of the flat
+   *  permission codes above, so menus that share a permission module do not move together. */
+  readonly menuSelected = signal<Map<string, ActionState>>(new Map());
+  private menuOriginal = signal<Map<string, ActionState>>(new Map());
 
   readonly loadingCatalogue = signal(true);
   readonly loadingGrants = signal(false);
@@ -187,9 +191,19 @@ export class PermissionAssign implements OnInit {
       .filter((g) => g.permissions.length);
   });
 
-  readonly dirty = computed(() => !sameSet(this.selected(), this.original()));
-
+  private readonly dirtyCodes = computed(() => !sameSet(this.selected(), this.original()));
+  private readonly dirtyMenus = computed(() => !sameMenus(this.menuSelected(), this.menuOriginal()));
+  readonly dirty = computed(() => this.view() === 'tree' ? this.dirtyMenus() : this.dirtyCodes());
+  readonly summary = computed(() => this.view() === 'tree'
+    ? `${toRoleMenuEntries(this.menuSelected()).length} menus assigned`
+    : `${this.selected().size} of ${this.grantable().length} granted`);
   readonly delta = computed(() => {
+    if (this.view() === 'tree') {
+      const [msel, morig] = [this.menuSelected(), this.menuOriginal()];
+      const ids = new Set([...msel.keys(), ...morig.keys()]);
+      const changed = [...ids].filter((id) => !sameState(msel.get(id), morig.get(id))).length;
+      return `${changed} menus changed`;
+    }
     const [sel, orig] = [this.selected(), this.original()];
     const added = [...sel].filter((c) => !orig.has(c)).length;
     const removed = [...orig].filter((c) => !sel.has(c)).length;
@@ -210,22 +224,10 @@ export class PermissionAssign implements OnInit {
     return map;
   });
 
-  /** `roleDefault` here is the role's *saved* grants, so the tree's built-in "differs
+  /** `roleDefault` here is the role's *saved* menu ticks, so the tree's built-in "differs
    *  from default" dot reads as "differs from what was last saved". */
   readonly permissionNodes = computed<MenuPermissionNode[]>(() =>
-    buildRoleMenuTree(this.menuItems(), this.moduleActions(), this.original()));
-
-  /** Live checkbox state, derived straight from `selected` — no separate signal to
-   *  keep in sync. */
-  readonly pending = computed<Map<string, ActionState>>(() => {
-    const map = new Map<string, ActionState>();
-    for (const [module, actions] of this.moduleActions()) {
-      const state: ActionState = { CREATE: false, READ: false, UPDATE: false, DELETE: false };
-      for (const a of actions) state[a] = this.selected().has(`${module}_${a}`);
-      map.set(module, state);
-    }
-    return map;
-  });
+    buildRoleMenuTreeByMenu(this.menuItems(), this.moduleActions(), this.menuOriginal()));
 
   private readonly leafById = computed(() =>
     new Map(this.permissionNodes().flatMap((n) => flattenLeaves(n)).map((l) => [l.id, l])));
@@ -264,31 +266,51 @@ export class PermissionAssign implements OnInit {
       },
       error: () => { this.clearSelection(); this.loadingGrants.set(false); this.notify.error('Could not load the role permissions.'); }
     });
+    this.loadMenus(roleId);
   }
 
-  private clearSelection(): void { this.selected.set(new Set()); this.original.set(new Set()); }
+  private loadMenus(roleId: string): void {
+    this.service.roleMenus(roleId).subscribe({
+      next: (rows) => {
+        const state = new Map<string, ActionState>(rows.map((r) => [r.menuItemId,
+          { CREATE: r.canCreate, READ: r.canRead, UPDATE: r.canUpdate, DELETE: r.canDelete }]));
+        this.menuSelected.set(new Map(state));
+        this.menuOriginal.set(new Map(state));
+      },
+      error: () => { this.menuSelected.set(new Map()); this.menuOriginal.set(new Map()); this.notify.error('Could not load the role menus.'); }
+    });
+  }
+
+  private clearSelection(): void {
+    this.selected.set(new Set()); this.original.set(new Set());
+    this.menuSelected.set(new Map()); this.menuOriginal.set(new Map());
+  }
 
   onSearch(t: string): void { this.term.set(t ?? ''); }
 
-  /** Menu tree's per-leaf toggle — resolve leaf → module, then reuse the same flat-code
-   *  path as the matrix view. */
+  /** Menu tree's per-leaf toggle — one menu's own tick, never its module siblings'. */
   onMenuToggle({ menuItemId, action, checked }: MenuToggle): void {
     const leaf = this.leafById().get(menuItemId);
     if (!leaf?.module) return;
-    this.onToggle({ codes: [`${leaf.module}_${action}`], checked });
+    const next = new Map(this.menuSelected());
+    const current = next.get(menuItemId) ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+    next.set(menuItemId, applyMenuToggle(current, action, checked, offeredActions(leaf)));
+    this.menuSelected.set(next);
   }
 
   /** Menu tree's cascading "select all under this node" — every available action of
    *  every leaf underneath. */
   onMenuToggleMany({ menuItemIds, checked }: MenuToggleMany): void {
     const byId = this.leafById();
-    const codes: string[] = [];
+    const next = new Map(this.menuSelected());
     for (const id of menuItemIds) {
       const leaf = byId.get(id);
       if (!leaf?.module) continue;
-      for (const a of CRUD_ACTIONS) if (hasAction(leaf.roleDefault, a)) codes.push(`${leaf.module}_${a}`);
+      const state: ActionState = { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+      for (const a of CRUD_ACTIONS) state[a] = checked && hasAction(leaf.roleDefault, a);
+      next.set(id, state);
     }
-    this.onToggle({ codes, checked });
+    this.menuSelected.set(next);
   }
 
   onToggle({ codes, checked }: PermissionToggle): void {
@@ -310,11 +332,16 @@ export class PermissionAssign implements OnInit {
     this.selected.set(next);
   }
 
-  reset(): void { this.selected.set(new Set(this.original())); this.notify.info('Reverted to the saved set.'); }
+  reset(): void {
+    if (this.view() === 'tree') this.menuSelected.set(new Map(this.menuOriginal()));
+    else this.selected.set(new Set(this.original()));
+    this.notify.info('Reverted to the saved set.');
+  }
 
   save(): void {
     const role = this.currentRole();
     if (!role || this.saving()) return;
+    if (this.view() === 'tree') { this.saveMenus(role.id); return; }
     const codes = [...this.selected()];
     if (!codes.length) { this.notify.error('Select at least one permission, or the request is rejected.'); return; }
 
@@ -322,6 +349,20 @@ export class PermissionAssign implements OnInit {
     this.service.assign(role.id, { permissionCodes: codes, replaceExisting: true }).subscribe({
       next: (res) => { this.saving.set(false); this.applyResult(res); },
       error: (e) => { this.saving.set(false); this.notify.error(e?.error?.message ?? 'Could not save permissions.'); }
+    });
+  }
+
+  /** Tree view: the whole menu set in one call; the server keeps the role's module
+   *  permissions in step, so reload both afterwards to show what actually stuck. */
+  private saveMenus(roleId: string): void {
+    this.saving.set(true);
+    this.service.saveRoleMenus(roleId, toRoleMenuEntries(this.menuSelected())).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.notify.success('Saved — role menus updated.');
+        this.loadGrants(roleId);
+      },
+      error: (e) => { this.saving.set(false); this.notify.error(e?.error?.message ?? 'Could not save the role menus.'); }
     });
   }
 
@@ -347,5 +388,23 @@ export class PermissionAssign implements OnInit {
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+/** Actions a menu's module offers a checkbox for. */
+function offeredActions(leaf: MenuPermissionNode): CrudAction[] {
+  return CRUD_ACTIONS.filter((a) => hasAction(leaf.roleDefault, a));
+}
+
+function sameState(a: ActionState | undefined, b: ActionState | undefined): boolean {
+  const x = a ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+  const y = b ?? { CREATE: false, READ: false, UPDATE: false, DELETE: false };
+  return CRUD_ACTIONS.every((act) => x[act] === y[act]);
+}
+
+/** Order-independent equality on menu ticks; a missing menu equals an all-unticked one. */
+function sameMenus(a: ReadonlyMap<string, ActionState>, b: ReadonlyMap<string, ActionState>): boolean {
+  const ids = new Set([...a.keys(), ...b.keys()]);
+  for (const id of ids) if (!sameState(a.get(id), b.get(id))) return false;
   return true;
 }

@@ -20,6 +20,8 @@ export const API = {
   myMenuGrants: '/menu-grants/me',
   users: '/users',
   roles: '/roles',
+  /** The menus one role holds; users with the role follow them live. */
+  roleMenus: (roleId: string) => `/roles/${roleId}/menus`,
   departments: '/departments',
   permissions: '/permissions',
   /** The menu/submenu hierarchy — GET .../tree feeds the User Permissions screen's tree UI. */
