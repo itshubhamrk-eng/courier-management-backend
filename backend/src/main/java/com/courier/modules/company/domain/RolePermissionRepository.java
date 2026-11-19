@@ -48,4 +48,20 @@ public interface RolePermissionRepository extends JpaRepository<RolePermission, 
     @Query(value = "SELECT COUNT(*) FROM role_permissions WHERE permission_id = :permissionId "
             + "AND deleted = FALSE", nativeQuery = true)
     long countGrantsAcrossAllCompanies(@Param("permissionId") byte[] permissionId);
+
+    /**
+     * Revoked (soft-deleted) grants of a role. Native because the entity's
+     * {@code @SQLRestriction} hides them from every derived query, yet their rows still hold
+     * the {@code (company, role, permission)} unique key, so granting the same permission
+     * again must revive the row rather than insert a duplicate.
+     */
+    @Query(value = "SELECT * FROM role_permissions WHERE role_id = :roleId AND deleted = TRUE",
+            nativeQuery = true)
+    List<RolePermission> findSoftDeletedByRoleIdRaw(@Param("roleId") byte[] roleId);
+
+    default List<RolePermission> findSoftDeletedByRoleId(UUID roleId) {
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(16);
+        buf.putLong(roleId.getMostSignificantBits()).putLong(roleId.getLeastSignificantBits());
+        return findSoftDeletedByRoleIdRaw(buf.array());
+    }
 }

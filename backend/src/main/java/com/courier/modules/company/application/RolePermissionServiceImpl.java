@@ -100,6 +100,10 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 .map(RolePermission::getPermissionCode)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        Map<UUID, RolePermission> revokedByPermissionId = rolePermissionRepository
+                .findSoftDeletedByRoleId(roleId).stream()
+                .collect(Collectors.toMap(RolePermission::getPermissionId, rp -> rp, (a, b) -> a));
+
         List<RolePermission> toSave = new ArrayList<>();
         for (Permission permission : found) {
             String code = permission.getPermissionCode();
@@ -117,7 +121,14 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 skipped.add(code);
                 continue;
             }
-            toSave.add(RolePermission.grant(roleId, permission));
+            RolePermission revivable = revokedByPermissionId.get(permission.getId());
+            if (revivable != null) {
+                // Same (role, permission) row as before: revive it, never insert a duplicate key.
+                revivable.restore();
+                toSave.add(revivable);
+            } else {
+                toSave.add(RolePermission.grant(roleId, permission));
+            }
             granted.add(code);
         }
 

@@ -144,6 +144,26 @@ class RolePermissionServiceImplTest {
     }
 
     @Test
+    @DisplayName("re-granting a permission that was revoked revives its row instead of inserting a duplicate")
+    void assignRevivesSoftDeletedGrant() {
+        when(permissionRepository.findAllByPermissionCodeIn(any()))
+                .thenReturn(List.of(shipmentCreate));
+        RolePermission revoked = RolePermission.grant(role.getId(), shipmentCreate);
+        revoked.softDelete(null);
+        when(rolePermissionRepository.findSoftDeletedByRoleId(role.getId())).thenReturn(List.of(revoked));
+
+        RolePermissionService.GrantResult result =
+                service.assign(role.getId(), List.of("SHIPMENT_CREATE"), false);
+
+        assertThat(result.granted()).containsExactly("SHIPMENT_CREATE");
+        assertThat(revoked.isDeleted()).isFalse();
+        org.mockito.ArgumentCaptor<List<RolePermission>> saved = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rolePermissionRepository, org.mockito.Mockito.atLeastOnce()).saveAll(saved.capture());
+        assertThat(saved.getAllValues().stream().flatMap(List::stream).toList()).containsExactly(revoked);
+        com.courier.shared.activity.application.ActivityContext.clear();
+    }
+
+    @Test
     @DisplayName("a permission the plan does not include is rejected, not granted")
     void planGatedPermissionIsRejected() {
         planEnables("bulkBooking", false);

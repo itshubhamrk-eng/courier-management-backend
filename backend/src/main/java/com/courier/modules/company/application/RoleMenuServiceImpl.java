@@ -15,7 +15,6 @@ import com.courier.shared.company.CompanyContext;
 import com.courier.shared.exception.BusinessRuleException;
 import com.courier.shared.exception.ResourceNotFoundException;
 import com.courier.shared.security.Roles;
-import com.courier.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -82,7 +81,6 @@ public class RoleMenuServiceImpl implements RoleMenuService {
         }
         desired.keySet().removeIf(id -> menus.get(id).isGroup());
 
-        UUID actor = SecurityUtils.getCurrentUserId().orElse(null);
         List<RoleMenu> changes = new ArrayList<>();
         for (RoleMenuItem item : desired.values()) {
             RoleMenu row = existing.get(item.menuItemId());
@@ -96,12 +94,13 @@ public class RoleMenuServiceImpl implements RoleMenuService {
             row.setCanDelete(item.canDelete());
             changes.add(row);
         }
-        existing.forEach((menuId, row) -> {
-            if (!desired.containsKey(menuId)) {
-                row.softDelete(actor);
-                changes.add(row);
-            }
-        });
+        // Hard delete: this is pure assignment data, and a soft-deleted row would keep holding the
+        // (role, menu) unique key, so re-ticking that menu later would fail as a duplicate.
+        List<RoleMenu> removed = existing.entrySet().stream()
+                .filter(e -> !desired.containsKey(e.getKey()))
+                .map(Map.Entry::getValue)
+                .toList();
+        roleMenuRepository.deleteAll(removed);
         roleMenuRepository.saveAll(changes);
 
         syncModulePermissions(roleId, existing.keySet(), desired, menus);

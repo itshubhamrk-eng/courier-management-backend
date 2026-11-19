@@ -115,7 +115,9 @@ class RoleMenuServiceImplTest {
         verify(roleMenuRepository).saveAll(saved.capture());
         assertThat(saved.getValue()).extracting(RoleMenu::getMenuItemId)
                 .contains(tickets.getId()).doesNotContain(group.getId());
-        assertThat(old.isDeleted()).isTrue();
+        // Hard delete: a soft-deleted row would still hold the (role, menu) unique key and
+        // make re-ticking that menu later fail with a duplicate-key conflict.
+        verify(roleMenuRepository).deleteAll(List.of(old));
     }
 
     @Test
