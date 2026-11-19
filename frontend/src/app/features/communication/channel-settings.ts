@@ -86,10 +86,14 @@ const CARDS: ChannelCard[] = [
 
               @if (card.channel === 'WHATSAPP') {
                 <div class="testmsg">
-                  <app-input [control]="testRecipient" label="Test message to" placeholder="9876543210 — sends Meta's hello_world" />
+                  <app-input [control]="testRecipient" label="Test message to" placeholder="9876543210" />
                   <app-button type="button" variant="stroked" icon="send" [loading]="sendingTest()" (pressed)="sendTest()">Send Test Message</app-button>
                 </div>
-                <span class="text-caption">Save your changes first — the test uses the saved credentials. A test-mode number can only message numbers added to its allowed list in Meta.</span>
+                <div class="testmsg">
+                  <app-input [control]="testTemplate" label="Approved template name (optional)" placeholder="blank = first approved template of this app" />
+                  <app-input [control]="testLanguage" label="Language" placeholder="en_US" />
+                </div>
+                <span class="text-caption">Meta's hello_world only works from its public test numbers, so this sends a template that is APPROVED on your account. Save your changes first — the test uses the saved credentials. A test-mode number can only message numbers added to its allowed list in Meta.</span>
               }
 
               <div class="status">
@@ -134,6 +138,8 @@ export class ChannelSettings implements OnInit {
   };
 
   protected readonly testRecipient = new FormControl('', { nonNullable: true });
+  protected readonly testTemplate = new FormControl('', { nonNullable: true });
+  protected readonly testLanguage = new FormControl('en_US', { nonNullable: true });
   protected readonly sendingTest = signal(false);
 
   private readonly settings = signal<Map<CommunicationChannel, CommunicationSetting>>(new Map());
@@ -219,7 +225,7 @@ export class ChannelSettings implements OnInit {
     const to = this.testRecipient.value.trim();
     if (!to) { this.notify.error('Enter the number to send the test message to.'); return; }
     this.sendingTest.set(true);
-    this.service.sendTestMessage(to).subscribe({
+    this.service.sendTestMessage(to, this.testTemplate.value.trim(), this.testLanguage.value.trim()).subscribe({
       next: (result) => {
         this.testResults.update((m) => new Map(m).set('WHATSAPP', result));
         this.sendingTest.set(false);

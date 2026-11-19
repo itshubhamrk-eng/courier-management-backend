@@ -82,9 +82,10 @@ export class CommunicationService {
     return this.api.post<ConnectionTestResult>(`${API.communicationSettings}/${channel}/test-connection`, {});
   }
 
-  /** Live send of Meta's hello_world template with the saved WhatsApp credentials. */
-  sendTestMessage(recipient: string) {
-    return this.api.post<ConnectionTestResult>(`${API.communicationSettings}/WHATSAPP/test-message`, { recipient });
+  /** Live send of an approved template with the saved WhatsApp credentials. */
+  sendTestMessage(recipient: string, templateName: string, language: string) {
+    return this.api.post<ConnectionTestResult>(`${API.communicationSettings}/WHATSAPP/test-message`,
+      { recipient, templateName: templateName || null, language: language || null });
   }
 
   // ---------------------------------------------------------------- logs

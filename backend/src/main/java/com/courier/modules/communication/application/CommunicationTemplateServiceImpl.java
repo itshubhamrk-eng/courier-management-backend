@@ -69,13 +69,16 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_CREATE')")
     public CommunicationTemplate create(CreateCommunicationTemplateCommand command) {
         UUID companyId = requireCompany();
-        if (repository.findByCompanyIdAndEventTypeAndChannel(companyId, command.eventType(), command.channel())
+        CommunicationEventType eventType = command.eventType() == null ? CommunicationEventType.CUSTOM
+                : command.eventType();
+        if (eventType != CommunicationEventType.CUSTOM
+                && repository.findByCompanyIdAndEventTypeAndChannel(companyId, eventType, command.channel())
                 .isPresent()) {
-            throw new BusinessRuleException("A template for " + command.eventType() + " + "
+            throw new BusinessRuleException("A template for " + eventType + " + "
                     + command.channel() + " already exists — edit it instead.");
         }
         CommunicationTemplate template = CommunicationTemplate.builder()
-                .eventType(command.eventType())
+                .eventType(eventType)
                 .channel(command.channel())
                 .templateName(requireText(command.templateName(), "Template name"))
                 .subject(command.subject())
@@ -173,6 +176,9 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     public CommunicationTemplate resetToDefault(UUID id) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadOrThrow(id, companyId);
+        if (template.getEventType() == CommunicationEventType.CUSTOM) {
+            throw new BusinessRuleException("A custom template has no default to reset to.");
+        }
         var seed = StarterTemplates.starter(template.getEventType(), template.getChannel());
 
         template.clearMetaSubmission();

@@ -10,7 +10,7 @@ export const COMMUNICATION_CHANNELS: CommunicationChannel[] = ['WHATSAPP', 'SMS'
 export type CommunicationEventType =
   | 'SHIPMENT_BOOKED' | 'SHIPMENT_DISPATCHED' | 'SHIPMENT_RECEIVED' | 'OUT_FOR_DELIVERY'
   | 'SHIPMENT_DELIVERED' | 'SHIPMENT_CANCELLED' | 'RTO_INITIATED' | 'RTO_DELIVERED'
-  | 'DAILY_BUSINESS_SUMMARY';
+  | 'DAILY_BUSINESS_SUMMARY' | 'CUSTOM';
 
 export const COMMUNICATION_EVENT_TYPES: CommunicationEventType[] = [
   'SHIPMENT_BOOKED', 'SHIPMENT_DISPATCHED', 'SHIPMENT_RECEIVED', 'OUT_FOR_DELIVERY',
@@ -78,7 +78,8 @@ export interface TemplateStarter {
 
 /** Mirrors backend `CreateCommunicationTemplateRequest`. */
 export interface CreateCommunicationTemplateRequest {
-  eventType: CommunicationEventType;
+  /** Omitted = a custom template, tied to no shipment event. */
+  eventType?: CommunicationEventType | null;
   channel: CommunicationChannel;
   templateName: string;
   subject?: string | null;

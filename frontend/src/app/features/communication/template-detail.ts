@@ -8,10 +8,10 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
-import { CommunicationTemplate, TemplateButton } from '@core/models/communication.model';
+import { CommunicationChannel, CommunicationTemplate, TemplateButton } from '@core/models/communication.model';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiInput } from '@shared/components/ui-input/ui-input';
-import { UiSelect } from '@shared/components/ui-select/ui-select';
+import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { DialogService } from '@shared/components/ui-dialog/dialog.service';
@@ -49,13 +49,14 @@ const MAX_CALLS = 1;
         <div class="td__title">
           <app-button variant="text" icon="arrow_back" (pressed)="back()">Templates</app-button>
           @if (template(); as t) {
-            <h1 class="text-h1">{{ title() }}</h1>
+            <h1 class="text-h1">{{ isNew() ? 'New template' : title() }}</h1>
             <span class="td__chan">{{ t.channel }}</span>
             @if (dirty()) { <span class="td__dirty">Unsaved changes</span> }
           }
         </div>
         @if (template(); as t) {
           <div class="page__actions">
+            @if (!isNew()) {
             <label class="send" [class.send--on]="t.status === 'ACTIVE'"
               [title]="t.status === 'ACTIVE' ? 'Messages are being sent' : 'Nothing is sent from this template'">
               <mat-slide-toggle [checked]="t.status === 'ACTIVE'" [disabled]="switching()"
@@ -65,9 +66,12 @@ const MAX_CALLS = 1;
                 <em>{{ t.status === 'ACTIVE' ? 'Turn off to stop these messages' : 'Turn on to start sending' }}</em>
               </span>
             </label>
-            <app-button variant="text" icon="restart_alt" [loading]="resetting()" (pressed)="resetToDefault()">Reset to default</app-button>
+            @if (t.eventType !== 'CUSTOM') {
+              <app-button variant="text" icon="restart_alt" [loading]="resetting()" (pressed)="resetToDefault()">Reset to default</app-button>
+            }
             <app-button variant="stroked" [disabled]="!dirty() || saving()" (pressed)="discard()">Discard</app-button>
-            <app-button icon="save" [loading]="saving()" [disabled]="!dirty()" (pressed)="save()">Save</app-button>
+            }
+            <app-button icon="save" [loading]="saving()" [disabled]="!dirty() && !isNew()" (pressed)="save()">{{ isNew() ? 'Create template' : 'Save' }}</app-button>
           </div>
         }
       </header>
@@ -84,6 +88,13 @@ const MAX_CALLS = 1;
         }
         <div class="td">
           <div class="td__main">
+            @if (isNew()) {
+              <app-card title="Channel" subtitle="A new template is not tied to a shipment event and is never sent automatically — submit it to Meta, then send it by name.">
+                <div class="td__form">
+                  <app-select [control]="newChannel" label="Channel" [options]="channelOptions" />
+                </div>
+              </app-card>
+            }
             @if (isWhatsApp()) {
               <app-card title="Template" subtitle="How this template is identified and filed with Meta.">
                 <div class="td__form">
@@ -238,9 +249,10 @@ const MAX_CALLS = 1;
                   @if (template()!.metaStatusDetail) { <p class="text-caption">{{ template()!.metaStatusDetail }}</p> }
                   <p class="text-caption">Submitting saves your changes, then files the template with Meta; review takes minutes to a day. Changing the name, text, header, footer, buttons, category or language afterwards means submitting again.</p>
                   <div class="meta__actions">
-                    <app-button variant="stroked" [loading]="metaBusy()" [disabled]="!!template()!.metaStatus"
+                    <app-button variant="stroked" [loading]="metaBusy()" [disabled]="isNew() || !!template()!.metaStatus"
                       (pressed)="submitToMeta()">Submit to Meta</app-button>
-                    <app-button variant="stroked" [loading]="metaBusy()" (pressed)="refreshMeta()">Check status</app-button>
+                    <app-button variant="stroked" [loading]="metaBusy()" [disabled]="isNew()" (pressed)="refreshMeta()">Check status</app-button>
+                    @if (isNew()) { <span class="text-caption">Create the template first, then submit it.</span> }
                   </div>
                 </div>
               </app-card>
@@ -371,6 +383,11 @@ export class TemplateDetail implements OnInit {
   protected readonly emojiGroups = EMOJI_GROUPS;
 
   protected readonly template = signal<CommunicationTemplate | null>(null);
+  /** True on /communication/templates/new — the same page, with nothing stored yet. */
+  protected readonly isNew = signal(false);
+  protected readonly channelOptions: SelectOption[] = [
+    { value: 'WHATSAPP', label: 'WhatsApp' }, { value: 'SMS', label: 'SMS' }, { value: 'EMAIL', label: 'Email' }];
+  protected readonly newChannel = new FormControl<CommunicationChannel>('WHATSAPP', { nonNullable: true });
   protected readonly loadError = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly metaBusy = signal(false);
@@ -456,6 +473,10 @@ export class TemplateDetail implements OnInit {
   });
 
   constructor() {
+    this.newChannel.valueChanges.pipe(takeUntilDestroyed()).subscribe((ch) => {
+      const t = this.template();
+      if (t && this.isNew()) this.template.set({ ...t, channel: ch });
+    });
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.syncTyped();
       this.formDirty.set(this.form.dirty);
@@ -464,7 +485,17 @@ export class TemplateDetail implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Communication' }, { label: 'Templates', route: '/communication/templates' }, { label: 'Edit' }]);
-    const id = this.route.snapshot.paramMap.get('id') ?? '';
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id === null) {
+      this.isNew.set(true);
+      this.breadcrumb.set([{ label: 'Communication' }, { label: 'Templates', route: '/communication/templates' }, { label: 'New' }]);
+      this.adopt({
+        id: '', eventType: 'CUSTOM', channel: 'WHATSAPP', templateName: '', subject: null, content: '',
+        status: 'ACTIVE', version: 0, category: 'UTILITY', language: 'en_US', headerText: null, footerText: null,
+        buttons: [], variableSamples: {}
+      } as unknown as CommunicationTemplate);
+      return;
+    }
     this.service.getTemplate(id).subscribe({
       next: (t) => this.adopt(t),
       error: () => this.loadError.set('This template could not be loaded. It may have been removed.')
@@ -575,6 +606,7 @@ export class TemplateDetail implements OnInit {
 
   protected save(): void {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.isNew()) { this.create(); return; }
     this.persist(() => this.notify.success('Template saved.'));
   }
 
@@ -637,6 +669,40 @@ export class TemplateDetail implements OnInit {
         this.notify.success(`Meta status: ${t.metaStatus ?? 'unknown'}.`);
       },
       error: (e) => { this.metaBusy.set(false); this.notify.error(apiMessage(e, 'Could not read the status from Meta.')); }
+    });
+  }
+
+  /** Create the row, then — for WhatsApp — file the rest (category, language, header, footer, buttons,
+   *  samples) through the same update the edit page uses, and open the stored template. */
+  private create(): void {
+    const t = this.template()!;
+    const v = this.form.getRawValue();
+    this.saving.set(true);
+    this.service.createTemplate({
+      channel: t.channel, templateName: (v.templateName ?? '').trim(),
+      subject: t.channel === 'EMAIL' ? (v.subject || null) : null, content: v.content
+    }).subscribe({
+      next: (created) => {
+        const done = (id: string) => {
+          this.saving.set(false);
+          this.notify.success('Template created.');
+          void this.router.navigate(['/communication/templates', id], { replaceUrl: true });
+        };
+        if (t.channel !== 'WHATSAPP') { done(created.id); return; }
+        this.service.updateTemplate(created.id, {
+          templateName: created.templateName, subject: null, content: created.content, status: created.status,
+          version: created.version, category: v.category, language: v.language,
+          headerText: (v.headerText ?? '').trim(), footerText: (v.footerText ?? '').trim(),
+          buttons: this.cleanButtons(), variableSamples: this.cleanSamples()
+        }).subscribe({
+          next: () => done(created.id),
+          error: (e) => {
+            this.notify.error(apiMessage(e, 'Created, but could not save the header, footer, buttons or language.'));
+            done(created.id);
+          }
+        });
+      },
+      error: (e) => { this.saving.set(false); this.notify.error(apiMessage(e, 'Could not create the template.')); }
     });
   }
 

@@ -22,10 +22,12 @@ public interface CommunicationSettingService {
      *  validates the configured fields are complete enough to attempt a send. */
     ConnectionTestResult testConnection(CommunicationChannel channel);
 
-    /** Live send of Meta's built-in {@code hello_world} template to {@code recipient} using this
-     *  company's stored WhatsApp credentials — the only real end-to-end check of them.
-     *  @throws com.courier.shared.exception.BusinessRuleException with Meta's own reason on failure */
-    ConnectionTestResult sendTestMessage(String recipient);
+    /** Live send of an approved WhatsApp template to {@code recipient} with this company's stored
+     *  credentials — the only real end-to-end check of them. {@code templateName} blank picks an
+     *  APPROVED template of this app (sample values fill its variables); a name not known to the app
+     *  is sent as a template with no variables in {@code language} (default en_US). Meta's
+     *  {@code hello_world} is no use: Meta only allows it from its public test numbers. */
+    ConnectionTestResult sendTestMessage(String recipient, String templateName, String language);
 
     /** No {@code @PreAuthorize} — called from {@code CommunicationOrchestrator}/{@code
      *  CommunicationSendService} on the {@code AFTER_COMMIT} listener thread and the

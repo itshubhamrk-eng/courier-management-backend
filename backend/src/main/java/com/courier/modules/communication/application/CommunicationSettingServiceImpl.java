@@ -35,6 +35,8 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final com.courier.modules.communication.application.provider.WhatsAppProvider whatsAppProvider;
+    private final com.courier.modules.communication.domain.CommunicationTemplateRepository templateRepository;
+    private final TemplateRenderer templateRenderer;
 
     @Override
     @Transactional
@@ -122,7 +124,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
-    public ConnectionTestResult sendTestMessage(String recipient) {
+    public ConnectionTestResult sendTestMessage(String recipient, String templateName, String language) {
         if (recipient == null || recipient.replaceAll("\\D", "").length() < 10) {
             throw new BusinessRuleException("Enter a valid WhatsApp number, with country code if it is not Indian.");
         }
@@ -137,9 +139,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
             throw new BusinessRuleException("Phone Number ID and Access Token are required. Save them first.");
         }
         try {
-            var result = whatsAppProvider.send(
-                    new com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppMessage(
-                            recipient, "hello_world", List.of(), "en_US", null, List.of()),
+            var result = whatsAppProvider.send(testMessage(companyId(), recipient, templateName, language),
                     credentials);
             log.info("WhatsApp test message sent in company {} by {}, message id {}", CompanyContext.getCompanyId().orElse(null),
                     currentActor(), result.providerMessageId());
@@ -166,6 +166,33 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     @Transactional(readOnly = true)
     public boolean hasAnyEnabled(UUID companyId) {
         return repository.existsByCompanyIdAndEnabledTrue(companyId);
+    }
+
+    private UUID companyId() {
+        return requireCompany();
+    }
+
+    private com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppMessage testMessage(
+            UUID companyId, String recipient, String templateName, String language) {
+        var templates = templateRepository.findAllByCompanyIdOrderByEventTypeAscChannelAsc(companyId).stream()
+                .filter(t -> t.getChannel() == CommunicationChannel.WHATSAPP).toList();
+        String name = templateName == null ? "" : templateName.trim();
+        var known = name.isEmpty()
+                ? templates.stream().filter(t -> "APPROVED".equals(t.getMetaStatus())).findFirst()
+                : templates.stream().filter(t -> name.equalsIgnoreCase(t.getTemplateName())).findFirst();
+        if (known.isPresent()) {
+            var t = known.get();
+            Map<String, String> samples = TemplateSampleValues.merged(
+                    TemplateComponentsCodec.readSamples(objectMapper, t.getVariableSamplesJson()));
+            return WhatsAppPayloadBuilder.build(recipient, t, templateRenderer, samples, objectMapper);
+        }
+        if (name.isEmpty()) {
+            throw new BusinessRuleException("No template of this app is APPROVED by Meta yet. Enter the name of "
+                    + "a template that is approved in your WhatsApp Manager.");
+        }
+        String lang = language == null || language.isBlank() ? "en_US" : language.trim();
+        return new com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppMessage(
+                recipient, name, List.of(), lang, null, List.of());
     }
 
     private boolean requireConfig(CommunicationSetting setting, String key) {

@@ -840,7 +840,7 @@ export const routes: Routes = [
       {
         path: 'communication/templates/new', title: 'New Template', canActivate: [roleGuard],
         data: { roles: COMMUNICATION_ADMIN },
-        loadComponent: () => import('@features/communication/template-new').then((m) => m.TemplateNew)
+        loadComponent: () => import('@features/communication/template-detail').then((m) => m.TemplateDetail)
       },
       {
         path: 'communication/templates/:id', title: 'Edit Template', canActivate: [roleGuard],

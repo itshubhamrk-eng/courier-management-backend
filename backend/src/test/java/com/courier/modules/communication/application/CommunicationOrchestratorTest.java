@@ -206,12 +206,12 @@ class CommunicationOrchestratorTest {
     }
 
     @Test
-    void listsExactlyTheSpecEventsPlusTheDailySummary() {
+    void listsExactlyTheSpecEventsPlusTheDailySummaryAndCustom() {
         assertThat(List.of(CommunicationEventType.values())).containsExactlyInAnyOrder(
                 CommunicationEventType.SHIPMENT_BOOKED, CommunicationEventType.SHIPMENT_DISPATCHED,
                 CommunicationEventType.SHIPMENT_RECEIVED, CommunicationEventType.OUT_FOR_DELIVERY,
                 CommunicationEventType.SHIPMENT_DELIVERED, CommunicationEventType.SHIPMENT_CANCELLED,
                 CommunicationEventType.RTO_INITIATED, CommunicationEventType.RTO_DELIVERED,
-                CommunicationEventType.DAILY_BUSINESS_SUMMARY);
+                CommunicationEventType.DAILY_BUSINESS_SUMMARY, CommunicationEventType.CUSTOM);
     }
 }

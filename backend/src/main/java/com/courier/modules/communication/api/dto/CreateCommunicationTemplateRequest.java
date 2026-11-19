@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 
 @Schema(name = "CreateCommunicationTemplateRequest")
 public record CreateCommunicationTemplateRequest(
-        @NotNull CommunicationEventType eventType,
+        @Schema(description = "Omit for a custom template (not tied to a shipment event)") CommunicationEventType eventType,
         @NotNull CommunicationChannel channel,
         @NotBlank @Size(max = 150) String templateName,
         @Size(max = 255) @Schema(description = "Email only") String subject,
