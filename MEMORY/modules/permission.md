@@ -265,3 +265,15 @@ data migration ran for real:
 - [ ] `[[menu-permission-management]]` — see the new module doc / `MEMORY/CHANGELOG.md`
       2026-09-18 for the menu hierarchy + per-user override layer this catalogue now
       feeds; not yet written up as its own `MEMORY/modules/*.md` file.
+
+## Role menus (`role_menu`, V149) - 2026-11-19
+
+A role holds an explicit list of menus, separate from its permission codes.
+
+- Table `role_menu(role_id -> company_roles.id, menu_item_id -> menu_items.id, can_create/read/update/delete)`, unique `(role_id, menu_item_id)`. Group (parent) menus are never stored; a parent shows when a child does.
+- Effective menus of a user = union of `role_menu.can_read` over their roles, minus `user_menu_grants` rows with READ unticked (deny-only). `UserPermissionService.allowedMenuCodes(userId)`, served by `GET /menu-grants/me` as `allowedMenus`.
+- `GET/PUT /roles/{id}/menus` (`RoleMenuService`, COMPANY_ADMIN). PUT replaces the whole set; an all-false item is unticked; removed rows are hard-deleted (a soft-deleted row would keep the unique key). It then calls `RolePermissionService.assign(roleId, finalCodes, replace=true)` with: current codes of modules the role never had a menu for (kept) + `<MODULE>_<ACTION>` for every ticked action of every ticked menu (only codes the catalogue has).
+- Frontend: custom-role-only users are decided by `allowedMenus` (`NavigationService.canSee`); any built-in role keeps the authored `roles` rule. Role screen = Assign Permissions tree (`buildRoleMenuTreeByMenu`, `applyMenuToggle`: ticking a write action also ticks READ).
+- Limitation: API authorisation is still per permission module.
+- Gotcha: soft-deleted rows keep unique keys. `role_permissions` revoked then re-granted now revives the row (`findSoftDeletedByRoleId`).
+
