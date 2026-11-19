@@ -150,6 +150,8 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
             return new ConnectionTestResult(true, "Meta accepted the test message"
                     + (result.providerMessageId() == null ? "." : " (id " + result.providerMessageId() + "). Check the phone."));
         } catch (com.courier.modules.communication.application.provider.ProviderSendException e) {
+            log.warn("WhatsApp test message failed in company {}: {}", CompanyContext.getCompanyId().orElse(null),
+                    e.getMessage());
             return new ConnectionTestResult(false, e.getMessage());
         }
     }
