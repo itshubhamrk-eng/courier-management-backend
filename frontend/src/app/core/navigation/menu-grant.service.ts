@@ -23,18 +23,24 @@ export class MenuGrantService {
   /** False until a fetch succeeds, so a failed fetch falls back to the permission rule. */
   private readonly _loaded = signal(false);
   readonly loaded = this._loaded.asReadonly();
+  /** True once the fetch for the current session has answered (success or failure), so a
+   *  route guard can wait for it without hanging on an error. */
+  private readonly _settled = signal(false);
+  readonly settled = this._settled.asReadonly();
 
   constructor() {
     effect(() => {
       this.auth.user();
       if (!this.auth.isAuthenticated()) { this.reset(); return; }
+      this._settled.set(false);
       this.api.get<{ deniedMenus: string[]; allowedMenus?: string[] }>(API.myMenuGrants).subscribe({
         next: (r) => {
           this._denied.set(new Set(r.deniedMenus ?? []));
           this._allowed.set(new Set(r.allowedMenus ?? []));
           this._loaded.set(r.allowedMenus !== undefined);
+          this._settled.set(true);
         },
-        error: () => this.reset()
+        error: () => { this.reset(); this._settled.set(true); }
       });
     });
   }
@@ -43,5 +49,6 @@ export class MenuGrantService {
     this._denied.set(new Set());
     this._allowed.set(new Set());
     this._loaded.set(false);
+    this._settled.set(false);
   }
 }

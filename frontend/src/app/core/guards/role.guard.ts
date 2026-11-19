@@ -1,5 +1,9 @@
 import { CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { filter, map, take, timeout, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { MenuGrantService } from '../navigation/menu-grant.service';
 import { AuthService } from '../auth/auth.service';
 import { NavigationService } from '../navigation/navigation.service';
 import { NavNode } from '../navigation/navigation.model';
@@ -22,9 +26,17 @@ export const roleGuard: CanActivateFn = (route, state) => {
 
   const roles = auth.roles();
   const customOnly = roles.length > 0 && roles.every((r) => !BUILT_IN_ROLES.has(r));
-  if (customOnly && underVisibleLeaf(nav.menu(), state.url.split(/[?#]/)[0])) return true;
+  const path = state.url.split(/[?#]/)[0];
+  const decide = () => customOnly && underVisibleLeaf(nav.menu(), path) ? true : router.createUrlTree(['/unauthorized']);
+  if (!customOnly) return decide();
 
-  return router.createUrlTree(['/unauthorized']);
+  // A custom-role user's sidebar comes from /menu-grants/me; on a cold page load (refresh, typed
+  // URL) the guard runs before it answers, so wait for it rather than bounce to /unauthorized.
+  const grants = inject(MenuGrantService);
+  if (grants.settled()) return decide();
+  return toObservable(grants.settled).pipe(
+    filter(Boolean), take(1), timeout(8000), map(decide), catchError(() => of(decide()))
+  );
 };
 
 function underVisibleLeaf(nodes: NavNode[], path: string): boolean {
