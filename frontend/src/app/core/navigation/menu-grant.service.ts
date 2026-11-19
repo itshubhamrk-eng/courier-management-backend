@@ -17,14 +17,31 @@ export class MenuGrantService {
   private readonly _denied = signal<ReadonlySet<string>>(new Set());
   readonly denied = this._denied.asReadonly();
 
+  /** Menus the user's roles hold (minus denied). Only trusted once {@link loaded} is true. */
+  private readonly _allowed = signal<ReadonlySet<string>>(new Set());
+  readonly allowed = this._allowed.asReadonly();
+  /** False until a fetch succeeds, so a failed fetch falls back to the permission rule. */
+  private readonly _loaded = signal(false);
+  readonly loaded = this._loaded.asReadonly();
+
   constructor() {
     effect(() => {
       this.auth.user();
-      if (!this.auth.isAuthenticated()) { this._denied.set(new Set()); return; }
-      this.api.get<{ deniedMenus: string[] }>(API.myMenuGrants).subscribe({
-        next: (r) => this._denied.set(new Set(r.deniedMenus ?? [])),
-        error: () => this._denied.set(new Set())
+      if (!this.auth.isAuthenticated()) { this.reset(); return; }
+      this.api.get<{ deniedMenus: string[]; allowedMenus?: string[] }>(API.myMenuGrants).subscribe({
+        next: (r) => {
+          this._denied.set(new Set(r.deniedMenus ?? []));
+          this._allowed.set(new Set(r.allowedMenus ?? []));
+          this._loaded.set(r.allowedMenus !== undefined);
+        },
+        error: () => this.reset()
       });
     });
+  }
+
+  private reset(): void {
+    this._denied.set(new Set());
+    this._allowed.set(new Set());
+    this._loaded.set(false);
   }
 }

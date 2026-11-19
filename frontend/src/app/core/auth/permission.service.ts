@@ -28,6 +28,12 @@ export class PermissionService {
     return roles.length === 0 || roles.some((r) => this.roleSet().has(r));
   }
 
+  /** True when the user has roles and none is a built-in one: their sidebar is their roles' menus. */
+  isCustomOnly(): boolean {
+    const roles = this.auth.roles();
+    return roles.length > 0 && roles.every((r) => !BUILT_IN_ROLES.has(r));
+  }
+
   hasPermission(code: string): boolean { return this.permissionSet().has(code); }
   hasAnyPermission(codes: string[]): boolean {
     return codes.length === 0 || codes.some((c) => this.permissionSet().has(c));
@@ -51,8 +57,7 @@ export class PermissionService {
     // A user whose roles are all company-defined custom roles (none of the built-in ones the
     // `roles` bridge lists) is governed by their permission grants alone: the bridge only
     // narrows built-in roles, and would otherwise hide every menu a custom-role user was granted.
-    const customOnly = perms.length > 0 && this.auth.roles().length > 0
-      && this.auth.roles().every((r) => !BUILT_IN_ROLES.has(r));
+    const customOnly = perms.length > 0 && this.isCustomOnly();
     const roleOk = roles.length === 0 || customOnly || this.hasAnyRole(roles);
     const permOk = perms.length === 0 || this.hasAnyPermission(perms);
     return roleOk && permOk;

@@ -110,6 +110,12 @@ export class NavigationService {
   /** Public/structural nodes are always visible; the rest go through the permission service. */
   private canSee(node: NavNode): boolean {
     if (!node.permission && !node.roles?.length) return true;
+    // A user whose roles are all company-defined is shown exactly the menus those roles hold.
+    // Built-in roles keep the authored `roles` rule (their scoping is deliberate), and so does
+    // everyone while the menus fetch has not succeeded.
+    if (this.perm.isCustomOnly() && this.menuGrants.loaded()) {
+      return this.menuGrants.allowed().has(node.id);
+    }
     return this.perm.canAccess({
       permissions: node.permission ? [node.permission] : [],
       roles: node.roles ?? []
