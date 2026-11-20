@@ -606,8 +606,9 @@ public class TicketServiceImpl implements TicketService {
     @Transactional(readOnly = true)
     public TicketDashboardStats dashboard(UUID companyId) {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
-        if (!caller.isSuperAdmin() && !caller.hasRole(Roles.COMPANY_ADMIN)) {
-            throw new ForbiddenException("Only a company admin or SUPER_ADMIN may view the ticket dashboard.");
+        boolean canRead = caller.authorities().stream().anyMatch(a -> "NOTIFICATION_READ".equals(a.getAuthority()));
+        if (!caller.isSuperAdmin() && !caller.hasRole(Roles.COMPANY_ADMIN) && !canRead) {
+            throw new ForbiddenException("Only a company admin, SUPER_ADMIN or a user with Support access may view the ticket dashboard.");
         }
         boolean crossTenant = caller.isSuperAdmin() && companyId == null;
         UUID scope = crossTenant ? null : (caller.isSuperAdmin() ? companyId : requireCompany());

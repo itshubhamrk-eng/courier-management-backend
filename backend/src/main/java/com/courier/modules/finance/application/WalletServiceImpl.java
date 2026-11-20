@@ -186,7 +186,7 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     @Transactional
-    @PreAuthorize(FINANCE_READERS)
+    @PreAuthorize(FINANCE_READERS + " or hasAuthority('REPORT_READ')")
     public List<WalletSummary> companySummary() {
         UUID companyId = requireCompany();
         return branchDirectory.listBranches(companyId).stream()

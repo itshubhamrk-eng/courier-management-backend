@@ -882,7 +882,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority('SHIPMENT_READ')")
+    @PreAuthorize("hasAuthority('SHIPMENT_READ') or hasAuthority('REPORT_READ')")
     public Page<Shipment> search(ShipmentCriteria criteria, Pageable pageable) {
         return shipmentRepository.findAll(buildSpecification(criteria), pageable);
     }

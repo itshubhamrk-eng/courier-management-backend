@@ -182,7 +182,7 @@ public class ManifestServiceImpl implements ManifestService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAuthority('MANIFEST_READ')")
+    @PreAuthorize("hasAuthority('MANIFEST_READ') or hasAuthority('REPORT_READ')")
     public Page<Manifest> search(ManifestCriteria criteria, Pageable pageable) {
         return manifestRepository.findAll(ManifestSpecifications.matching(criteria).and(ownBranchScope()), pageable);
     }

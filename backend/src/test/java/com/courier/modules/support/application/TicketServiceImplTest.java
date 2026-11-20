@@ -276,6 +276,30 @@ class TicketServiceImplTest {
 
     // ---------------------------------------------------------------- helpers
 
+    @Test
+    @DisplayName("the ticket dashboard is refused to a custom-role user without NOTIFICATION_READ")
+    void dashboardRefusedWithoutNotificationRead() {
+        signedInWithPermissions("CRM", Set.of());
+
+        assertThatThrownBy(() -> service.dashboard(null))
+                .isInstanceOf(com.courier.shared.exception.ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("the ticket dashboard is readable by a custom-role user holding NOTIFICATION_READ")
+    void dashboardReadableWithNotificationRead() {
+        signedInWithPermissions("CRM", Set.of("NOTIFICATION_READ"));
+
+        assertThat(service.dashboard(null)).isNotNull();
+    }
+
+    private void signedInWithPermissions(String role, Set<String> permissions) {
+        AuthenticatedUser principal = new AuthenticatedUser(CALLER, COMPANY, "user@test.local",
+                Set.of(role), permissions, "jti");
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.authorities()));
+    }
+
     private void signedIn(String role) {
         signedIn(role, CALLER);
     }
