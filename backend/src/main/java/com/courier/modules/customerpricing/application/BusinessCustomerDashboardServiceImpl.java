@@ -37,6 +37,16 @@ import java.util.UUID;
 public class BusinessCustomerDashboardServiceImpl implements BusinessCustomerDashboardService {
 
     /** Payment modes not collected at the counter; an un-invoiced booking on one of these is still owed. */
+    /**
+     * COMPANY_ADMIN, or a custom-role user holding CUSTOMER_READ through a menu assignment. The
+     * built-in operational roles hold CUSTOMER_READ too but must stay out: this dashboard is
+     * company-admin territory (its route is COMPANY_ONLY).
+     */
+    private static final String DASHBOARD_READERS = "hasRole('" + Roles.COMPANY_ADMIN + "') or "
+            + "(hasAuthority('CUSTOMER_READ') and !hasAnyRole('" + Roles.BRANCH_MANAGER + "', '"
+            + Roles.HUB_MANAGER + "', '" + Roles.OPERATOR + "', '" + Roles.DRIVER + "', '"
+            + Roles.CUSTOMER + "', '" + Roles.VIEWER + "'))";
+
     private static final String PENDING_MODES = "'TBB', 'TOPAY', 'TO_PAY', 'COD'";
 
     @PersistenceContext
@@ -44,7 +54,7 @@ public class BusinessCustomerDashboardServiceImpl implements BusinessCustomerDas
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('" + Roles.COMPANY_ADMIN + "') or hasAuthority('CUSTOMER_READ')")
+    @PreAuthorize(DASHBOARD_READERS)
     public BusinessCustomerDashboard overview() {
         UUID companyId = CompanyContext.getCompanyId().orElseThrow(() -> new BusinessRuleException(
                 "No company is bound to this request. The dashboard belongs to a company."));
