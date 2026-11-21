@@ -116,27 +116,12 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
         </app-card>
 
         @if (shipments().length) {
-          <app-card title="Assign Delivery User & Vehicle">
+          <app-card title="Assign Delivery Person & Vehicle">
             <form [formGroup]="form" (ngSubmit)="assign()" class="df">
               <div class="grid2">
-                <app-select [control]="c('deliveryUserId')" label="Delivery User" [options]="userOptions()" placeholder="Select delivery user" />
+                <app-input [control]="c('deliveryPersonName')" label="Delivery Person Name" placeholder="Enter delivery person name" [maxLength]="120" />
+                <app-input [control]="c('deliveryPersonMobile')" type="tel" label="Delivery Person Contact Number" placeholder="e.g. 9876543210" [maxLength]="20" />
                 <app-select [control]="c('vehicleId')" label="Vehicle" [options]="vehicleOptions()" placeholder="Select vehicle (optional)" [allowEmpty]="true" emptyLabel="None" />
-              </div>
-
-              <div class="otp">
-                @if (!otpVerified()) {
-                  <app-button type="button" variant="stroked" icon="sms" [loading]="sendingOtp()"
-                    [disabled]="!c('deliveryUserId').value || resendCooldown() > 0" (pressed)="requestOtp()">
-                    {{ otpRequested() ? (resendCooldown() > 0 ? 'Resend OTP (' + resendCooldown() + 's)' : 'Resend OTP') : 'Send Delivery User OTP (optional)' }}
-                  </app-button>
-                  @if (otpRequested()) {
-                    <span class="text-caption">Sent to {{ maskedMobile() }} — valid {{ otpExpiresInMinutes() }} min.</span>
-                    <app-input [control]="otpControl" type="tel" label="Enter OTP" placeholder="4-digit code" [maxLength]="4" />
-                    <app-button type="button" icon="check" [loading]="verifyingOtp()" (pressed)="verifyOtp()">Verify OTP</app-button>
-                  }
-                } @else {
-                  <span class="otp__ok">✓ Delivery User OTP verified</span>
-                }
               </div>
 
               <div class="grid2">
@@ -270,7 +255,8 @@ export class OutForDelivery implements OnInit, OnDestroy {
   private resendTimer: ReturnType<typeof setInterval> | null = null;
 
   readonly form: FormGroup = this.fb.group({
-    deliveryUserId: [null as string | null, Validators.required],
+    deliveryPersonName: ['', [Validators.required, Validators.maxLength(120)]],
+    deliveryPersonMobile: ['', [Validators.required, Validators.pattern(/^[0-9+\- ]{7,20}$/)]],
     vehicleId: [null as string | null],
     fuelCost: [null as number | null, Validators.min(0)],
     deliveryCharge: [null as number | null, Validators.min(0)]
@@ -312,7 +298,6 @@ export class OutForDelivery implements OnInit, OnDestroy {
     });
     // In Scan at a hub links here with ?tab=hub: open straight on the hub's own shipments.
     if (this.route.snapshot.queryParamMap.get('tab') === 'hub') this.hubMode.set(true);
-    this.c('deliveryUserId').valueChanges.subscribe(() => this.resetOtpState());
     // Digits-only, 4 chars max — strips anything a paste or a non-numeric keyboard slips
     // in, since the field itself (a plain text input) doesn't block that on its own.
     this.otpControl.valueChanges.subscribe((v) => {
@@ -432,7 +417,8 @@ export class OutForDelivery implements OnInit, OnDestroy {
     const selected = this.shipments().filter((s) => shipmentIds.includes(s.id));
     this.assigning.set(true);
     this.movementService.outForDelivery({
-      shipmentIds, deliveryUserId: v.deliveryUserId,
+      shipmentIds,
+      deliveryPersonName: String(v.deliveryPersonName).trim(), deliveryPersonMobile: String(v.deliveryPersonMobile).trim(),
       vehicleId: v.vehicleId, fuelCost: v.fuelCost, deliveryCharge: v.deliveryCharge
     }).subscribe({
       next: (r) => {
@@ -442,7 +428,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
         this.drsPrintCount.set(0);
         const assignedNumbers = new Set(r.results.filter((o) => o.success).map((o) => o.reference));
         this.printableShipments.set(selected.filter((s) => assignedNumbers.has(s.shipmentNumber)));
-        this.deliveryUserLabel = this.label(v.deliveryUserId, this.userOptions());
+        this.deliveryUserLabel = `${String(v.deliveryPersonName).trim()} · ${String(v.deliveryPersonMobile).trim()}`;
         if (r.failureCount) this.notify.error(`${r.failureCount} of ${r.results.length} could not be assigned.`);
         else this.notify.success(`${r.successCount} shipment(s) assigned.`);
         this.selectedIds.set(new Set());

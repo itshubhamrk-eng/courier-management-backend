@@ -72,6 +72,7 @@ const DEFAULT_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELI
           <td>{{ s.receiverName }}</td>
           <td class="mono">{{ s.receiverContact }}</td>
           <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
+          <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
           <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td><app-shipment-status-badge [status]="s.status" /></td>
           <td>{{ s.deliveredAt ? (s.deliveredAt | date: 'dd MMM y, h:mm a') : '—' }}</td>
@@ -135,6 +136,7 @@ export class DeliveryReport implements OnInit {
     { key: 'receiverName', header: 'Receiver' },
     { key: 'receiverContact', header: 'Receiver Contact' },
     { key: 'paymentModeId', header: 'Payment Mode' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'netAmount', header: 'Amount', align: 'right' },
     { key: 'status', header: 'Status', width: '150px' },
     { key: 'deliveredAt', header: 'Delivered At' }
@@ -207,11 +209,11 @@ export class DeliveryReport implements OnInit {
 
   private download(rows: Shipment[]): void {
     const header = ['shipmentNumber', 'trackingNumber', 'deliveryBranch', 'receiver', 'receiverContact',
-      'paymentMode', 'netAmount', 'totalCommission', 'commissionOnBasicFreight',
+      'paymentMode', 'quantity', 'netAmount', 'totalCommission', 'commissionOnBasicFreight',
       'branchCommissionOnOtherAmount', 'companyCommissionOnBasicFreight', 'status', 'deliveredAt'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, this.branchLabel(r.deliveryBranchId),
       r.receiverName, r.receiverContact, this.paymentModeLabel(r.paymentModeId),
-      r.netAmount ?? '', r.totalCommission ?? '', r.commissionOnBasicFreight ?? '',
+      r.numberOfPackages ?? '', r.netAmount ?? '', r.totalCommission ?? '', r.commissionOnBasicFreight ?? '',
       r.branchCommissionOnOtherAmount ?? '', r.companyCommissionOnBasicFreight ?? '',
       r.status, r.deliveredAt ?? '']);
     downloadCsv(`delivery-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [6, 7, 8, 9, 10]);

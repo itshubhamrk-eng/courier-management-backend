@@ -50,8 +50,8 @@ import { Lookup } from '@features/users/user.service';
                  (rowClick)="view($event)">
         <ng-template #row let-r>
           <td class="mono">{{ r.drsNumber ?? '—' }}</td>
-          <td>{{ userLabel(r.deliveryUserId) }}</td>
-          <td class="mono">{{ userContact(r.deliveryUserId) }}</td>
+          <td>{{ userLabel(r) }}</td>
+          <td class="mono">{{ userContact(r) }}</td>
           <td>{{ branchLabel(r.deliveryBranchId) }}</td>
           <td>{{ r.runDate }}</td>
           <td class="num">{{ r.shipmentCount }}</td>
@@ -135,11 +135,18 @@ export class DrsReport implements OnInit {
   onTo(e: Event): void { this.to.set((e.target as HTMLInputElement).value); this.load(); }
   onPendingOnly(e: Event): void { this.pendingOnly.set((e.target as HTMLInputElement).checked); }
 
-  protected userLabel(id: string): string { return this.users().get(id) ?? id; }
+  protected userLabel(r: DrsSummary): string {
+    if (r.deliveryPersonName) return r.deliveryPersonName;
+    return r.deliveryUserId ? (this.users().get(r.deliveryUserId) ?? r.deliveryUserId) : '—';
+  }
   protected branchLabel(id: string): string { return this.branches().get(id) ?? id; }
-  protected userContact(id: string): string { return this.userContacts().get(id)?.mobile ?? '—'; }
+  protected userContact(r: DrsSummary): string {
+    if (r.deliveryPersonName) return r.deliveryPersonMobile || '—';
+    return r.deliveryUserId ? (this.userContacts().get(r.deliveryUserId)?.mobile ?? '—') : '—';
+  }
 
   view(r: DrsSummary): void {
-    this.router.navigate(['/reports/drs', r.deliveryUserId, r.deliveryBranchId, r.runDate]);
+    this.router.navigate(['/reports/drs', r.deliveryUserId ?? 'none', r.deliveryBranchId, r.runDate],
+      r.deliveryUserId ? {} : { queryParams: { name: r.deliveryPersonName ?? '', mobile: r.deliveryPersonMobile ?? '' } });
   }
 }

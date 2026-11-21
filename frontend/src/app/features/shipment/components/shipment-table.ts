@@ -35,6 +35,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td class="mono">{{ s.receiverContact }}</td>
         <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
         <td>{{ s.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</td>
+        <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
         <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
         <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
@@ -101,6 +102,7 @@ export class ShipmentTable {
     { key: 'receiverContact', header: 'Receiver Contact' },
     { key: 'paymentModeId', header: 'Payment Mode' },
     { key: 'deliveryType', header: 'Delivery Type' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', sortable: true, align: 'right' },
     { key: 'netAmount', header: 'Total Amount', align: 'right' },
     { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },

@@ -6,6 +6,12 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-21 - THC driver typed in, not picked (V150)
+- Manifest Finalization (THC) dispatch now takes `driverName` + `driverMobile` typed in, stored on the manifest (`manifests.driver_name/driver_mobile`, V150) and shown on the THC print, THC report and shipment movement table. `driverUserId` is optional (legacy/old manifests still resolve through the user directory); old 8-arg `ManifestService.dispatch` kept as a default delegate.
+- Driver OTP UI removed from the THC form (it needed a driver user id); backend OTP endpoints untouched.
+- DRS (Out For Delivery) gets the same treatment (V151): `delivery_assignment.delivery_user_id` now nullable + `delivery_person_name/mobile`; DRS groups by user OR name+mobile, `/drs/detail` takes optional `deliveryUserId`/`deliveryPersonName`/`deliveryPersonMobile` (frontend route uses `none` + `?name=&mobile=` for typed people). Delivery OTP UI removed from the form. Status-override to OUT_FOR_DELIVERY still needs a picked user.
+- Also: In Scan renamed "Manifest In Scan" (labels only); Shipment No. is the first field in Booking Details.
+
 ## 2026-11-19 - Role-owned menus (`role_menu`, V149)
 - A role now stores its own menu list (`role_menu`, same CRUD flags as `user_menu_grants`). Ticking Tickets no longer ticks Communication: 102 menu leaves shared only 32 permission modules, so the old role screen coupled every menu that shared one (Support+Communication = `NOTIFICATION`, Follow-ups+Customers = `CUSTOMER`, all 14 Reports = `REPORT`).
 - Users follow their role live: `GET /menu-grants/me` returns `{deniedMenus, allowedMenus}`; allowed = union of the user's roles' `role_menu` READ rows minus that user's own `user_menu_grants` denials (still deny-only). Nothing is copied at user creation. New user with the role sees its menus at once; editing the role updates every holder.

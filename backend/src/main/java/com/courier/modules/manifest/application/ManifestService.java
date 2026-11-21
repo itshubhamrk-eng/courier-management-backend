@@ -50,8 +50,20 @@ public interface ManifestService {
      * {@code driverAdvance}/{@code tollAmount}/{@code otherAmount} are all optional trip
      * expenses, stored as entered with no validation beyond non-negative.
      */
-    Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
-            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount);
+    default Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
+            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
+        return dispatch(id, vehicleId, driverUserId, null, null, departureTime,
+                fuelCost, driverAdvance, tollAmount, otherAmount);
+    }
+
+    /**
+     * Same as above, but the driver may be typed in instead of picked: {@code driverName} +
+     * {@code driverMobile} are stored on the manifest itself, and {@code driverUserId} is
+     * then optional. Either a driver user id or a driver name is required.
+     */
+    Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, String driverName, String driverMobile,
+            Instant departureTime, BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount,
+            BigDecimal otherAmount);
 
     /**
      * Removes one shipment from a still-{@code CREATED} manifest, reverting it to

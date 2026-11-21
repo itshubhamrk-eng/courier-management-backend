@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record DrsDetailResponse(
-        UUID deliveryUserId, UUID deliveryBranchId, LocalDate runDate,
+        UUID deliveryUserId, String deliveryPersonName, String deliveryPersonMobile, UUID deliveryBranchId, LocalDate runDate,
         String drsNumber, List<DrsShipmentRowResponse> shipments
 ) {
 }

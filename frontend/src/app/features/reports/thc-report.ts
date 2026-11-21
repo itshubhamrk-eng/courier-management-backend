@@ -54,7 +54,7 @@ import { Lookup } from '@features/users/user.service';
           <td>{{ branchLabel(m.bookingBranchId) }}</td>
           <td>{{ branchLabel(m.deliveryBranchId) }}</td>
           <td>{{ vehicleLabel(m.vehicleId) }}</td>
-          <td>{{ driverLabel(m.driverUserId) }}</td>
+          <td>{{ driverLabel(m) }}</td>
           <td class="num">{{ m.shipmentCount }}</td>
           <td class="num">{{ m.totalWeight | number: '1.3-3' }} kg</td>
           <td class="num">{{ m.totalPackages }}</td>
@@ -101,7 +101,7 @@ export class ThcReport implements OnInit {
     { key: 'bookingBranchId', header: 'Booking Branch' },
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
     { key: 'vehicleId', header: 'Vehicle' },
-    { key: 'driverUserId', header: 'Driver' },
+    { key: 'driverName', header: 'Driver' },
     { key: 'shipmentCount', header: 'Shipments', align: 'right', width: '100px' },
     { key: 'totalWeight', header: 'Weight', align: 'right', width: '110px' },
     { key: 'totalPackages', header: 'Packages', align: 'right', width: '100px' },
@@ -138,7 +138,10 @@ export class ThcReport implements OnInit {
 
   protected branchLabel(id: string): string { return this.branches().get(id) ?? id; }
   protected vehicleLabel(id: string | null | undefined): string { return id ? (this.vehicles().get(id) ?? id) : '—'; }
-  protected driverLabel(id: string | null | undefined): string { return id ? (this.drivers().get(id) ?? id) : '—'; }
+  protected driverLabel(m: Manifest): string {
+    if (m.driverName) return m.driverMobile ? `${m.driverName} · ${m.driverMobile}` : m.driverName;
+    return m.driverUserId ? (this.drivers().get(m.driverUserId) ?? m.driverUserId) : '—';
+  }
 
   protected tripExpenseTotal(m: Manifest): number {
     return (m.fuelCost ?? 0) + (m.driverAdvance ?? 0) + (m.tollAmount ?? 0) + (m.otherAmount ?? 0);

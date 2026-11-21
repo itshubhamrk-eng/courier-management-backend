@@ -69,6 +69,7 @@ const MAX_NUMBERS = 200;
               <td>{{ r.shipment.status === 'DELIVERED' ? '—' : ('Stock at ' + branchLabel(r.shipment.currentLocationId ?? '')) }}</td>
               <td>{{ r.shipment.senderName }}</td>
               <td>{{ r.shipment.receiverName }}</td>
+              <td class="num">{{ r.shipment.numberOfPackages ?? '—' }}</td>
               <td class="num">{{ r.shipment.chargeableWeight | number: '1.3-3' }} kg</td>
               <td class="num">{{ r.shipment.netAmount != null ? ('₹' + (r.shipment.netAmount | number: '1.2-2')) : '—' }}</td>
               <td>{{ r.shipment.receivedAt ? (r.shipment.receivedAt | date: 'dd MMM y, h:mm a') : '—' }}</td>
@@ -125,6 +126,7 @@ export class BulkTrackingReport implements OnInit {
     { key: 'currentLocationId', header: 'Current Location' },
     { key: 'senderName', header: 'Sender' },
     { key: 'receiverName', header: 'Receiver' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', align: 'right' as const },
     { key: 'netAmount', header: 'Amount', align: 'right' as const },
     { key: 'receivedAt', header: 'Received Date' },
@@ -170,7 +172,7 @@ export class BulkTrackingReport implements OnInit {
   exportCsv(): void {
     const rows = this.results() ?? [];
     const header = ['enteredNumber', 'found', 'shipmentNumber', 'trackingNumber', 'bookingDate',
-      'bookingBranch', 'deliveryBranch', 'currentLocation', 'sender', 'receiver', 'chargeableWeight',
+      'bookingBranch', 'deliveryBranch', 'currentLocation', 'sender', 'receiver', 'quantity', 'chargeableWeight',
       'netAmount', 'receivedDate', 'deliveryDate', 'status'];
     const lines = rows.map((r) => [
       r.number, r.found ? 'Yes' : 'No',
@@ -179,7 +181,7 @@ export class BulkTrackingReport implements OnInit {
       r.shipment ? this.branchLabel(r.shipment.deliveryBranchId) : '',
       r.shipment && r.shipment.status !== 'DELIVERED' ? 'Stock at ' + this.branchLabel(r.shipment.currentLocationId ?? '') : '',
       r.shipment?.senderName ?? '', r.shipment?.receiverName ?? '',
-      r.shipment?.chargeableWeight ?? '', r.shipment?.netAmount ?? '',
+      r.shipment?.numberOfPackages ?? '', r.shipment?.chargeableWeight ?? '', r.shipment?.netAmount ?? '',
       r.shipment?.receivedAt ?? '', r.shipment?.deliveredAt ?? '', r.shipment?.status ?? ''
     ]);
     downloadCsv(`bulk-shipment-tracking-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [10, 11]);

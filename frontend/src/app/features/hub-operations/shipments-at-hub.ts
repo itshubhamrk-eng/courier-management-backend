@@ -57,6 +57,7 @@ const STATUS_OPTIONS: SelectOption[] = [
           <td>{{ s.toCity || '—' }}</td>
           <td>{{ s.currentLocationId ? (branchNames().get(s.currentLocationId) || '—') : '—' }}</td>
           <td>{{ s.nextLocationId ? (branchNames().get(s.nextLocationId) || '—') : '—' }}</td>
+          <td class="tbl--right">{{ s.numberOfPackages ?? '—' }}</td>
           <td class="tbl--right">{{ s.chargeableWeight }} kg</td>
           <td><app-shipment-status-badge [status]="s.status" /></td>
           <td>{{ s.receivedAt ? (s.receivedAt | date: 'dd MMM, HH:mm') : '—' }}</td>
@@ -106,6 +107,7 @@ export class ShipmentsAtHub implements OnInit {
     { key: 'toCity', header: 'Destination' },
     { key: 'currentLocationId', header: 'Current Hub' },
     { key: 'nextLocationId', header: 'Next Destination' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'chargeableWeight', header: 'Weight', width: '90px' },
     { key: 'status', header: 'Status', width: '160px' },
     { key: 'receivedAt', header: 'Received', width: '140px' },

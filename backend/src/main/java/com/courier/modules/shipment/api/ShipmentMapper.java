@@ -276,7 +276,7 @@ public class ShipmentMapper {
 
     public com.courier.modules.shipment.api.dto.DrsSummaryResponse toResponse(ShipmentService.DrsSummary s) {
         return new com.courier.modules.shipment.api.dto.DrsSummaryResponse(
-                s.deliveryUserId(), s.deliveryBranchId(), s.runDate(), s.drsNumber(),
+                s.deliveryUserId(), s.deliveryPersonName(), s.deliveryPersonMobile(), s.deliveryBranchId(), s.runDate(), s.drsNumber(),
                 s.shipmentCount(), s.deliveredCount(), s.pendingCount(), s.failedCount());
     }
 
@@ -289,7 +289,7 @@ public class ShipmentMapper {
 
     public com.courier.modules.shipment.api.dto.DrsDetailResponse toResponse(ShipmentService.DrsDetail d) {
         return new com.courier.modules.shipment.api.dto.DrsDetailResponse(
-                d.deliveryUserId(), d.deliveryBranchId(), d.runDate(), d.drsNumber(),
+                d.deliveryUserId(), d.deliveryPersonName(), d.deliveryPersonMobile(), d.deliveryBranchId(), d.runDate(), d.drsNumber(),
                 d.shipments().stream().map(this::toResponse).toList());
     }
 

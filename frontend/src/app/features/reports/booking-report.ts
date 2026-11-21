@@ -66,6 +66,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
           <td>{{ s.senderName }}</td>
           <td>{{ s.receiverName }}</td>
           <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
+          <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
           <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
           <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
@@ -131,6 +132,7 @@ export class BookingReport implements OnInit {
     { key: 'senderName', header: 'Sender' },
     { key: 'receiverName', header: 'Receiver' },
     { key: 'paymentModeId', header: 'Payment Mode' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', align: 'right' },
     { key: 'netAmount', header: 'Amount', align: 'right' },
     { key: 'commissionOnBasicFreight', header: 'Commission on Basic Freight', align: 'right' },
@@ -207,13 +209,13 @@ export class BookingReport implements OnInit {
 
   private download(rows: Shipment[]): void {
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
-      'sender', 'senderContact', 'receiver', 'receiverContact', 'paymentMode', 'chargeableWeight', 'netAmount',
+      'sender', 'senderContact', 'receiver', 'receiverContact', 'paymentMode', 'quantity', 'chargeableWeight', 'netAmount',
       'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
       'companyCommissionOnBasicFreight', 'status'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact, this.paymentModeLabel(r.paymentModeId),
-      r.chargeableWeight, r.netAmount ?? '',
+      r.numberOfPackages ?? '', r.chargeableWeight, r.netAmount ?? '',
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
       r.companyCommissionOnBasicFreight ?? '', r.status]);
     downloadCsv(`booking-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [10, 11, 12, 13, 14, 15]);

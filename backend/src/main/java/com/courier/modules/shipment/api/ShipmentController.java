@@ -429,7 +429,8 @@ public class ShipmentController {
             return ApiResponse.<com.courier.modules.shipment.api.dto.ShipmentDrsResponse>success(null, null);
         }
         return ApiResponse.success(new com.courier.modules.shipment.api.dto.ShipmentDrsResponse(
-                d.getDrsNumber(), d.getDeliveryBranchId(), d.getDeliveryUserId(), d.getVehicleId(),
+                d.getDrsNumber(), d.getDeliveryBranchId(), d.getDeliveryUserId(),
+                d.getDeliveryPersonName(), d.getDeliveryPersonMobile(), d.getVehicleId(),
                 d.getFuelCost(), d.getDeliveryCharge(), d.getStatus().name(),
                 d.getAssignedAt(), d.getDeliveredAt(), d.getReceiverName(), d.getDeliveryRemarks()));
     }

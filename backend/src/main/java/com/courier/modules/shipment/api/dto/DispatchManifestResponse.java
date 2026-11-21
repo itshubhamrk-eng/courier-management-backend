@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record DispatchManifestResponse(
         UUID manifestId, String manifestNumber, ManifestStatus status,
-        UUID vehicleId, UUID driverUserId, Instant dispatchedAt, Instant departureTime, int shipmentCount,
+        UUID vehicleId, UUID driverUserId, String driverName, String driverMobile, Instant dispatchedAt, Instant departureTime, int shipmentCount,
         BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount
 ) {
 }

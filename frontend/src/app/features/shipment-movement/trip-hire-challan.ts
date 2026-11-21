@@ -151,23 +151,8 @@ import { SettingsService } from '@features/settings/settings.service';
             <form [formGroup]="form" (ngSubmit)="dispatch()" class="df">
               <div class="grid2">
                 <app-select [control]="c('vehicleId')" label="Vehicle" [options]="vehicleOptions()" placeholder="Select vehicle" />
-                <app-select [control]="c('driverUserId')" label="Driver" [options]="driverOptions()" placeholder="Select driver" />
-              </div>
-
-              <div class="otp">
-                @if (!otpVerified()) {
-                  <app-button type="button" variant="stroked" icon="sms" [loading]="sendingOtp()"
-                    [disabled]="!c('driverUserId').value || resendCooldown() > 0" (pressed)="requestOtp()">
-                    {{ otpRequested() ? (resendCooldown() > 0 ? 'Resend OTP (' + resendCooldown() + 's)' : 'Resend OTP') : 'Send Driver OTP (optional)' }}
-                  </app-button>
-                  @if (otpRequested()) {
-                    <span class="text-caption">Sent to {{ maskedMobile() }} — valid {{ otpExpiresInMinutes() }} min.</span>
-                    <app-input [control]="otpControl" type="tel" label="Enter OTP" placeholder="4-digit code" [maxLength]="4" />
-                    <app-button type="button" icon="check" [loading]="verifyingOtp()" (pressed)="verifyOtp()">Verify OTP</app-button>
-                  }
-                } @else {
-                  <span class="otp__ok">✓ Driver OTP verified</span>
-                }
+                <app-input [control]="c('driverName')" label="Driver Name" placeholder="Enter driver name" [maxLength]="120" />
+                <app-input [control]="c('driverMobile')" type="tel" label="Driver Contact Number" placeholder="e.g. 9876543210" [maxLength]="20" />
               </div>
 
               <label class="fld"><span class="fld__l">Departure Time</span>
@@ -383,7 +368,8 @@ export class TripHireChallan implements OnInit, OnDestroy {
   readonly searchControl = new FormControl('');
   readonly form: FormGroup = this.fb.group({
     vehicleId: [null as string | null, Validators.required],
-    driverUserId: [null as string | null, Validators.required],
+    driverName: ['', [Validators.required, Validators.maxLength(120)]],
+    driverMobile: ['', [Validators.required, Validators.pattern(/^[0-9+\- ]{7,20}$/)]],
     departureTime: [this.nowLocalDateTime() as string | null],
     fuelCost: [null as number | null, Validators.min(0)],
     driverAdvance: [null as number | null, Validators.min(0)],
@@ -410,7 +396,6 @@ export class TripHireChallan implements OnInit, OnDestroy {
       this.topayModeIds.set(new Set(p.content
         .filter((r) => r['collectAtDelivery'] === true && r['cashOnDelivery'] !== true)
         .map((r) => r.id))));
-    this.c('driverUserId').valueChanges.subscribe(() => this.resetOtpState());
     // Digits-only, 4 chars max — strips anything a paste or a non-numeric keyboard slips
     // in, since the field itself (a plain text input) doesn't block that on its own.
     this.otpControl.valueChanges.subscribe((v) => {
@@ -620,7 +605,8 @@ export class TripHireChallan implements OnInit, OnDestroy {
       switchMap(() => {
         const v = this.form.getRawValue();
         return this.movementService.dispatch({
-          manifestId: manifest.id, vehicleId: v.vehicleId, driverUserId: v.driverUserId,
+          manifestId: manifest.id, vehicleId: v.vehicleId,
+          driverName: String(v.driverName).trim(), driverMobile: String(v.driverMobile).trim(),
           departureTime: v.departureTime ? new Date(v.departureTime).toISOString() : null,
           fuelCost: v.fuelCost, driverAdvance: v.driverAdvance,
           tollAmount: v.tollAmount, otherAmount: v.otherAmount
@@ -633,6 +619,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
         this.pendingRemovals.set([]);
         const dispatched: Manifest = {
           ...manifest, status: r.status, vehicleId: r.vehicleId, driverUserId: r.driverUserId,
+          driverName: r.driverName, driverMobile: r.driverMobile,
           dispatchedAt: r.dispatchedAt, departureTime: r.departureTime,
           fuelCost: r.fuelCost, driverAdvance: r.driverAdvance,
           tollAmount: r.tollAmount, otherAmount: r.otherAmount
@@ -722,7 +709,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
     const companyAddress = companyAddressLine(company);
     const companyGst = company?.gstNumber ?? null;
     const companyContact = company?.mobile ?? null;
-    const driver = this.driverDirectory().get(m.driverUserId ?? '');
+    const driver = m.driverName ? { name: m.driverName, mobile: m.driverMobile || '—' } : this.driverDirectory().get(m.driverUserId ?? '');
     const thcNumber = this.thcNumber(m);
     const fuelCost = m.fuelCost ?? 0;
     const driverAdvance = m.driverAdvance ?? 0;
@@ -795,7 +782,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
           <div><span class="label">FROM</span>${this.esc(this.branchNames().get(m.bookingBranchId) ?? '—')}</div>
           <div><span class="label">TO</span>${this.esc(this.manifestToLabel(m))}</div>
           <div><span class="label">VEHICLE NO</span>${this.esc(this.label(m.vehicleId, this.vehicleOptions()))}</div>
-          <div><span class="label">DRIVER NAME</span>${this.esc(this.label(m.driverUserId, this.driverOptions()))}</div>
+          <div><span class="label">DRIVER NAME</span>${this.esc(m.driverName || this.label(m.driverUserId, this.driverOptions()))}</div>
           <div><span class="label">DRIVER MOBILE</span>${this.esc(driver?.mobile) || '—'}</div>
           <div><span class="label">QTY (PKGS)</span>${m.totalPackages}</div>
         </div>

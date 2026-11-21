@@ -708,7 +708,9 @@ export class ShipmentView implements OnInit {
       const vehicleIds = new Set<string>();
       if (drs?.vehicleId) vehicleIds.add(drs.vehicleId);
       this.drs.set(drs);
-      this.drsUser.set(drs ? dir.get(drs.deliveryUserId) ?? null : null);
+      this.drsUser.set(!drs ? null : drs.deliveryPersonName
+        ? { name: drs.deliveryPersonName, mobile: drs.deliveryPersonMobile || '—' }
+        : drs.deliveryUserId ? dir.get(drs.deliveryUserId) ?? null : null);
 
       const manifests$ = ids.length
         ? forkJoin(ids.map((id) => this.manifestService.get(id).pipe(catchError(() => of(null)))))
@@ -742,7 +744,7 @@ export class ShipmentView implements OnInit {
             dispatchedAt: at(m, 'DISPATCHED') ?? m.departureTime ?? m.dispatchedAt ?? null,
             receivedAt: at(m, 'IN_SCAN', true) ?? hubReceivedAt(m),
             vehicle: m.vehicleId ? vNames.get(m.vehicleId) ?? null : null,
-            driver: m.driverUserId ? dir.get(m.driverUserId) ?? null : null
+            driver: m.driverName ? { name: m.driverName, mobile: m.driverMobile || '—' } : m.driverUserId ? dir.get(m.driverUserId) ?? null : null
           })));
           this.drsVehicle.set(drs?.vehicleId ? vNames.get(drs.vehicleId) ?? null : null);
           this.loadingMovement.set(false);

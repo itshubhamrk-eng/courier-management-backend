@@ -1789,21 +1789,28 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional
     @PreAuthorize(WRITERS + " or hasAuthority('DELIVERY_ASSIGN')")
     public BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId,
+                                                    String personName, String personMobile,
                                                     UUID vehicleId, BigDecimal fuelCost, BigDecimal deliveryCharge) {
         UUID companyId = requireCompany();
-        userService.getById(deliveryUserId); // 404s if foreign/missing — no role restriction, see module doc
+        String name = personName == null ? null : personName.trim();
+        String mobile = personMobile == null ? null : personMobile.trim();
+        if (deliveryUserId != null) {
+            userService.getById(deliveryUserId); // 404s if foreign/missing — no role restriction, see module doc
+        } else if (name == null || name.isEmpty()) {
+            throw new BusinessRuleException("Delivery person name is required.");
+        }
 
         String drsNumber = nextDrsNumber(companyId);
         List<MovementOutcome> outcomes = new ArrayList<>();
         for (UUID shipmentId : shipmentIds) {
-            outcomes.add(assignOneOutForDelivery(companyId, shipmentId, deliveryUserId, drsNumber,
+            outcomes.add(assignOneOutForDelivery(companyId, shipmentId, deliveryUserId, name, mobile, drsNumber,
                     vehicleId, fuelCost, deliveryCharge));
         }
         return new BulkMovementResult(outcomes, drsNumber);
     }
 
     private MovementOutcome assignOneOutForDelivery(UUID companyId, UUID shipmentId, UUID deliveryUserId,
-                                                      String drsNumber, UUID vehicleId, BigDecimal fuelCost,
+                                                      String personName, String personMobile, String drsNumber, UUID vehicleId, BigDecimal fuelCost,
                                                       BigDecimal deliveryCharge) {
         Shipment shipment = shipmentRepository.findByIdWithinCompany(shipmentId, companyId).orElse(null);
         if (shipment == null) {
@@ -1831,9 +1838,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         if (assignment.isNew()) {
             assignment.setDeliveryBranchId(shipment.getDeliveryBranchId());
             assignment.setDeliveryUserId(deliveryUserId);
+            assignment.setDeliveryPersonName(personName);
+            assignment.setDeliveryPersonMobile(personMobile);
             assignment.setAssignedAt(Instant.now());
         } else {
-            assignment.reassign(deliveryUserId, shipment.getDeliveryBranchId());
+            assignment.reassign(deliveryUserId, personName, personMobile, shipment.getDeliveryBranchId());
         }
         assignment.setDrsNumber(drsNumber);
         assignment.setVehicleId(vehicleId);
@@ -1847,7 +1856,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         appendHistory(saved, companyId, previous, ShipmentStatus.OUT_FOR_DELIVERY, "DRS",
                 shipment.getDeliveryBranchId(), saved.getManifestId(), null);
         auditService.record(AuditAction.SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED, ENTITY, saved.getId(),
-                Map.of("shipmentNumber", saved.getShipmentNumber(), "deliveryUserId", deliveryUserId.toString()));
+                Map.of("shipmentNumber", saved.getShipmentNumber(), "deliveryUserId", String.valueOf(deliveryUserId),
+                        "deliveryPerson", String.valueOf(personName)));
         eventPublisher.publishEvent(new ShipmentEvent.OutForDelivery(saved.getId(), companyId, Instant.now()));
         return new MovementOutcome(saved.getShipmentNumber(), true, null);
     }
@@ -2504,14 +2514,15 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         return rows.stream()
                 .collect(Collectors.groupingBy(d -> new DrsGroupKey(d.getDeliveryUserId(),
-                        d.getDeliveryBranchId(), d.getAssignedAt().atZone(ZoneOffset.UTC).toLocalDate())))
+                        d.getDeliveryPersonName(), d.getDeliveryPersonMobile(), d.getDeliveryBranchId(), d.getAssignedAt().atZone(ZoneOffset.UTC).toLocalDate())))
                 .entrySet().stream()
                 .map(e -> {
                     long delivered = e.getValue().stream()
                             .filter(d -> d.getStatus() == DeliveryAssignmentStatus.DELIVERED).count();
                     long failed = e.getValue().stream()
                             .filter(d -> d.getStatus() == DeliveryAssignmentStatus.FAILED).count();
-                    return new DrsSummary(e.getKey().deliveryUserId(), e.getKey().deliveryBranchId(),
+                    return new DrsSummary(e.getKey().deliveryUserId(), e.getKey().personName(), e.getKey().personMobile(),
+                            e.getKey().deliveryBranchId(),
                             e.getKey().runDate(), representativeDrsNumber(e.getValue()), e.getValue().size(),
                             (int) delivered, e.getValue().size() - (int) delivered - (int) failed, (int) failed);
                 })
@@ -2522,17 +2533,21 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
-    public DrsDetail getDrsDetail(UUID deliveryUserId, UUID deliveryBranchId, LocalDate runDate) {
+    public DrsDetail getDrsDetail(UUID deliveryUserId, String personName, String personMobile,
+                                  UUID deliveryBranchId, LocalDate runDate) {
         UUID companyId = requireCompany();
         List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByCompanyAndAssignedAtBetween(
                 companyId, runDate.atStartOfDay(ZoneOffset.UTC).toInstant(),
                 runDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())
                 .stream()
-                .filter(d -> d.getDeliveryUserId().equals(deliveryUserId)
-                        && d.getDeliveryBranchId().equals(deliveryBranchId))
+                .filter(d -> Objects.equals(d.getDeliveryUserId(), deliveryUserId)
+                        && (deliveryUserId != null
+                                || (Objects.equals(d.getDeliveryPersonName(), personName)
+                                        && Objects.equals(d.getDeliveryPersonMobile(), personMobile)))
+                        && Objects.equals(d.getDeliveryBranchId(), deliveryBranchId))
                 .toList();
         if (assignments.isEmpty()) {
-            throw new ResourceNotFoundException("DRS", deliveryUserId);
+            throw new ResourceNotFoundException("DRS", deliveryUserId != null ? deliveryUserId : deliveryBranchId);
         }
 
         List<UUID> shipmentIds = assignments.stream().map(DeliveryAssignment::getShipmentId).toList();
@@ -2553,7 +2568,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 })
                 .filter(Objects::nonNull)
                 .toList();
-        return new DrsDetail(deliveryUserId, deliveryBranchId, runDate, representativeDrsNumber(assignments), rows);
+        return new DrsDetail(deliveryUserId, personName, personMobile, deliveryBranchId, runDate, representativeDrsNumber(assignments), rows);
     }
 
     /** {@code assignments} is already ordered newest-first (the repository query's own
@@ -2564,7 +2579,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .filter(Objects::nonNull).findFirst().orElse(null);
     }
 
-    private record DrsGroupKey(UUID deliveryUserId, UUID deliveryBranchId, LocalDate runDate) {
+    private record DrsGroupKey(UUID deliveryUserId, String personName, String personMobile, UUID deliveryBranchId, LocalDate runDate) {
     }
 
     // ------------------------------------------------------------- cross-module

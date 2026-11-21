@@ -37,7 +37,7 @@ public class ManifestMapper {
     public ManifestResponse toResponse(Manifest m, ManifestShipmentAggregate aggregate) {
         return new ManifestResponse(m.getId(), m.getManifestNumber(), m.getBookingBranchId(),
                 m.getDeliveryBranchId(), m.getDeliveryMode(), m.getDestinationCity(),
-                m.getVehicleId(), m.getDriverUserId(), m.getStatus(),
+                m.getVehicleId(), m.getDriverUserId(), m.getDriverName(), m.getDriverMobile(), m.getStatus(),
                 m.getDispatchedAt(), m.getDepartureTime(), m.getCompletedAt(), m.getRemarks(),
                 m.getFuelCost(), m.getDriverAdvance(), m.getTollAmount(), m.getOtherAmount(),
                 m.getCreatedAt(), m.getUpdatedAt(), m.getVersion(),

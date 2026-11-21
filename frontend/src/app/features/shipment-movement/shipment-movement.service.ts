@@ -84,9 +84,13 @@ export class ShipmentMovementService {
   }
 
   /** DRS Report detail — every shipment on one DRS run. */
-  drsDetail(deliveryUserId: string, deliveryBranchId: string, runDate: string) {
-    return this.api.get<DrsDetail>(`${API.shipmentMovement}/drs/detail`,
-      { deliveryUserId, deliveryBranchId, runDate });
+  drsDetail(deliveryUserId: string | null, deliveryBranchId: string, runDate: string,
+            deliveryPersonName?: string | null, deliveryPersonMobile?: string | null) {
+    const params: Record<string, string> = { deliveryBranchId, runDate };
+    if (deliveryUserId) params['deliveryUserId'] = deliveryUserId;
+    if (deliveryPersonName) params['deliveryPersonName'] = deliveryPersonName;
+    if (deliveryPersonMobile) params['deliveryPersonMobile'] = deliveryPersonMobile;
+    return this.api.get<DrsDetail>(`${API.shipmentMovement}/drs/detail`, params);
   }
 
   /** Active company users, for the driver/delivery-user pickers — same shape

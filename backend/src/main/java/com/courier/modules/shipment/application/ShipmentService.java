@@ -446,7 +446,19 @@ public interface ShipmentService {
      * {@code ManifestService.dispatch} gives its own trip-expense fields — and are
      * stamped on every row this call touches, same as the generated {@code drsNumber}.
      */
+    default BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId,
+                                             UUID vehicleId, java.math.BigDecimal fuelCost,
+                                             java.math.BigDecimal deliveryCharge) {
+        return assignOutForDelivery(shipmentIds, deliveryUserId, null, null, vehicleId, fuelCost, deliveryCharge);
+    }
+
+    /**
+     * Same, but the delivery person may be typed in: {@code personName} + {@code personMobile}
+     * are stored on each assignment row and {@code deliveryUserId} is then optional. Either a
+     * delivery user id or a person name is required.
+     */
     BulkMovementResult assignOutForDelivery(Collection<UUID> shipmentIds, UUID deliveryUserId,
+                                             String personName, String personMobile,
                                              UUID vehicleId, java.math.BigDecimal fuelCost,
                                              java.math.BigDecimal deliveryCharge);
 
@@ -566,7 +578,13 @@ public interface ShipmentService {
     List<DrsSummary> listDrs(java.time.LocalDate from, java.time.LocalDate to, UUID deliveryBranchId);
 
     /** Every shipment on one DRS run — same grouping key {@link #listDrs} used to build the row. */
-    DrsDetail getDrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate);
+    default DrsDetail getDrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate) {
+        return getDrsDetail(deliveryUserId, null, null, deliveryBranchId, runDate);
+    }
+
+    /** {@code deliveryUserId} null selects a typed delivery person, matched by name + mobile. */
+    DrsDetail getDrsDetail(UUID deliveryUserId, String personName, String personMobile,
+                           UUID deliveryBranchId, java.time.LocalDate runDate);
 
     /** {@code drsNumber} is the most recently generated number among the run's assignments
      *  (null for runs made entirely of pre-V31 rows) — the grouping key itself is still
@@ -593,7 +611,7 @@ public interface ShipmentService {
                                  int maxAttempts) {
     }
 
-    record DrsSummary(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,
+    record DrsSummary(UUID deliveryUserId, String deliveryPersonName, String deliveryPersonMobile, UUID deliveryBranchId, java.time.LocalDate runDate,
                       String drsNumber, int shipmentCount, int deliveredCount, int pendingCount, int failedCount) {
     }
 
@@ -604,7 +622,7 @@ public interface ShipmentService {
                           String fromCity, String toCity) {
     }
 
-    record DrsDetail(UUID deliveryUserId, UUID deliveryBranchId, java.time.LocalDate runDate,
+    record DrsDetail(UUID deliveryUserId, String deliveryPersonName, String deliveryPersonMobile, UUID deliveryBranchId, java.time.LocalDate runDate,
                      String drsNumber, List<DrsShipmentRow> shipments) {
     }
 

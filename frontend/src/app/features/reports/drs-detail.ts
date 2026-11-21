@@ -37,7 +37,7 @@ import { ShipmentStatusBadge } from '../shipment/components/shipment-status-badg
           @if (detail(); as d) {
             <p class="text-caption">
               @if (d.drsNumber) { <span class="mono">{{ d.drsNumber }}</span> · }
-              {{ userLabel(d.deliveryUserId) }} ({{ userContact(d.deliveryUserId) }}) · {{ branchLabel(d.deliveryBranchId) }} · {{ d.runDate }}
+              {{ userLabel(d) }} ({{ userContact(d) }}) · {{ branchLabel(d.deliveryBranchId) }} · {{ d.runDate }}
             </p>
           }
         </div>
@@ -148,7 +148,9 @@ export class DrsDetailPage implements OnInit {
       this.collectIds.set(new Set(p.content.filter((r) => r['collectAtDelivery'] === true).map((r) => r.id))));
 
     const { deliveryUserId, deliveryBranchId, runDate } = this.route.snapshot.params;
-    this.movementService.drsDetail(deliveryUserId, deliveryBranchId, runDate).subscribe({
+    const q = this.route.snapshot.queryParams;
+    this.movementService.drsDetail(deliveryUserId === 'none' ? null : deliveryUserId, deliveryBranchId, runDate,
+      q['name'], q['mobile']).subscribe({
       next: (d) => {
         this.detail.set(d); this.loading.set(false);
         if (d.drsNumber) this.printLog.history('DRS', d.drsNumber).subscribe({ next: (h) => this.printCount.set(h.count), error: () => undefined });
@@ -157,8 +159,14 @@ export class DrsDetailPage implements OnInit {
     });
   }
 
-  protected userLabel(id: string): string { return this.users().get(id) ?? id; }
-  protected userContact(id: string): string { return this.userContacts().get(id)?.mobile ?? '—'; }
+  protected userLabel(d: DrsDetail): string {
+    if (d.deliveryPersonName) return d.deliveryPersonName;
+    return d.deliveryUserId ? (this.users().get(d.deliveryUserId) ?? d.deliveryUserId) : '—';
+  }
+  protected userContact(d: DrsDetail): string {
+    if (d.deliveryPersonName) return d.deliveryPersonMobile || '—';
+    return d.deliveryUserId ? (this.userContacts().get(d.deliveryUserId)?.mobile ?? '—') : '—';
+  }
   protected branchLabel(id: string): string { return this.branches().get(id) ?? id; }
   protected paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 
@@ -179,7 +187,7 @@ export class DrsDetailPage implements OnInit {
       })),
       drsNumber: d.drsNumber,
       branchLabel: this.branchLabel(d.deliveryBranchId),
-      deliveryUserLabel: this.userLabel(d.deliveryUserId),
+      deliveryUserLabel: this.userLabel(d),
       dateLabel: `${day}/${m}/${y}`,
       companyName: c?.companyName ?? this.auth.companyName() ?? '',
       companyLogo: c?.logo ?? this.auth.companyLogo() ?? null,

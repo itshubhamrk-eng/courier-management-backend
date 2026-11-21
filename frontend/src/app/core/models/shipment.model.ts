@@ -362,7 +362,9 @@ export interface ShipmentStatusHistoryEntry {
 export interface ShipmentDrs {
   drsNumber?: string | null;
   deliveryBranchId?: string | null;
-  deliveryUserId: string;
+  deliveryUserId?: string | null;
+  deliveryPersonName?: string | null;
+  deliveryPersonMobile?: string | null;
   vehicleId?: string | null;
   fuelCost?: number | null;
   deliveryCharge?: number | null;
@@ -714,6 +716,9 @@ export interface Manifest {
   destinationCity?: string | null;
   vehicleId?: string | null;
   driverUserId?: string | null;
+  /** Typed in at THC dispatch — stored on the manifest, no user account behind it. */
+  driverName?: string | null;
+  driverMobile?: string | null;
   status: ManifestStatus;
   dispatchedAt?: string | null;
   departureTime?: string | null;
@@ -881,7 +886,9 @@ export interface BulkMovementResult {
 export interface DispatchManifestRequest {
   manifestId: string;
   vehicleId: string;
-  driverUserId: string;
+  driverUserId?: string | null;
+  driverName?: string | null;
+  driverMobile?: string | null;
   departureTime?: string | null;
   fuelCost?: number | null;
   driverAdvance?: number | null;
@@ -894,7 +901,9 @@ export interface DispatchManifestResponse {
   manifestNumber: string;
   status: ManifestStatus;
   vehicleId: string;
-  driverUserId: string;
+  driverUserId?: string | null;
+  driverName?: string | null;
+  driverMobile?: string | null;
   dispatchedAt?: string | null;
   departureTime?: string | null;
   shipmentCount: number;
@@ -925,7 +934,9 @@ export interface InScanRequest {
  *  use — stamped on every DeliveryAssignment row the call touches. */
 export interface OutForDeliveryRequest {
   shipmentIds: string[];
-  deliveryUserId: string;
+  deliveryUserId?: string | null;
+  deliveryPersonName?: string | null;
+  deliveryPersonMobile?: string | null;
   vehicleId?: string | null;
   fuelCost?: number | null;
   deliveryCharge?: number | null;
@@ -980,7 +991,9 @@ export interface TimelineStep {
  *  calendar day), grouped server-side from `DeliveryAssignment` rows. There is no separate
  *  DRS/batch table — see `MEMORY/modules/shipment-movement.md`. Mirrors `DrsSummaryResponse`. */
 export interface DrsSummary {
-  deliveryUserId: string;
+  deliveryUserId?: string | null;
+  deliveryPersonName?: string | null;
+  deliveryPersonMobile?: string | null;
   deliveryBranchId: string;
   runDate: string;
   drsNumber: string | null;
@@ -1012,7 +1025,9 @@ export interface DrsShipmentRow {
 
 /** Body of GET /shipment-movement/drs/detail — mirrors `DrsDetailResponse`. */
 export interface DrsDetail {
-  deliveryUserId: string;
+  deliveryUserId?: string | null;
+  deliveryPersonName?: string | null;
+  deliveryPersonMobile?: string | null;
   deliveryBranchId: string;
   runDate: string;
   drsNumber: string | null;

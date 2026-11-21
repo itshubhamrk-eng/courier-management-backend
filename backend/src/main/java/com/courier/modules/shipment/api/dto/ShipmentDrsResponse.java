@@ -9,7 +9,7 @@ import java.util.UUID;
 @Schema(name = "ShipmentDrsResponse",
         description = "The DRS (delivery run) this one shipment is on — read from its DeliveryAssignment row")
 public record ShipmentDrsResponse(
-        String drsNumber, UUID deliveryBranchId, UUID deliveryUserId, UUID vehicleId,
+        String drsNumber, UUID deliveryBranchId, UUID deliveryUserId, String deliveryPersonName, String deliveryPersonMobile, UUID vehicleId,
         BigDecimal fuelCost, BigDecimal deliveryCharge, String status,
         Instant assignedAt, Instant deliveredAt, String receiverName, String deliveryRemarks
 ) {

@@ -97,7 +97,7 @@ public class ShipmentMovementController {
                     + "Driver OTP verification (dispatch-otp/verify) is optional and not required here.")
     public ApiResponse<DispatchManifestResponse> dispatch(@Valid @RequestBody DispatchManifestRequest request) {
         Manifest manifest = manifestService.dispatch(request.manifestId(), request.vehicleId(),
-                request.driverUserId(), request.departureTime(),
+                request.driverUserId(), request.driverName(), request.driverMobile(), request.departureTime(),
                 request.fuelCost(), request.driverAdvance(), request.tollAmount(), request.otherAmount());
         // The shipments themselves are already DISPATCHED by the time this call returns —
         // count them by that status rather than MANIFEST_CREATED, which none of them are
@@ -112,7 +112,8 @@ public class ShipmentMovementController {
                 .getTotalElements();
         return ApiResponse.success(new DispatchManifestResponse(
                 manifest.getId(), manifest.getManifestNumber(), manifest.getStatus(),
-                manifest.getVehicleId(), manifest.getDriverUserId(), manifest.getDispatchedAt(),
+                manifest.getVehicleId(), manifest.getDriverUserId(), manifest.getDriverName(), manifest.getDriverMobile(),
+                manifest.getDispatchedAt(),
                 manifest.getDepartureTime(), dispatchedCount,
                 manifest.getFuelCost(), manifest.getDriverAdvance(), manifest.getTollAmount(),
                 manifest.getOtherAmount()), "Manifest dispatched");
@@ -183,7 +184,7 @@ public class ShipmentMovementController {
             }
         }
         var result = shipmentService.assignOutForDelivery(request.shipmentIds(), request.deliveryUserId(),
-                request.vehicleId(), request.fuelCost(), request.deliveryCharge());
+                request.deliveryPersonName(), request.deliveryPersonMobile(), request.vehicleId(), request.fuelCost(), request.deliveryCharge());
         return ApiResponse.success(shipmentMapper.toResponse(result));
     }
 
@@ -249,10 +250,13 @@ public class ShipmentMovementController {
             description = "Every shipment assigned to this delivery user, at this delivery branch, "
                     + "on this day.")
     public ApiResponse<com.courier.modules.shipment.api.dto.DrsDetailResponse> drsDetail(
-            @RequestParam UUID deliveryUserId, @RequestParam UUID deliveryBranchId,
+            @RequestParam(required = false) UUID deliveryUserId,
+            @RequestParam(required = false) String deliveryPersonName,
+            @RequestParam(required = false) String deliveryPersonMobile,
+            @RequestParam UUID deliveryBranchId,
             @RequestParam java.time.LocalDate runDate) {
-        return ApiResponse.success(
-                shipmentMapper.toResponse(shipmentService.getDrsDetail(deliveryUserId, deliveryBranchId, runDate)));
+        return ApiResponse.success(shipmentMapper.toResponse(shipmentService.getDrsDetail(
+                deliveryUserId, deliveryPersonName, deliveryPersonMobile, deliveryBranchId, runDate)));
     }
 
     @PostMapping("/{shipmentId}/delivery-failed")

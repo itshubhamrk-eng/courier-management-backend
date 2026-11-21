@@ -58,8 +58,15 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
     private UUID deliveryBranchId;
 
     @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "delivery_user_id", columnDefinition = "BINARY(16)", nullable = false)
+    @Column(name = "delivery_user_id", columnDefinition = "BINARY(16)")
     private UUID deliveryUserId;
+
+    /** Delivery person typed in at DRS time (V151) — no user account behind it. */
+    @Column(name = "delivery_person_name", length = 120)
+    private String deliveryPersonName;
+
+    @Column(name = "delivery_person_mobile", length = 20)
+    private String deliveryPersonMobile;
 
     @Column(name = "assigned_at", nullable = false)
     private Instant assignedAt;
@@ -104,10 +111,16 @@ public class DeliveryAssignment extends CompanyOwnedEntity {
     private String otp;
 
     public void reassign(UUID deliveryUserId, UUID deliveryBranchId) {
+        reassign(deliveryUserId, null, null, deliveryBranchId);
+    }
+
+    public void reassign(UUID deliveryUserId, String personName, String personMobile, UUID deliveryBranchId) {
         if (status == DeliveryAssignmentStatus.DELIVERED) {
             throw new BusinessRuleException("This shipment has already been delivered.");
         }
         this.deliveryUserId = deliveryUserId;
+        this.deliveryPersonName = personName;
+        this.deliveryPersonMobile = personMobile;
         this.deliveryBranchId = deliveryBranchId;
         this.assignedAt = Instant.now();
         this.status = DeliveryAssignmentStatus.ASSIGNED;

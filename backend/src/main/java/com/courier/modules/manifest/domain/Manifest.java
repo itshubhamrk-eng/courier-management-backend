@@ -98,6 +98,13 @@ public class Manifest extends CompanyOwnedEntity {
     @Column(name = "driver_user_id", columnDefinition = "BINARY(16)")
     private UUID driverUserId;
 
+    /** Driver typed in at THC dispatch — stored on the manifest itself, no user account behind it. */
+    @Column(name = "driver_name", length = 120)
+    private String driverName;
+
+    @Column(name = "driver_mobile", length = 20)
+    private String driverMobile;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
@@ -183,8 +190,8 @@ public class Manifest extends CompanyOwnedEntity {
      *         fixed at the moment it leaves, the same "point of no return" DISPATCH
      *         carries everywhere else in this project
      */
-    public void dispatch(UUID vehicleId, UUID driverUserId, Instant departureTime,
-            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
+    public void dispatch(UUID vehicleId, UUID driverUserId, String driverName, String driverMobile,
+            Instant departureTime, BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
         if (isCancelled()) {
             throw new BusinessRuleException(
                     "Manifest %s was cancelled and cannot be dispatched.".formatted(manifestNumber));
@@ -199,6 +206,8 @@ public class Manifest extends CompanyOwnedEntity {
         // again once OTP is made mandatory.
         this.vehicleId = vehicleId;
         this.driverUserId = driverUserId;
+        this.driverName = driverName;
+        this.driverMobile = driverMobile;
         this.status = ManifestStatus.DISPATCHED;
         this.dispatchedAt = Instant.now();
         this.departureTime = departureTime != null ? departureTime : this.dispatchedAt;

@@ -184,13 +184,13 @@ export class ShipmentList implements OnInit {
   private download(rows: Shipment[]): void {
     const withCompany = !this.myBranchId;
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
-      'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount',
+      'sender', 'senderContact', 'receiver', 'receiverContact', 'quantity', 'chargeableWeight', 'netAmount',
       'totalCommission', 'commissionOnBasicFreight', 'branchCommissionOnOtherAmount',
       ...(withCompany ? ['companyCommissionOnBasicFreight'] : []), 'status'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
-      r.chargeableWeight, r.netAmount ?? '',
+      r.numberOfPackages ?? '', r.chargeableWeight, r.netAmount ?? '',
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
       ...(withCompany ? [r.companyCommissionOnBasicFreight ?? ''] : []), r.status]);
     downloadCsv(`shipments-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,

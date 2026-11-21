@@ -62,6 +62,7 @@ const EXCEPTION_STATUSES = ['RETURNED'] as const;
           <td>{{ branchLabel(s.deliveryBranchId) }}</td>
           <td>{{ s.senderName }}</td>
           <td>{{ s.receiverName }}</td>
+          <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
           <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
           <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td><app-shipment-status-badge [status]="s.status" /></td>
@@ -114,6 +115,7 @@ export class ShipmentExceptionReport implements OnInit {
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
     { key: 'senderName', header: 'Sender' },
     { key: 'receiverName', header: 'Receiver' },
+    { key: 'numberOfPackages', header: 'Qty', align: 'right', width: '70px' },
     { key: 'chargeableWeight', header: 'Chargeable Wt.', align: 'right' },
     { key: 'netAmount', header: 'Amount', align: 'right' },
     { key: 'status', header: 'Status', width: '140px' }
@@ -176,11 +178,11 @@ export class ShipmentExceptionReport implements OnInit {
 
   private download(rows: Shipment[]): void {
     const header = ['shipmentNumber', 'trackingNumber', 'bookingDate', 'bookingBranch', 'deliveryBranch',
-      'sender', 'senderContact', 'receiver', 'receiverContact', 'chargeableWeight', 'netAmount', 'status'];
+      'sender', 'senderContact', 'receiver', 'receiverContact', 'quantity', 'chargeableWeight', 'netAmount', 'status'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
-      r.chargeableWeight, r.netAmount ?? '', r.status]);
+      r.numberOfPackages ?? '', r.chargeableWeight, r.netAmount ?? '', r.status]);
     downloadCsv(`shipment-exception-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [9, 10]);
     this.notify.info(`Exported ${rows.length} shipment(s).`);
   }

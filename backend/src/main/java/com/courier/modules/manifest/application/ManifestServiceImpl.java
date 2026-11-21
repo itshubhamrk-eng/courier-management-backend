@@ -233,8 +233,8 @@ public class ManifestServiceImpl implements ManifestService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('MANIFEST_DISPATCH')")
-    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, Instant departureTime,
-            BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
+    public Manifest dispatch(UUID id, UUID vehicleId, UUID driverUserId, String driverName, String driverMobile,
+            Instant departureTime, BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
         UUID companyId = requireCompany();
         Manifest manifest = loadOrThrow(id, companyId);
 
@@ -271,10 +271,16 @@ public class ManifestServiceImpl implements ManifestService {
         }
         // A driver is any real user of this company — see the module doc for why no
         // company role currently models "driver" cleanly enough to restrict further.
-        userService.getById(driverUserId);
+        String name = driverName == null ? null : driverName.trim();
+        String mobile = driverMobile == null ? null : driverMobile.trim();
+        if (driverUserId != null) {
+            userService.getById(driverUserId);
+        } else if (name == null || name.isEmpty()) {
+            throw new BusinessRuleException("Driver name is required.");
+        }
 
         String statusBefore = manifest.getStatus().name();
-        manifest.dispatch(vehicleId, driverUserId, departureTime, fuelCost, driverAdvance, tollAmount, otherAmount);
+        manifest.dispatch(vehicleId, driverUserId, name, mobile, departureTime, fuelCost, driverAdvance, tollAmount, otherAmount);
         Manifest saved = manifestRepository.save(manifest);
 
         ActivityContext.recordChange("Manifest", "Dispatch",
@@ -282,7 +288,8 @@ public class ManifestServiceImpl implements ManifestService {
                 "Manifest", saved.getId().toString(),
                 Map.of("status", statusBefore),
                 Map.of("status", saved.getStatus().name(), "vehicleId", String.valueOf(vehicleId),
-                        "driverUserId", String.valueOf(driverUserId)));
+                        "driverUserId", String.valueOf(driverUserId),
+                        "driverName", String.valueOf(name), "driverMobile", String.valueOf(mobile)));
 
         List<UUID> dispatchedShipmentIds = readyShipments.stream().map(Shipment::getId).toList();
         shipmentService.transitionToDispatched(
