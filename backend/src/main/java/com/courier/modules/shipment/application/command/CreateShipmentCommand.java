@@ -65,7 +65,7 @@ import java.util.UUID;
  * @param flowType          null means {@link FlowType#STANDARD}; {@link FlowType#MSRTC}
  *                          books straight to {@code deliveryBranchId}
  * @param deliveryBranchId  required for {@link FlowType#MSRTC}, ignored for STANDARD (whose
- *                          delivery branch is assigned later, by Load Sheet)
+ *                          delivery branch is assigned later, by Manifest Creation)
  */
 public record CreateShipmentCommand(
         UUID bookingBranchId,
@@ -135,7 +135,7 @@ public record CreateShipmentCommand(
                 insuranceApplicable, deliveryType, doorDeliveryCharge, null, null, null);
     }
 
-    /** The shape before Business Customer pricing: an ordinary booking, no customer. */
+    /** The shape before TBB Customer pricing: an ordinary booking, no customer. */
     public CreateShipmentCommand(
             UUID bookingBranchId, String manualShipmentNumber, String pickupPincode, String deliveryPincode,
             String senderName, String senderAddress, String senderContact,

@@ -22,7 +22,7 @@ import java.util.UUID;
  * <p>Not accepted: {@code companyId} (from the JWT), {@code trackingNumber} (always
  * generated), {@code status} (a new shipment starts {@code BOOKED}), {@code
  * deliveryBranchId} (not decided at booking at all any more — a real delivery branch,
- * or Direct Company Delivery, is assigned later at Load Sheet; see
+ * or Direct Company Delivery, is assigned later at Manifest Creation; see
  * {@code ShipmentServiceImpl}), {@code actualWeight}/{@code volumetricWeight}/
  * {@code chargeableWeight} as top-level writes (computed from {@code items}; the bare
  * {@code actualWeight}/dimension fields here are the fallback used only when
@@ -134,7 +134,7 @@ public record CreateShipmentRequest(
         FlowType flowType,
         @Schema(description = "Required when flowType is MSRTC; ignored otherwise.")
         UUID deliveryBranchId,
-        @Schema(description = "The Business Customer this booking is for. When that customer has an "
+        @Schema(description = "The TBB Customer this booking is for. When that customer has an "
                 + "ACTIVE pricing zone covering the destination, freight and ODA are priced from the "
                 + "zone's rate card and its docket/mathadi/pack/fuel/FOV lines become the minimum "
                 + "otherCharges. Omit for an ordinary booking.")

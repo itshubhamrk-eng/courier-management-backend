@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { ILLUSTRATION_STYLES, nextIllustrationUid } from './illustration-base';
 
-/** Clay-style warehouse/hub glyph — branches, manifest, loading sheet pages. */
+/** Clay-style warehouse/hub glyph — branches, manifest, manifest creation pages. */
 @Component({
   selector: 'app-warehouse-illustration',
   standalone: true,

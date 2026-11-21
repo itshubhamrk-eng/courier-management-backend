@@ -32,7 +32,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Builds one invoice for one business customer from every non-cancelled booking that is not
+ * Builds one invoice for one TBB customer from every non-cancelled booking that is not
  * already on a live invoice. No authorisation of its own — callers are the admin service
  * (COMPANY_ADMIN) and the billing-cycle job (no user at all) — but the company must be bound
  * in {@link CompanyContext}: every query is scoped to it explicitly, since native SQL bypasses

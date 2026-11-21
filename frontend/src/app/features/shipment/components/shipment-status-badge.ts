@@ -14,12 +14,12 @@ const TONE: Record<ShipmentStatus, 'success' | 'warning' | 'danger' | 'info' | '
   CANCELLED: 'danger'
 };
 
-/** Overrides the default word-split label — MANIFEST_CREATED doubles as "loading sheet
+/** Overrides the default word-split label — MANIFEST_CREATED doubles as "manifest creation
  *  created" (V20, on direct request: adding a shipment to a manifest already is the
- *  loading sheet milestone, no separate scan step). Every other status keeps its plain
+ *  manifest creation milestone, no separate scan step). Every other status keeps its plain
  *  word-split label. */
 const LABEL: Partial<Record<ShipmentStatus, string>> = {
-  MANIFEST_CREATED: 'Loading Sheet Created',
+  MANIFEST_CREATED: 'Manifest Creation Created',
   OUT_FOR_DELIVERY: 'DRS'
 };
 

@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Bills every ACTIVE business customer whose cycle has closed. For a customer the cycle end is
+ * Bills every ACTIVE TBB customer whose cycle has closed. For a customer the cycle end is
  * {@link BillingCycle#lastClosedCycleEnd}; an AUTO invoice already issued for that end date means
  * "done", so the job is idempotent however often it runs. Anything unbilled up to the cycle end —
  * including bookings a missed run left behind — goes on the invoice.
@@ -35,7 +35,7 @@ public class BillingCycleService {
     @PersistenceContext
     private EntityManager em;
 
-    /** Every company that has at least one active business customer. */
+    /** Every company that has at least one active TBB customer. */
     @SuppressWarnings("unchecked")
     public List<UUID> companiesToBill() {
         List<byte[]> rows = em.createNativeQuery("SELECT DISTINCT company_id FROM customers "

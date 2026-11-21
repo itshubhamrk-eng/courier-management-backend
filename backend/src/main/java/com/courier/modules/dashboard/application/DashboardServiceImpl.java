@@ -446,7 +446,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     /** TO_PAY-shaped payment mode ids for a company — collects at delivery, but not
      *  cash-on-delivery (the consignee's amount). Backs the dashboard's "TO_PAY awaiting
-     *  delivery" tile: shipments already debited at THC in-scan (see {@code
+     *  delivery" tile: shipments already debited at Manifest Finalization in-scan (see {@code
      *  ShipmentServiceImpl.scanOneIn}'s {@code ToPayReceivedAtDeliveryBranch}) but not yet
      *  actually delivered. */
     private List<UUID> toPayModeIds(UUID companyId) {

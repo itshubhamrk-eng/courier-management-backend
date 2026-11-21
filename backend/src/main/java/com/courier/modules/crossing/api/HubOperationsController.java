@@ -35,7 +35,7 @@ import java.util.UUID;
 
 /**
  * The genuinely new part of Hub Operations — out-scan and exceptions. In-scan reuses
- * {@code POST /shipment-movement/in-scan}; Load Sheet creation, vehicle/driver and
+ * {@code POST /shipment-movement/in-scan}; Manifest Creation creation, vehicle/driver and
  * dispatch reuse {@code /manifests}; the shipments-at-hub list and destination grouping
  * reuse {@code GET /shipments} and {@code GET /manifests/eligible-destinations} — none of
  * those are duplicated here.
@@ -53,7 +53,7 @@ public class HubOperationsController {
     @PostMapping("/out-scan")
     @Operation(summary = "Out-scan shipments at a hub",
             description = "Confirms every given tracking number is physically present and attached to "
-                    + "this Load Sheet. A tracking number already out-scanned for this manifest is rejected "
+                    + "this Manifest Creation. A tracking number already out-scanned for this manifest is rejected "
                     + "as a duplicate.")
     public ApiResponse<List<MovementOutcomeResponse>> outScan(@Valid @RequestBody OutScanRequest request) {
         List<MovementOutcomeResponse> outcomes = service

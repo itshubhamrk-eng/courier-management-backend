@@ -195,7 +195,7 @@ export class CustomerRateEdit implements OnInit {
     this.service.zone(this.zoneId).subscribe({
       next: (z) => {
         this.zone.set(z);
-        this.breadcrumb.set([{ label: 'Business Customer' }, { label: 'Rate', route: '/business-customer/rates' }, { label: z.zoneName }]);
+        this.breadcrumb.set([{ label: 'TBB Customer' }, { label: 'Rate', route: '/business-customer/rates' }, { label: z.zoneName }]);
         this.service.rate(this.zoneId).subscribe({
           next: (r) => { this.hydrate(r ?? null); this.loading.set(false); },
           error: () => { this.hydrate(null); this.loading.set(false); }

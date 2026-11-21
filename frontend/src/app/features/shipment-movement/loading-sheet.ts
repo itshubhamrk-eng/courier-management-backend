@@ -24,7 +24,7 @@ import { ManifestCard } from './components/manifest-card';
 import { WarehouseIllustration } from '@shared/components/illustrations/warehouse-illustration';
 
 /**
- * Loading Sheet — creating a manifest already is "loading sheet created" (V20, on direct
+ * Manifest Creation — creating a manifest already is "manifest creation created" (V20, on direct
  * request: "manifest created as outscan created" — one milestone, not two, so there is
  * no separate scan action here any more). The brief's own page asked for "Search
  * Manifest / Display Shipments / Scan Tracking Number / Bulk Scan / Show Scan Count",
@@ -44,13 +44,13 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
       <header class="page__head" data-tour="loading-sheet-head">
         <div class="page__head-row">
           <app-warehouse-illustration class="page__head-ill" [size]="52" />
-          <div><h1 class="text-h1">Loading Sheet</h1>
-          <p class="text-caption">Manifests ready to dispatch — creating one already counts as loading sheet created.</p></div>
+          <div><h1 class="text-h1">Manifest Creation</h1>
+          <p class="text-caption">Manifests ready to dispatch — creating one already counts as manifest creation created.</p></div>
         </div>
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
       </header>
 
-      <app-card title="Create Loading Sheet" subtitle="Send to a hub or to a branch, select the booked shipments, then create the sheet.">
+      <app-card title="Create Manifest Creation" subtitle="Send to a hub or to a branch, select the booked shipments, then create the sheet.">
         <div class="mode-toggle">
           <app-button [variant]="mode() === 'hub' ? 'primary' : 'stroked'" (pressed)="setMode('hub')">Send to Hub</app-button>
           <app-button [variant]="mode() === 'branch' ? 'primary' : 'stroked'" (pressed)="setMode('branch')">Send to Branch</app-button>
@@ -64,7 +64,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
             @if (!hubOptions().length) { <p class="empty">No hub branch exists yet.</p> }
             @else if (!assignedHubId()) { <p class="text-caption">No hub is assigned to your branch — pick one here, or assign one under Masters › Assign Hub to Branch.</p> }
             @else if (!assignedHubUsable()) { <p class="text-caption">Your branch's assigned hub is inactive — pick another hub here, or reassign under Masters › Assign Hub to Branch.</p> }
-            <p class="text-caption">Pick a hub, then select the shipments to send. They go to the hub first; the hub scans in the THC, then creates a Load Sheet or DRS from there.</p>
+            <p class="text-caption">Pick a hub, then select the shipments to send. They go to the hub first; the hub scans in the Manifest Finalization, then creates a Manifest Creation or DRS from there.</p>
           } @else if (mode() === 'branch') {
             <app-autocomplete [control]="c('deliveryBranchId')" label="Branch" [options]="assignableBranchOptions()" placeholder="Search branch…" />
             <p class="text-caption">Pick a branch, then select the shipments currently at your branch to send to it.</p>
@@ -103,13 +103,13 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
             }
           }
           <div class="df__bar">
-            <app-button type="submit" icon="add_box" [loading]="creating()" [disabled]="!myBranchId">Create Loading Sheet</app-button>
+            <app-button type="submit" icon="add_box" [loading]="creating()" [disabled]="!myBranchId">Create Manifest Creation</app-button>
           </div>
         </form>
       </app-card>
 
       <div class="ml-head">
-        <h2 class="text-h2 section-title">Open Loading Sheet</h2>
+        <h2 class="text-h2 section-title">Open Manifest Creation</h2>
         <div class="ml-filters">
           <app-autocomplete [control]="filterBranchControl" [options]="allBranchOptions()" placeholder="All lanes" />
           <app-select [control]="sortControl" [options]="sortOptions" />
@@ -187,7 +187,7 @@ export class LoadingSheet implements OnInit {
       .map(([id, label]) => ({ value: id, label }))
       .sort((a, b) => a.label.localeCompare(b.label)));
 
-  /** Every branch but this one — Load Sheet's "assign a delivery branch" picker, once a
+  /** Every branch but this one — Manifest Creation's "assign a delivery branch" picker, once a
    *  destination city is chosen. Unlike `branchOptions`, not derived from any shipment's
    *  own data: nothing has decided a branch for these shipments yet, so any branch is a
    *  valid destination. */
@@ -209,7 +209,7 @@ export class LoadingSheet implements OnInit {
   });
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Operations' }, { label: 'Loading Sheet' }]);
+    this.breadcrumb.set([{ label: 'Operations' }, { label: 'Manifest Creation' }]);
     // Listeners first: the branch directory is cached, so its callback can fire synchronously and
     // preselect the assigned hub — a listener registered after that would miss the change and the
     // shipment list would never load.
@@ -407,7 +407,7 @@ export class LoadingSheet implements OnInit {
   }
 
   /** Same branded challan layout as `TripHireChallan.renderThcHtml`, retitled and with the
-   *  VEHICLE NO / DRIVER NAME meta cells swapped for FROM / TO BRANCH — a Loading Sheet
+   *  VEHICLE NO / DRIVER NAME meta cells swapped for FROM / TO BRANCH — a Manifest Creation
    *  manifest is still CREATED, so no vehicle or driver exists yet to print. */
   private renderLoadingSheetHtml(m: Manifest, shipments: Shipment[]): string {
     const topayIds = this.topayModeIds();
@@ -427,14 +427,14 @@ export class LoadingSheet implements OnInit {
       <td class="right">${topayFreight(s) ?? ''}</td>
     </tr>`).join('');
     const created = m.createdAt ? new Date(m.createdAt) : null;
-    const companyName = this.esc(this.auth.companyName() ?? 'Loading Sheet');
+    const companyName = this.esc(this.auth.companyName() ?? 'Manifest Creation');
     const companyLogo = this.auth.companyLogo();
     const fromLabel = this.esc(this.branchNames().get(m.bookingBranchId) ?? '—');
     const toLabel = m.deliveryMode === 'DIRECT_COMPANY_DELIVERY'
       ? 'Direct Company Delivery'
       : this.esc((m.deliveryBranchId ? this.branchNames().get(m.deliveryBranchId) : null) ?? '—');
 
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Loading Sheet ${this.esc(m.manifestNumber)}</title>
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Manifest Creation ${this.esc(m.manifestNumber)}</title>
       <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
@@ -534,7 +534,7 @@ export class LoadingSheet implements OnInit {
 
   private openLoadingSheetTab(m: Manifest, shipments: Shipment[]): void {
     const win = window.open('', '_blank');
-    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the loading sheet.'); return; }
+    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to print the manifest creation.'); return; }
     this.printLog.printWindow(win, this.renderLoadingSheetHtml(m, shipments), 'LOADING_SHEET', m.id, m.manifestNumber,
       (count) => this.printCounts.update((c) => ({ ...c, [m.id]: count })));
   }

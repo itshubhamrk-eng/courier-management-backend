@@ -63,7 +63,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
 
     List<Shipment> findAllByCompanyIdAndManifestIdIn(UUID companyId, Collection<UUID> manifestIds);
 
-    /** Load Sheet's destination-city picker: every distinct {@code toCity} among a
+    /** Manifest Creation's destination-city picker: every distinct {@code toCity} among a
      *  branch's own shipments still awaiting a delivery-branch assignment. */
     @Query("select distinct s.toCity from Shipment s where s.companyId = :companyId "
             + "and s.currentLocationId = :branchId and s.status in :statuses "

@@ -34,10 +34,10 @@ public record ShipmentSearchRequest(
         @Schema(description = "Free text over shipment number and tracking number")
         String search,
         @Size(max = 120)
-        @Schema(description = "Load Sheet's destination-city match, for a shipment with no "
+        @Schema(description = "Manifest Creation's destination-city match, for a shipment with no "
                 + "delivery branch resolved yet")
         String toCity,
-        @Schema(description = "Load Sheet's own eligibility filter — true for only shipments "
+        @Schema(description = "Manifest Creation's own eligibility filter — true for only shipments "
                 + "with no delivery branch resolved yet")
         Boolean unassignedDeliveryBranch,
         @Schema(description = "Only shipments of this flow (STANDARD or MSRTC); omit for both")

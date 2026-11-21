@@ -19,7 +19,7 @@ import { BusinessCustomerService } from './business-customer.service';
 const STATUS_OPTS: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }];
 
 /**
- * Pricing zones across the company's business customers — filter by customer and status,
+ * Pricing zones across the company's TBB customers — filter by customer and status,
  * search by zone name. A zone is the unit a rate card is attached to.
  */
 @Component({
@@ -31,7 +31,7 @@ const STATUS_OPTS: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { val
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Pricing Zones</h1>
-          <p class="text-caption">Named groups of districts and cities a business customer is priced by — {{ zones().length }} shown.</p></div>
+          <p class="text-caption">Named groups of districts and cities a TBB customer is priced by — {{ zones().length }} shown.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search zone name…" (changed)="onSearch($event)" />
           @if (canCreate()) { <app-button icon="add" (pressed)="create()">New Zone</app-button> }
@@ -44,7 +44,7 @@ const STATUS_OPTS: SelectOption[] = [{ value: 'ACTIVE', label: 'Active' }, { val
       </div>
 
       <app-table [columns]="columns" [rows]="zones()" [loading]="loading()"
-                 emptyTitle="No pricing zones" emptyHint="Create a zone for a business customer to start pricing by destination."
+                 emptyTitle="No pricing zones" emptyHint="Create a zone for a TBB customer to start pricing by destination."
                  (rowClick)="open($event)">
         <ng-template #row let-z>
           <td><div class="zn">{{ z.zoneName }}@if (z.fallbackScope && z.zoneName !== scopeLabel(z)) { <span class="sub"> · {{ scopeLabel(z) }}</span> }</div>@if (z.description) { <div class="sub">{{ z.description }}</div> }</td>
@@ -112,7 +112,7 @@ export class PricingZoneList implements OnInit {
   protected readonly canDelete = computed(() => this.perms.canAccess({ roles: [AppRole.COMPANY_ADMIN], permissions: ['PRICING_ZONE_DELETE'] }));
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Business Customer' }, { label: 'Pricing Zone' }]);
+    this.breadcrumb.set([{ label: 'TBB Customer' }, { label: 'Pricing Zone' }]);
     this.service.businessCustomers().subscribe((p) =>
       this.customerOpts.set(p.content.map((c) => ({ value: c.id, label: `${c.displayName} (${c.customerCode})` }))));
     this.customerCtl.valueChanges.subscribe(() => this.load());

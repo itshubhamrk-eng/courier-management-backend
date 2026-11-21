@@ -5,7 +5,7 @@ import {
   ApprovalStatus, Invoice, InvoiceStatus, InvoiceSummary, MarkPaidRequest, RecordPaymentRequest, UnbilledSummary, UploadedProof
 } from '@core/models/customer-invoice.model';
 
-/** Business customer invoices and receipts — mirrors the backend endpoints one-to-one. */
+/** TBB customer invoices and receipts — mirrors the backend endpoints one-to-one. */
 @Injectable({ providedIn: 'root' })
 export class BusinessBillingService {
   private readonly api = inject(ApiService);

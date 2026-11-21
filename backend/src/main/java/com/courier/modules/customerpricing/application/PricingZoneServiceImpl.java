@@ -76,7 +76,7 @@ public class PricingZoneServiceImpl implements PricingZoneService {
         UUID companyId = requireCompany();
         Customer customer = customerService.getById(customerId);
         if (customer.getCustomerType() != CustomerType.BUSINESS) {
-            throw new BusinessRuleException("Pricing zones are for business customers; %s is an individual customer."
+            throw new BusinessRuleException("Pricing zones are for TBB customers; %s is an individual customer."
                     .formatted(customer.displayName()));
         }
 

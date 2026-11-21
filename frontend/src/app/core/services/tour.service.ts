@@ -55,17 +55,17 @@ const BRANCH_MANAGER_STEPS: TourStep[] = [
   {
     data: { route: '/movement/loading-sheet' },
     element: '[data-tour="loading-sheet-head"]',
-    popover: { title: 'Loading Sheet', description: 'Batch your booked shipments bound for one branch into a manifest — this is the loading sheet.', side: 'bottom' }
+    popover: { title: 'Manifest Creation', description: 'Batch your booked shipments bound for one branch into a manifest — this is the manifest creation.', side: 'bottom' }
   },
   {
     data: { route: '/movement/trip-hire-challan' },
     element: '[data-tour="thc-head"]',
-    popover: { title: 'Trip Hire Challan (THC)', description: 'Assign a vehicle and driver to a manifest and send it out — its last stop at your branch.', side: 'bottom' }
+    popover: { title: 'Manifest Finalization', description: 'Assign a vehicle and driver to a manifest and send it out — its last stop at your branch.', side: 'bottom' }
   },
   {
     data: { route: '/movement/in-scan' },
     element: '[data-tour="in-scan-head"]',
-    popover: { title: 'In Scan', description: 'Receive an inbound manifest arriving at your branch — scan it in to take custody.', side: 'bottom' }
+    popover: { title: 'Manifest In Scan', description: 'Receive an inbound manifest arriving at your branch — scan it in to take custody.', side: 'bottom' }
   },
   {
     data: { route: '/movement/pending-delivery' },

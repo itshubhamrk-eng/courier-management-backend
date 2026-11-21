@@ -98,15 +98,15 @@ public class ManifestController {
     @Operation(summary = "Summary stats for a manifest search",
             description = "Same filters as the list endpoint (`ManifestSearchRequest`), unpaged — "
                     + "manifest count, total shipment count, total weight and total package count "
-                    + "over every matching manifest, not just one page. Powers the THC Report summary row.")
+                    + "over every matching manifest, not just one page. Powers the Manifest Finalization Report summary row.")
     public ApiResponse<ManifestSummaryStatsResponse> summary(@ParameterObject ManifestSearchRequest search) {
         return ApiResponse.success(mapper.toSummaryStats(manifestService.summaryStats(mapper.toCriteria(search))));
     }
 
     @GetMapping("/eligible-destinations")
-    @Operation(summary = "Distinct destination cities eligible for a new Load Sheet from this branch",
+    @Operation(summary = "Distinct destination cities eligible for a new Manifest Creation from this branch",
             description = "Every distinct destination city among this branch's own BOOKED/READY_FOR_MANIFEST "
-                    + "shipments with no delivery branch resolved yet — Load Sheet's first picker, ahead of "
+                    + "shipments with no delivery branch resolved yet — Manifest Creation's first picker, ahead of "
                     + "the shipment checklist.")
     public ApiResponse<List<String>> eligibleDestinations(@RequestParam UUID bookingBranchId) {
         return ApiResponse.success(shipmentService.findEligibleDestinationCities(bookingBranchId));
@@ -118,7 +118,7 @@ public class ManifestController {
 
     @GetMapping("/{id}/shipments")
     @Operation(summary = "List the shipments scanned onto this manifest",
-            description = "Loading Sheet's own \"Search Manifest -> Display Shipments\" and Dispatch's "
+            description = "Manifest Creation's own \"Search Manifest -> Display Shipments\" and Dispatch's "
                     + "manifest picker both read this.")
     public ApiResponse<List<ShipmentSummaryResponse>> shipments(@PathVariable UUID id) {
         manifestService.getById(id); // 404s a foreign/unknown manifest before listing anything

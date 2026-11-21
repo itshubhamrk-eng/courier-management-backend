@@ -106,7 +106,7 @@ export interface FreightCalculationRequest {
    *  resolves District/ODA off that exact pincode-area link. */
   destinationAreaId?: string | null;
   chargeableWeight: number;
-  /** A Business Customer — when it has an ACTIVE pricing zone covering the destination,
+  /** A TBB Customer — when it has an ACTIVE pricing zone covering the destination,
    *  freight is priced from that zone's rate card instead. */
   businessCustomerId?: string | null;
   /** Basis of the zone rate's FOV %. */
@@ -134,7 +134,7 @@ export interface FreightCalculationResponse {
   odaApplicable: boolean;
   odaCharge: number;
   totalFreight: number;
-  /** Set when a Business Customer pricing zone priced the booking; `weightSlabLabel` then names it. */
+  /** Set when a TBB Customer pricing zone priced the booking; `weightSlabLabel` then names it. */
   customerZoneName?: string | null;
   /** Zone rate's docket + mathadi + pack + fuel + FOV — the minimum Other Charges. */
   customerExtraCharges?: number;

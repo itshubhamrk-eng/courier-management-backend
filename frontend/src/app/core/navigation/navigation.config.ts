@@ -69,7 +69,7 @@ const NOT_BRANCH_MANAGER = (roles: AppRole[]): AppRole[] =>
 const OPS_SHIPMENT_READERS = [...OPS_MANAGERS, AppRole.BOOKING_OPERATOR, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 
 // Hub Operations' own screens — COMPANY_ADMIN for oversight, HUB_MANAGER for the hub's
-// own desk. In Scan/Load Sheet/Dispatch under this section reuse the Shipment Movement
+// own desk. In Scan/Manifest Creation/Dispatch under this section reuse the Shipment Movement
 // screens above wholesale (same component, a second route); see app.routes.ts.
 const HUB_OPS = [AppRole.COMPANY_ADMIN, AppRole.HUB_MANAGER];
 
@@ -148,11 +148,11 @@ export const NAVIGATION: NavNode[] = [
     ]
   },
 
-  // Business Customer: business accounts, the pricing zones (district/city groups) each is
+  // TBB Customer: business accounts, the pricing zones (district/city groups) each is
   // priced by, and the per-zone rate cards. COMPANY_ADMIN-only back-office setup, same tier
   // as Masters/Charges. Separate from Rate Master, which is the company-wide route rate card.
   {
-    id: 'business-customer', title: 'Business Customer', icon: 'business_center', order: 2.6,
+    id: 'business-customer', title: 'TBB Customer', icon: 'business_center', order: 2.6,
     children: [
       { id: 'business-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/business-customer/dashboard', permission: 'CUSTOMER_READ', roles: COMPANY_ONLY },
       { id: 'business-customers', title: 'Customer', icon: 'contacts', route: '/business-customer/customers', permission: 'CUSTOMER_READ', roles: COMPANY_ONLY },
@@ -248,18 +248,18 @@ export const NAVIGATION: NavNode[] = [
       // Booking is the counter desk's job (SHIPMENT_CREATE); manifest through delivery is
       // the road (MANIFEST_DISPATCH, MANIFEST_RECEIVE, DELIVERY_DISPATCH, DELIVERY_DELIVER)
       // — see DefaultRoleCatalog's BOOKING_OPERATOR / DELIVERY_OPERATOR definitions.
-      // Shipment Movement (V19) shipped these five: Loading Sheet/Trip Hire Challan (THC) happen at the
+      // Shipment Movement (V19) shipped these five: Manifest Creation/Manifest Finalization happen at the
       // booking branch (OPS_BOOKING), In Scan/Out For Delivery/Deliver at the delivery
       // branch (OPS_DELIVERY_DESK) — see MEMORY/modules/shipment-movement.md.
       // 'sorting' has no module behind it yet and stays aspirational.
       { id: 'booking', title: 'Shipment Booking', icon: 'add_box', route: '/shipments/new', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       // Same booking screen, customer picked first — see ShipmentCreate.isBusinessBooking.
-      { id: 'business-booking', title: 'Business Customer Booking', icon: 'business_center', route: '/business-customer/booking', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
+      { id: 'business-booking', title: 'TBB Customer Booking', icon: 'business_center', route: '/business-customer/booking', permission: 'SHIPMENT_CREATE', roles: OPS_BOOKING },
       { id: 'shipment-search', title: 'Shipment Search', icon: 'search', route: '/shipments', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
       { id: 'track', title: 'Track Shipment', icon: 'my_location', route: '/track', permission: 'SHIPMENT_READ', roles: OPS_SHIPMENT_READERS },
-      { id: 'manifest', title: 'Loading Sheet', icon: 'qr_code_scanner', route: '/movement/loading-sheet', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },
-      { id: 'dispatch', title: 'Trip Hire Challan (THC)', icon: 'outbound', route: '/movement/trip-hire-challan', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
-      { id: 'receive', title: 'In Scan', icon: 'move_to_inbox', route: '/movement/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK },
+      { id: 'manifest', title: 'Manifest Creation', icon: 'qr_code_scanner', route: '/movement/loading-sheet', permission: 'TRACKING_CREATE', roles: OPS_BOOKING },
+      { id: 'dispatch', title: 'Manifest Finalization', icon: 'outbound', route: '/movement/trip-hire-challan', permission: 'MANIFEST_DISPATCH', roles: OPS_BOOKING },
+      { id: 'receive', title: 'Manifest In Scan', icon: 'move_to_inbox', route: '/movement/in-scan', permission: 'MANIFEST_RECEIVE', roles: OPS_DELIVERY_DESK },
       { id: 'pending-delivery', title: 'Pending Delivery', icon: 'pending_actions', route: '/movement/pending-delivery', permission: 'DELIVERY_ASSIGN', roles: OPS_DELIVERY_DESK },
       { id: 'out-for-delivery', title: 'Generate DRS', icon: 'directions_run', route: '/movement/out-for-delivery', permission: 'DELIVERY_ASSIGN', roles: OPS_DELIVERY_DESK },
       { id: 'delivery', title: 'Delivery', icon: 'task_alt', route: '/movement/delivery', permission: 'DELIVERY_DELIVER', roles: OPS_DELIVERY_DESK },
@@ -281,7 +281,7 @@ export const NAVIGATION: NavNode[] = [
   },
 
   // Hub Operations (2026-09-21) — receive/sort/load-sheet/out-scan/dispatch/exceptions
-  // at a hub. In Scan, Load Sheet and Dispatch reuse the Shipment Movement screens above
+  // at a hub. In Scan, Manifest Creation and Dispatch reuse the Shipment Movement screens above
   // wholesale, routed again under their own path; Dashboard, Shipments At Hub, Out Scan
   // and Exceptions are the genuinely new screens. See MEMORY/modules/hub-operations.md.
   // MSRTC: the same shipment/manifest tables as Operations, flagged flowType MSRTC. Books
@@ -310,7 +310,7 @@ export const NAVIGATION: NavNode[] = [
       { id: 'hub-in-scan', title: 'In Scan', icon: 'move_to_inbox', route: '/hub-operations/in-scan', permission: 'HUB_IN_SCAN', roles: HUB_OPS },
       { id: 'hub-shipments', title: 'Shipments At Hub', icon: 'inventory_2', route: '/hub-operations/shipments', permission: 'HUB_READ', roles: HUB_OPS },
       { id: 'hub-sorting', title: 'Sorting', icon: 'sort', route: '/hub-operations/sorting', permission: 'HUB_SORT', roles: HUB_OPS },
-      { id: 'hub-load-sheet', title: 'Load Sheets', icon: 'qr_code_scanner', route: '/hub-operations/load-sheet', permission: 'MANIFEST_CREATE', roles: HUB_OPS },
+      { id: 'hub-load-sheet', title: 'Manifest Creations', icon: 'qr_code_scanner', route: '/hub-operations/load-sheet', permission: 'MANIFEST_CREATE', roles: HUB_OPS },
       { id: 'hub-out-scan', title: 'Out Scan', icon: 'outbox', route: '/hub-operations/out-scan', permission: 'HUB_OUT_SCAN', roles: HUB_OPS },
       { id: 'hub-dispatch', title: 'Dispatch', icon: 'outbound', route: '/hub-operations/dispatch', permission: 'HUB_DISPATCH', roles: HUB_OPS },
       { id: 'hub-exceptions', title: 'Exceptions', icon: 'report_problem', route: '/hub-operations/exceptions', permission: 'HUB_EXCEPTION_MANAGE', roles: HUB_OPS },
@@ -378,7 +378,7 @@ export const NAVIGATION: NavNode[] = [
       { id: 'commission-report', title: 'Commission Report', icon: 'payments', route: '/reports/commissions', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'commission-credit-report', title: 'Commission Credit Report', icon: 'price_check', route: '/reports/commission-credit', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'drs-report', title: 'DRS Report', icon: 'directions_run', route: '/reports/drs', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
-      { id: 'thc-report', title: 'Trip Hire Challan Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
+      { id: 'thc-report', title: 'Manifest Finalization Report', icon: 'outbound', route: '/reports/thc', permission: 'REPORT_READ', roles: SHIPMENT_READERS },
       { id: 'branch-reports', title: 'Branch Reports', icon: 'bar_chart', route: '/reports/branches', permission: 'REPORT_READ', roles: BRANCH_REPORT_READERS },
       // Branch responsibility #11 — every branch staff role reads reports on the work it did.
       { id: 'finance-reports', title: 'Finance Reports', icon: 'analytics', route: '/reports/finance', permission: 'REPORT_READ', roles: [...FINANCE, AppRole.ACCOUNTS] },

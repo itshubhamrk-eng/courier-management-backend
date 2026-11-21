@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** The per-zone rate card of a business customer. {@code COMPANY_ADMIN} writes; authenticated users read and calculate. */
+/** The per-zone rate card of a TBB customer. {@code COMPANY_ADMIN} writes; authenticated users read and calculate. */
 public interface ZoneRateService {
 
     /** Creates the zone's rate card, or fully replaces it (header and slabs) if one exists. */

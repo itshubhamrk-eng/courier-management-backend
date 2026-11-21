@@ -1,5 +1,5 @@
 /**
- * Business Customer pricing — mirrors backend `com.courier.modules.customerpricing`
+ * TBB Customer pricing — mirrors backend `com.courier.modules.customerpricing`
  * (`PricingZoneDtos` / `CustomerRateDtos`) one-to-one. A pricing zone belongs to one
  * customer and groups districts/cities; a zone has at most one rate card (header charges
  * plus per-kg weight slabs).
@@ -117,6 +117,8 @@ export interface CalculateRateResponse {
 }
 
 /** Mirrors backend `BusinessCustomerDashboard` (GET /business-customers/dashboard). */
+export interface RevenuePoint { month: string; amount: number; bookings: number; }
+
 export interface BusinessDashboard {
   totals: {
     customers: number; activeCustomers: number; inactiveCustomers: number;
@@ -129,6 +131,6 @@ export interface BusinessDashboard {
     customerId: string; customerCode: string; displayName: string; mobile: string; status: string;
     paymentMode: string; billingFrequency: string;
     bookingsThisMonth: number; bookingsTotal: number;
-    quantity: number; weight: number; businessAmount: number; pendingAmount: number; lastBookingAt?: string | null;
+    quantity: number; weight: number; businessAmount: number; monthAmount: number; pendingAmount: number; lastBookingAt?: string | null;
   }>;
 }

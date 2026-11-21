@@ -24,7 +24,7 @@ const STATUS_OPTS: SelectOption[] = (Object.keys(INVOICE_STATUS_LABELS) as Invoi
   .map((s) => ({ value: s, label: INVOICE_STATUS_LABELS[s] }));
 
 /**
- * Business customer invoices. Invoices are issued automatically when a customer's weekly /
+ * TBB customer invoices. Invoices are issued automatically when a customer's weekly /
  * 15-day / monthly cycle closes; this screen lists them, and lets an admin bill a customer
  * right now (everything unbilled up to a date) or run the cycle for the company.
  */
@@ -36,7 +36,7 @@ const STATUS_OPTS: SelectOption[] = (Object.keys(INVOICE_STATUS_LABELS) as Invoi
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Business Customer Billing</h1>
+        <div><h1 class="text-h1">TBB Customer Billing</h1>
           <p class="text-caption">Invoices per billing cycle, payments received and what is still owed — {{ rows().length }} shown.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search invoice number…" (changed)="onSearch($event)" />
@@ -56,7 +56,7 @@ const STATUS_OPTS: SelectOption[] = (Object.keys(INVOICE_STATUS_LABELS) as Invoi
       @if (genOpen()) {
         <app-card title="Generate invoice now" subtitle="Bills every booking of the customer, up to the date, that is not on an invoice yet.">
           <div class="gen">
-            <app-autocomplete [control]="genCustomer" label="Business Customer" [options]="customerOpts()" placeholder="Search business customer…" />
+            <app-autocomplete [control]="genCustomer" label="TBB Customer" [options]="customerOpts()" placeholder="Search TBB customer…" />
             <app-input [control]="genDate" label="Bill up to (date)" type="date" />
             <app-button icon="receipt_long" [disabled]="!genCustomerId()" [loading]="generating()" (pressed)="generate()">Generate</app-button>
           </div>
@@ -156,7 +156,7 @@ export class BillingList implements OnInit {
   protected readonly totalOutstanding = computed(() => this.live().reduce((a, r) => a + r.balance, 0));
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Business Customer' }, { label: 'Billing' }]);
+    this.breadcrumb.set([{ label: 'TBB Customer' }, { label: 'Billing' }]);
     this.customers.businessCustomers().subscribe((p) =>
       this.customerOpts.set(p.content.map((c) => ({ value: c.id, label: `${c.displayName} (${c.customerCode})` }))));
     [this.customerFilter, this.statusFilter, this.approvalFilter, this.fromFilter, this.toFilter].forEach((c) => c.valueChanges.subscribe(() => this.load()));

@@ -81,7 +81,7 @@ public class Manifest extends CompanyOwnedEntity {
     @Builder.Default
     private FlowType flowType = FlowType.STANDARD;
 
-    /** The destination city this Load Sheet was created for — drives which BOOKED
+    /** The destination city this Manifest Creation was created for — drives which BOOKED
      *  shipments (no delivery branch resolved yet, see {@code Shipment.deliveryBranchId})
      *  are eligible to attach, by matching their own {@code toCity} rather than a branch
      *  that doesn't exist for them yet. Null for a manifest created the old way, where
@@ -107,7 +107,7 @@ public class Manifest extends CompanyOwnedEntity {
     private Instant dispatchedAt;
 
     /** Operator-entered departure time — distinct from {@code dispatchedAt} (the server
-     *  clock at the moment THC was created); this is when the vehicle actually leaves,
+     *  clock at the moment Manifest Finalization was created); this is when the vehicle actually leaves,
      *  which the operator may back- or forward-date relative to that. Optional: falls
      *  back to {@code dispatchedAt} wherever it is displayed. */
     @Column(name = "departure_time")
@@ -120,7 +120,7 @@ public class Manifest extends CompanyOwnedEntity {
     private String remarks;
 
     /** Trip expenses, all optional and operator-entered at dispatch time — every one of
-     *  them prints on the THC alongside the vehicle/driver so the trip's cash outlay is
+     *  them prints on the Manifest Finalization alongside the vehicle/driver so the trip's cash outlay is
      *  on the same document as the load itself. */
     @Column(name = "fuel_cost", precision = 12, scale = 2)
     private BigDecimal fuelCost;
@@ -162,7 +162,20 @@ public class Manifest extends CompanyOwnedEntity {
     private static final int OTP_MAX_ATTEMPTS = 5;
 
     public boolean isDispatched() {
-        return status != ManifestStatus.CREATED;
+        return status == ManifestStatus.DISPATCHED || status == ManifestStatus.COMPLETED;
+    }
+
+    public boolean isCancelled() {
+        return status == ManifestStatus.CANCELLED;
+    }
+
+    /** Only a manifest creation that has not left the branch can be cancelled. */
+    public void cancel() {
+        if (status != ManifestStatus.CREATED) {
+            throw new BusinessRuleException(
+                    "Manifest %s is %s and can no longer be cancelled.".formatted(manifestNumber, status));
+        }
+        this.status = ManifestStatus.CANCELLED;
     }
 
     /**
@@ -172,6 +185,10 @@ public class Manifest extends CompanyOwnedEntity {
      */
     public void dispatch(UUID vehicleId, UUID driverUserId, Instant departureTime,
             BigDecimal fuelCost, BigDecimal driverAdvance, BigDecimal tollAmount, BigDecimal otherAmount) {
+        if (isCancelled()) {
+            throw new BusinessRuleException(
+                    "Manifest %s was cancelled and cannot be dispatched.".formatted(manifestNumber));
+        }
         if (isDispatched()) {
             throw new BusinessRuleException(
                     "Manifest %s has already been dispatched.".formatted(manifestNumber));

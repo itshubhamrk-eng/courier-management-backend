@@ -25,7 +25,7 @@ import java.util.Set;
  *
  * <p><b>V20, on direct request:</b> the standalone {@code OUT_SCAN} state (and the
  * separate "scan each shipment onto the manifest" action that wrote it) is gone —
- * {@link #MANIFEST_CREATED} now doubles as "loading sheet created" (see {@code ShipmentStatusBadge}'s
+ * {@link #MANIFEST_CREATED} now doubles as "manifest creation created" (see {@code ShipmentStatusBadge}'s
  * display label), and Dispatch's precondition moved from "at least one OUT_SCAN
  * shipment" to "at least one MANIFEST_CREATED shipment". The user's own words: "manifest
  * created as outscan created" — one milestone, not two. V20's migration folds any

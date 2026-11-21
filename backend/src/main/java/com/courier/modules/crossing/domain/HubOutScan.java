@@ -19,7 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One shipment, confirmed physically present at a hub before its Load Sheet may
+ * One shipment, confirmed physically present at a hub before its Manifest Creation may
  * dispatch. The {@code (company_id, manifest_id, shipment_id)} unique constraint on the
  * table is the duplicate-scan guard — structural, not a service-layer check, the same
  * style {@code DeliveryAssignment}'s {@code uk_delivery_assignment_company_shipment}

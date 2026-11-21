@@ -13,10 +13,10 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
 /**
  * One open manifest's own card: heading (manifest number, lane, total weight, total
  * parcels) and its LR table underneath. Adding a shipment to a manifest already is the
- * "loading sheet created" milestone (V20, on direct request — there is no separate scan
+ * "manifest creation created" milestone (V20, on direct request — there is no separate scan
  * action any more; see ManifestService.create and ShipmentStatus's own class doc), so
  * this card stays a read-only worklist by default — the next action for any of these
- * shipments is a Trip Hire Challan (THC). `showDispatchAction` opts a card into
+ * shipments is a Manifest Finalization. `showDispatchAction` opts a card into
  * surfacing that action itself (THC's own worklist), instead of every consumer building
  * its own trigger.
  * `showInScanAction` does the same for In Scan's pending-manifest worklist — receives
@@ -25,7 +25,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
  * that calls `ManifestService.removeShipment` directly and reverts the shipment to
  * BOOKED; the card owns this mutation itself rather than delegating to a parent output,
  * the same way it already owns fetching its own shipment list.
- * `showPrintAction` (Loading Sheet) adds a Print button that just emits `print` with the
+ * `showPrintAction` (Manifest Creation) adds a Print button that just emits `print` with the
  * manifest — the card has no opinion on layout, the parent renders the actual sheet (see
  * `LoadingSheet.printLoadingSheet`, the same branded-challan approach THC's own print uses).
  */
@@ -45,7 +45,7 @@ import { DialogService } from '@shared/components/ui-dialog/dialog.service';
           <div class="stat"><span class="stat__value">{{ totalWeight() }} kg</span><span class="stat__label">Total Weight</span></div>
           <div class="stat"><span class="stat__value">{{ totalParcels() }}</span><span class="stat__label">Total Parcels</span></div>
           @if (showDispatchAction()) {
-            <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">THC</app-button>
+            <app-button icon="outbound" (pressed)="dispatch.emit(manifest())">Manifest Finalization</app-button>
           }
           @if (showPrintAction()) {
             <app-button variant="stroked" icon="print" (pressed)="print.emit(manifest())">{{ printCount() ? 'Reprint (' + printCount() + ')' : 'Print' }}</app-button>
@@ -125,7 +125,7 @@ export class ManifestCard implements OnInit {
   readonly showInScanAction = input(false);
   readonly showRemoveAction = input(false);
   readonly showPrintAction = input(false);
-  /** How many times this manifest's Loading Sheet has been printed (0 = never). */
+  /** How many times this manifest's Manifest Creation has been printed (0 = never). */
   readonly printCount = input(0);
   readonly inScanLoading = input(false);
   readonly dispatch = output<Manifest>();

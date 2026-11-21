@@ -10,5 +10,7 @@ package com.courier.modules.manifest.domain;
 public enum ManifestStatus {
     CREATED,
     DISPATCHED,
-    COMPLETED
+    COMPLETED,
+    /** Every shipment on a still-open manifest creation was cancelled, so the manifest creation was cancelled with it. */
+    CANCELLED
 }

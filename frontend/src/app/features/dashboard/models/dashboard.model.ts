@@ -161,7 +161,7 @@ export interface CompanyOverview {
   topCustomers: TopCustomer[];
   podOverview: PodOverview;
   /** Pending-delivery TO_PAY shipments — freight already debited from the delivery
-   *  branch's wallet at THC in-scan, not yet actually delivered. */
+   *  branch's wallet at Manifest Finalization in-scan, not yet actually delivered. */
   toPayAwaitingDelivery: number;
 }
 
@@ -186,7 +186,7 @@ export interface BranchOverview {
   podOverview: PodOverview;
   rejectedPods: RejectedPod[];
   /** Pending-delivery TO_PAY shipments — freight already debited from this branch's
-   *  wallet at THC in-scan, not yet actually delivered. */
+   *  wallet at Manifest Finalization in-scan, not yet actually delivered. */
   toPayAwaitingDelivery: number;
 
   /** Stock already dispatched toward this branch (a crossing hop or the final delivery

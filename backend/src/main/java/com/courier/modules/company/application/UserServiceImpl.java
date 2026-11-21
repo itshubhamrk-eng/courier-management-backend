@@ -102,10 +102,10 @@ public class UserServiceImpl implements UserService {
             + Roles.SUPER_ADMIN + "', '" + Roles.BRANCH_MANAGER + "', '" + Roles.HUB_MANAGER
             + "') or hasAuthority('USER_READ')";
 
-    // The list (not the single-user read) is also open to the counter roles: DRS, THC and loading
+    // The list (not the single-user read) is also open to the counter roles: DRS, Manifest Finalization and loading
     // sheet pages fill their delivery-user / driver pickers from it. Scoped to the caller's own
     // branch or hub in search() (restrictToManagerScope), so a counter user sees only colleagues.
-    // Also by permission, not only by role name: a company's own role that can dispatch a THC or
+    // Also by permission, not only by role name: a company's own role that can dispatch a Manifest Finalization or
     // make a DRS needs the same picker (mobile app, docs G4). Same branch/hub scoping applies.
     private static final String LIST_READERS = READERS + " or hasAnyRole('" + DefaultRoleCatalog.BOOKING_OPERATOR
             + "', '" + DefaultRoleCatalog.DELIVERY_OPERATOR + "', '" + Roles.OPERATOR + "')"

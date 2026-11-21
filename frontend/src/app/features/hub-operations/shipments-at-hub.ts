@@ -18,7 +18,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 const STATUS_OPTIONS: SelectOption[] = [
   { value: 'DISPATCHED', label: 'Dispatched (en route)' },
   { value: 'READY_FOR_MANIFEST', label: 'Arrived, not yet sorted' },
-  { value: 'MANIFEST_CREATED', label: 'On a Load Sheet, ready to dispatch' },
+  { value: 'MANIFEST_CREATED', label: 'On a Manifest Creation, ready to dispatch' },
   { value: 'IN_SCAN', label: 'Received (final destination)' }
 ];
 
@@ -62,7 +62,7 @@ const STATUS_OPTIONS: SelectOption[] = [
           <td>{{ s.receivedAt ? (s.receivedAt | date: 'dd MMM, HH:mm') : '—' }}</td>
           <td class="acts">
             @if (s.status === 'READY_FOR_MANIFEST') {
-              <app-button variant="stroked" (pressed)="goLoadingSheet()">Loading Sheet</app-button>
+              <app-button variant="stroked" (pressed)="goLoadingSheet()">Manifest Creation</app-button>
               <app-button variant="stroked" (pressed)="goDrs()">DRS</app-button>
             }
           </td>

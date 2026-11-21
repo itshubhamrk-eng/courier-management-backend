@@ -38,7 +38,7 @@ const SHIPMENT_WRITERS = [...UPDATERS, AppRole.BOOKING_OPERATOR];
 // "Access denied". The backend already grants a hub manager SHIPMENT_READ / REPORT_READ.
 const SHIPMENT_READERS = [...SHIPMENT_WRITERS, AppRole.HUB_MANAGER, AppRole.DELIVERY_OPERATOR, AppRole.ACCOUNTS];
 // Shipment Movement: the same desks as Shipment Booking, plus the delivery desk —
-// Loading Sheet/Trip Hire Challan (THC) are typically the booking branch, In Scan/Out
+// Manifest Creation/Manifest Finalization are typically the booking branch, In Scan/Out
 // For Delivery/Deliver the
 // delivery branch. Mirrors ShipmentServiceImpl's movement WRITERS (COMPANY_ADMIN,
 // BRANCH_MANAGER, OPERATOR) the same way SHIPMENT_WRITERS does for booking.
@@ -266,15 +266,15 @@ export const routes: Routes = [
         path: 'customers/:id/edit', title: 'Edit Customer', canActivate: [roleGuard], data: { roles: CUSTOMER_WRITERS },
         loadComponent: () => import('@features/customer/customer-edit').then((m) => m.CustomerEdit)
       },
-      // Business Customer — COMPANY_ADMIN-only back-office setup: the customer list (the
+      // TBB Customer — COMPANY_ADMIN-only back-office setup: the customer list (the
       // same CustomerList pinned to BUSINESS customers), each customer's pricing zones, and
       // the per-zone rate cards. Literal segments ('new') before the ':id' parameters.
       {
-        path: 'business-customer/dashboard', title: 'Business Customer Dashboard', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        path: 'business-customer/dashboard', title: 'TBB Customer Dashboard', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/business-customer/business-dashboard').then((m) => m.BusinessDashboardPage)
       },
       {
-        path: 'business-customer/billing', title: 'Business Customer Billing', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
+        path: 'business-customer/billing', title: 'TBB Customer Billing', canActivate: [roleGuard], data: { roles: COMPANY_ONLY },
         loadComponent: () => import('@features/business-billing/billing-list').then((m) => m.BillingList)
       },
       {
@@ -282,7 +282,7 @@ export const routes: Routes = [
         loadComponent: () => import('@features/business-billing/billing-invoice').then((m) => m.BillingInvoice)
       },
       {
-        path: 'business-customer/customers', title: 'Business Customers', canActivate: [roleGuard],
+        path: 'business-customer/customers', title: 'TBB Customers', canActivate: [roleGuard],
         data: { roles: COMPANY_ONLY, businessOnly: true },
         loadComponent: () => import('@features/customer/customer-list').then((m) => m.CustomerList)
       },
@@ -501,7 +501,7 @@ export const routes: Routes = [
         loadComponent: () => import('@features/reports/drs-detail').then((m) => m.DrsDetailPage)
       },
       {
-        path: 'reports/thc', title: 'Trip Hire Challan Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
+        path: 'reports/thc', title: 'Manifest Finalization Report', canActivate: [roleGuard], data: { roles: SHIPMENT_READERS },
         loadComponent: () => import('@features/reports/thc-report').then((m) => m.ThcReport)
       },
       {
@@ -536,13 +536,13 @@ export const routes: Routes = [
         path: 'shipments/new', title: 'New Shipment', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
-      // Business Customer Booking: the same booking screen, but the customer is chosen first
+      // TBB Customer Booking: the same booking screen, but the customer is chosen first
       // (route data businessBooking) and fills the consignor + payment mode.
       {
-        path: 'business-customer/booking', title: 'Business Customer Booking', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS, businessBooking: true },
+        path: 'business-customer/booking', title: 'TBB Customer Booking', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS, businessBooking: true },
         loadComponent: () => import('@features/shipment/shipment-create').then((m) => m.ShipmentCreate)
       },
-      // MSRTC (V104): same booking / Trip Hire Challan screens, flowType MSRTC via route data;
+      // MSRTC (V104): same booking / Manifest Finalization screens, flowType MSRTC via route data;
       // Create Manifest is its own branch-to-branch screen.
       {
         path: 'msrtc/shipments/new', title: 'MSRTC Shipment Booking', canActivate: [roleGuard], data: { roles: SHIPMENT_WRITERS, flowType: 'MSRTC' },
@@ -631,15 +631,15 @@ export const routes: Routes = [
       // Shipment Movement — the minimal Manifest module (see MEMORY/modules/shipment-movement.md)
       // plus the five movement steps the brief's own REST API list names.
       {
-        path: 'movement/loading-sheet', title: 'Loading Sheet', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        path: 'movement/loading-sheet', title: 'Manifest Creation', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
       },
       {
-        path: 'movement/trip-hire-challan', title: 'Trip Hire Challan (THC)', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        path: 'movement/trip-hire-challan', title: 'Manifest Finalization', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/shipment-movement/trip-hire-challan').then((m) => m.TripHireChallan)
       },
       {
-        path: 'movement/in-scan', title: 'In Scan', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
+        path: 'movement/in-scan', title: 'Manifest In Scan', canActivate: [roleGuard], data: { roles: MOVEMENT_WRITERS },
         loadComponent: () => import('@features/shipment-movement/in-scan').then((m) => m.InScan)
       },
       {
@@ -712,7 +712,7 @@ export const routes: Routes = [
         path: 'hubs', title: 'Hubs', canActivate: [roleGuard], data: { roles: HUB_READERS },
         loadComponent: () => import('@features/hub/hub-list').then((m) => m.HubList)
       },
-      // Hub Operations — In Scan/Load Sheet/Sorting/Dispatch reuse the existing Shipment
+      // Hub Operations — In Scan/Manifest Creation/Sorting/Dispatch reuse the existing Shipment
       // Movement/Manifest screens wholesale (routed again here under their own path, same
       // component); Dashboard/Shipments At Hub/Out Scan/Exceptions are the genuinely new
       // screens. See MEMORY/modules/hub-operations.md.
@@ -733,7 +733,7 @@ export const routes: Routes = [
         loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
       },
       {
-        path: 'hub-operations/load-sheet', title: 'Hub Load Sheet', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
+        path: 'hub-operations/load-sheet', title: 'Hub Manifest Creation', canActivate: [roleGuard], data: { roles: HUB_WRITERS },
         loadComponent: () => import('@features/shipment-movement/loading-sheet').then((m) => m.LoadingSheet)
       },
       {

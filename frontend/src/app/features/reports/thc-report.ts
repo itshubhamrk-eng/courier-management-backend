@@ -16,10 +16,10 @@ import { ShipmentMovementService } from '@features/shipment-movement/shipment-mo
 import { Lookup } from '@features/users/user.service';
 
 /**
- * Trip Hire Challan (THC) Report — every dispatched manifest, company-wide for a
+ * Manifest Finalization Report — every dispatched manifest, company-wide for a
  * COMPANY_ADMIN or locked to the caller's own booking branch for a BRANCH_MANAGER, the
  * same branch-scoping `DrsReport` uses. Reads GET /manifests?status=DISPATCHED — a
- * manifest already carries its vehicle/driver/dispatchedAt once THC dispatches it
+ * manifest already carries its vehicle/driver/dispatchedAt once Manifest Finalization dispatches it
  * (see `Manifest.dispatch`), so no new backend endpoint is needed.
  */
 @Component({
@@ -30,8 +30,8 @@ import { Lookup } from '@features/users/user.service';
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Trip Hire Challan Report</h1>
-          <p class="text-caption">{{ page().totalElements }} THC(s) {{ myBranchId ? 'at your branch' : 'across the company' }}.</p></div>
+        <div><h1 class="text-h1">Manifest Finalization Report</h1>
+          <p class="text-caption">{{ page().totalElements }} Manifest Finalization(s) {{ myBranchId ? 'at your branch' : 'across the company' }}.</p></div>
         <app-button variant="stroked" icon="refresh" (pressed)="load()">Refresh</app-button>
       </header>
 
@@ -97,7 +97,7 @@ export class ThcReport implements OnInit {
   private readonly drivers = signal<Map<string, string>>(new Map());
 
   protected readonly columns: TableColumn<Manifest>[] = [
-    { key: 'manifestNumber', header: 'THC No.', width: '150px' },
+    { key: 'manifestNumber', header: 'Manifest Finalization No.', width: '150px' },
     { key: 'bookingBranchId', header: 'Booking Branch' },
     { key: 'deliveryBranchId', header: 'Delivery Branch' },
     { key: 'vehicleId', header: 'Vehicle' },
@@ -112,7 +112,7 @@ export class ThcReport implements OnInit {
   private query: PageQuery = { page: 0, size: 20, sort: 'dispatchedAt,desc' };
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Reports' }, { label: 'Trip Hire Challan Report' }]);
+    this.breadcrumb.set([{ label: 'Reports' }, { label: 'Manifest Finalization Report' }]);
     this.masters.branchDirectory().subscribe((list) =>
       this.branches.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`]))));
     this.vehicleService.list(false).subscribe((list) =>

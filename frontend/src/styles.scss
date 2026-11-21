@@ -89,7 +89,7 @@ body {
 }
 .page__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 // Optional small illustration accent next to a page__head's title — used on a few
-// logistics-heavy pages (Loading Sheet, In Scan, THC, DRS, Delivery). Subtle, hidden on
+// logistics-heavy pages (Manifest Creation, In Scan, Manifest Finalization, DRS, Delivery). Subtle, hidden on
 // narrow screens so it never competes with the title for space.
 .page__head-row { display: flex; align-items: center; gap: 14px; }
 .page__head-ill { flex-shrink: 0; }

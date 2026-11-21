@@ -203,7 +203,7 @@ public class Customer extends CompanyOwnedEntity {
             this.status = CustomerStatus.ACTIVE;
         }
         if (customerType == CustomerType.BUSINESS && (gstNumber == null || gstNumber.isBlank())) {
-            throw new BusinessRuleException("GST number is mandatory for a business customer.");
+            throw new BusinessRuleException("GST number is mandatory for a TBB customer.");
         }
     }
 

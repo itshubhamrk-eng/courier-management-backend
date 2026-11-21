@@ -29,8 +29,8 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
   ],
   sla: [
     { key: 'slaBreachTicketEnabled', label: 'Auto-raise ticket on SLA breach', type: 'checkbox' },
-    { key: 'slaBookingToLoadingSheetHours', label: 'Booking → Loading Sheet (hours)', type: 'number', min: 1, max: 720 },
-    { key: 'slaLoadingSheetToThcHours', label: 'Loading Sheet → THC (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaBookingToLoadingSheetHours', label: 'Booking → Manifest Creation (hours)', type: 'number', min: 1, max: 720 },
+    { key: 'slaLoadingSheetToThcHours', label: 'Manifest Creation → Manifest Finalization (hours)', type: 'number', min: 1, max: 720 },
     { key: 'slaThcToInscanHours', label: 'THC → Inscan (hours)', type: 'number', min: 1, max: 720 },
     { key: 'slaInscanToDrsHours', label: 'Inscan → DRS (hours)', type: 'number', min: 1, max: 720 },
     { key: 'slaDrsToDeliveryHours', label: 'DRS → Delivery (hours)', type: 'number', min: 1, max: 720 }
@@ -133,9 +133,9 @@ const SECTION_FIELDS: Record<string, SectionField[]> = {
                   <label class="rzp__check">
                     <input type="checkbox" [checked]="manualStatusOverrideInput()" [disabled]="savingManualOverride()"
                            (change)="onManualStatusOverrideToggle($event)" />
-                    <span>Allow manual shipment status override on Trip Hire Challan (COMPANY_ADMIN / BRANCH_MANAGER)</span>
+                    <span>Allow manual shipment status override on Manifest Finalization (COMPANY_ADMIN / BRANCH_MANAGER)</span>
                   </label>
-                  <span class="text-caption">Lets a company admin or branch manager force a shipment straight to In Scan, Out For Delivery, Delivered or any other status from the THC tracking screen, bypassing the normal flow. Off by default.</span>
+                  <span class="text-caption">Lets a company admin or branch manager force a shipment straight to In Scan, Out For Delivery, Delivered or any other status from the Manifest Finalization tracking screen, bypassing the normal flow. Off by default.</span>
                 </div>
               }
               @if (s.key === 'finance') {
@@ -317,7 +317,7 @@ export class SettingsPage implements OnInit {
 
   /** Shipment's third inline field — a plain toggle, saved immediately on change (no
    *  separate Save button, unlike the two numeric fields above). Gates whether a
-   *  COMPANY_ADMIN/BRANCH_MANAGER can use Trip Hire Challan's "Change Status" action —
+   *  COMPANY_ADMIN/BRANCH_MANAGER can use Manifest Finalization's "Change Status" action —
    *  see `TripHireChallan`/`ShipmentMovementService.overrideStatus`. */
   readonly manualStatusOverrideInput = signal(false);
   readonly savingManualOverride = signal(false);

@@ -86,7 +86,7 @@ public class Shipment extends CompanyOwnedEntity {
      * Always null at booking — the operator only picks a destination pincode/area, never
      * a Delivery Branch, and {@code ShipmentServiceImpl.create}/{@code update} resolve one
      * off {@code branch_pincode_mapping} only to price the booking, never to persist it
-     * here. Filled in for real, once, the first time a Load Sheet (Manifest) is created
+     * here. Filled in for real, once, the first time a Manifest Creation (Manifest) is created
      * for this shipment's {@code toCity} — see {@code ShipmentServiceImpl.attachToManifest}.
      */
     @JdbcTypeCode(SqlTypes.BINARY)
@@ -123,7 +123,7 @@ public class Shipment extends CompanyOwnedEntity {
 
     /**
      * Where this shipment is headed next — the crossing branch when one was picked at
-     * booking time, otherwise null until a Load Sheet assigns a real delivery branch (set
+     * booking time, otherwise null until a Manifest Creation assigns a real delivery branch (set
      * to the same value as {@code deliveryBranchId} from that point on). No physical FK.
      */
     @JdbcTypeCode(SqlTypes.BINARY)
@@ -144,8 +144,8 @@ public class Shipment extends CompanyOwnedEntity {
     @Column(name = "destination_area_id", columnDefinition = "BINARY(16)")
     private UUID destinationAreaId;
 
-    /** The Business Customer this booking was made for, when it was booked through
-     *  "Business Customer booking" — freight is priced from that customer's pricing-zone
+    /** The TBB Customer this booking was made for, when it was booked through
+     *  "TBB Customer booking" — freight is priced from that customer's pricing-zone
      *  rate card when one covers the destination, and re-derived from it on edit. Null for
      *  every ordinary booking and for shipments booked before this column existed. */
     @JdbcTypeCode(SqlTypes.BINARY)

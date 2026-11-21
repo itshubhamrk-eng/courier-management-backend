@@ -49,7 +49,7 @@ const STATUSES: SelectOption[] = [
       } @else {
         <div class="sum">Delivered without approved POD on this page: <strong [class.warn]="pending() > 0">{{ pending() }}</strong></div>
         <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
-                   emptyTitle="No deliveries" emptyHint="Shipments handed to this partner by Load Sheet appear here." idKey="id" (rowClick)="open($event)">
+                   emptyTitle="No deliveries" emptyHint="Shipments handed to this partner by Manifest Creation appear here." idKey="id" (rowClick)="open($event)">
           <ng-template #row let-s>
             <td><strong>{{ s.shipmentNumber }}</strong><div class="text-caption">{{ s.trackingNumber }}</div></td>
             <td>{{ s.toCity || '—' }}</td>

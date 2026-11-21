@@ -333,7 +333,7 @@ export class Delivery implements OnInit {
   readonly shipments = signal<Shipment[]>([]);
   readonly loading = signal(true);
   /** Branch id -> "Name (CODE)" for the worklist's From Branch / To Branch column — same
-   *  `branchDirectory()` lookup Loading Sheet/THC already use for the same reason. */
+   *  `branchDirectory()` lookup Manifest Creation/Manifest Finalization already use for the same reason. */
   readonly branchNames = signal<Map<string, string>>(new Map());
   readonly searchControl = new FormControl('');
   readonly statusControl = new FormControl<StatusFilter>('ALL');

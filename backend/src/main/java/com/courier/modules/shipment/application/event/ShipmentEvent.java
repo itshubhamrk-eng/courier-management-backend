@@ -90,7 +90,7 @@ public sealed interface ShipmentEvent {
 
     /**
      * A {@code TO_PAY} shipment reached its own final delivery branch — in-scanned off its
-     * incoming Trip Hire Challan, not a crossing hub's in-scan (see {@code
+     * incoming Manifest Finalization, not a crossing hub's in-scan (see {@code
      * ShipmentServiceImpl.scanOneIn}'s {@code finalDestination} branch, the same one {@link
      * ReceivedAtBranch} is gated on) — and its delivery branch's wallet owes the freight
      * right away. The consignee only pays cash at the door once the shipment is actually
@@ -176,6 +176,22 @@ public sealed interface ShipmentEvent {
     ) implements ShipmentEvent {
     }
 
+    /**
+     * A delivered shipment carries an ODA charge, so its delivery branch's wallet is credited the
+     * branch's own {@code odaChargeAmount}. Published beside {@link DeliveryWeightCommissionApplicable}
+     * when delivery + POD approval are both in; not published when the amount is zero. Handled by
+     * {@code ShipmentDeliveryWalletListener} -> {@code WalletService.creditForOdaCharge}.
+     */
+    record OdaChargeApplicable(
+            UUID shipmentId,
+            UUID companyId,
+            UUID deliveryBranchId,
+            String shipmentNumber,
+            BigDecimal amount,
+            Instant occurredAt
+    ) implements ShipmentEvent {
+    }
+
     // ---------------------------------------------------------------- Communication Center
     //
     // The six records below carry only ids/scalars, same discipline as every event above —
@@ -234,7 +250,7 @@ public sealed interface ShipmentEvent {
      * ShipmentCancellationWalletListener} needs it to look up every wallet entry filed
      * against this shipment ({@code referenceId}) and reverse them.
      */
-    record Cancelled(UUID shipmentId, UUID companyId, String shipmentNumber, Instant occurredAt)
+    record Cancelled(UUID shipmentId, UUID companyId, String shipmentNumber, UUID manifestId, Instant occurredAt)
             implements ShipmentEvent {
     }
 }

@@ -44,7 +44,7 @@ export class BranchService {
     return this.api.patch<BranchResponse>(`${API.branches}/${id}/assign-manager`, { managerId });
   }
 
-  /** Set (or clear, with null) the hub this branch's Loading Sheets default to. */
+  /** Set (or clear, with null) the hub this branch's Manifest Creations default to. */
   assignHub(id: string, hubId: string | null) {
     return this.api.patch<Branch>(`${API.branches}/${id}/assign-hub`, { hubId });
   }

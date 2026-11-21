@@ -7,8 +7,8 @@ import { MasterDataService } from '../masters/master-data.service';
 import { BranchService } from './branch.service';
 
 /**
- * Assign Hub to Branch — each non-hub branch names the hub its Loading Sheets go to by
- * default (`branches.assigned_hub_id`, V96). Loading Sheet preselects "Send to Hub" with
+ * Assign Hub to Branch — each non-hub branch names the hub its Manifest Creations go to by
+ * default (`branches.assigned_hub_id`, V96). Manifest Creation preselects "Send to Hub" with
  * this hub; branches with no hub assigned fall back to the manual picker.
  */
 @Component({
@@ -21,7 +21,7 @@ import { BranchService } from './branch.service';
       <header class="page__head">
         <div>
           <h1 class="text-h1">Assign Hub to Branch</h1>
-          <p class="text-caption">Loading Sheets created at a branch go to its assigned hub by default.</p>
+          <p class="text-caption">Manifest Creations created at a branch go to its assigned hub by default.</p>
         </div>
       </header>
 

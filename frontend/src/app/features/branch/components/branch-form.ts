@@ -187,7 +187,8 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           <app-input [control]="c('companyServiceChargePercentage')" label="Company Service Charge %" type="number" [min]="0" [max]="100" [step]="0.01" placeholder="10" />
           <app-input [control]="c('drsChargePerQty')" label="DRS Charge per Qty" type="number" [min]="0" [step]="0.01" placeholder="2" />
           <app-input [control]="c('deliveryCommissionRatePerKg')" label="Delivery Commission per Kg" type="number" [min]="0" [step]="0.01" placeholder="1.5" />
-          <app-input [control]="c('deliveryCommissionMinWeightKg')" label="Delivery Commission Minimum Chargeable Weight (Kg)" type="number" [min]="0" [step]="0.01" placeholder="10" />
+          <app-input [control]="c('deliveryCommissionMinWeightKg')" label="Delivery Commission Minimum Weight (Kg)" type="number" [min]="0" [step]="0.01" placeholder="10" />
+          <app-input [control]="c('odaChargeAmount')" label="ODA Charge Amount" type="number" [min]="0" [step]="0.01" placeholder="0" />
         </div>
       </app-card>
 
@@ -343,7 +344,8 @@ export class BranchForm {
       companyServiceChargePercentage: b.companyServiceChargePercentage,
       drsChargePerQty: b.drsChargePerQty,
       deliveryCommissionRatePerKg: b.deliveryCommissionRatePerKg,
-      deliveryCommissionMinWeightKg: b.deliveryCommissionMinWeightKg
+      deliveryCommissionMinWeightKg: b.deliveryCommissionMinWeightKg,
+      odaChargeAmount: b.odaChargeAmount ?? 0
     }, { emitEvent: false });
     this.form.markAsPristine();
     this.hydrated.set(true);
@@ -388,6 +390,7 @@ export class BranchForm {
       drsChargePerQty: [2, [Validators.required, Validators.min(0)]],
       deliveryCommissionRatePerKg: [1.5, [Validators.required, Validators.min(0)]],
       deliveryCommissionMinWeightKg: [10, [Validators.required, Validators.min(0)]],
+      odaChargeAmount: [0, [Validators.required, Validators.min(0)]],
       // Create-only. Kept as a group so the payload maps straight onto BranchUserRequest;
       // no minimum length on the password — the server's policy owns that rule and its
       // message names the one that failed.
@@ -429,7 +432,8 @@ export class BranchForm {
       companyServiceChargePercentage: Number(v.companyServiceChargePercentage),
       drsChargePerQty: Number(v.drsChargePerQty),
       deliveryCommissionRatePerKg: Number(v.deliveryCommissionRatePerKg),
-      deliveryCommissionMinWeightKg: Number(v.deliveryCommissionMinWeightKg)
+      deliveryCommissionMinWeightKg: Number(v.deliveryCommissionMinWeightKg),
+      odaChargeAmount: Number(v.odaChargeAmount)
     };
 
     if (this.isCreate()) {

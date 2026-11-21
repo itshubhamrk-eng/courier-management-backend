@@ -38,7 +38,7 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
       <header class="page__head">
         <div>
           <h1 class="text-h1">{{ isCreate() ? 'New Pricing Zone' : (zone()?.zoneName || 'Pricing Zone') }}</h1>
-          <p class="text-caption">{{ isCreate() ? 'Group districts and cities a business customer is priced by.' : 'Rename the zone and manage its districts and cities.' }}</p>
+          <p class="text-caption">{{ isCreate() ? 'Group districts and cities a TBB customer is priced by.' : 'Rename the zone and manage its districts and cities.' }}</p>
         </div>
         @if (!isCreate() && zone()) {
           <div class="page__actions"><app-button variant="stroked" icon="request_quote" (pressed)="openRate()">{{ zone()!.hasRate ? 'Edit rate' : 'Set rate' }}</app-button></div>
@@ -53,7 +53,7 @@ interface PendingLocation { districtId: string; cityId: string | null; label: st
         <app-card title="Zone" subtitle="The name must be unique among this customer's zones.">
           <div class="grid">
             @if (isCreate()) {
-              <app-select [control]="customerCtl" label="Business Customer" [options]="customerOpts()" placeholder="Select a customer" />
+              <app-select [control]="customerCtl" label="TBB Customer" [options]="customerOpts()" placeholder="Select a customer" />
             } @else {
               <div class="stat"><span class="stat__l">Customer</span><span class="stat__v">{{ zone()!.customerName || '—' }}</span></div>
             }
@@ -184,7 +184,7 @@ export class PricingZoneForm implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set([
-      { label: 'Business Customer' }, { label: 'Pricing Zone', route: '/business-customer/pricing-zones' },
+      { label: 'TBB Customer' }, { label: 'Pricing Zone', route: '/business-customer/pricing-zones' },
       { label: this.isCreate() ? 'New' : 'Manage' }
     ]);
     if (this.isCreate()) {

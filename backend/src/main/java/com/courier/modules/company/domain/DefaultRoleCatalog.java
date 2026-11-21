@@ -187,7 +187,7 @@ public final class DefaultRoleCatalog {
                             "REPORT_PRINT", "DASHBOARD_READ",
                             "MASTER_DATA_READ", "RATE_MASTER_READ", "RATE_MASTER_CALCULATE")),
 
-            // Hub Operations (2026-09-21) added the MANIFEST_* grants (a Hub Load Sheet
+            // Hub Operations (2026-09-21) added the MANIFEST_* grants (a Hub Manifest Creation
             // is a Manifest booked from a hub branch — no separate hub load-sheet
             // permission) and the five hub-operational verbs seeded onto PermissionModule
             // .HUB alongside its pre-existing CRUD.

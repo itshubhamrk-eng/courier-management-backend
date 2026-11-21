@@ -6,7 +6,7 @@ import { PrintDocType, PrintHistory, PrintLogService } from './print-log.service
 
 export interface PrintHistoryData { docType: PrintDocType; docRef: string; title: string; }
 
-/** Who printed a DRS / Loading Sheet / THC, when, and how many times in total. */
+/** Who printed a DRS / Manifest Creation / Finalization, when, and how many times in total. */
 @Component({
   selector: 'app-print-history-dialog',
   standalone: true,

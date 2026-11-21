@@ -31,7 +31,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
  *  for Booking Branch. What happens next to a received (IN_SCAN) shipment lives on its
  *  own page — see Pending Delivery.
  *
- *  Picking a manifest (THC action button, or typing its number into Scan) no longer
+ *  Picking a manifest (Manifest Finalization action button, or typing its number into Scan) no longer
  *  bulk-receives every shipment on it blind — on direct request ("if 10 shipment in
  *  single THS ... able to uncheck if some shipment not physicaly available in THC"), it
  *  opens a checklist of that manifest's non-`IN_SCAN` shipments, every row checked by
@@ -49,7 +49,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
       <header class="page__head" data-tour="in-scan-head">
         <div class="page__head-row">
           <app-scanner-illustration class="page__head-ill" [size]="52" />
-          <div><h1 class="text-h1">{{ isMsrtc ? 'In Scan Manifest' : 'In Scan' }}</h1>
+          <div><h1 class="text-h1">{{ isMsrtc ? 'In Scan Manifest' : 'Manifest In Scan' }}</h1>
           <p class="text-caption">Receive shipments dispatched to {{ myBranchLabel() }}.</p></div>
         </div>
         <app-act-as-branch />
@@ -64,7 +64,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
         <app-card>
           <div class="mh">
             <div><strong>{{ rm.manifestNumber }}</strong>
-              <span class="text-caption">{{ branchNames().get(rm.bookingBranchId) || '—' }} → {{ (rm.deliveryBranchId ? branchNames().get(rm.deliveryBranchId) : null) || '—' }} &nbsp;·&nbsp; Uncheck any shipment not physically in this THC before receiving.</span></div>
+              <span class="text-caption">{{ branchNames().get(rm.bookingBranchId) || '—' }} → {{ (rm.deliveryBranchId ? branchNames().get(rm.deliveryBranchId) : null) || '—' }} &nbsp;·&nbsp; Uncheck any shipment not physically in this Manifest Finalization before receiving.</span></div>
             <app-button variant="stroked" icon="close" (pressed)="cancelReceive()">Cancel</app-button>
           </div>
         </app-card>
@@ -145,7 +145,7 @@ import { StatusBadge } from '@shared/components/status-badge/status-badge';
               <div class="next">
                 <span class="text-caption">Received at your hub — what next?</span>
                 <div class="next__btns">
-                  <app-button icon="add_box" (pressed)="goLoadingSheet()">Create Loading Sheet</app-button>
+                  <app-button icon="add_box" (pressed)="goLoadingSheet()">Create Manifest Creation</app-button>
                   <app-button variant="stroked" icon="directions_run" (pressed)="goDrs()">Generate DRS</app-button>
                 </div>
               </div>
@@ -213,7 +213,7 @@ export class InScan implements OnInit {
   readonly scanning = signal(false);
   readonly outcomes = signal<MovementOutcome[]>([]);
   /** True when the branch being received at is a HUB — a received shipment there is not
-   *  final-delivery IN_SCAN, it is READY_FOR_MANIFEST and can go onward on a Load Sheet or out
+   *  final-delivery IN_SCAN, it is READY_FOR_MANIFEST and can go onward on a Manifest Creation or out
    *  for delivery on a DRS straight from the hub. */
   readonly hubIds = signal<Set<string>>(new Set());
   readonly atHub = computed(() => !!this.myBranchId && this.hubIds().has(this.myBranchId));
@@ -221,7 +221,7 @@ export class InScan implements OnInit {
 
   readonly pendingManifests = signal<Manifest[]>([]);
   /** A hub's in-scan releases each shipment from its manifest as it is received (it goes on to its next leg),
-   *  so a manifest left with no shipments is fully received — not shown as a blank THC/manifest. */
+   *  so a manifest left with no shipments is fully received — not shown as a blank Manifest Finalization/manifest. */
   readonly visibleManifests = computed(() =>
     this.atHub() ? this.pendingManifests().filter((m) => m.shipmentCount > 0) : this.pendingManifests());
   readonly loadingManifests = signal(true);
@@ -254,7 +254,7 @@ export class InScan implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set(this.isMsrtc
       ? [{ label: 'MSRTC' }, { label: 'In Scan Manifest' }]
-      : [{ label: 'Operations' }, { label: 'In Scan' }]);
+      : [{ label: 'Operations' }, { label: 'Manifest In Scan' }]);
     this.masterData.branchDirectory().subscribe((list) => {
       this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
       this.branchNames.set(new Map(list.map((b) => [b.id, `${b.branchName} (${b.branchCode})`])));
@@ -373,7 +373,7 @@ export class InScan implements OnInit {
    *  shipment (short-received, not physically on the vehicle) is simply left out, not
    *  removed from the manifest itself. The unchecked complement goes along as
    *  `missingTrackingNumbers` so the backend can auto-raise a Support ticket for the
-   *  company the instant a THC comes up short — the operator's own explicit answer,
+   *  company the instant a Manifest Finalization comes up short — the operator's own explicit answer,
    *  not a guess. */
   protected confirmReceive(): void {
     const selected = this.selectedTrackingNumbers();

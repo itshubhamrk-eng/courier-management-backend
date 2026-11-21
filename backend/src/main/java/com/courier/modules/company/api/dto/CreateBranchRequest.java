@@ -97,13 +97,17 @@ public record CreateBranchRequest(
         BigDecimal drsChargePerQty,
         @DecimalMin("0.0")
         @Schema(description = "Delivery commission per kg, credited on delivery "
-                + "(deliveryCommission = rate * max(chargeable weight, deliveryCommissionMinWeightKg)). "
+                + "(deliveryCommission = rate * max(actual weight, deliveryCommissionMinWeightKg)). "
                 + "Defaults to 1.50 when omitted.", example = "1.5")
         BigDecimal deliveryCommissionRatePerKg,
         @DecimalMin("0.0")
-        @Schema(description = "Minimum chargeable weight (kg) for delivery commission. "
+        @Schema(description = "Minimum weight (kg) for delivery commission. "
                 + "Defaults to 10 when omitted.", example = "10")
         BigDecimal deliveryCommissionMinWeightKg,
+        @DecimalMin("0.0")
+        @Schema(description = "ODA charge credited to this branch's wallet per delivered shipment that "
+                + "carries an ODA charge. Defaults to 0 when omitted.", example = "50")
+        BigDecimal odaChargeAmount,
 
         @Valid
         @Schema(description = "The branch's login account. Omit to have one derived from "

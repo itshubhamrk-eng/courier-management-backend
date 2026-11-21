@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** Business customer invoices and receipts. {@code COMPANY_ADMIN} only — the menu that hosts it is company-only too. */
+/** TBB customer invoices and receipts. {@code COMPANY_ADMIN} only — the menu that hosts it is company-only too. */
 public interface CustomerBillingService {
 
     List<InvoiceSummary> search(UUID customerId, InvoiceStatus status, ApprovalStatus approval, LocalDate from, LocalDate to, String search);

@@ -30,13 +30,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Print tracking for DRS, Loading Sheet and THC: every print/reprint is a row (who, when);
+/** Print tracking for DRS, Manifest Creation and Manifest Finalization: every print/reprint is a row (who, when);
  *  the print count is the row count. */
 @RestController
 @RequestMapping("/api/v1/print-logs")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Print Log", description = "Who printed a DRS / Loading Sheet / THC, and how many times")
+@Tag(name = "Print Log", description = "Who printed a DRS / Manifest Creation / Finalization, and how many times")
 public class PrintLogController {
 
     private final PrintLogRepository repository;

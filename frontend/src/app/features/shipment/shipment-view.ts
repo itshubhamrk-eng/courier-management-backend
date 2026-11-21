@@ -188,17 +188,17 @@ const TIMELINE_ICONS: Record<string, string> = {
           </app-card>
         </div>
 
-        <app-card title="Loading Sheet / THC" subtitle="Every load sheet this shipment has travelled on">
+        <app-card title="Manifest Creation / Finalization" subtitle="Every manifest creation this shipment has travelled on">
           @if (loadingMovement()) {
             <app-loader [minHeight]="100" caption="Loading…" />
           } @else if (!movementDocs().length) {
-            <p class="empty">Not on a loading sheet yet.</p>
+            <p class="empty">Not on a manifest creation yet.</p>
           } @else {
             <div class="mt-wrap">
               <table class="mt">
                 <thead>
                   <tr>
-                    <th>Loading Sheet / THC No.</th><th>Status</th><th>Created</th><th>Dispatched</th>
+                    <th>Manifest Creation / Finalization No.</th><th>Status</th><th>Created</th><th>Dispatched</th>
                     <th>Received</th><th>Vehicle</th><th>Driver</th><th></th>
                   </tr>
                 </thead>
@@ -214,7 +214,7 @@ const TIMELINE_ICONS: Record<string, string> = {
                       <td>{{ d.driver ? d.driver.name + (d.driver.mobile !== '—' ? ' · ' + d.driver.mobile : '') : '—' }}</td>
                       <td>
                         <a class="sv__link" [routerLink]="['/movement/trip-hire-challan']" [queryParams]="{ manifestNumber: d.manifest.manifestNumber }">
-                          <mat-icon>outbound</mat-icon> THC</a>
+                          <mat-icon>outbound</mat-icon> Manifest Finalization</a>
                       </td>
                     </tr>
                   }
@@ -692,8 +692,8 @@ export class ShipmentView implements OnInit {
     });
   }
 
-  /** Loading Sheet / THC history (every manifest named in the status log, plus the
-   *  current one) and the DRS row. A Load Sheet and its THC are the same `Manifest`. */
+  /** Manifest Creation / Finalization history (every manifest named in the status log, plus the
+   *  current one) and the DRS row. A Manifest Creation and its Manifest Finalization are the same `Manifest`. */
   private loadMovement(currentManifestId: string | null): void {
     this.loadingMovement.set(true);
     forkJoin({

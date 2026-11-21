@@ -27,7 +27,7 @@ public record FreightCalculationResult(
         boolean odaApplicable,
         BigDecimal odaCharge,
         BigDecimal totalFreight,
-        /** Name of the Business Customer pricing zone that priced this booking — null when
+        /** Name of the TBB Customer pricing zone that priced this booking — null when
          *  District Level Freight did (the default). */
         String customerZoneName,
         /** The zone rate card's non-freight lines (docket + mathadi + pack + fuel % + FOV %),

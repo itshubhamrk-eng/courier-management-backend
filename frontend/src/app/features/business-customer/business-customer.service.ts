@@ -4,7 +4,7 @@ import { API } from '@core/config/api-endpoints';
 import { Customer } from '@core/models/customer.model';
 import {
   CalculateRateRequest, CalculateRateResponse, CreateZoneRequest, CustomerRate, LocationRequest,
-  BusinessDashboard, PricingZone, SaveRateRequest, UpdateZoneRequest, ZoneStatus
+  BusinessDashboard, RevenuePoint, PricingZone, SaveRateRequest, UpdateZoneRequest, ZoneStatus
 } from '@core/models/pricing-zone.model';
 
 /** Pricing zones and per-zone rate cards — mirrors the backend endpoints one-to-one. */
@@ -21,6 +21,9 @@ export class BusinessCustomerService {
     });
   }
 
+  revenueTrend(months: number, customerId?: string) {
+    return this.api.get<RevenuePoint[]>(API.businessRevenueTrend, { months, customerId });
+  }
   dashboard() { return this.api.get<BusinessDashboard>(API.businessDashboard); }
 
   // ---- zones --------------------------------------------------------------------

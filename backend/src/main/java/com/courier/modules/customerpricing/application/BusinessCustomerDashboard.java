@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Company-wide overview of business customers: counts, payment/billing mix and per-customer
+ * Company-wide overview of TBB customers: counts, payment/billing mix and per-customer
  * booking activity. Bookings are matched to a customer by the consignor's mobile number — a
  * shipment stores plain sender values, never a customer id — so the booking figures are
  * "bookings whose consignor contact is this customer's mobile", cancelled ones excluded.
@@ -33,7 +33,7 @@ public record BusinessCustomerDashboard(
                               String status, String paymentMode, String billingFrequency,
                               long bookingsThisMonth, long bookingsTotal,
                               long quantity, BigDecimal weight,
-                              BigDecimal businessAmount, BigDecimal pendingAmount,
+                              BigDecimal businessAmount, BigDecimal monthAmount, BigDecimal pendingAmount,
                               Instant lastBookingAt) {
     }
 }

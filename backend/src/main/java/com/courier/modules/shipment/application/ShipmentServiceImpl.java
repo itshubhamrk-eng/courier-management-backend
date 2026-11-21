@@ -372,7 +372,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         // MSRTC books straight to a delivery branch picked (or resolved from the pincode) at
         // the counter, so it is the one flow that writes deliveryBranchId at booking. STANDARD
-        // is untouched: its delivery branch is still assigned later, by Load Sheet.
+        // is untouched: its delivery branch is still assigned later, by Manifest Creation.
         FlowType flowType = command.flowType() == null ? FlowType.STANDARD : command.flowType();
         UUID msrtcDeliveryBranchId = null;
         if (flowType == FlowType.MSRTC) {
@@ -412,7 +412,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         requireOdaNotBelowMinimum(command.odaCharge(), freightCalc);
 
         // Delivery Branch is no longer picked, decided, or even resolved at booking —
-        // Load Sheet is the only place a shipment's deliveryBranchId gets written, by
+        // Manifest Creation is the only place a shipment's deliveryBranchId gets written, by
         // destination city (see ShipmentServiceImpl.attachToManifest), or never at all
         // for Direct Company Delivery. Pricing (Route/Rate's old branch-pair matching)
         // runs with no delivery branch every time now; District Level Freight (the
@@ -1302,6 +1302,10 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
 
         ShipmentStatus previous = shipment.getStatus();
+        // A cancelled shipment leaves its manifest creation; the manifest module cancels the sheet too
+        // when this was its last shipment (see ManifestCancellationListener).
+        UUID manifestId = shipment.getManifestId();
+        shipment.setManifestId(null);
         shipment.transitionTo(ShipmentStatus.CANCELLED);
         Shipment saved = shipmentRepository.save(shipment);
         appendHistory(saved, companyId, previous, ShipmentStatus.CANCELLED, remarks.trim());
@@ -1317,7 +1321,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 Map.of("status", previous.name()),
                 Map.of("status", saved.getStatus().name(), "reason", remarks.trim()));
         eventPublisher.publishEvent(new ShipmentEvent.Cancelled(
-                saved.getId(), companyId, saved.getShipmentNumber(), Instant.now()));
+                saved.getId(), companyId, saved.getShipmentNumber(), manifestId, Instant.now()));
 
         return saved;
     }
@@ -1407,7 +1411,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 ? shipment.getCurrentLocationId() : shipment.getBookingBranchId();
 
         if (shipment.getNextLocationId() == null && shipment.getDeliveryBranchId() == null) {
-            // Load Sheet's normal case since delivery-branch assignment moved here: nothing
+            // Manifest Creation's normal case since delivery-branch assignment moved here: nothing
             // has decided this shipment's next stop yet, so it can't be matched by branch —
             // matched by its own resolved destination city instead. Assigning the branch for
             // real, right here, is this shipment's very first delivery-branch assignment.
@@ -1415,8 +1419,8 @@ public class ShipmentServiceImpl implements ShipmentService {
                 throw new BusinessRuleException(
                         "Shipment %s is not at this branch.".formatted(shipment.getShipmentNumber()));
             }
-            // A hub Load Sheet carries mixed destinations — the hub sorts them onward — and a
-            // branch Load Sheet with no destination city is a direct "send these to this branch"
+            // A hub Manifest Creation carries mixed destinations — the hub sorts them onward — and a
+            // branch Manifest Creation with no destination city is a direct "send these to this branch"
             // pick, so the city match only applies when the sheet names a destination city.
             if (!hubTransfer && manifestDestinationCity != null && !manifestDestinationCity.isBlank()) {
                 if (shipment.getToCity() == null
@@ -1427,14 +1431,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                 }
             }
             // A hub stop is only a next stop: the real delivery branch is assigned later, by
-            // the hub's own Load Sheet, once the shipment has been received there.
+            // the hub's own Manifest Creation, once the shipment has been received there.
             if (!hubTransfer) {
                 shipment.setDeliveryBranchId(expectedDeliveryBranchId);
             }
             shipment.setNextLocationId(expectedDeliveryBranchId);
         } else {
             // Already has a real next stop — a crossing hop still ahead, or a legacy row
-            // booked before Load Sheet deferred branch assignment. Same lane check as ever.
+            // booked before Manifest Creation deferred branch assignment. Same lane check as ever.
             UUID actualNextStop = shipment.getNextLocationId() != null
                     ? shipment.getNextLocationId() : shipment.getDeliveryBranchId();
             if (!Objects.equals(actualPosition, expectedBookingBranchId)
@@ -2162,7 +2166,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 }
                 default -> {
                     // No single-shipment real method covers this edge: DISPATCHED/IN_SCAN only
-                    // ever happen as part of a manifest-wide THC dispatch (vehicle/driver, every
+                    // ever happen as part of a manifest-wide Manifest Finalization dispatch (vehicle/driver, every
                     // shipment on that manifest together); BOOKED/READY_FOR_MANIFEST/
                     // MANIFEST_CREATED/RETURNED have no dedicated writer at all. Falls through.
                 }
@@ -2250,17 +2254,30 @@ public class ShipmentServiceImpl implements ShipmentService {
                         drsCharge, Instant.now()));
             }
 
-            // Independent of DRS charge: a per-kg commission on the shipment's own chargeable
-            // weight, with a floor so a very light shipment still earns the floor's worth.
-            BigDecimal chargeableWeight = shipment.getChargeableWeight() == null
-                    ? BigDecimal.ZERO : shipment.getChargeableWeight();
-            BigDecimal billableWeight = chargeableWeight.max(deliveryBranch.getDeliveryCommissionMinWeightKg());
+            // Independent of DRS charge: a per-kg commission on the shipment's own ACTUAL
+            // weight (not the chargeable/volumetric one), with a floor so a very light
+            // shipment still earns the floor's worth: rate x max(actual, minimum weight).
+            BigDecimal actualWeight = shipment.getActualWeight() == null
+                    ? BigDecimal.ZERO : shipment.getActualWeight();
+            BigDecimal billableWeight = actualWeight.max(deliveryBranch.getDeliveryCommissionMinWeightKg());
             BigDecimal deliveryWeightCommission = deliveryBranch.getDeliveryCommissionRatePerKg()
                     .multiply(billableWeight);
             if (deliveryWeightCommission.compareTo(BigDecimal.ZERO) > 0) {
                 eventPublisher.publishEvent(new ShipmentEvent.DeliveryWeightCommissionApplicable(
                         shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
                         deliveryWeightCommission, Instant.now()));
+            }
+
+            // ODA: when the shipment carries an ODA charge, the delivery branch earns its own
+            // configured fixed ODA amount (Branch.odaChargeAmount), same trigger as the two above.
+            BigDecimal branchOda = deliveryBranch.getOdaChargeAmount() == null
+                    ? BigDecimal.ZERO : deliveryBranch.getOdaChargeAmount();
+            if (branchOda.compareTo(BigDecimal.ZERO) > 0
+                    && chargeRepository.findByShipmentIdWithinCompany(shipment.getId(), companyId)
+                            .map(c -> c.getOdaCharge() != null && c.getOdaCharge().signum() > 0).orElse(false)) {
+                eventPublisher.publishEvent(new ShipmentEvent.OdaChargeApplicable(
+                        shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
+                        branchOda, Instant.now()));
             }
         }
 
@@ -2424,11 +2441,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase();
     }
 
-    // MANIFEST_CREATED doubles as "Loading Sheet Created" (V20, on direct request) — one
+    // MANIFEST_CREATED doubles as "Manifest Creation Created" (V20, on direct request) — one
     // milestone, not two; see ShipmentStatus's own class doc.
     private static final Map<ShipmentStatus, String> TIMELINE_LABELS = Map.of(
             ShipmentStatus.BOOKED, "Booked",
-            ShipmentStatus.MANIFEST_CREATED, "Loading Sheet Created",
+            ShipmentStatus.MANIFEST_CREATED, "Manifest Creation Created",
             ShipmentStatus.DISPATCHED, "Dispatched",
             ShipmentStatus.IN_SCAN, "Received",
             ShipmentStatus.OUT_FOR_DELIVERY, "DRS",
@@ -2778,7 +2795,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
     }
 
-    /** A Business Customer zone's docket/mathadi/pack/fuel/FOV lines ride as Other Charges —
+    /** A TBB Customer zone's docket/mathadi/pack/fuel/FOV lines ride as Other Charges —
      *  the operator may raise them, never go below the rate card. No-op for District Level Freight. */
     private void requireCustomerExtraCharges(BigDecimal otherCharges, FreightCalculationResult freightCalc) {
         BigDecimal required = freightCalc.customerExtraCharges();

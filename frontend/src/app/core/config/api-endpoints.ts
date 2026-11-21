@@ -31,7 +31,7 @@ export const API = {
   userMenuPermissions: (userId: string) => `/users/${userId}/menu-permissions`,
   branches: '/branches',
   customers: '/customers',
-  /** Business Customer pricing: a customer's zones (districts/cities) and per-zone rate cards. */
+  /** TBB Customer pricing: a customer's zones (districts/cities) and per-zone rate cards. */
   pricingZones: '/pricing-zones',
   /** MSRTC bus depot / station master. */
   busDepots: '/bus-depots',
@@ -45,6 +45,7 @@ export const API = {
   pdpStatements: '/pdp-statements',
   pdpDashboard: '/pdp-dashboard',
   businessDashboard: '/business-customers/dashboard',
+  businessRevenueTrend: '/business-customers/dashboard/revenue-trend',
   customerInvoices: '/customer-invoices',
   rates: '/rates',
   /** Charge & Charge Settings — standalone pricing/commission configuration, scoped to
@@ -69,12 +70,12 @@ export const API = {
    *  not part of the movement brief's own REST list, which assumes a manifest exists. */
   manifests: '/manifests',
   vehicles: '/vehicles',
-  /** Loading Sheet, Trip Hire Challan (THC), In Scan, Out For Delivery, Deliver. */
+  /** Manifest Creation, Manifest Finalization, In Scan, Out For Delivery, Deliver. */
   shipmentMovement: '/shipment-movement',
   branchWallet: '/branch-wallet',
   /** Hub Operations — out-scan and exceptions (the genuinely new surface). A hub itself
    *  is a `Branch` row with `branchType: 'HUB'`, so Hub listing reuses `API.branches`
-   *  with that filter, not its own endpoint; in-scan/Load Sheet/dispatch reuse
+   *  with that filter, not its own endpoint; in-scan/Manifest Creation/dispatch reuse
    *  `shipmentMovement`/`manifests`/`vehicles`. See MEMORY/modules/hub-operations.md. */
   hubOperations: '/hub-operations',
   companySettings: '/company-settings',

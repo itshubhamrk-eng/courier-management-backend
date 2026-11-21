@@ -84,7 +84,7 @@ export class CustomerRateList implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Business Customer' }, { label: 'Rate' }]);
+    this.breadcrumb.set([{ label: 'TBB Customer' }, { label: 'Rate' }]);
     this.service.businessCustomers().subscribe((p) =>
       this.customerOpts.set(p.content.map((c) => ({ value: c.id, label: `${c.displayName} (${c.customerCode})` }))));
     this.customerCtl.valueChanges.subscribe(() => this.load());

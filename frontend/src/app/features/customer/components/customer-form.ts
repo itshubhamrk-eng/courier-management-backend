@@ -87,7 +87,7 @@ function upperPattern(pattern: RegExp) {
         </div>
       </app-card>
 
-      <app-card title="Tax Details" [subtitle]="isBusiness() ? 'GST is mandatory for a business customer.' : 'Optional for an individual customer.'">
+      <app-card title="Tax Details" [subtitle]="isBusiness() ? 'GST is mandatory for a TBB customer.' : 'Optional for an individual customer.'">
         <div class="grid">
           <app-input [control]="c('gstNumber')" label="GST Number" [required]="isBusiness()" placeholder="27ABCDE1234F1Z5" [maxLength]="15" />
           <app-input [control]="c('panNumber')" label="PAN Number" placeholder="ABCDE1234F" [maxLength]="10" />
@@ -163,7 +163,7 @@ export class CustomerForm {
   readonly mode = input<'create' | 'edit'>('create');
   readonly customer = input<CustomerResponse | null>(null);
   readonly saving = input(false);
-  /** Pre-selected type when creating (the Business Customer menu starts at BUSINESS). */
+  /** Pre-selected type when creating (the TBB Customer menu starts at BUSINESS). */
   readonly initialType = input<CustomerType>('INDIVIDUAL');
 
   readonly saved = output<CreateCustomerRequest | UpdateCustomerRequest>();

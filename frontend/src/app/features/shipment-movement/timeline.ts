@@ -14,8 +14,8 @@ const ICONS: Record<string, string> = {
   DELIVERED: 'task_alt'
 };
 
-/** Timeline — Booked -> Loading Sheet Created -> Dispatched -> Received -> Out For Delivery ->
- *  Delivered. Loading Sheet folded into Manifest Created on request — one milestone, not two.
+/** Timeline — Booked -> Manifest Creation Created -> Dispatched -> Received -> Out For Delivery ->
+ *  Delivered. Manifest Creation folded into Manifest Created on request — one milestone, not two.
  *  GET /shipments/{id}/timeline. */
 @Component({
   selector: 'app-shipment-timeline',

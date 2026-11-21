@@ -1,6 +1,6 @@
 /**
- * Business Customer Billing — mirrors backend `com.courier.modules.customerbilling`
- * (`CustomerBillingDtos`). An invoice bills one business customer for every non-cancelled booking
+ * TBB Customer Billing — mirrors backend `com.courier.modules.customerbilling`
+ * (`CustomerBillingDtos`). An invoice bills one TBB customer for every non-cancelled booking
  * not already on a live invoice; balance = total - prepaid (paid at the counter) - receipts.
  */
 

@@ -36,7 +36,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/customer-rates")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Customer Rates", description = "Per-zone rate cards of business customers")
+@Tag(name = "Customer Rates", description = "Per-zone rate cards of TBB customers")
 public class CustomerRateController {
 
     private final ZoneRateService service;

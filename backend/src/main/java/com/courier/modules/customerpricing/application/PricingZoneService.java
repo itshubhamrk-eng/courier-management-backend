@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Pricing zones of business customers. {@code COMPANY_ADMIN} writes; any authenticated user
+ * Pricing zones of TBB customers. {@code COMPANY_ADMIN} writes; any authenticated user
  * of the company reads (booking needs to resolve a zone). The company is the caller's.
  */
 public interface PricingZoneService {

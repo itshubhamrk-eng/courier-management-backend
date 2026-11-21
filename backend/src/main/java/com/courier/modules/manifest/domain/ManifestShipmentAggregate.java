@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Shipment-count/weight/package-count totals for one manifest — the THC Report's
+ * Shipment-count/weight/package-count totals for one manifest — the Manifest Finalization Report's
  * per-row and summary-stat numbers. {@code totalWeight} sums {@code Shipment.chargeableWeight},
  * the same weight figure the Booking/Delivery Report summary rows use.
  */

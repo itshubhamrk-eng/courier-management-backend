@@ -2,7 +2,7 @@
  * Hub Operations models — mirror the backend `com.courier.modules.crossing` one-to-one
  * (see MEMORY/modules/hub-operations.md). A hub itself is a `Branch` with
  * `branchType: 'HUB'` (see `@core/models/branch.model.ts`) — no separate Hub model.
- * In-scan, Load Sheet/Sorting, vehicle+driver and dispatch reuse the existing
+ * In-scan, Manifest Creation/Sorting, vehicle+driver and dispatch reuse the existing
  * Shipment/Manifest models; only out-scan and exceptions are genuinely new.
  */
 

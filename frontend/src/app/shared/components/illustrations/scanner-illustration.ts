@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { ILLUSTRATION_STYLES, nextIllustrationUid } from './illustration-base';
 
-/** Clay-style barcode-scanner glyph — in-scan/out-scan, loading sheet pages. */
+/** Clay-style barcode-scanner glyph — in-scan/out-scan, manifest creation pages. */
 @Component({
   selector: 'app-scanner-illustration',
   standalone: true,

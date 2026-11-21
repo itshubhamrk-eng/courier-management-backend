@@ -71,7 +71,7 @@ type FreightOutcome =
   template: `
     <div class="page">
       <header class="page__head" data-tour="booking-head">
-        <div><h1 class="text-h1">{{ isMsrtc ? 'MSRTC Shipment Booking' : isBusinessBooking ? 'Business Customer Booking' : 'New Shipment' }}</h1><p class="text-caption">{{ isBusinessBooking && !selectedBusinessCustomer() ? 'Select the business customer first — the booking form opens once you do.' : 'Fill in the booking — the summary prices it as you go, or speak it.' }}</p></div>
+        <div><h1 class="text-h1">{{ isMsrtc ? 'MSRTC Shipment Booking' : isBusinessBooking ? 'TBB Customer Booking' : 'New Shipment' }}</h1><p class="text-caption">{{ isBusinessBooking && !selectedBusinessCustomer() ? 'Select the TBB customer first — the booking form opens once you do.' : 'Fill in the booking — the summary prices it as you go, or speak it.' }}</p></div>
         <div class="page__head-actions">
           <app-voice-mic-button (transcriptReady)="onVoiceTranscript($event)" (error)="onVoiceError($event)" />
           <app-button variant="stroked" (pressed)="cancel()">Cancel</app-button>
@@ -82,10 +82,10 @@ type FreightOutcome =
       }
 
       @if (isBusinessBooking) {
-        <app-card title="Business Customer" subtitle="Choose who this booking is for. The consignor and payment mode are filled from the customer.">
+        <app-card title="TBB Customer" subtitle="Choose who this booking is for. The consignor and payment mode are filled from the customer.">
           <div class="bizbook__panel">
-            <app-autocomplete [control]="businessCustomerCtl" label="Business Customer" [options]="businessCustomerOptions()"
-              placeholder="Search business customer by name or code…" />
+            <app-autocomplete [control]="businessCustomerCtl" label="TBB Customer" [options]="businessCustomerOptions()"
+              placeholder="Search TBB customer by name or code…" />
             @if (businessPickupOptions().length > 1) {
               <app-select [control]="businessPickupCtl" label="Pickup Address" [options]="businessPickupOptions()" placeholder="Select a pickup address" />
             }
@@ -100,6 +100,8 @@ type FreightOutcome =
         <div class="lr__main">
           <app-card title="Booking Details" [subtitle]="'Booking from ' + myBranchLabel()">
             <div class="grid3">
+              <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
+                <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
               <label class="fld"><span class="fld__l">Booking Date</span>
                 <input class="fld__i" type="date" [formControl]="c('bookingDate')" /></label>
               @if (isMsrtc) {
@@ -129,8 +131,6 @@ type FreightOutcome =
                   <p class="hint">Expected delivery: {{ edp | date: 'mediumDate' }}</p>
                 }
               </div>
-              <label class="fld"><span class="fld__l">Shipment No. (optional)</span>
-                <input class="fld__i" [formControl]="c('manualShipmentNumber')" placeholder="Leave blank to auto-generate" maxlength="30" /></label>
             </div>
             <div class="spacer"></div>
             @if (isMsrtc) {
@@ -228,12 +228,12 @@ type FreightOutcome =
             @if (!isBusinessBooking) {
             <label class="chk bizbook">
               <input type="checkbox" [checked]="businessMode()" (change)="toggleBusinessMode($any($event.target).checked)" />
-              <span>Business Customer booking</span>
+              <span>TBB Customer booking</span>
             </label>
             @if (businessMode()) {
               <div class="bizbook__panel">
-                <app-autocomplete [control]="businessCustomerCtl" label="Business Customer" [options]="businessCustomerOptions()"
-                  placeholder="Search business customer by name or code…" />
+                <app-autocomplete [control]="businessCustomerCtl" label="TBB Customer" [options]="businessCustomerOptions()"
+                  placeholder="Search TBB customer by name or code…" />
                 @if (businessPickupOptions().length > 1) {
                   <app-select [control]="businessPickupCtl" label="Pickup Address" [options]="businessPickupOptions()" placeholder="Select a pickup address" />
                 }
@@ -639,7 +639,7 @@ export class ShipmentCreate implements OnInit {
   /** The MSRTC Shipment Booking route reuses this screen; everything MSRTC-only below is
    *  gated on this, so the standard booking behaves exactly as before. */
   protected readonly isMsrtc = this.route.snapshot.data['flowType'] === 'MSRTC';
-  /** Operations > Business Customer Booking: the customer is chosen first, then the normal booking form opens. */
+  /** Operations > TBB Customer Booking: the customer is chosen first, then the normal booking form opens. */
   protected readonly isBusinessBooking = this.route.snapshot.data['businessBooking'] === true;
   /** MSRTC only: how the destination is chosen — a pincode (its mapped branch is looked up)
    *  or a branch picked directly (its own pincode drives pricing). */
@@ -839,7 +839,7 @@ export class ShipmentCreate implements OnInit {
    *  `receiverName`/`receiverContact` without joining Shipment to Customer at booking time; the
    *  picked customer's plain values are copied into the free-text fields exactly like manual
    *  typing, nothing here becomes a foreign key. */
-  /** Business Customer booking: pick a business customer to fill the consignor and payment
+  /** TBB Customer booking: pick a TBB customer to fill the consignor and payment
    *  mode. Purely a convenience — like `pickCustomer`, no customer id is stored on the shipment. */
   protected readonly businessMode = signal(false);
   protected readonly businessCustomerOptions = signal<SelectOption[]>([]);
@@ -847,7 +847,7 @@ export class ShipmentCreate implements OnInit {
   protected readonly businessCustomerCtl = new FormControl<string>('', { nonNullable: true });
   /** The autocomplete control holds the typed text until an option is chosen; this is set only to a real customer id. */
   protected readonly selectedBusinessCustomer = signal('');
-  /** The Business Customer zone rate's docket/mathadi/pack/fuel/FOV total currently folded into
+  /** The TBB Customer zone rate's docket/mathadi/pack/fuel/FOV total currently folded into
    *  Other Charges — tracked so a recalculation replaces it instead of stacking on it. */
   private readonly zoneExtraCharges = signal(0);
   protected readonly businessPickupCtl = new FormControl<string>('', { nonNullable: true });
@@ -918,7 +918,7 @@ export class ShipmentCreate implements OnInit {
 
   /** Crossing Branch picker options — excludes the caller's own branch (already out of
    *  `branchOptions`). There is no Delivery Branch to also exclude any more — that's
-   *  decided later, at Load Sheet, not at booking. */
+   *  decided later, at Manifest Creation, not at booking. */
   protected readonly crossingBranchOptions = computed(() => this.branchOptions());
 
   ngOnInit(): void {
@@ -936,7 +936,7 @@ export class ShipmentCreate implements OnInit {
       }
     }
     this.breadcrumb.set(this.isBusinessBooking
-      ? [{ label: 'Operations' }, { label: 'Business Customer Booking' }]
+      ? [{ label: 'Operations' }, { label: 'TBB Customer Booking' }]
       : [{ label: 'Shipments', route: '/shipments' }, { label: 'New' }]);
     this.settings.get().subscribe((d) => {
       const shipment = (d as { shipment?: { defaultChargeableWeightKg?: number; defaultAppointmentDeliveryCharge?: number; toPayCharge?: number; minOdaCharge?: number } })?.shipment;
@@ -1009,7 +1009,7 @@ export class ShipmentCreate implements OnInit {
     // .findByPincodeAndArea. A 6-digit pincode is looked up (paged master search, exact
     // code match) for its id, then its area links (the primary one auto-selects as a
     // convenience default, still overridable). No delivery branch is resolved from this
-    // any more — that's decided later, at Load Sheet, not at booking.
+    // any more — that's decided later, at Manifest Creation, not at booking.
     this.c('destinationPincode').valueChanges.subscribe((v) =>
       this.destinationPincodeQuery$.next((v ?? '').trim()));
     this.destinationPincodeQuery$.pipe(
@@ -1125,7 +1125,7 @@ export class ShipmentCreate implements OnInit {
     // (it doesn't care about service type/package type/payment mode/declared value/
     // booking date); weight reschedules via {@link onWeight}.
     this.c('deliveryPincode').valueChanges.subscribe(() => this.scheduleFreightCalc());
-    // A Business Customer zone's FOV % is a share of the declared value, so it moves with it.
+    // A TBB Customer zone's FOV % is a share of the declared value, so it moves with it.
     this.c('declaredValue').valueChanges.subscribe(() => {
       if (this.selectedBusinessCustomer()) this.scheduleFreightCalc();
     });
@@ -1213,7 +1213,7 @@ export class ShipmentCreate implements OnInit {
       this.businessCustomerService.businessCustomers().subscribe({
         next: (p) => this.businessCustomerOptions.set(
           p.content.map((c) => ({ value: c.id, label: `${c.displayName} (${c.customerCode})` }))),
-        error: () => this.notify.error('Could not load business customers.')
+        error: () => this.notify.error('Could not load TBB customers.')
       });
     }
   }
@@ -1636,7 +1636,7 @@ export class ShipmentCreate implements OnInit {
     setIfPresent('declaredValue', fields.declaredValue, 'declared value');
     setIfPresent('remarks', fields.remarks, 'remarks');
 
-    // No Delivery Branch to set from voice any more — Load Sheet is where one gets
+    // No Delivery Branch to set from voice any more — Manifest Creation is where one gets
     // assigned, not booking (fields.deliveryBranchText, if a voice command names one, is
     // simply not applied to anything here).
 
@@ -1690,7 +1690,7 @@ export class ShipmentCreate implements OnInit {
     // Only the fields the Pricing Engine actually reads — sender/receiver identity plays
     // no part in a price, so the preview shouldn't wait on it (booking itself still does,
     // via the Book button's own `form.invalid` check). There is no Delivery Branch any
-    // more — Load Sheet is where one gets assigned, not booking — so `deliveryPincode` is
+    // more — Manifest Creation is where one gets assigned, not booking — so `deliveryPincode` is
     // what signals "a destination has been entered".
     return !!(v.bookingBranchId && v.deliveryPincode && v.serviceTypeId
       && v.paymentModeId && this.weight().chargeable > 0);

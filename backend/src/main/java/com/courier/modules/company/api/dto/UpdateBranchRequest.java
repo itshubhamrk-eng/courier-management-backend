@@ -80,11 +80,15 @@ public record UpdateBranchRequest(
                 + "(drsCharge = drsChargePerQty * qty)", example = "2") BigDecimal drsChargePerQty,
         @NotNull @DecimalMin("0.0")
         @Schema(description = "Delivery commission per kg, credited on delivery "
-                + "(deliveryCommission = rate * max(chargeable weight, deliveryCommissionMinWeightKg))",
+                + "(deliveryCommission = rate * max(actual weight, deliveryCommissionMinWeightKg))",
                 example = "1.5") BigDecimal deliveryCommissionRatePerKg,
         @NotNull @DecimalMin("0.0")
-        @Schema(description = "Minimum chargeable weight (kg) for delivery commission", example = "10")
+        @Schema(description = "Minimum weight (kg) for delivery commission", example = "10")
         BigDecimal deliveryCommissionMinWeightKg,
+        @NotNull @DecimalMin("0.0")
+        @Schema(description = "ODA charge credited to this branch's wallet per delivered shipment that "
+                + "carries an ODA charge", example = "50")
+        BigDecimal odaChargeAmount,
 
         @NotNull @PositiveOrZero
         @Schema(description = "Version last read; a stale value returns 409") Long version

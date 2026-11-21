@@ -73,7 +73,7 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
           </div>
         }
         <div class="inv-sheet">
-          <!-- Same masthead as the consignment note / THC / DRS prints: logo, company letterhead, identity box with a QR. -->
+          <!-- Same masthead as the consignment note / Manifest Finalization / DRS prints: logo, company letterhead, identity box with a QR. -->
           <div class="inv-hdr" [innerHTML]="header()"></div>
           <div class="inv-head">
             <div><h2>TAX INVOICE</h2><p class="inv-muted">{{ inv()!.invoiceNumber }} · {{ inv()!.source === 'AUTO' ? 'Auto-generated' : 'Manual' }}</p></div>
@@ -238,7 +238,7 @@ export class BillingInvoice implements OnInit {
   ngOnInit(): void {
     this.injectHeaderStyles();
     this.companyProfile.get().subscribe({ next: (c) => this.letterhead.set(c), error: () => this.letterhead.set(null) });
-    this.breadcrumb.set([{ label: 'Business Customer' }, { label: 'Billing', route: '/business-customer/billing' }, { label: 'Invoice' }]);
+    this.breadcrumb.set([{ label: 'TBB Customer' }, { label: 'Billing', route: '/business-customer/billing' }, { label: 'Invoice' }]);
     this.load();
   }
 

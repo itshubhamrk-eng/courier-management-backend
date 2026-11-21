@@ -18,8 +18,8 @@ export const DELIVERY_TYPES: DeliveryType[] = ['DOOR', 'OFFICE'];
  * Renamed in V19 (Shipment Movement) to match that module's own vocabulary exactly:
  * `MANIFESTED` -> `MANIFEST_CREATED`, `RECEIVED` -> `IN_SCAN`, `RETURN_INITIATED` folded
  * into a direct edge to `RETURNED`. V20, on direct request, folded the separate
- * `OUT_SCAN` state back into `MANIFEST_CREATED` — one milestone ("loading sheet created"),
- * not two; adding a shipment to a manifest already is the loading sheet action. See backend
+ * `OUT_SCAN` state back into `MANIFEST_CREATED` — one milestone ("manifest creation created"),
+ * not two; adding a shipment to a manifest already is the manifest creation action. See backend
  * `ShipmentStatus.java`.
  */
 export type ShipmentStatus =
@@ -470,7 +470,7 @@ export interface ShipmentFields {
 }
 
 /** Body of POST /shipments — mirrors backend `CreateShipmentRequest`. */
-/** STANDARD is the original booking / Load Sheet / THC flow; MSRTC books straight to a
+/** STANDARD is the original booking / Manifest Creation / Finalization flow; MSRTC books straight to a
  *  delivery branch and moves branch to branch only. */
 export type FlowType = 'STANDARD' | 'MSRTC';
 
@@ -479,7 +479,7 @@ export interface CreateShipmentRequest extends ShipmentFields {
   /** Omit for the normal flow. MSRTC requires `deliveryBranchId`. */
   flowType?: FlowType;
   deliveryBranchId?: string | null;
-  /** The Business Customer this booking is for — prices freight from their zone rate card
+  /** The TBB Customer this booking is for — prices freight from their zone rate card
    *  when one covers the destination. Omit for an ordinary booking. */
   businessCustomerId?: string | null;
   /** Optional — enter a specific shipment number instead of the auto-generated
@@ -516,10 +516,10 @@ export interface ShipmentSearchRequest {
   deliveredDateTo?: string;
   paymentModeId?: string;
   search?: string;
-  /** Load Sheet's destination-city match, for a shipment with no delivery branch
+  /** Manifest Creation's destination-city match, for a shipment with no delivery branch
    *  resolved yet. */
   toCity?: string;
-  /** Load Sheet's own eligibility filter — true for only shipments with no delivery
+  /** Manifest Creation's own eligibility filter — true for only shipments with no delivery
    *  branch resolved yet. */
   unassignedDeliveryBranch?: boolean;
 }
@@ -614,7 +614,7 @@ export interface AddShipmentDocumentRequest {
 export interface PricingRequest {
   bookingBranchId: string;
   /** No longer resolved or sent by Shipment Booking — a destination pincode has no
-   *  delivery branch at booking any more (Load Sheet is where one gets assigned).
+   *  delivery branch at booking any more (Manifest Creation is where one gets assigned).
    *  Optional purely because the backend DTO still accepts one from other callers. */
   deliveryBranchId?: string | null;
   pickupPincode: string;
@@ -684,15 +684,15 @@ export interface PricingResponse {
 }
 
 /**
- * Shipment Movement (V19) — Booking Branch -> Create Manifest (Loading Sheet Created) ->
- * Trip Hire Challan (THC) -> Delivery Branch -> In Scan -> Out For Delivery -> Delivered. Mirrors
+ * Shipment Movement (V19) — Booking Branch -> Create Manifest (Manifest Creation Created) ->
+ * Manifest Finalization -> Delivery Branch -> In Scan -> Out For Delivery -> Delivered. Mirrors
  * `com.courier.modules.manifest`/`com.courier.modules.shipment`'s movement additions
  * one-to-one. See MEMORY/modules/shipment-movement.md.
  */
 
-export type ManifestStatus = 'CREATED' | 'DISPATCHED' | 'COMPLETED';
+export type ManifestStatus = 'CREATED' | 'DISPATCHED' | 'COMPLETED' | 'CANCELLED';
 
-/** Who is responsible for delivery — decided at Load Sheet creation, never at booking.
+/** Who is responsible for delivery — decided at Manifest Creation creation, never at booking.
  *  `BRANCH_DELIVERY` (the original, only-ever-existing shape) has a real
  *  `deliveryBranchId`; `DIRECT_COMPANY_DELIVERY` has none — the company's own
  *  vehicle/driver, assigned at the same dispatch step, carries the shipment the rest of
@@ -707,7 +707,7 @@ export interface Manifest {
   /** Null only for `DIRECT_COMPANY_DELIVERY` — see `deliveryMode`. */
   deliveryBranchId: string | null;
   deliveryMode: DeliveryMode;
-  /** The destination city this Load Sheet was created for — set only when it grouped
+  /** The destination city this Manifest Creation was created for — set only when it grouped
    *  shipments with no delivery branch resolved yet, matched by their own `toCity`. Null
    *  for a manifest created the old way (every shipment on it already had a real next-stop
    *  branch — a crossing hop, or a legacy row). */
@@ -738,20 +738,20 @@ export interface CreateManifestRequest {
   deliveryBranchId?: string | null;
   /** Null defaults to BRANCH_DELIVERY, the only mode that existed before this field. */
   deliveryMode?: DeliveryMode | null;
-  /** The destination city this Load Sheet is being created for — required to attach a
+  /** The destination city this Manifest Creation is being created for — required to attach a
    *  freshly BOOKED shipment with no delivery branch resolved yet; not needed when every
    *  shipment being attached already carries a real next-stop branch. */
   destinationCity?: string | null;
   shipmentIds: string[];
   remarks?: string | null;
-  /** true when `deliveryBranchId` is a HUB this Load Sheet goes to first; the hub assigns
-   *  the shipments' real delivery branch from its own Load Sheet. */
+  /** true when `deliveryBranchId` is a HUB this Manifest Creation goes to first; the hub assigns
+   *  the shipments' real delivery branch from its own Manifest Creation. */
   hubTransfer?: boolean;
-  /** Omit for a Load Sheet. MSRTC makes a branch-to-branch MSRTC manifest. */
+  /** Omit for a Manifest Creation. MSRTC makes a branch-to-branch MSRTC manifest. */
   flowType?: FlowType;
 }
 
-/** GET /manifests/summary — the THC Report summary row. Mirrors backend
+/** GET /manifests/summary — the Manifest Finalization Report summary row. Mirrors backend
  *  `ManifestSummaryStatsResponse`. */
 export interface ManifestSummaryStats {
   totalManifests: number;
@@ -774,7 +774,7 @@ export type VehicleType = 'BIKE' | 'SCOOTER' | 'AUTO' | 'VAN' | 'PICKUP' | 'TRUC
 export type FuelType = 'PETROL' | 'DIESEL' | 'CNG' | 'EV' | 'OTHER';
 export type VehicleStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
 
-/** Mirrors backend `VehicleResponse` — the fleet Trip Hire Challan (THC)'s "Assign Vehicle" picker reads. */
+/** Mirrors backend `VehicleResponse` — the fleet Manifest Finalization's "Assign Vehicle" picker reads. */
 export interface Vehicle {
   id: string;
   companyId: string;

@@ -32,7 +32,7 @@ import java.util.UUID;
  * TicketService#raiseSystemTicket}, the one path that does not require a current user.
  *
  * <p>Known gap: shipments mid-crossing ({@code READY_FOR_MANIFEST}) are not checked —
- * that status means "awaiting the next leg's own loading sheet", which does not map
+ * that status means "awaiting the next leg's own manifest creation", which does not map
  * cleanly onto one of the five stages below without guessing which leg's clock should be
  * running. Flagged rather than approximated.
  */
@@ -139,8 +139,8 @@ public class ShipmentSlaSweepService {
 
     private String label(ShipmentSlaStage stage) {
         return switch (stage) {
-            case BOOKING_TO_LOADING_SHEET -> "Booked, no loading sheet";
-            case LOADING_SHEET_TO_THC -> "Loading sheet created, no THC";
+            case BOOKING_TO_LOADING_SHEET -> "Booked, no manifest creation";
+            case LOADING_SHEET_TO_THC -> "Manifest creation created, no THC";
             case THC_TO_INSCAN -> "THC generated, not in-scanned";
             case INSCAN_TO_DRS -> "In-scanned, no DRS";
             case DRS_TO_DELIVERY -> "DRS generated, not delivered";

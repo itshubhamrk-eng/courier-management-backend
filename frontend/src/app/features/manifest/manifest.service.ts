@@ -18,12 +18,12 @@ export class ManifestService {
   create(body: CreateManifestRequest) { return this.api.post<Manifest>(API.manifests, body); }
   get(id: string) { return this.api.get<Manifest>(`${API.manifests}/${id}`); }
   list(query: PageQuery) { return this.api.page<Manifest>(API.manifests, query); }
-  /** Unpaged aggregates for the THC Report summary row — same filters as `list`, minus paging. */
+  /** Unpaged aggregates for the Manifest Finalization Report summary row — same filters as `list`, minus paging. */
   summary(filters: ManifestSearchRequest) {
     return this.api.get<ManifestSummaryStats>(`${API.manifests}/summary`, filters as Record<string, unknown>);
   }
   shipments(id: string) { return this.api.get<Shipment[]>(`${API.manifests}/${id}/shipments`); }
-  /** Load Sheet's own "which city am I creating this for" picker — every distinct
+  /** Manifest Creation's own "which city am I creating this for" picker — every distinct
    *  destination city among this branch's own BOOKED/READY_FOR_MANIFEST shipments with no
    *  delivery branch resolved yet. */
   eligibleDestinations(bookingBranchId: string) {

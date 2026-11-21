@@ -25,7 +25,7 @@ import com.courier.modules.customer.domain.BillingFrequency;
 import com.courier.shared.exception.BusinessRuleException;
 
 /**
- * A bill to one business customer for a set of bookings. {@code balance()} is what is still owed:
+ * A bill to one TBB customer for a set of bookings. {@code balance()} is what is still owed:
  * total less what was paid at the counter ({@code prepaidAmount}) and receipts recorded since.
  */
 @Entity

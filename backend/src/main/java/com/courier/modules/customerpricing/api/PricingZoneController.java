@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-/** Business customer pricing zones. Writes are {@code COMPANY_ADMIN} (enforced on the service); reads are any authenticated user. */
+/** TBB customer pricing zones. Writes are {@code COMPANY_ADMIN} (enforced on the service); reads are any authenticated user. */
 @RestController
 @RequestMapping("/api/v1/pricing-zones")
 @RequiredArgsConstructor

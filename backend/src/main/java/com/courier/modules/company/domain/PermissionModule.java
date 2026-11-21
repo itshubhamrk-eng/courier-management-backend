@@ -72,13 +72,13 @@ public enum PermissionModule {
      */
     CHARGE("Charges", 112),
     /**
-     * Business Customer: a customer's own pricing zones (named groups of districts/cities)
+     * TBB Customer: a customer's own pricing zones (named groups of districts/cities)
      * and the per-zone rate card. Separate from {@link #RATE_MASTER}, which is the
      * company-wide route-keyed rate card.
      */
     PRICING_ZONE("Pricing Zones", 125),
     CUSTOMER_RATE("Customer Rates", 127),
-    /** Business customer invoices: generate (CREATE), record a payment (UPDATE), cancel (DELETE). */
+    /** TBB customer invoices: generate (CREATE), record a payment (UPDATE), cancel (DELETE). */
     CUSTOMER_BILLING("Customer Billing", 128),
     ROUTE_MASTER("Route Master", 120),
 

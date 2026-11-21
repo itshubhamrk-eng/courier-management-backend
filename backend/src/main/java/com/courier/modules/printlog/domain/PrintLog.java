@@ -19,7 +19,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
-/** One print (or reprint) of a DRS, Loading Sheet or THC: who, when. The print count of a
+/** One print (or reprint) of a DRS, Manifest Creation or Manifest Finalization: who, when. The print count of a
  *  document is simply the number of rows for its {@code docType + docRef}. */
 @Entity
 @Getter

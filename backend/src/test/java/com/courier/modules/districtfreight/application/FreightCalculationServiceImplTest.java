@@ -344,7 +344,7 @@ class FreightCalculationServiceImplTest {
     }
 
     @Test
-    @DisplayName("a business customer whose zone covers the destination is priced from the zone rate card, not District Level Freight")
+    @DisplayName("a TBB customer whose zone covers the destination is priced from the zone rate card, not District Level Freight")
     void customerZonePricesFreight() {
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(withCity()));
         when(zoneService.resolve(CUSTOMER, DISTRICT, CITY)).thenReturn(Optional.of(
@@ -366,7 +366,7 @@ class FreightCalculationServiceImplTest {
     }
 
     @Test
-    @DisplayName("a business customer with no zone for the destination falls back to District Level Freight")
+    @DisplayName("a TBB customer with no zone for the destination falls back to District Level Freight")
     void customerWithoutZoneFallsBack() {
         when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(withCity()));
         when(zoneService.resolve(CUSTOMER, DISTRICT, CITY)).thenReturn(Optional.empty());

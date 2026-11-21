@@ -11,7 +11,7 @@ import {
 /**
  * The genuinely new Hub Operations surface — out-scan and exceptions — talks to
  * /api/v1/hub-operations, mirroring HubOperationsController one-to-one; no mock data.
- * In-scan/Load Sheet/dispatch reuse ShipmentMovementService/ManifestService directly and
+ * In-scan/Manifest Creation/dispatch reuse ShipmentMovementService/ManifestService directly and
  * have no methods here.
  */
 @Injectable({ providedIn: 'root' })

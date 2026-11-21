@@ -82,6 +82,21 @@ public class ShipmentDeliveryWalletListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(ShipmentEvent.OdaChargeApplicable event) {
+        try {
+            CompanyContext.runAs(event.companyId(), () -> walletService.creditForOdaCharge(
+                    new com.courier.modules.finance.application.command.OdaChargeCreditCommand(
+                            event.deliveryBranchId(), event.amount(), event.shipmentNumber(),
+                            "ODA charge for shipment " + event.shipmentNumber())));
+        } catch (RuntimeException e) {
+            log.error("Could not credit ODA charge to delivery branch {} for shipment {} ({}); "
+                    + "the shipment stays delivered, uncredited — reconcile manually",
+                    event.deliveryBranchId(), event.shipmentNumber(), event.shipmentId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(ShipmentEvent.DeliveryWeightCommissionApplicable event) {
         try {
             CompanyContext.runAs(event.companyId(), () -> walletService.creditForDeliveryWeightCommission(

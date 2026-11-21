@@ -3,7 +3,7 @@ package com.courier.modules.support.domain;
 /**
  * The five shipment lifecycle transitions the SLA sweep watches. Each is the outbound
  * leg of the status named — e.g. {@code BOOKING_TO_LOADING_SHEET} is how long a
- * {@code BOOKED} shipment may go without a loading sheet.
+ * {@code BOOKED} shipment may go without a manifest creation.
  */
 public enum ShipmentSlaStage {
     BOOKING_TO_LOADING_SHEET,

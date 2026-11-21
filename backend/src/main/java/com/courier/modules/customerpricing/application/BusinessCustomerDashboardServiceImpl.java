@@ -70,13 +70,14 @@ public class BusinessCustomerDashboardServiceImpl implements BusinessCustomerDas
                 company, null).stream()
                 .map(r -> new Cust(uuid(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), str(r[6]))).toList();
 
-        // mobile -> [mobile, bookings, thisMonth, lastAt, businessAmount, pendingAmount, qty, weightKg]
+        // mobile -> [mobile, bookings, thisMonth, lastAt, businessAmount, pendingAmount, qty, weightKg, monthAmount]
         Map<String, Object[]> bookings = new HashMap<>();
         for (Object[] r : rows("SELECT s.sender_contact, COUNT(*), SUM(s.created_at >= :m), MAX(s.created_at), "
                 + "COALESCE(SUM(sc.net_amount), 0), "
                 + "COALESCE(SUM(CASE WHEN pm.code IN (" + PENDING_MODES + ") AND NOT EXISTS (SELECT 1 FROM customer_invoice_lines l "
                 + "WHERE l.shipment_id = s.id AND l.deleted = 0) THEN sc.net_amount ELSE 0 END), 0), "
-                + "COALESCE(SUM(s.number_of_packages), 0), COALESCE(SUM(s.actual_weight), 0) "
+                + "COALESCE(SUM(s.number_of_packages), 0), COALESCE(SUM(s.actual_weight), 0), "
+                + "COALESCE(SUM(CASE WHEN s.created_at >= :m THEN sc.net_amount ELSE 0 END), 0) "
                 + "FROM shipments s LEFT JOIN shipment_charges sc ON sc.shipment_id = s.id AND sc.deleted = 0 "
                 + "LEFT JOIN master_payment_modes pm ON pm.id = s.payment_mode_id "
                 + "WHERE s.company_id = :c AND s.deleted = 0 AND s.status <> 'CANCELLED' AND s.sender_contact IS NOT NULL "
@@ -115,12 +116,46 @@ public class BusinessCustomerDashboardServiceImpl implements BusinessCustomerDas
             month += bMonth; total += bTotal; qtyAll += qty; weightAll = weightAll.add(weight);
             business = business.add(amount); pending = pending.add(due);
             out.add(new CustomerRow(c.id(), c.code(), c.name(), c.mobile(), c.status(), c.mode(), c.freq(),
-                    bMonth, bTotal, qty, weight, amount, due, b == null || b[3] == null ? null : ((Timestamp) b[3]).toInstant()));
+                    bMonth, bTotal, qty, weight, amount,
+                    b == null ? BigDecimal.ZERO : money(b[8]), due, b == null || b[3] == null ? null : ((Timestamp) b[3]).toInstant()));
         }
 
         Totals totals = new Totals(customers.size(), active, customers.size() - active, month, total,
                 qtyAll, weightAll, business, pending);
         return new BusinessCustomerDashboard(totals, byMode, byFreq, out);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(DASHBOARD_READERS)
+    public List<RevenuePoint> revenueTrend(int months, UUID customerId) {
+        UUID companyId = CompanyContext.getCompanyId().orElseThrow(() -> new BusinessRuleException(
+                "No company is bound to this request. The dashboard belongs to a company."));
+        byte[] company = TimeOrderedUuid.toBytes(companyId);
+        int n = Math.max(1, Math.min(24, months));
+        LocalDate first = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).minusMonths(n - 1L);
+        Timestamp from = Timestamp.from(first.atStartOfDay().toInstant(ZoneOffset.UTC));
+
+        // Same mobile matching as overview(): TBB customers only, cancelled excluded.
+        String sql = "SELECT DATE_FORMAT(s.created_at, '%Y-%m'), COUNT(DISTINCT s.id), COALESCE(SUM(sc.net_amount), 0) "
+                + "FROM shipments s LEFT JOIN shipment_charges sc ON sc.shipment_id = s.id AND sc.deleted = 0 "
+                + "WHERE s.company_id = :c AND s.deleted = 0 AND s.status <> 'CANCELLED' AND s.created_at >= :m "
+                + "AND s.sender_contact IN (SELECT mobile FROM customers WHERE company_id = :c AND deleted = 0 "
+                + "AND customer_type = 'BUSINESS'" + (customerId == null ? "" : " AND id = :cid") + ") "
+                + "GROUP BY 1";
+        var q = em.createNativeQuery(sql).setParameter("c", company).setParameter("m", from);
+        if (customerId != null) q.setParameter("cid", TimeOrderedUuid.toBytes(customerId));
+        Map<String, Object[]> byMonth = new HashMap<>();
+        @SuppressWarnings("unchecked") List<Object[]> res = (List<Object[]>) q.getResultList();
+        for (Object[] r : res) byMonth.put(str(r[0]), r);
+
+        List<RevenuePoint> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String key = first.plusMonths(i).toString().substring(0, 7);
+            Object[] r = byMonth.get(key);
+            out.add(new RevenuePoint(key, r == null ? BigDecimal.ZERO : money(r[2]), r == null ? 0 : num(r[1])));
+        }
+        return out;
     }
 
     @SuppressWarnings("unchecked")

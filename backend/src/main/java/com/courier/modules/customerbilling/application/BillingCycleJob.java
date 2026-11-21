@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 
-/** Daily 01:30 (server time; override with {@code billing.cycle.cron}): issues each business customer's invoice when their weekly / 15-day / monthly cycle has closed. */
+/** Daily 01:30 (server time; override with {@code billing.cycle.cron}): issues each TBB customer's invoice when their weekly / 15-day / monthly cycle has closed. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

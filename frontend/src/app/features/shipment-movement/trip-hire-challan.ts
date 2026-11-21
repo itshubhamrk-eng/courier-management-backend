@@ -27,26 +27,26 @@ import { ManifestCard } from './components/manifest-card';
 import { TruckIllustration } from '@shared/components/illustrations/truck-illustration';
 import { SettingsService } from '@features/settings/settings.service';
 
-/** Trip Hire Challan (THC) — renamed from "Dispatch" on direct request; the dispatch
- *  action itself is unchanged. A worklist of every open ("loading sheet created")
- *  manifest, each carrying its own THC action; picking one opens its shipment checklist
+/** Manifest Finalization — renamed from "Dispatch" on direct request; the dispatch
+ *  action itself is unchanged. A worklist of every open ("manifest creation created")
+ *  manifest, each carrying its own Manifest Finalization action; picking one opens its shipment checklist
  *  and Assign Vehicle & Driver below. Unchecking a shipment only drops its row
  *  client-side (`pendingRemovals` — no popup, no immediate status change, on direct
  *  request); the actual `ManifestService.removeShipment` calls (same mutation
  *  `ManifestCard`'s own remove button uses) fire from `dispatch()`, right before the
  *  dispatch POST itself, so nothing about the manifest changes until Dispatch is
  *  clicked. Requires the manifest to still carry at least one MANIFEST_CREATED
- *  ("loading sheet created") shipment at dispatch time (enforced server-side).
+ *  ("manifest creation created") shipment at dispatch time (enforced server-side).
  *  Departure Time is operator-entered and optional — blank defaults server-side to the
- *  dispatch moment itself (see Manifest.dispatch). Once dispatched, the THC preview tab
+ *  dispatch moment itself (see Manifest.dispatch). Once dispatched, the Manifest Finalization preview tab
  *  opens automatically (`window.open` + `document.write`, no PDF service) with the
  *  manifest's vehicle/driver/departure and its LR table; that tab carries its own Print
  *  and Download PDF buttons (both `window.print()` — "Save as PDF" in the browser's print
  *  dialog *is* the PDF export, there's no separate file written). "Preview THC" on this
- *  page just reopens the same tab for an already-dispatched manifest. The THC follows a
+ *  page just reopens the same tab for an already-dispatched manifest. The Manifest Finalization follows a
  *  branded challan layout (KTC-style: title bar, company/challan-number header, meta strip,
  *  bordered shipment table, total row, terms & conditions, signature footer). The printed
- *  challan number is not `manifestNumber` itself but `THC/<booking-branch-code>/<DDMMYY
+ *  challan number is not `manifestNumber` itself but `Manifest Finalization/<booking-branch-code>/<DDMMYY
  *  dispatch date>/<manifestNumber's own random suffix>` (see `thcNumber()`) — the branch
  *  code and date make it human-readable on paper, the suffix keeps it unique without a new
  *  backend sequence. Its TO PAY FREIGHT column only shows a figure for `topayModeIds` —
@@ -60,7 +60,7 @@ import { SettingsService } from '@features/settings/settings.service';
  *  number itself (`Shipment.ewayBillNumber`, `ShipmentService.ewayBillNumbersFor`) — also
  *  blank until Part-A has actually succeeded, which for a shipment dispatched right after
  *  booking may still be in flight or `FAILED`; Part-B (this dispatch's own vehicle/
- *  transport details) is filled in server-side right after this THC is generated, not
+ *  transport details) is filled in server-side right after this Manifest Finalization is generated, not
  *  reflected on the printed copy itself. The QR code encodes the challan number as plain
  *  text (same `qrcode-generator` lib `consignment-print.util.ts` already uses for the LR's
  *  own QR, no CDN dependency). */
@@ -74,7 +74,7 @@ import { SettingsService } from '@features/settings/settings.service';
       <header class="page__head" data-tour="thc-head">
         <div class="page__head-row">
           <app-truck-illustration class="page__head-ill" [size]="52" />
-          <div><h1 class="text-h1">{{ isMsrtc ? 'Finalize Manifest' : 'Trip Hire Challan (THC)' }}</h1>
+          <div><h1 class="text-h1">{{ isMsrtc ? 'Finalize Manifest' : 'Manifest Finalization' }}</h1>
           <p class="text-caption">Assign a vehicle and driver, then send the manifest out.</p></div>
         </div>
         <app-button variant="stroked" icon="refresh" (pressed)="loadOpenManifests()">Refresh</app-button>
@@ -88,11 +88,11 @@ import { SettingsService } from '@features/settings/settings.service';
           </div>
         </app-card>
 
-        <h2 class="text-h2 section-title">{{ isMsrtc ? 'Manifest Created' : 'Loading Sheet Created' }}</h2>
+        <h2 class="text-h2 section-title">{{ isMsrtc ? 'Manifest Created' : 'Manifest Creation Created' }}</h2>
         @if (loadingManifests()) {
           <app-loader [minHeight]="120" caption="Loading…" />
         } @else if (!openManifests().length) {
-          <app-card><p class="empty">No manifest is ready for a Trip Hire Challan.</p></app-card>
+          <app-card><p class="empty">No manifest is ready for a Manifest Finalization.</p></app-card>
         } @else {
           @for (m of openManifests(); track m.id) {
             <app-manifest-card [manifest]="m" [branchNames]="branchNames()" [showDispatchAction]="true" (dispatch)="selectManifest($event)" />
@@ -107,7 +107,7 @@ import { SettingsService } from '@features/settings/settings.service';
               <span class="text-caption">{{ branchNames().get(m.bookingBranchId) || '—' }} → {{ manifestToLabel(m) }} &nbsp;·&nbsp; Status: {{ m.status }}</span></div>
             <div class="mh__actions">
               @if (m.status !== 'CREATED') {
-                <app-button variant="stroked" icon="print" [loading]="previewing()" (pressed)="previewThc()">{{ thcPrintCount() ? 'Reprint THC (' + thcPrintCount() + ')' : 'Preview THC' }}</app-button>
+                <app-button variant="stroked" icon="print" [loading]="previewing()" (pressed)="previewThc()">{{ thcPrintCount() ? 'Reprint Manifest Finalization (' + thcPrintCount() + ')' : 'Preview THC' }}</app-button>
                 @if (thcPrintCount()) {
                   <app-button variant="stroked" icon="history" (pressed)="thcPrintHistory()">Print History</app-button>
                 }
@@ -118,7 +118,7 @@ import { SettingsService } from '@features/settings/settings.service';
         </app-card>
 
         @if (m.status === 'CREATED') {
-          <app-card title="Shipments on this THC" subtitle="Uncheck a shipment to leave it off this THC — it's removed from the loading sheet when you click Dispatch.">
+          <app-card title="Shipments on this THC" subtitle="Uncheck a shipment to leave it off this Manifest Finalization — it's removed from the manifest creation when you click Dispatch.">
             @if (loadingShipments()) {
               <app-loader [minHeight]="80" caption="Loading…" />
             } @else if (!manifestShipments().length) {
@@ -219,7 +219,7 @@ import { SettingsService } from '@features/settings/settings.service';
           </app-card>
 
           @if (overridingShipment(); as os) {
-            <app-card title="Change status — {{ os.shipmentNumber }}" subtitle="Manual override — bypasses the normal THC/DRS/Deliver flow.">
+            <app-card title="Change status — {{ os.shipmentNumber }}" subtitle="Manual override — bypasses the normal Manifest Finalization/DRS/Deliver flow.">
               <form [formGroup]="overrideForm" (ngSubmit)="submitOverride()" class="df">
                 <div class="grid2">
                   <app-select [control]="oc('targetStatus')" label="New Status" [options]="statusOptions" placeholder="Select status" />
@@ -332,7 +332,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
    *  `userDirectory()` lookup DRS Report/Detail already uses for the same reason
    *  (`userOptions()`'s Lookup has no mobile slot). */
   readonly driverDirectory = signal<Map<string, { name: string; mobile: string }>>(new Map());
-  /** Company letterhead for the THC header (name/address/GST beside the logo) — same
+  /** Company letterhead for the Manifest Finalization header (name/address/GST beside the logo) — same
    *  `CompanyProfileService` `consignment-print.util.ts` uses for the LR. */
   readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
   readonly manifestShipments = signal<Shipment[]>([]);
@@ -365,7 +365,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
   readonly statusOptions: SelectOption[] = [
     { value: 'BOOKED', label: 'Booked' },
     { value: 'READY_FOR_MANIFEST', label: 'Ready For Manifest' },
-    { value: 'MANIFEST_CREATED', label: 'Manifest Created (Loading Sheet)' },
+    { value: 'MANIFEST_CREATED', label: 'Manifest Created (Manifest Creation)' },
     { value: 'DISPATCHED', label: 'Dispatched' },
     { value: 'IN_SCAN', label: 'In Scan / Received' },
     { value: 'OUT_FOR_DELIVERY', label: 'Out For Delivery' },
@@ -394,7 +394,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.breadcrumb.set(this.isMsrtc
       ? [{ label: 'MSRTC' }, { label: 'Finalize Manifest' }]
-      : [{ label: 'Operations' }, { label: 'Trip Hire Challan (THC)' }]);
+      : [{ label: 'Operations' }, { label: 'Manifest Finalization' }]);
     this.vehicleService.list(true).subscribe((v) =>
       this.vehicleOptions.set(v.map((x) => ({ value: x.id, label: x.vehicleNumber }))));
     this.movementService.userOptions().subscribe((u) =>
@@ -434,7 +434,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
 
   protected c(name: string): FormControl { return this.form.get(name) as FormControl; }
 
-  /** A branch-bound user only ever sees their own branch's load sheets; branch-less admins see all. */
+  /** A branch-bound user only ever sees their own branch's manifest creations; branch-less admins see all. */
   private branchScope(): { bookingBranchId?: string; flowType: FlowType } {
     const branchId = this.auth.user()?.branchId;
     return branchId ? { bookingBranchId: branchId, flowType: this.flowType } : { flowType: this.flowType };
@@ -664,7 +664,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
   }
 
   /** DIRECT_COMPANY_DELIVERY has no delivery branch — a real label for it beats a bare
-   *  dash, same treatment ManifestCard/Loading Sheet's own print already give it. */
+   *  dash, same treatment ManifestCard/Manifest Creation's own print already give it. */
   protected manifestToLabel(m: Manifest): string {
     if (m.deliveryMode === 'DIRECT_COMPANY_DELIVERY') return 'Direct Company Delivery';
     return (m.deliveryBranchId ? this.branchNames().get(m.deliveryBranchId) : null) ?? '—';
@@ -674,7 +674,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
     return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /** `THC/<booking-branch-code>/<DDMMYY dispatch date>/<manifestNumber's own random
+  /** `Manifest Finalization/<booking-branch-code>/<DDMMYY dispatch date>/<manifestNumber's own random
    *  suffix>` — human-readable on paper, still unique without a new DB sequence. Falls back
    *  to "now" when there's no dispatch/departure time yet (a not-yet-dispatched preview). */
   private thcNumber(m: Manifest): string {
@@ -685,10 +685,10 @@ export class TripHireChallan implements OnInit, OnDestroy {
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yy = String(d.getFullYear()).slice(-2);
     const seq = m.manifestNumber.split('-').pop() ?? m.manifestNumber;
-    return `THC/${code}/${dd}${mm}${yy}/${seq}`;
+    return `Manifest Finalization/${code}/${dd}${mm}${yy}/${seq}`;
   }
 
-  /** Mirrors the branded KTC-style Trip Hire Challan layout. TO PAY FREIGHT only carries a
+  /** Mirrors the branded KTC-style Manifest Finalization layout. TO PAY FREIGHT only carries a
    *  figure for `topayModeIds` (collectAtDelivery, not cashOnDelivery) — see that signal's
    *  doc. INVOICE NO is the shipment's E-Way Bill invoice number, blank where none exists. */
   private renderThcHtml(m: Manifest, shipments: Shipment[]): string {
@@ -716,7 +716,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
     const dispatched = m.departureTime ?? m.dispatchedAt;
     const dispatchedDate = dispatched ? new Date(dispatched) : null;
     const company = this.companyLetterhead();
-    const companyNameRaw = company?.companyName ?? this.auth.companyName() ?? 'Trip Hire Challan';
+    const companyNameRaw = company?.companyName ?? this.auth.companyName() ?? 'Manifest Finalization';
     const companyName = this.esc(companyNameRaw);
     const companyLogo = company?.logo ?? this.auth.companyLogo();
     const companyAddress = companyAddressLine(company);
@@ -730,7 +730,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
     const otherAmount = m.otherAmount ?? 0;
     const totalExpenses = fuelCost + driverAdvance + tollAmount + otherAmount;
 
-    return `<!doctype html><html><head><meta charset="utf-8"><title>THC ${this.esc(m.manifestNumber)}</title>
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Manifest Finalization ${this.esc(m.manifestNumber)}</title>
       <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 20px; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
@@ -786,7 +786,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
 
         ${renderPrintHeader(
           { companyName: companyNameRaw, companyLogo, companyAddress, companyGst, companyContact, companyWebsite: null },
-          { label: 'THC No', value: thcNumber, qrValue: thcNumber }
+          { label: 'Manifest No', value: thcNumber, qrValue: thcNumber }
         )}
 
         <div class="meta">
@@ -836,7 +836,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
           <span class="label">TERMS &amp; CONDITIONS</span>
           <ol>
             <li>Goods are carried entirely at the owner's risk.</li>
-            <li>Driver must carry a valid driving license, RC and this Trip Hire Challan for the entire trip.</li>
+            <li>Driver must carry a valid driving license, RC and this Manifest Finalization for the entire trip.</li>
             <li>Vehicle and load must match the QTY and shipment list stated above at every checkpoint.</li>
             <li>Any shortage, damage or tampering of seal must be reported to the branch immediately.</li>
             <li>${companyName} is not liable for delay or loss caused by circumstances beyond its control.</li>
@@ -857,7 +857,7 @@ export class TripHireChallan implements OnInit, OnDestroy {
 
   private openThcTab(m: Manifest, shipments: Shipment[]): void {
     const win = window.open('', '_blank');
-    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to preview the THC.'); return; }
+    if (!win) { this.notify.error('Pop-up blocked — allow pop-ups to preview the Manifest Finalization.'); return; }
     this.printLog.printWindow(win, this.renderThcHtml(m, shipments), 'THC', m.id, this.thcNumber(m),
       (count) => this.thcPrintCount.set(count));
   }

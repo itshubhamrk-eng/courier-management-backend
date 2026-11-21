@@ -140,7 +140,7 @@ public enum AuditAction {
     BUS_TIMETABLE_SAVED,
     BUS_TIMETABLE_CLEARED,
 
-    // --- business customer pricing: zones, their locations, and the per-zone rate card.
+    // --- TBB customer pricing: zones, their locations, and the per-zone rate card.
     PRICING_ZONE_CREATED,
     PRICING_ZONE_UPDATED,
     PRICING_ZONE_ACTIVATED,
@@ -256,6 +256,7 @@ public enum AuditAction {
     SHIPMENT_OUT_SCANNED,
     MANIFEST_DISPATCHED,
     MANIFEST_SHIPMENT_REMOVED,
+    MANIFEST_CANCELLED,
     SHIPMENT_IN_SCANNED,
     SHIPMENT_OUT_FOR_DELIVERY_ASSIGNED,
     SHIPMENT_DELIVERED,

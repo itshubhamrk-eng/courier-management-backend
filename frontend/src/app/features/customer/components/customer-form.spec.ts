@@ -8,7 +8,7 @@ import { CustomerForm } from './customer-form';
  * The GST-mandatory-for-BUSINESS rule mirrors the server's `Customer.applyInvariants()` —
  * this is the client-side half of it, so the error surfaces before the round-trip.
  */
-describe('CustomerForm — GST is mandatory only for a business customer', () => {
+describe('CustomerForm — GST is mandatory only for a TBB customer', () => {
   let fixture: ComponentFixture<CustomerForm>;
   let form: CustomerForm;
 
@@ -45,14 +45,14 @@ describe('CustomerForm — GST is mandatory only for a business customer', () =>
     expect(body!.gstNumber).toBeNull();
   });
 
-  it('refuses to submit a business customer with a blank GST', () => {
+  it('refuses to submit a TBB customer with a blank GST', () => {
     group().patchValue({ customerType: 'BUSINESS' });
     fixture.detectChanges();
 
     expect(emitted()).toBeUndefined();
   });
 
-  it('accepts a business customer once a valid GSTIN is supplied, uppercased', () => {
+  it('accepts a TBB customer once a valid GSTIN is supplied, uppercased', () => {
     group().patchValue({ customerType: 'BUSINESS', gstNumber: '27abcde1234f1z5' });
     fixture.detectChanges();
 

@@ -89,7 +89,7 @@ public class HubOperationsServiceImpl implements HubOperationsService {
             return new MovementOutcome(trackingNumber, false, "No such tracking number.");
         }
         if (!Objects.equals(shipment.getManifestId(), manifest.getId())) {
-            return new MovementOutcome(trackingNumber, false, "Not on this Load Sheet.");
+            return new MovementOutcome(trackingNumber, false, "Not on this Manifest Creation.");
         }
         if (shipment.getStatus() != ShipmentStatus.MANIFEST_CREATED) {
             return new MovementOutcome(trackingNumber, false,

@@ -49,7 +49,7 @@ import java.util.UUID;
 /**
  * The four remaining movement steps, in business-flow order: Dispatch -&gt; In Scan -&gt;
  * Out For Delivery -&gt; Deliver. Out Scan is gone as its own step (V20, on direct
- * request) — adding a shipment to a manifest already is "loading sheet created", so Dispatch
+ * request) — adding a shipment to a manifest already is "manifest creation created", so Dispatch
  * now reads {@code MANIFEST_CREATED} shipments directly rather than a separately-scanned
  * subset. Every write is a {@link ShipmentService} method except Dispatch, which is
  * {@link ManifestService}'s own (it owns the manifest-side mutation) — see

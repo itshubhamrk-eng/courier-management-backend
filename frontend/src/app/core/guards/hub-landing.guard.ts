@@ -7,7 +7,7 @@ import { AppRole } from '../models/role.model';
 import { MasterDataService } from '@features/masters/master-data.service';
 
 /** A user staffed at a HUB branch lands on the Hub Dashboard instead of the generic
- *  branch dashboard — the hub's own work (incoming, at hub, sorting, load sheets) lives there.
+ *  branch dashboard — the hub's own work (incoming, at hub, sorting, manifest creations) lives there.
  *  Only for the roles that may open it (same set as the hub-operations routes): hub counter staff
  *  (booking/delivery operators, accounts) would otherwise be bounced to "Access denied" on login. */
 const HUB_DASHBOARD_ROLES = [AppRole.COMPANY_ADMIN, AppRole.HUB_MANAGER];

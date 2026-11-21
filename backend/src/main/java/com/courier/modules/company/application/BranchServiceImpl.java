@@ -142,6 +142,7 @@ public class BranchServiceImpl implements BranchService {
                         DEFAULT_DELIVERY_COMMISSION_RATE_PER_KG))
                 .deliveryCommissionMinWeightKg(orDefault(command.deliveryCommissionMinWeightKg(),
                         DEFAULT_DELIVERY_COMMISSION_MIN_WEIGHT_KG))
+                .odaChargeAmount(orDefault(command.odaChargeAmount(), java.math.BigDecimal.ZERO.setScale(2)))
                 .build();
 
         branch.applyInvariants();
@@ -341,6 +342,7 @@ public class BranchServiceImpl implements BranchService {
         branch.setDrsChargePerQty(command.drsChargePerQty());
         branch.setDeliveryCommissionRatePerKg(command.deliveryCommissionRatePerKg());
         branch.setDeliveryCommissionMinWeightKg(command.deliveryCommissionMinWeightKg());
+        branch.setOdaChargeAmount(command.odaChargeAmount());
 
         // Same fallback as create(): only when the caller left both blank. An explicit
         // pair (including one that clears a previous geocode) is a deliberate choice and
@@ -745,6 +747,7 @@ public class BranchServiceImpl implements BranchService {
         v.put("drsChargePerQty", String.valueOf(b.getDrsChargePerQty()));
         v.put("deliveryCommissionRatePerKg", String.valueOf(b.getDeliveryCommissionRatePerKg()));
         v.put("deliveryCommissionMinWeightKg", String.valueOf(b.getDeliveryCommissionMinWeightKg()));
+        v.put("odaChargeAmount", String.valueOf(b.getOdaChargeAmount()));
         return v;
     }
 

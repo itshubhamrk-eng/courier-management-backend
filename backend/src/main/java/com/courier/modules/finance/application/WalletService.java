@@ -158,7 +158,7 @@ public interface WalletService {
 
     /**
      * Debits the delivery branch's wallet for a {@code TO_PAY} shipment the moment it is
-     * in-scanned off its incoming Trip Hire Challan at its own final delivery branch
+     * in-scanned off its incoming Manifest Finalization at its own final delivery branch
      * ({@code TPY}, referencing the shipment number) — not a crossing hub's in-scan, and not
      * {@link #debitForCodDelivery}'s later, actual-delivery trigger. The branch is liable
      * for the freight the instant the shipment is physically on its premises, ahead of the
@@ -206,6 +206,9 @@ public interface WalletService {
      *         caller's own and the caller is not a company admin
      */
     WalletTransaction creditForDeliveryWeightCommission(DeliveryWeightCommissionCreditCommand command);
+
+    /** Credits the delivery branch's own ODA charge amount for a delivered ODA shipment ({@code ODA}). */
+    WalletTransaction creditForOdaCharge(com.courier.modules.finance.application.command.OdaChargeCreditCommand command);
 
     /**
      * Credits the booking branch's wallet with its commission share of a PREPAID shipment

@@ -763,6 +763,35 @@ public class WalletServiceImpl implements WalletService {
         return entry;
     }
 
+    @Override
+    @Transactional
+    @PreAuthorize(AUTHENTICATED)
+    public WalletTransaction creditForOdaCharge(com.courier.modules.finance.application.command.OdaChargeCreditCommand command) {
+        UUID companyId = requireCompany();
+        UUID resolvedBranch = resolveBranchForWrite(command.branchId(), companyId);
+
+        BigDecimal validated = requirePositiveAmount(command.amount());
+        SubTransactionType reason = SubTransactionType.ODA;
+        reason.requireSupports(TransactionType.CR);
+
+        Wallet wallet = lockOrThrow(resolvedBranch, companyId);
+        requireOperational(wallet);
+
+        WalletTransaction entry = post(wallet, companyId, TransactionType.CR, reason, validated,
+                ReferenceType.SHIPMENT, command.shipmentNumber(), command.remarks(), null, null);
+
+        log.info("Wallet {} credited {} {} ODA charge for shipment {} by {}",
+                wallet.getWalletNumber(), wallet.getCurrency(), validated.toPlainString(),
+                command.shipmentNumber(), currentActor());
+        auditService.record(AuditAction.WALLET_CREDITED, ENTITY, wallet.getId(),
+                ledgerDetails(wallet, entry));
+        eventPublisher.publishEvent(new WalletEvent.WalletCredited(
+                wallet.getId(), companyId, resolvedBranch, entry.getId(), reason, validated,
+                entry.getBalanceAfter(), Instant.now()));
+
+        return entry;
+    }
+
     // -------------------------------------------------------------- booking debit
 
     @Override

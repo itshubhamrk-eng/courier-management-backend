@@ -20,17 +20,17 @@ public record CreateManifestRequest(
                 + "the only mode that existed before this field")
         DeliveryMode deliveryMode,
         @Size(max = 120)
-        @Schema(description = "The destination city this Load Sheet is being created for — "
+        @Schema(description = "The destination city this Manifest Creation is being created for — "
                 + "required to attach a freshly BOOKED shipment that has no delivery branch "
                 + "resolved yet; not needed for shipments that already carry a real next-stop "
                 + "branch (e.g. a crossing hop)")
         String destinationCity,
         @NotEmpty List<UUID> shipmentIds,
         @Size(max = 500) String remarks,
-        @Schema(description = "true when deliveryBranchId is a HUB this Load Sheet is going to "
+        @Schema(description = "true when deliveryBranchId is a HUB this Manifest Creation is going to "
                 + "first — shipments keep no delivery branch; the hub assigns it later")
         Boolean hubTransfer,
-        @Schema(description = "Omit (or STANDARD) for a Load Sheet. MSRTC makes a branch-to-branch "
+        @Schema(description = "Omit (or STANDARD) for a Manifest Creation. MSRTC makes a branch-to-branch "
                 + "MSRTC manifest: deliveryBranchId is required and only MSRTC shipments may be added")
         FlowType flowType
 ) {

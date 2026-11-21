@@ -186,7 +186,7 @@ public class Branch extends CompanyOwnedEntity {
     @Builder.Default
     private boolean instantCommission = true;
 
-    /** The HUB-type branch this branch's Loading Sheets go to by default; null = none. */
+    /** The HUB-type branch this branch's Manifest Creations go to by default; null = none. */
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "assigned_hub_id", columnDefinition = "BINARY(16)")
     private UUID assignedHubId;
@@ -246,6 +246,13 @@ public class Branch extends CompanyOwnedEntity {
     @Column(name = "delivery_commission_min_weight_kg", nullable = false, precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal deliveryCommissionMinWeightKg = new BigDecimal("10.00");
+
+    /** ODA (out-of-delivery-area) charge credited to this branch's wallet, as a fixed amount per
+     *  shipment, when it delivers a shipment that carries an ODA charge. Defaults to 0.00
+     *  (nothing credited), set at branch creation, editable. */
+    @Column(name = "oda_charge_amount", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal odaChargeAmount = BigDecimal.ZERO.setScale(2);
 
     // ---------------------------------------------------------------- behaviour
 
@@ -312,6 +319,9 @@ public class Branch extends CompanyOwnedEntity {
         }
         if (deliveryCommissionMinWeightKg != null && deliveryCommissionMinWeightKg.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessRuleException("Delivery commission minimum weight cannot be negative.");
+        }
+        if (odaChargeAmount != null && odaChargeAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessRuleException("ODA charge amount cannot be negative.");
         }
     }
 

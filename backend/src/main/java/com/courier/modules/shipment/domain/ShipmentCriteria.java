@@ -12,16 +12,16 @@ import java.util.UUID;
  * @param statuses         match any of these statuses
  * @param bookingBranchId  the booking branch
  * @param deliveryBranchId the delivery branch
- * @param currentLocationId where the shipment physically is right now — Loading Sheet's
+ * @param currentLocationId where the shipment physically is right now — Manifest Creation's
  *                          "shipments I can manifest from here" query for a crossing hub
  *                          use this instead of {@code bookingBranchId}, since a shipment
  *                          past its first crossing hop is no longer at its booking branch
  * @param nextLocationId    the shipment's next stop (a crossing hub, or the delivery
- *                          branch once every hop is done) — Loading Sheet's "which branch
+ *                          branch once every hop is done) — Manifest Creation's "which branch
  *                          can I manifest this shipment to" uses this instead of
  *                          {@code deliveryBranchId} for the same reason
  * @param manifestId       shipments scanned onto this manifest — Shipment Movement's own
- *                         "Search Manifest -&gt; Display Shipments" (Loading Sheet) and
+ *                         "Search Manifest -&gt; Display Shipments" (Manifest Creation) and
  *                         Dispatch screens filter by this
  * @param bookingDateFrom  inclusive
  * @param bookingDateTo    inclusive
@@ -32,11 +32,11 @@ import java.util.UUID;
  * @param deliveredDateTo   inclusive
  * @param paymentModeId    the shipment's payment mode (Paid / To-Pay / Credit)
  * @param search           free text over shipment number and tracking number
- * @param toCity           Load Sheet's destination-city match — the resolved destination
+ * @param toCity           Manifest Creation's destination-city match — the resolved destination
  *                         city text stored on the shipment (see {@code Shipment.toCity}),
  *                         for a shipment that has no delivery branch yet
  * @param unassignedDeliveryBranch when true, only shipments with no {@code deliveryBranchId}
- *                         resolved yet — Load Sheet's own eligibility filter, paired with
+ *                         resolved yet — Manifest Creation's own eligibility filter, paired with
  *                         {@code toCity}
  * @param flowType         only shipments of this flow; null means both
  * @param excludeLegacy    when true, shipments imported from the old software

@@ -1,8 +1,8 @@
 package com.courier.modules.manifest.domain;
 
 /**
- * Who is responsible for getting a Load Sheet's shipments to the receiver, decided at
- * Load Sheet creation — never at booking (see {@code Shipment.deliveryBranchId}'s own
+ * Who is responsible for getting a Manifest Creation's shipments to the receiver, decided at
+ * Manifest Creation creation — never at booking (see {@code Shipment.deliveryBranchId}'s own
  * doc). {@code BRANCH_DELIVERY} is the original, only-ever-existing shape: a real
  * {@code Manifest.deliveryBranchId} receives the shipment (dispatch, in-scan, out for
  * delivery, deliver — unchanged). {@code DIRECT_COMPANY_DELIVERY} has no delivery branch

@@ -132,7 +132,7 @@ public class ManifestServiceImpl implements ManifestService {
         shipmentService.requireFlowType(command.shipmentIds(), flowType);
         if (command.hubTransfer()) {
             if (deliveryMode != DeliveryMode.BRANCH_DELIVERY) {
-                throw new BusinessRuleException("A hub Load Sheet cannot use Direct Company Delivery.");
+                throw new BusinessRuleException("A hub Manifest Creation cannot use Direct Company Delivery.");
             }
             boolean toHub = branchDirectory.findBranch(command.deliveryBranchId(), companyId)
                     .map(branch -> "HUB".equals(branch.branchType()))
@@ -188,7 +188,7 @@ public class ManifestServiceImpl implements ManifestService {
     }
 
     /** A branch-bound caller (not a company/platform admin) only sees manifests their own
-     *  branch books, or dispatched ones addressed to it — never another branch's load sheets. */
+     *  branch books, or dispatched ones addressed to it — never another branch's manifest creations. */
     private Specification<Manifest> ownBranchScope() {
         AuthenticatedUser caller = SecurityUtils.requireCurrentUser();
         if (caller.isPlatformTier() || caller.hasRole(Roles.COMPANY_ADMIN)) {
@@ -198,7 +198,7 @@ public class ManifestServiceImpl implements ManifestService {
         if (ownBranchId == null) {
             return (root, query, cb) -> cb.conjunction();
         }
-        // Until dispatch a load sheet belongs to the branch that created it alone; the
+        // Until dispatch a manifest creation belongs to the branch that created it alone; the
         // receiving branch only gets it once it is on the road (In Scan).
         return (root, query, cb) -> cb.or(cb.equal(root.get("bookingBranchId"), ownBranchId),
                 cb.and(cb.equal(root.get("deliveryBranchId"), ownBranchId),
@@ -249,7 +249,7 @@ public class ManifestServiceImpl implements ManifestService {
                     "Manifest %s has no shipment to dispatch.".formatted(manifest.getManifestNumber()));
         }
 
-        // Hub Operations (2026-09-21): a Load Sheet booked from a hub (branch_type HUB)
+        // Hub Operations (2026-09-21): a Manifest Creation booked from a hub (branch_type HUB)
         // may not dispatch until every shipment on it has been out-scanned — Branch
         // Delivery's own dispatch is untouched, this check never runs for it.
         boolean fromHub = branchDirectory.findBranch(manifest.getBookingBranchId(), companyId)
@@ -414,6 +414,27 @@ public class ManifestServiceImpl implements ManifestService {
                 shipmentId, manifest.getManifestNumber(), manifestId, companyId, currentActor());
         auditService.record(AuditAction.MANIFEST_SHIPMENT_REMOVED, ENTITY, manifestId,
                 Map.of("shipmentId", shipmentId.toString()));
+    }
+
+    @Override
+    @Transactional
+    public void cancelIfEmpty(UUID manifestId) {
+        UUID companyId = requireCompany();
+        Manifest manifest = loadOrThrow(manifestId, companyId);
+        if (manifest.getStatus() != ManifestStatus.CREATED) {
+            return;
+        }
+        boolean hasLiveShipment = shipmentService.findByManifestIds(List.of(manifestId)).stream()
+                .anyMatch(s -> s.getStatus() != com.courier.modules.shipment.domain.ShipmentStatus.CANCELLED);
+        if (hasLiveShipment) {
+            return;
+        }
+        manifest.cancel();
+        manifestRepository.save(manifest);
+        log.info("Manifest {} ({}) cancelled in company {}: its last shipment was cancelled",
+                manifest.getManifestNumber(), manifestId, companyId);
+        auditService.record(AuditAction.MANIFEST_CANCELLED, ENTITY, manifestId,
+                Map.of("reason", "Last shipment on the manifest creation was cancelled"));
     }
 
     private Manifest loadOrThrow(UUID id, UUID companyId) {

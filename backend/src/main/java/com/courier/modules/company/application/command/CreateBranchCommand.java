@@ -29,6 +29,7 @@ public record CreateBranchCommand(
         BigDecimal commissionOnBasicFreight, BigDecimal companyServiceChargePercentage,
         BigDecimal drsChargePerQty,
         BigDecimal deliveryCommissionRatePerKg, BigDecimal deliveryCommissionMinWeightKg,
+        BigDecimal odaChargeAmount,
         NewBranchUser branchUser
 ) {
 

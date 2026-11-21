@@ -90,7 +90,7 @@ const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 /** Letterhead fields the shared print header needs — a subset of {@link ConsignmentPrintData},
- *  so THC/DRS (which don't book a shipment) can pass just their `CompanyProfileService` data. */
+ *  so Manifest Finalization/DRS (which don't book a shipment) can pass just their `CompanyProfileService` data. */
 export interface PrintHeaderCompany {
   companyName: string;
   companyLogo: string | null;
@@ -100,7 +100,7 @@ export interface PrintHeaderCompany {
   companyWebsite: string | null;
 }
 
-/** The right-hand identity box (LR No / THC No / DRS No, plus an optional barcode and/or QR
+/** The right-hand identity box (LR No / Manifest Finalization No / DRS No, plus an optional barcode and/or QR
  *  of the same or a related value). */
 export interface PrintHeaderBox {
   label: string;
@@ -110,7 +110,7 @@ export interface PrintHeaderBox {
 }
 
 /** The consignment note's own header (logo, letterhead, identity box) — shared verbatim by
- *  the THC (`trip-hire-challan.ts`) and DRS (`out-for-delivery.ts`) prints so every document
+ *  the Manifest Finalization (`trip-hire-challan.ts`) and DRS (`out-for-delivery.ts`) prints so every document
  *  this system prints carries the same masthead. Pair with {@link PRINT_HEADER_CSS}. */
 export function renderPrintHeader(d: PrintHeaderCompany, box: PrintHeaderBox): string {
   return `<div class="head">

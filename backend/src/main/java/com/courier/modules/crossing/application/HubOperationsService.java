@@ -12,7 +12,7 @@ import java.util.UUID;
 
 /**
  * The operational surface Hub Operations adds on top of what already exists — in-scan
- * (reuses {@code ShipmentService.inScan}/crossing's own {@code arriveAt}), Load Sheet
+ * (reuses {@code ShipmentService.inScan}/crossing's own {@code arriveAt}), Manifest Creation
  * creation and dispatch (reuse {@code ManifestService} as-is), and shipment/destination
  * listing (reuse {@code GET /shipments} and {@code GET /manifests/eligible-destinations}).
  * What's genuinely new: out-scan (duplicate-scan-before-dispatch), exceptions, and a

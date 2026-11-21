@@ -8,8 +8,8 @@ package com.courier.modules.crossing.application;
  *                           {@code IN_SCAN} at final destination or a crossing hop)
  * @param pendingInScan      shipments dispatched and headed here, not yet arrived
  * @param shipmentsAtHub     shipments physically here right now, any stage
- * @param pendingSorting     arrived, not yet attached to an outbound Load Sheet
- * @param readyForDispatch   attached to a Load Sheet from this hub, not yet dispatched
+ * @param pendingSorting     arrived, not yet attached to an outbound Manifest Creation
+ * @param readyForDispatch   attached to a Manifest Creation from this hub, not yet dispatched
  * @param dispatchedToday    manifests booked from this hub, dispatched today
  * @param pendingExceptions  open {@code ShipmentException} rows at this hub
  * @param todaysLoadSheets   manifests booked from this hub, created today (any status)

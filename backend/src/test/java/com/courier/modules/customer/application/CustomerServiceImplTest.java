@@ -109,7 +109,7 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("a business customer without GST is refused")
+    @DisplayName("a TBB customer without GST is refused")
     void businessWithoutGstRejected() {
         assertThatThrownBy(() -> service.create(command(null, CustomerType.BUSINESS, "9876543210", null)))
                 .isInstanceOf(BusinessRuleException.class)
@@ -119,7 +119,7 @@ class CustomerServiceImplTest {
     }
 
     @Test
-    @DisplayName("a business customer with GST is accepted")
+    @DisplayName("a TBB customer with GST is accepted")
     void businessWithGstAccepted() {
         Customer created = service.create(command(null, CustomerType.BUSINESS, "9876543210", "27ABCDE1234F1Z5"));
 

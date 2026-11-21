@@ -78,10 +78,12 @@ export interface BranchResponse {
   /** DRS charge per item quantity, debited on delivery (drsCharge = drsChargePerQty * qty). */
   drsChargePerQty: number;
   /** Delivery commission per kg, credited on delivery (deliveryCommission = rate *
-   *  max(chargeable weight, deliveryCommissionMinWeightKg)). Independent of drsChargePerQty. */
+   *  max(actual weight, deliveryCommissionMinWeightKg)). Independent of drsChargePerQty. */
   deliveryCommissionRatePerKg: number;
-  /** Minimum chargeable weight (kg) for deliveryCommissionRatePerKg. */
+  /** Minimum weight (kg) for deliveryCommissionRatePerKg. */
   deliveryCommissionMinWeightKg: number;
+  /** ODA charge credited to this branch's wallet per delivered shipment that carries an ODA charge. */
+  odaChargeAmount: number;
   createdBy?: string | null;
   createdDate?: string | null;
   updatedBy?: string | null;
@@ -178,6 +180,8 @@ export interface CreateBranchRequest {
   deliveryCommissionRatePerKg?: number | null;
   /** Omitted defaults to 10 on the backend. */
   deliveryCommissionMinWeightKg?: number | null;
+  /** Omitted defaults to 0 on the backend. */
+  odaChargeAmount?: number | null;
   /** Optional; a branch always gets a user, this only says who it is. */
   branchUser?: BranchUserRequest | null;
 }
@@ -226,6 +230,7 @@ export interface UpdateBranchRequest {
   drsChargePerQty: number;
   deliveryCommissionRatePerKg: number;
   deliveryCommissionMinWeightKg: number;
+  odaChargeAmount: number;
   version: number;
 }
 

@@ -111,7 +111,7 @@ export class PendingDelivery implements OnInit {
   readonly assigningId = signal<string | null>(null);
   readonly deliveryUserControl = new FormControl<string | null>(null);
   /** Branch id -> "Name (CODE)" for the worklist's From Branch / To Branch column — same
-   *  `branchDirectory()` lookup Loading Sheet/THC already use for the same reason. */
+   *  `branchDirectory()` lookup Manifest Creation/Manifest Finalization already use for the same reason. */
   readonly branchNames = signal<Map<string, string>>(new Map());
 
   ngOnInit(): void {

@@ -15,7 +15,7 @@ import { VehicleService } from './vehicle.service';
 /**
  * Fleet management — full vehicle records (registration, class, ownership dates,
  * statutory document expiries, base branch). Grown from the minimal fleet-picker table
- * Dispatch/THC reads (0.25.0, see MEMORY/modules/shipment-movement.md).
+ * Dispatch/Manifest Finalization reads (0.25.0, see MEMORY/modules/shipment-movement.md).
  * COMPANY_ADMIN/BRANCH_MANAGER write, matching VehicleServiceImpl's own gate.
  */
 @Component({
@@ -28,7 +28,7 @@ import { VehicleService } from './vehicle.service';
       <header class="page__head">
         <div>
           <h1 class="text-h1">Vehicles</h1>
-          <p class="text-caption">The fleet Trip Hire Challan's "Assign Vehicle" picker reads from.</p>
+          <p class="text-caption">The fleet Manifest Finalization's "Assign Vehicle" picker reads from.</p>
         </div>
       </header>
 

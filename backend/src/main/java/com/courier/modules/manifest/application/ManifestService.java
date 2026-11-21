@@ -34,7 +34,7 @@ public interface ManifestService {
 
     /**
      * Unpaged shipment-count/weight/package totals over every manifest matching
-     * {@code criteria} — the THC Report summary row, same filters as {@link #search}
+     * {@code criteria} — the Manifest Finalization Report summary row, same filters as {@link #search}
      * minus paging.
      */
     ManifestSummaryStats summaryStats(ManifestCriteria criteria);
@@ -60,6 +60,13 @@ public interface ManifestService {
      * isn't actually on this manifest.
      */
     void removeShipment(UUID manifestId, UUID shipmentId);
+
+    /**
+     * Called when a shipment on this manifest creation was cancelled (and has already left it): if the sheet
+     * has no live shipment left and has not been dispatched, it is cancelled too. A no-op otherwise.
+     * Internal — driven by {@link ManifestCancellationListener}, not exposed over REST.
+     */
+    void cancelIfEmpty(UUID manifestId);
 
     /** Result of a successful OTP request — never the raw code itself, only enough for the
      *  UI to tell the operator where it went and how long it lasts. */

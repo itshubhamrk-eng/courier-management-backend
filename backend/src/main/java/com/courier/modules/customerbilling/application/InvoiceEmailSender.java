@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * E-mails an approved invoice to the business customer through the platform's {@link EmailProvider}
+ * E-mails an approved invoice to the TBB customer through the platform's {@link EmailProvider}
  * (real SMTP when {@code spring.mail.host} is configured, otherwise the log-only provider — see its
  * javadoc). The sender identity is the company's own e-mail channel identity from Communication
  * Center when one is set, else {@code app.billing.from-email}. The body is an HTML summary with a

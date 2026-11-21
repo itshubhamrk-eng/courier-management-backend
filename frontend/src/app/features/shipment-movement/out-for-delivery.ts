@@ -33,7 +33,7 @@ import { RouteIllustration } from '@shared/components/illustrations/route-illust
  *  shipment should be visible"), independent of whether a Delivery User is picked yet.
  *  Check off shipments, pick the Delivery User, optionally assign a Vehicle/Fuel
  *  Cost/Delivery Charge and verify a Delivery User OTP, then Generate DRS — the same
- *  Vehicle/Fuel Cost/OTP-verification shape Trip Hire Challan's own Dispatch action
+ *  Vehicle/Fuel Cost/OTP-verification shape Manifest Finalization's own Dispatch action
  *  uses (`trip-hire-challan.ts`), adapted to a delivery user instead of a driver+
  *  manifest (there is still no separate DRS/batch table to hang vehicle/fuel/OTP state
  *  off before Generate DRS runs — see `ShipmentService.assignOutForDelivery`'s own doc).
@@ -217,12 +217,12 @@ export class OutForDelivery implements OnInit, OnDestroy {
    *  COMPANY_ADMIN), since "my branch" would otherwise have nothing to show them. */
   readonly directMode = signal(!this.acting.effectiveId());
   /** Hub delivery: shipments received (in-scanned) at this hub with no delivery branch,
-   *  delivered from here instead of going on another Load Sheet. */
+   *  delivered from here instead of going on another Manifest Creation. */
   readonly hubMode = signal(false);
   /** The effective branch is a HUB: "My Branch" then also lists the hub's own received stock. */
   private readonly hubIds = signal<Set<string>>(new Set());
   readonly isHub = computed(() => { const id = this.acting.effectiveId(); return !!id && this.hubIds().has(id); });
-  /** Company letterhead for the DRS header — same `CompanyProfileService` the LR and THC
+  /** Company letterhead for the DRS header — same `CompanyProfileService` the LR and Manifest Finalization
    *  prints use, so every printed document shares one masthead. */
   readonly companyLetterhead = signal<CompanyLetterhead | null>(null);
 
@@ -237,7 +237,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
   readonly collectAtDeliveryModeIds = signal<Set<string>>(new Set());
   readonly branchLabel = signal('');
   /** Branch id -> "Name (CODE)" for the worklist's From Branch / To Branch column — same
-   *  `branchDirectory()` lookup Loading Sheet/THC already use for the same reason. */
+   *  `branchDirectory()` lookup Manifest Creation/Manifest Finalization already use for the same reason. */
   readonly branchNames = signal<Map<string, string>>(new Map());
   readonly outcomes = signal<MovementOutcome[]>([]);
   readonly drsNumber = signal<string | null>(null);
@@ -265,7 +265,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
   readonly maskedMobile = signal('');
   readonly otpExpiresInMinutes = signal(5);
   readonly otpControl = new FormControl('', [Validators.pattern(/^\d{4}$/)]);
-  /** Seconds left before Resend OTP is clickable again — same THC convention. */
+  /** Seconds left before Resend OTP is clickable again — same Manifest Finalization convention. */
   readonly resendCooldown = signal(0);
   private resendTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -307,7 +307,7 @@ export class OutForDelivery implements OnInit, OnDestroy {
         const b = list.find((x) => x.id === this.myBranchId);
         this.branchLabel.set(b ? `${b.branchName} (${b.branchCode})` : '');
         // A hub's received shipments (READY_FOR_MANIFEST, no delivery branch) belong on "My Branch"
-        // too — the operator picks DRS here or Loading Sheet, so both must see the same stock.
+        // too — the operator picks DRS here or Manifest Creation, so both must see the same stock.
       }
     });
     // In Scan at a hub links here with ?tab=hub: open straight on the hub's own shipments.

@@ -18,7 +18,7 @@ import { Shipment } from '@core/models/shipment.model';
  * delivery branch (see ShipmentCreate's MSRTC mode), so this screen just groups the ones
  * waiting at the caller's branch by that delivery branch and turns the chosen ones into a
  * manifest flagged `flowType: MSRTC`. Finalize Manifest (vehicle + driver, dispatch) is the
- * next menu item. Separate from Loading Sheet on purpose: no city, hub or crossing modes.
+ * next menu item. Separate from Manifest Creation on purpose: no city, hub or crossing modes.
  */
 @Component({
   selector: 'app-msrtc-create-manifest',

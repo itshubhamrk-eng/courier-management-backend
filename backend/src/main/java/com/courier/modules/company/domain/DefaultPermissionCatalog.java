@@ -101,7 +101,7 @@ public final class DefaultPermissionCatalog {
         // Hub Operations (2026-09-21) added five operational rights on top of the CRUD
         // this module was seeded with while it was still just a branch-shaped master —
         // a hub's screens are receiving, sorting, out-scanning and raising exceptions,
-        // not just editing the hub record itself. Load Sheet/vehicle/dispatch reuse
+        // not just editing the hub record itself. Manifest Creation/vehicle/dispatch reuse
         // MANIFEST_* and dispatch reuses the existing DISPATCH action; only the four
         // hub-specific verbs (IN_SCAN/OUT_SCAN/SORT/EXCEPTION_MANAGE) are new.
         MATRIX.put(PermissionModule.HUB,

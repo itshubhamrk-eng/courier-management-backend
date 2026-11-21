@@ -149,7 +149,7 @@ class HubOperationsServiceImplTest {
         List<MovementOutcome> outcomes = service.outScan(manifest.getId(), HUB, List.of("TRK-1"));
 
         assertThat(outcomes.get(0).success()).isFalse();
-        assertThat(outcomes.get(0).message()).contains("Not on this Load Sheet");
+        assertThat(outcomes.get(0).message()).contains("Not on this Manifest Creation");
         verify(hubOutScanRepository, never()).save(any());
     }
 

@@ -35,7 +35,7 @@ public interface FreightCalculationService {
     }
 
     /**
-     * As above, for a booking made for a Business Customer: when that customer has an ACTIVE
+     * As above, for a booking made for a TBB Customer: when that customer has an ACTIVE
      * pricing zone covering the destination (city match beating whole-district), freight and
      * ODA come from the zone's rate card instead of District Level Freight, and the result
      * carries the zone's docket/mathadi/pack/fuel/FOV lines as {@code customerExtraCharges}.

@@ -59,7 +59,7 @@ public record CompanySettingsRequest(
         Boolean autoGenerateBarcode,
         Boolean allowDuplicateReferenceNumber,
         @Schema(description = "Opt-in: lets a COMPANY_ADMIN/BRANCH_MANAGER manually override a "
-                + "shipment's status, bypassing the normal THC/DRS/Deliver flow")
+                + "shipment's status, bypassing the normal Manifest Finalization/DRS/Deliver flow")
         Boolean manualStatusOverrideEnabled,
         Boolean autoAssignTrackingNumber,
         @DecimalMin(value = "0.001", message = "must be greater than zero")

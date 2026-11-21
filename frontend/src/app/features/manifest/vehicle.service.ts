@@ -3,7 +3,7 @@ import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import { Vehicle, CreateVehicleRequest, UpdateVehicleRequest } from '@core/models/shipment.model';
 
-/** The fleet Trip Hire Challan (THC)'s "Assign Vehicle" picker reads from — /api/v1/vehicles. */
+/** The fleet Manifest Finalization's "Assign Vehicle" picker reads from — /api/v1/vehicles. */
 @Injectable({ providedIn: 'root' })
 export class VehicleService {
   private readonly api = inject(ApiService);

@@ -15,7 +15,7 @@ import { HubDashboardStats } from './hub-operations.model';
 
 /**
  * Hub Dashboard — the nine figures `HubOperationsService.dashboard()` returns, plus the
- * quick actions the spec asks for (In Scan / Sort / Create Load Sheet / Out Scan /
+ * quick actions the spec asks for (In Scan / Sort / Create Manifest Creation / Out Scan /
  * Dispatch / Exceptions). Scoped to the signed-in user's own hub branch, the same
  * "no picker, my own branch" pattern every other Hub Operations screen uses.
  */
@@ -42,7 +42,7 @@ import { HubDashboardStats } from './hub-operations.model';
           <app-statistic-card label="Ready For Dispatch" icon="local_shipping" tone="success" [value]="s().readyForDispatch" [loading]="loading()" />
           <app-statistic-card label="Dispatched Today" icon="send" tone="success" [value]="s().dispatchedToday" [loading]="loading()" />
           <app-statistic-card label="Pending Exceptions" icon="report_problem" tone="danger" [value]="s().pendingExceptions" [loading]="loading()" />
-          <app-statistic-card label="Today's Load Sheets" icon="qr_code_scanner" tone="info" [value]="s().todaysLoadSheets" [loading]="loading()" />
+          <app-statistic-card label="Today's Manifest Creations" icon="qr_code_scanner" tone="info" [value]="s().todaysLoadSheets" [loading]="loading()" />
         </div>
 
         <div class="two">
@@ -60,7 +60,7 @@ import { HubDashboardStats } from './hub-operations.model';
             }
           </app-card>
 
-          <app-card [title]="'At your hub — awaiting action (' + atHubTotal() + ')'" subtitle="Received and not yet on a Load Sheet or DRS.">
+          <app-card [title]="'At your hub — awaiting action (' + atHubTotal() + ')'" subtitle="Received and not yet on a Manifest Creation or DRS.">
             @if (!atHub().length) { <p class="empty">No shipment is waiting at this hub.</p> } @else {
               <div class="tbl__wrap"><table class="tbl">
                 <thead><tr><th>AWB</th><th>From</th><th>To</th><th class="r">Weight</th></tr></thead>
@@ -71,17 +71,17 @@ import { HubDashboardStats } from './hub-operations.model';
                   }
                 </tbody></table></div>
               <div class="more">
-                <app-button icon="add_box" (pressed)="go('/hub-operations/load-sheet')">Create Loading Sheet</app-button>
+                <app-button icon="add_box" (pressed)="go('/hub-operations/load-sheet')">Create Manifest Creation</app-button>
                 <app-button variant="stroked" icon="directions_run" (pressed)="goDrs()">Generate DRS</app-button>
               </div>
             }
           </app-card>
         </div>
 
-        <app-card [title]="'Load Sheets from your hub — ready to out-scan / dispatch (' + openSheets().length + ')'">
-          @if (!openSheets().length) { <p class="empty">No open Load Sheet from this hub.</p> } @else {
+        <app-card [title]="'Manifest Creations from your hub — ready to out-scan / dispatch (' + openSheets().length + ')'">
+          @if (!openSheets().length) { <p class="empty">No open Manifest Creation from this hub.</p> } @else {
             <div class="tbl__wrap"><table class="tbl">
-              <thead><tr><th>Load Sheet</th><th>To</th><th class="r">Parcels</th><th class="r">Weight</th></tr></thead>
+              <thead><tr><th>Manifest Creation</th><th>To</th><th class="r">Parcels</th><th class="r">Weight</th></tr></thead>
               <tbody>
                 @for (m of openSheets(); track m.id) {
                   <tr><td class="b">{{ m.manifestNumber }}</td><td>{{ name(m.deliveryBranchId) }}</td>
@@ -99,7 +99,7 @@ import { HubDashboardStats } from './hub-operations.model';
           <div class="qa">
             <app-button icon="move_to_inbox" (pressed)="go('/hub-operations/in-scan')">In Scan</app-button>
             <app-button icon="sort" (pressed)="go('/hub-operations/sorting')">Sort Shipments</app-button>
-            <app-button icon="qr_code_scanner" (pressed)="go('/hub-operations/load-sheet')">Create Load Sheet</app-button>
+            <app-button icon="qr_code_scanner" (pressed)="go('/hub-operations/load-sheet')">Create Manifest Creation</app-button>
             <app-button icon="outbox" (pressed)="go('/hub-operations/out-scan')">Out Scan</app-button>
             <app-button icon="outbound" (pressed)="go('/hub-operations/dispatch')">Dispatch</app-button>
             <app-button icon="report_problem" (pressed)="go('/hub-operations/exceptions')">Exceptions</app-button>

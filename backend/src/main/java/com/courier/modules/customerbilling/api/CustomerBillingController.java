@@ -42,12 +42,12 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** Business customer invoices. {@code COMPANY_ADMIN} only (enforced on the service). */
+/** TBB customer invoices. {@code COMPANY_ADMIN} only (enforced on the service). */
 @RestController
 @RequestMapping("/api/v1/customer-invoices")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Customer Billing", description = "Business customer invoices and receipts")
+@Tag(name = "Customer Billing", description = "TBB customer invoices and receipts")
 public class CustomerBillingController {
 
     private final CustomerBillingService service;
@@ -94,7 +94,7 @@ public class CustomerBillingController {
 
     @PostMapping("/run-cycle")
     @Operation(summary = "Run the billing cycle now", description = "Does for this company what the daily job does: invoices each "
-            + "active business customer whose weekly / 15-day / monthly cycle has closed. Idempotent.")
+            + "active TBB customer whose weekly / 15-day / monthly cycle has closed. Idempotent.")
     public ApiResponse<CycleResult> runCycle() {
         return ApiResponse.success(new CycleResult(service.runCycleNow()), "Billing cycle run");
     }
@@ -140,7 +140,7 @@ public class CustomerBillingController {
     }
 
     @PostMapping("/{id}/approve")
-    @Operation(summary = "Approve an invoice", description = "Approving e-mails the invoice to the business customer's e-mail address. "
+    @Operation(summary = "Approve an invoice", description = "Approving e-mails the invoice to the TBB customer's e-mail address. "
             + "A mail failure does not undo the approval; see emailStatus / emailError and use resend-email.")
     public ApiResponse<InvoiceResponse> approve(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.approve(id)), "Invoice approved");

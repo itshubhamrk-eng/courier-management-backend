@@ -137,7 +137,7 @@ public class CompanySettings extends CompanyOwnedEntity {
 
     /** Opt-in per company. When true, a {@code COMPANY_ADMIN}/{@code BRANCH_MANAGER} can push
      *  a shipment straight to any status via {@code ShipmentService.overrideStatus}, bypassing
-     *  the normal per-screen flow (THC dispatch / DRS / Deliver) — for correcting a shipment
+     *  the normal per-screen flow (Manifest Finalization dispatch / DRS / Deliver) — for correcting a shipment
      *  stuck in the wrong state, or force-tracking a THC's shipments by hand. Off by default:
      *  an arbitrary jump that isn't a legal {@code ShipmentStatus} edge skips the real service
      *  method (and its money/wallet side effects) entirely, so this is a deliberate trade-off
@@ -242,7 +242,7 @@ public class CompanySettings extends CompanyOwnedEntity {
     // Hours a shipment may sit in one status before the sweep (ShipmentSlaSweepJob)
     // raises an auto-ticket. Each field is the outbound leg of the status named,
     // e.g. slaBookingToLoadingSheetHours is how long a BOOKED shipment may go
-    // without a loading sheet (MANIFEST_CREATED).
+    // without a manifest creation (MANIFEST_CREATED).
 
     @Column(name = "sla_breach_ticket_enabled", nullable = false)
     @Builder.Default

@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Gives every new business customer its two catch-all pricing zones, "Rest of Maharashtra" and
+ * Gives every new TBB customer its two catch-all pricing zones, "Rest of Maharashtra" and
  * "Out of Maharashtra", so the rate cards are there to fill in from day one.
  *
  * <p>Same shape as the wallet provisioning for branches: AFTER_COMMIT + REQUIRES_NEW so a zone

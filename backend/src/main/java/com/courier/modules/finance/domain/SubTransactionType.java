@@ -32,7 +32,8 @@ public enum SubTransactionType {
     ADJ(Direction.BOTH, "Adjustment"),
     PNL(Direction.DEBIT, "Penalty"),
     DRS(Direction.CREDIT, "DRS Commission"),
-    DWC(Direction.CREDIT, "Delivery Weight Commission");
+    DWC(Direction.CREDIT, "Delivery Weight Commission"),
+    ODA(Direction.CREDIT, "ODA Charge");
 
     /** Which {@link TransactionType} a reason may be filed under. */
     public enum Direction {

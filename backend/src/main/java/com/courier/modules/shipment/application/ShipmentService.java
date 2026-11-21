@@ -219,7 +219,7 @@ public interface ShipmentService {
 
     /**
      * Every shipment scanned onto any of these manifests, within the caller's company —
-     * the THC Report's shipment-count/weight/package-count aggregate, batch-fetched the
+     * the Manifest Finalization Report's shipment-count/weight/package-count aggregate, batch-fetched the
      * same "one query, not one per row" way as {@link #netAmountsFor}.
      */
     List<Shipment> findByManifestIds(Collection<UUID> manifestIds);
@@ -326,9 +326,9 @@ public interface ShipmentService {
      *
      * <p>Two ways a shipment can qualify: if it already carries a real next stop
      * ({@code nextLocationId} or, failing that, {@code deliveryBranchId} — a crossing hop,
-     * or a legacy row from before Load Sheet deferred branch assignment), it must travel
+     * or a legacy row from before Manifest Creation deferred branch assignment), it must travel
      * exactly {@code expectedBookingBranchId} -&gt; {@code expectedDeliveryBranchId}, same
-     * as ever. Otherwise (the normal case since Load Sheet — booked with no branch
+     * as ever. Otherwise (the normal case since Manifest Creation — booked with no branch
      * resolved yet) it is matched by destination city instead: it must be sitting at
      * {@code expectedBookingBranchId} and its own {@code toCity} must match
      * {@code manifestDestinationCity} — {@code deliveryBranchId}/{@code nextLocationId} are
@@ -358,14 +358,14 @@ public interface ShipmentService {
     Shipment detachFromManifest(UUID shipmentId, UUID manifestId);
 
     /** Read-only — {@code ManifestServiceImpl.dispatch} uses this to enforce "at least one
-     * shipment on the manifest" before it will dispatch. Loading Sheet folded into
+     * shipment on the manifest" before it will dispatch. Manifest Creation folded into
      * {@code MANIFEST_CREATED} itself (V20, on direct request) — adding a shipment to a
-     * manifest already is the "loading sheet created" milestone, so this simply reads every
+     * manifest already is the "manifest creation created" milestone, so this simply reads every
      * {@code MANIFEST_CREATED} shipment on the manifest rather than a separate scanned
      * subset. */
     List<Shipment> findManifestCreatedShipments(UUID manifestId);
 
-    /** Load Sheet's own "which city am I creating this for" picker — every distinct
+    /** Manifest Creation's own "which city am I creating this for" picker — every distinct
      *  {@code toCity} among this branch's own BOOKED/READY_FOR_MANIFEST shipments that
      *  have no delivery branch resolved yet ({@code attachToManifest}'s city-matching
      *  path). A shipment already carrying a real next stop (crossing hop, or a legacy row)
@@ -470,7 +470,7 @@ public interface ShipmentService {
      * counts against a small attempt limit before the code is invalidated outright and a fresh
      * one must be requested. Verification is currently optional: {@link #assignOutForDelivery}
      * does not require it to have succeeded first, same "optional for now" stance
-     * {@code ManifestService.verifyDispatchOtp} takes for THC dispatch.
+     * {@code ManifestService.verifyDispatchOtp} takes for Manifest Finalization dispatch.
      */
     void verifyDeliveryDispatchOtp(UUID deliveryUserId, String otp);
 
@@ -487,7 +487,7 @@ public interface ShipmentService {
      * Opt-in per company ({@code CompanySettings.manualStatusOverrideEnabled}) manual
      * correction: pushes one shipment to {@code command.targetStatus()} by hand, for a
      * {@code COMPANY_ADMIN}/{@code BRANCH_MANAGER}, from any current status — including one
-     * a normal screen (THC/DRS/Deliver) would never let this shipment reach next.
+     * a normal screen (Manifest Finalization/DRS/Deliver) would never let this shipment reach next.
      *
      * <p>When the jump <em>is</em> a legal {@link ShipmentStatus#canTransitionTo} edge that a
      * real service method already covers ({@code IN_SCAN->OUT_FOR_DELIVERY} via

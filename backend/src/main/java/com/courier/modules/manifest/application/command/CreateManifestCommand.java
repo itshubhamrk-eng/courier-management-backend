@@ -14,9 +14,9 @@ import java.util.UUID;
  * {@link DeliveryMode#BRANCH_DELIVERY} and must be absent for
  * {@link DeliveryMode#DIRECT_COMPANY_DELIVERY} — validated in
  * {@code ManifestServiceImpl.create}, not here. {@code deliveryMode} null defaults to
- * {@code BRANCH_DELIVERY}. {@code hubTransfer} marks a Load Sheet whose {@code deliveryBranchId}
+ * {@code BRANCH_DELIVERY}. {@code hubTransfer} marks a Manifest Creation whose {@code deliveryBranchId}
  * is a HUB (a stop en route, not the final delivery branch): shipments get only their
- * next stop set, and the hub assigns the real delivery branch from its own Load Sheet.
+ * next stop set, and the hub assigns the real delivery branch from its own Manifest Creation.
  * {@code flowType} {@link FlowType#MSRTC} marks a branch-to-branch MSRTC manifest.
  */
 public record CreateManifestCommand(

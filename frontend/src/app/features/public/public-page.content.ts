@@ -73,7 +73,7 @@ export const PUBLIC_PAGE_CONTENT: Record<PublicPageKey, PublicPageContent> = {
     sections: [
       { heading: 'How pricing works', body: [
         'Rates are computed per shipment at the time of booking based on origin, destination, weight/volumetric weight and the service level chosen.',
-        'Registered business customers may have negotiated rate cards; individual/walk-in customers are quoted the standard rate card in force at booking.'
+        'Registered TBB customers may have negotiated rate cards; individual/walk-in customers are quoted the standard rate card in force at booking.'
       ] },
       { heading: 'Request a quote', body: [
         `For a rate estimate before booking, contact us at ${BUSINESS.supportEmail} or ${BUSINESS.supportPhone} with your pickup/delivery pin codes and approximate weight.`
@@ -193,7 +193,7 @@ export const PUBLIC_PAGE_CONTENT: Record<PublicPageKey, PublicPageContent> = {
         'Online payments (UPI, debit/credit cards, net banking, wallets) via Razorpay, and Cash on Delivery (COD) where offered for a shipment.'
       ] },
       { heading: 'Business accounts', body: [
-        'Registered business customers may use a prepaid wallet billed against their bookings, per the terms agreed with their account.'
+        'Registered TBB customers may use a prepaid wallet billed against their bookings, per the terms agreed with their account.'
       ] },
       { heading: 'Invoicing & GST', body: [
         `GST is charged as applicable on our services. Our GSTIN is ${BUSINESS.gstin}. Invoices are made available for completed shipments.`

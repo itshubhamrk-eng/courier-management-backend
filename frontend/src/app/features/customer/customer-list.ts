@@ -32,7 +32,7 @@ const LIFECYCLE = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER];
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">{{ businessOnly ? 'Business Customers' : 'Customers' }}</h1><p class="text-caption">{{ businessOnly ? 'Business accounts with pickup/delivery addresses, payment terms and zone pricing' : 'Reusable customer master data' }} — {{ page().totalElements }} in all.</p></div>
+        <div><h1 class="text-h1">{{ businessOnly ? 'TBB Customers' : 'Customers' }}</h1><p class="text-caption">{{ businessOnly ? 'Business accounts with pickup/delivery addresses, payment terms and zone pricing' : 'Reusable customer master data' }} — {{ page().totalElements }} in all.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search code, name, mobile, email…" (changed)="onSearch($event)" />
           <app-button variant="stroked" icon="filter_list" (pressed)="filterOpen.set(true)">
@@ -65,7 +65,7 @@ export class CustomerList implements OnInit {
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
   private readonly router = inject(Router);
-  /** Set by the Business Customer menu route: the list is pinned to BUSINESS customers. */
+  /** Set by the TBB Customer menu route: the list is pinned to BUSINESS customers. */
   protected readonly businessOnly = !!inject(ActivatedRoute).snapshot.data['businessOnly'];
 
   readonly loading = signal(true);
@@ -88,7 +88,7 @@ export class CustomerList implements OnInit {
 
   ngOnInit(): void {
     this.breadcrumb.set(this.businessOnly
-      ? [{ label: 'Business Customer' }, { label: 'Customer' }]
+      ? [{ label: 'TBB Customer' }, { label: 'Customer' }]
       : [{ label: 'Customers' }]);
     this.load();
   }

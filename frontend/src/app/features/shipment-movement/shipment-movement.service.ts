@@ -12,8 +12,8 @@ import { UserService, Lookup } from '@features/users/user.service';
 /**
  * Dispatch -> In Scan -> Out For Delivery -> Deliver — talks to
  * /api/v1/shipment-movement, mirroring ShipmentMovementController one-to-one. No mock data.
- * Loading Sheet is no longer a separate step (V20, on direct request) — adding a shipment to
- * a manifest already is "loading sheet created"; see ManifestService.create.
+ * Manifest Creation is no longer a separate step (V20, on direct request) — adding a shipment to
+ * a manifest already is "manifest creation created"; see ManifestService.create.
  */
 @Injectable({ providedIn: 'root' })
 export class ShipmentMovementService {

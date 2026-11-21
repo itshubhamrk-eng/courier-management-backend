@@ -100,15 +100,15 @@ public enum PermissionAction {
     IN_SCAN(25),
 
     /**
-     * Confirm a shipment already on a Load Sheet is physically present before that
-     * Load Sheet may be dispatched from a hub. Its own right, distinct from
+     * Confirm a shipment already on a Manifest Creation is physically present before that
+     * Manifest Creation may be dispatched from a hub. Its own right, distinct from
      * {@code DISPATCH}: a desk that may scan shipments onto the outbound pile is not
      * thereby the desk that may declare the vehicle gone.
      */
     OUT_SCAN(26),
 
     /**
-     * Group shipments at a hub by their next stop ahead of Load Sheet creation. Its own
+     * Group shipments at a hub by their next stop ahead of Manifest Creation creation. Its own
      * right, distinct from {@code READ}/{@code UPDATE}: sorting decides where a shipment
      * goes next, which is a bigger decision than merely viewing or editing its record.
      */

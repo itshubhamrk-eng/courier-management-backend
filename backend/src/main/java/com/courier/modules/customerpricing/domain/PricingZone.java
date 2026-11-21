@@ -20,7 +20,7 @@ import org.hibernate.type.SqlTypes;
 import java.util.UUID;
 
 /**
- * A named group of districts/cities that one business customer is priced by. Belongs to
+ * A named group of districts/cities that one TBB customer is priced by. Belongs to
  * exactly one customer; the name is unique among that customer's live zones (checked in
  * the service — a soft-deleted zone must not reserve its name).
  */

@@ -8,7 +8,7 @@ export type PrintDocType = 'DRS' | 'LOADING_SHEET' | 'THC';
 export interface PrintEntry { printedByName: string | null; printedBy: string; printedAt: string; }
 export interface PrintHistory { docType: PrintDocType; docRef: string; count: number; history: PrintEntry[]; }
 
-/** Print tracking for DRS / Loading Sheet / THC — every open of the print tab is one row
+/** Print tracking for DRS / Manifest Creation / Finalization — every open of the print tab is one row
  *  (who + when); the count is the row count. Backs /api/v1/print-logs. */
 @Injectable({ providedIn: 'root' })
 export class PrintLogService {

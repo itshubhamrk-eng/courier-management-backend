@@ -97,7 +97,7 @@ public interface BranchService {
 
     Branch assignManager(UUID id, UUID managerId);
 
-    /** Sets (or, with null, clears) the hub this branch sends its Loading Sheets to. */
+    /** Sets (or, with null, clears) the hub this branch sends its Manifest Creations to. */
     Branch assignHub(UUID id, UUID hubId);
 
     /**

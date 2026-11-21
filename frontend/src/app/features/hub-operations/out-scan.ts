@@ -13,12 +13,12 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { HubOperationsService } from './hub-operations.service';
 
 /**
- * Out Scan — before a hub-originated Load Sheet may dispatch, every shipment on it must
- * be confirmed physically present. Picking a Load Sheet lists its `MANIFEST_CREATED`
+ * Out Scan — before a hub-originated Manifest Creation may dispatch, every shipment on it must
+ * be confirmed physically present. Picking a Manifest Creation lists its `MANIFEST_CREATED`
  * shipments (unscanned first); scanning an AWB (or typing it) confirms one at a time. A
- * shipment already out-scanned, not on this Load Sheet, or not physically here is
+ * shipment already out-scanned, not on this Manifest Creation, or not physically here is
  * rejected — see `HubOperationsService.outScan`. Dispatch itself happens on the
- * Dispatch screen (Trip Hire Challan), reused as-is.
+ * Dispatch screen (Manifest Finalization), reused as-is.
  */
 @Component({
   selector: 'app-hub-out-scan',
@@ -35,11 +35,11 @@ import { HubOperationsService } from './hub-operations.service';
       @if (!myBranchId) {
         <app-card><p class="empty">No hub assigned — ask an admin.</p></app-card>
       } @else if (!activeManifest()) {
-        <app-card title="Load Sheets ready for Out Scan">
+        <app-card title="Manifest Creations ready for Out Scan">
           @if (loadingManifests()) {
             <app-loader [minHeight]="100" caption="Loading…" />
           } @else if (!openManifests().length) {
-            <p class="empty">No Load Sheet from your hub is awaiting out-scan.</p>
+            <p class="empty">No Manifest Creation from your hub is awaiting out-scan.</p>
           } @else {
             <div class="ml">
               @for (m of openManifests(); track m.id) {

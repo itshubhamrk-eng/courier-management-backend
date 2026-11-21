@@ -28,7 +28,7 @@ const TRACK_TOKEN = /\b([A-Za-z]{2,6}-?\d{4,})\b|\b(\d{8,})\b/;
 const ALIASES: Record<string, string[]> = {
   'track': ['track', 'lr', 'awb', 'consignment', 'status', 'ट्रैक', 'ट्रॅक', 'स्थिति'],
   'rate-calculator': ['rate', 'check rate', 'calculate rate', 'freight rate', 'रेट', 'भाड़ा', 'दर'],
-  'manifest': ['loading sheet', 'outscan', 'out scan', 'लोडिंग शीट', 'आउट स्कैन', 'आउट स्कॅन'],
+  'manifest': ['manifest creation', 'outscan', 'out scan', 'लोडिंग शीट', 'आउट स्कैन', 'आउट स्कॅन'],
   'receive': ['inscan', 'in scan', 'receive', 'इन स्कैन', 'इन स्कॅन'],
   'dispatch': ['dispatch', 'thc', 'trip hire challan', 'डिस्पैच', 'डिस्पॅच'],
   'booking': ['book', 'book shipment', 'new shipment', 'create shipment', 'बुक', 'बुकिंग'],
