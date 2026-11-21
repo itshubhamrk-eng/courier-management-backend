@@ -66,8 +66,12 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
             @else if (!assignedHubUsable()) { <p class="text-caption">Your branch's assigned hub is inactive — pick another hub here, or reassign under Masters › Assign Hub to Branch.</p> }
             <p class="text-caption">Pick a hub, then select the shipments to send. They go to the hub first; the hub scans in the Manifest Finalization, then creates a Manifest Creation or DRS from there.</p>
           } @else if (mode() === 'branch') {
-            <app-autocomplete [control]="c('deliveryBranchId')" label="Branch" [options]="assignableBranchOptions()" placeholder="Search branch…" />
-            <p class="text-caption">Pick a branch, then select the shipments currently at your branch to send to it.</p>
+            <app-autocomplete [control]="cityControl" label="City" [options]="branchCityOptions()" placeholder="Search city…" />
+            @if (cityValue()) {
+              <app-autocomplete [control]="c('deliveryBranchId')" label="Branch" [options]="cityBranchOptions()" placeholder="Search branch…" />
+              @if (!cityBranchOptions().length) { <p class="empty">No branch is connected to this city.</p> }
+            }
+            <p class="text-caption">Pick a city, then a branch in it, then select the shipments currently at your branch to send to it.</p>
           } @else {
             <app-autocomplete [control]="c('deliveryBranchId')" label="Delivery Branch" [options]="branchOptions()" placeholder="Search branch…" />
             @if (!loadingBranches() && !branchOptions().length) {
@@ -194,6 +198,18 @@ export class LoadingSheet implements OnInit {
   protected readonly assignableBranchOptions = computed<SelectOption[]>(() =>
     this.allBranchOptions().filter((o) => o.value !== this.myBranchId));
 
+  /** Send-to-Branch mode: city filter first, then only that city's branches. */
+  readonly cityControl = new FormControl<string | null>(null);
+  protected readonly cityValue = signal<string | null>(null);
+  protected readonly branchCities = signal<Map<string, string>>(new Map());
+  protected readonly branchCityOptions = computed<SelectOption[]>(() =>
+    [...new Set(this.assignableBranchOptions().map((o) => this.branchCities().get(o.value)).filter((c): c is string => !!c))]
+      .sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: c })));
+  protected readonly cityBranchOptions = computed<SelectOption[]>(() => {
+    const city = this.cityValue();
+    return city ? this.assignableBranchOptions().filter((o) => this.branchCities().get(o.value) === city) : [];
+  });
+
   readonly sortOptions: SelectOption[] = [
     { value: 'createdAt,desc', label: 'Newest First' },
     { value: 'createdAt,asc', label: 'Oldest First' },
@@ -217,7 +233,13 @@ export class LoadingSheet implements OnInit {
       if (this.mode() === 'lane') this.loadBooked(id);
       else this.loadBookedForHub(id);
     });
+    this.cityControl.valueChanges.subscribe((city) => {
+      this.cityValue.set(city);
+      this.createForm.reset({ deliveryBranchId: null, shipmentIds: [] });
+      this.bookedShipments.set([]);
+    });
     this.masterData.branchDirectory().subscribe((list) => {
+      this.branchCities.set(new Map(list.filter((b) => !!b.city).map((b) => [b.id, b.city!.trim()])));
       this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
       this.assignedHubId.set(list.find((b) => b.id === this.myBranchId)?.assignedHubId ?? null);
       this.branchNames.set(new Map(list.map((b) =>
@@ -245,6 +267,8 @@ export class LoadingSheet implements OnInit {
 
   protected setMode(mode: 'hub' | 'branch' | 'lane'): void {
     this.mode.set(mode);
+    this.cityControl.reset(null, { emitEvent: false });
+    this.cityValue.set(null);
     this.createForm.reset({ deliveryBranchId: null, shipmentIds: [] });
     this.bookedShipments.set([]);
     this.applyAssignedHub();

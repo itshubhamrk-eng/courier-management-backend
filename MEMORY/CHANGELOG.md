@@ -11853,3 +11853,4 @@ Run against MySQL 8.0.46 on 2026-07-22:
 ### Not included (deliberate)
 - No `auth`, `tenant`, `company` or `shipment` business logic.
 - No `UserDetailsService`, no refresh-token persistence — both arrive in Phase 2.
+- 2026-11-21: Manifest Creation Send-to-Branch now City filter then that city's branches (loading-sheet.ts, frontend only; not browser-verified).
