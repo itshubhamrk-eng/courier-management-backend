@@ -185,6 +185,63 @@ public class WalletServiceImpl implements WalletService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(AUTHENTICATED)
+    public PeriodSummary periodSummary(UUID branchId, Instant from, Instant to) {
+        UUID companyId = requireCompany();
+        UUID resolved = resolveBranchForRead(branchId, companyId);
+        return periodSummaryUnguarded(companyId, resolved, from, to);
+    }
+
+    /** System path only: no authorization, the caller passes the company id explicitly. */
+    @Override
+    @Transactional(readOnly = true)
+    public PeriodSummary periodSummaryUnguarded(UUID companyId, UUID branchId, Instant from, Instant to) {
+        Wallet wallet = walletRepository.findByBranchIdWithinCompany(branchId, companyId).orElse(null);
+        if (wallet == null) {
+            return new PeriodSummary(Wallet.ZERO, Wallet.ZERO, 0, Wallet.ZERO, Wallet.ZERO,
+                    Wallet.ZERO, Wallet.ZERO, Wallet.ZERO);
+        }
+        BigDecimal opening = balanceBefore(wallet, companyId, from);
+        BigDecimal closing = balanceBefore(wallet, companyId, to);
+
+        long rechargeCount = 0;
+        BigDecimal recharge = Wallet.ZERO, comCr = Wallet.ZERO, comDr = Wallet.ZERO,
+                drs = Wallet.ZERO, booking = Wallet.ZERO;
+        for (WalletTransaction t : transactionRepository.findBetween(wallet.getId(), companyId, from, to)) {
+            BigDecimal amount = Wallet.normalise(t.getAmount());
+            SubTransactionType sub = t.getSubTransactionType();
+            if (sub == SubTransactionType.WRC && t.isCredit()) {
+                rechargeCount++;
+                recharge = recharge.add(amount);
+            } else if (sub == SubTransactionType.COM) {
+                if (t.isCredit()) comCr = comCr.add(amount); else comDr = comDr.add(amount);
+            } else if (sub == SubTransactionType.DRS && t.isCredit()) {
+                drs = drs.add(amount);
+            } else if (sub == SubTransactionType.SBK && t.isDebit()) {
+                booking = booking.add(amount);
+            }
+        }
+        return new PeriodSummary(opening, closing, rechargeCount, recharge, comCr, comDr, drs, booking);
+    }
+
+    /** System path only: no authorization, the caller passes the company id explicitly. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<WalletTransaction> transactionsBetween(UUID companyId, UUID branchId, Instant from, Instant to) {
+        return walletRepository.findByBranchIdWithinCompany(branchId, companyId)
+                .map(w -> transactionRepository.findBetween(w.getId(), companyId, from, to))
+                .orElse(List.of());
+    }
+
+    /** {@code balanceAfter} of the newest entry strictly before the instant; zero when none. */
+    private BigDecimal balanceBefore(Wallet wallet, UUID companyId, Instant before) {
+        WalletTransaction last = firstOf(transactionRepository.findLatestBefore(
+                wallet.getId(), companyId, before, PageRequest.of(0, 1)));
+        return last == null ? Wallet.ZERO : Wallet.normalise(last.getBalanceAfter());
+    }
+
+    @Override
     @Transactional
     @PreAuthorize(FINANCE_READERS + " or hasAuthority('REPORT_READ')")
     public List<WalletSummary> companySummary() {

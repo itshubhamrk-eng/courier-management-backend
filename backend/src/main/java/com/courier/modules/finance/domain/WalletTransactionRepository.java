@@ -197,4 +197,31 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     BigDecimal sumAnyDirectionForCompanyBetween(@Param("companyId") UUID companyId,
                                                 @Param("subTypes") java.util.Collection<SubTransactionType> subTypes,
                                                 @Param("from") Instant from, @Param("to") Instant to);
+
+    // ------------------------------------------------------- branch period statement
+    // Ledger rows are only posted once settled (a PENDING gateway recharge lives in
+    // RechargeOrder, not here), so no payment-status predicate is needed.
+
+    /** Entries in {@code [from, to)}, oldest first. Explicit companyId: scheduler path. */
+    @Query("""
+            select t from WalletTransaction t
+            where t.walletId = :walletId and t.companyId = :companyId
+              and t.createdAt >= :from and t.createdAt < :to
+            order by t.createdAt asc, t.transactionNo asc
+            """)
+    List<WalletTransaction> findBetween(@Param("walletId") UUID walletId,
+                                        @Param("companyId") UUID companyId,
+                                        @Param("from") Instant from, @Param("to") Instant to);
+
+    /** Newest entry strictly before {@code before} (pass a 1-row page). */
+    @Query("""
+            select t from WalletTransaction t
+            where t.walletId = :walletId and t.companyId = :companyId
+              and t.createdAt < :before
+            order by t.createdAt desc, t.transactionNo desc
+            """)
+    List<WalletTransaction> findLatestBefore(@Param("walletId") UUID walletId,
+                                             @Param("companyId") UUID companyId,
+                                             @Param("before") Instant before,
+                                             org.springframework.data.domain.Pageable pageable);
 }

@@ -293,4 +293,42 @@ public interface WalletService {
             Instant lastRechargeAt
     ) {
     }
+
+    /**
+     * One branch wallet over a window {@code [from, to)} on {@code createdAt}, for statements.
+     *
+     * @param openingBalance {@code balanceAfter} of the last entry before {@code from} (0 if none)
+     * @param closingBalance {@code balanceAfter} of the last entry before {@code to}
+     *                       (equals opening when the window is empty)
+     * @param drsChargeCredited DRS commission credits ({@code DRS}, credit)
+     * @param bookingDebited shipment booking debits ({@code SBK}, debit)
+     */
+    record PeriodSummary(
+            BigDecimal openingBalance,
+            BigDecimal closingBalance,
+            long rechargeCount,
+            BigDecimal rechargeAmount,
+            BigDecimal commissionCredited,
+            BigDecimal commissionDebited,
+            BigDecimal drsChargeCredited,
+            BigDecimal bookingDebited
+    ) {
+    }
+
+    /** Period figures for one branch, under the same branch-access rule as {@link #summarise}. */
+    PeriodSummary periodSummary(UUID branchId, Instant from, Instant to);
+
+    /**
+     * System path only (scheduler threads with no logged-in user). Performs no authorization:
+     * the caller must pass a company id explicitly and is responsible for it being right.
+     * A branch with no wallet yields all zeros.
+     */
+    PeriodSummary periodSummaryUnguarded(UUID companyId, UUID branchId, Instant from, Instant to);
+
+    /**
+     * System path only, like {@link #periodSummaryUnguarded}: no authorization, the caller must
+     * pass a company id explicitly. Ledger entries in {@code [from, to)}, ascending by
+     * {@code createdAt}. Empty for a branch with no wallet.
+     */
+    List<WalletTransaction> transactionsBetween(UUID companyId, UUID branchId, Instant from, Instant to);
 }
