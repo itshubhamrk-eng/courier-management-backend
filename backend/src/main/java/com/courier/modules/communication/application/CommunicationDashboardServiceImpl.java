@@ -49,6 +49,7 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
     private final CommunicationLogRepository repository;
     private final DailyReportLogRepository dailyReportLogRepository;
     private final com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
+    private final com.courier.modules.communication.domain.BranchReportLogRepository branchReportLogRepository;
     private final CommunicationSettingRepository settingRepository;
     private final CommunicationTemplateRepository templateRepository;
     private final ObjectMapper objectMapper;
@@ -153,6 +154,10 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
         for (var t : testLogRepository
                 .findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(companyId, from, to)) {
             out.add(new WhatsAppExtra(t.getStatus(), t.getCreatedAt(), t.getReadAt()));
+        }
+        for (var b : branchReportLogRepository
+                .findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(companyId, from, to)) {
+            out.add(new WhatsAppExtra(b.getStatus(), b.getCreatedAt(), b.getReadAt()));
         }
         return out;
     }
@@ -277,6 +282,15 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
                             CommunicationChannel.WHATSAPP)
                     .map(CommunicationTemplate::getCategory).orElse("UTILITY");
             byCategory.merge(category, dailySent, Long::sum);
+        }
+        long branchSent = branchReportLogRepository
+                .countByCompanyIdAndStatusInAndSentAtGreaterThanEqualAndSentAtLessThan(companyId, billable, from, to);
+        if (branchSent > 0) {
+            String category = templateRepository.findByCompanyIdAndEventTypeAndChannel(companyId,
+                            com.courier.modules.communication.domain.CommunicationEventType.BRANCH_MONTHLY_REPORT,
+                            CommunicationChannel.WHATSAPP)
+                    .map(CommunicationTemplate::getCategory).orElse("UTILITY");
+            byCategory.merge(category, branchSent, Long::sum);
         }
 
         Map<String, String> config = settingRepository.findByCompanyIdAndChannel(companyId, CommunicationChannel.WHATSAPP)

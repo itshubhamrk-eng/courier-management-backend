@@ -30,6 +30,7 @@ class CommunicationDashboardServiceImplTest {
     @Mock private CommunicationLogRepository repository;
     @Mock private com.courier.modules.communication.domain.DailyReportLogRepository dailyReportLogRepository;
     @Mock private com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
+    @Mock private com.courier.modules.communication.domain.BranchReportLogRepository branchReportLogRepository;
     @Mock private com.courier.modules.communication.domain.CommunicationSettingRepository settingRepository;
     @Mock private com.courier.modules.communication.domain.CommunicationTemplateRepository templateRepository;
 
@@ -37,7 +38,7 @@ class CommunicationDashboardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CommunicationDashboardServiceImpl(repository, dailyReportLogRepository, testLogRepository, settingRepository,
+        service = new CommunicationDashboardServiceImpl(repository, dailyReportLogRepository, testLogRepository, branchReportLogRepository, settingRepository,
                 templateRepository, new com.fasterxml.jackson.databind.ObjectMapper());
         when(dailyReportLogRepository.findFirstByCompanyIdOrderByReportDateDescCreatedAtDesc(any()))
                 .thenReturn(java.util.Optional.empty());
@@ -402,5 +403,47 @@ class CommunicationDashboardServiceImplTest {
 
         whatsAppConfig("{\"rateCurrency\":\"\"}");
         assertThat(service.today().whatsAppCost().currency()).isEqualTo("INR");
+    }
+
+    @Test
+    void branchReportsCountAsWhatsAppMessages() {
+        var now = java.time.Instant.now();
+        var delivered = com.courier.modules.communication.domain.BranchReportLog.builder()
+                .status(CommunicationStatus.DELIVERED).readAt(now).build();
+        delivered.setCreatedAt(now);
+        var failed = com.courier.modules.communication.domain.BranchReportLog.builder()
+                .status(CommunicationStatus.FAILED).build();
+        failed.setCreatedAt(now);
+        when(branchReportLogRepository.findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any(), any()))
+                .thenReturn(List.of(delivered, failed));
+
+        var summary = service.today();
+
+        // Same rule as every other source: a FAILED row is not "sent" (it never left), DELIVERED is.
+        assertThat(summary.totalSent()).isEqualTo(1);
+        assertThat(summary.totalDelivered()).isEqualTo(1);
+        assertThat(summary.totalFailed()).isEqualTo(1);
+        assertThat(summary.totalRead()).isEqualTo(1);
+    }
+
+    @Test
+    void branchReportSendsArePricedUnderTheirTemplatesCategory() {
+        whatsAppConfig("{\"rateUtility\":\"0.10\",\"rateMarketing\":\"0.50\"}");
+        when(repository.countWhatsAppByCategory(any(), any(), any(), any())).thenReturn(List.of(cat("UTILITY", 10)));
+        when(branchReportLogRepository.countByCompanyIdAndStatusInAndSentAtGreaterThanEqualAndSentAtLessThan(any(), any(), any(), any()))
+                .thenReturn(4L);
+        var tpl = com.courier.modules.communication.domain.CommunicationTemplate.builder()
+                .eventType(com.courier.modules.communication.domain.CommunicationEventType.BRANCH_MONTHLY_REPORT)
+                .channel(CommunicationChannel.WHATSAPP).category("MARKETING").build();
+        when(templateRepository.findByCompanyIdAndEventTypeAndChannel(any(),
+                org.mockito.ArgumentMatchers.eq(com.courier.modules.communication.domain.CommunicationEventType.BRANCH_MONTHLY_REPORT), any()))
+                .thenReturn(java.util.Optional.of(tpl));
+
+        var cost = service.today().whatsAppCost();
+
+        assertThat(cost.lines().get(0).messages()).isEqualTo(10);
+        assertThat(cost.lines().get(1).category()).isEqualTo("MARKETING");
+        assertThat(cost.lines().get(1).messages()).isEqualTo(4);
+        assertThat(cost.total()).isEqualByComparingTo("3.00");
     }
 }

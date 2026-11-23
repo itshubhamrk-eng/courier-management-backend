@@ -38,10 +38,11 @@ class WhatsAppReceiptServiceImplTest {
     private CommunicationLog row;
 
     @Mock private com.courier.modules.communication.domain.WhatsAppTestLogRepository testRepository;
+    @Mock private com.courier.modules.communication.domain.BranchReportLogRepository branchReportRepository;
 
     @BeforeEach
     void setUp() {
-        service = new WhatsAppReceiptServiceImpl(logRepository, dailyRepository, testRepository);
+        service = new WhatsAppReceiptServiceImpl(logRepository, dailyRepository, testRepository, branchReportRepository);
         row = CommunicationLog.builder().providerMessageId("wamid.1").status(CommunicationStatus.SENT).build();
         when(logRepository.findFirstByProviderMessageId("wamid.1")).thenReturn(Optional.of(row));
         when(logRepository.findFirstByProviderMessageId("wamid.unknown")).thenReturn(Optional.empty());
@@ -155,5 +156,36 @@ class WhatsAppReceiptServiceImplTest {
         assertThat(daily.getDeliveredAt()).isEqualTo(T1);
         assertThat(daily.getReadAt()).isEqualTo(T2);
         assertThat(daily.isSent()).isTrue();   // DELIVERED must never be sent again
+    }
+
+    @Test
+    void aBranchReportsReceiptsLandOnItsOwnLedger() {
+        var report = com.courier.modules.communication.domain.BranchReportLog.builder().providerMessageId("wamid.branch")
+                .status(CommunicationStatus.SENT).build();
+        when(logRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.empty());
+        when(branchReportRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.of(report));
+
+        int matched = service.apply(List.of(new Receipt("wamid.branch", "delivered", T1, null),
+                new Receipt("wamid.branch", "read", T2, null)));
+
+        assertThat(matched).isEqualTo(2);
+        assertThat(report.getStatus()).isEqualTo(CommunicationStatus.DELIVERED);
+        assertThat(report.getDeliveredAt()).isEqualTo(T1);
+        assertThat(report.getReadAt()).isEqualTo(T2);
+        assertThat(report.isSent()).isTrue();
+    }
+
+    @Test
+    void aBranchReportFailureAfterDeliveryIsIgnored() {
+        var report = com.courier.modules.communication.domain.BranchReportLog.builder().providerMessageId("wamid.branch")
+                .status(CommunicationStatus.SENT).build();
+        when(logRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.empty());
+        when(branchReportRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.of(report));
+
+        service.apply(List.of(new Receipt("wamid.branch", "delivered", T1, null),
+                new Receipt("wamid.branch", "failed", T2, "late nonsense")));
+
+        assertThat(report.getStatus()).isEqualTo(CommunicationStatus.DELIVERED);
+        assertThat(report.getErrorMessage()).isNull();
     }
 }

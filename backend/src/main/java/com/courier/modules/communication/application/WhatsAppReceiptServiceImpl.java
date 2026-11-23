@@ -1,5 +1,7 @@
 package com.courier.modules.communication.application;
 
+import com.courier.modules.communication.domain.BranchReportLog;
+import com.courier.modules.communication.domain.BranchReportLogRepository;
 import com.courier.modules.communication.domain.CommunicationLog;
 import com.courier.modules.communication.domain.CommunicationLogRepository;
 import com.courier.modules.communication.domain.CommunicationStatus;
@@ -40,6 +42,7 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
     private final CommunicationLogRepository logRepository;
     private final DailyReportLogRepository dailyReportLogRepository;
     private final WhatsAppTestLogRepository testLogRepository;
+    private final BranchReportLogRepository branchReportLogRepository;
 
     @Override
     @Transactional
@@ -68,6 +71,12 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
             if (testMessage.isPresent()) {
                 matched++;
                 applyToTest(testMessage.get(), status, at, receipt.error());
+                continue;
+            }
+            Optional<BranchReportLog> branchMessage = branchReportLogRepository.findFirstByProviderMessageId(receipt.messageId());
+            if (branchMessage.isPresent()) {
+                matched++;
+                applyToBranchReport(branchMessage.get(), status, at, receipt.error());
             }
         }
         return matched;
@@ -180,6 +189,41 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
             }
         }
         testLogRepository.save(row);
+    }
+
+    private void applyToBranchReport(BranchReportLog row, String status, Instant at, String error) {
+        switch (status) {
+            case "delivered" -> {
+                if (row.getDeliveredAt() == null) {
+                    row.setDeliveredAt(at);
+                }
+                if (row.getStatus() == CommunicationStatus.SENT) {
+                    row.setStatus(CommunicationStatus.DELIVERED);
+                }
+            }
+            case "read" -> {
+                if (row.getDeliveredAt() == null) {
+                    row.setDeliveredAt(at);
+                }
+                if (row.getReadAt() == null) {
+                    row.setReadAt(at);
+                }
+                if (row.getStatus() == CommunicationStatus.SENT) {
+                    row.setStatus(CommunicationStatus.DELIVERED);
+                }
+            }
+            case "failed" -> {
+                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
+                    return;
+                }
+                row.setStatus(CommunicationStatus.FAILED);
+                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
+            }
+            default -> {
+                return;
+            }
+        }
+        branchReportLogRepository.save(row);
     }
 
     private static String truncate(String value) {
