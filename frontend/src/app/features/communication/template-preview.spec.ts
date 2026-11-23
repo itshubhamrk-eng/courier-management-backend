@@ -55,6 +55,9 @@ describe('template preview helpers', () => {
 
   it('offers the daily variables for the daily event and shipment ones otherwise', () => {
     expect(variablesFor('DAILY_BUSINESS_SUMMARY')).toContain('reportDate');
+    expect(variablesFor('BRANCH_MONTHLY_REPORT')).toEqual(['branchName', 'month']);
+    expect(sampleValues()['branchName']).toBeTruthy();
+    expect(sampleValues()['month']).toBeTruthy();
     expect(variablesFor('SHIPMENT_BOOKED')).toContain('trackingUrl');
     expect(variablesFor('SHIPMENT_BOOKED')).not.toContain('reportDate');
   });

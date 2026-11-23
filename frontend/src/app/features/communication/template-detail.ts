@@ -249,10 +249,11 @@ const MAX_CALLS = 1;
                   @if (template()!.metaStatusDetail) { <p class="text-caption">{{ template()!.metaStatusDetail }}</p> }
                   <p class="text-caption">Submitting saves your changes, then files the template with Meta; review takes minutes to a day. Changing the name, text, header, footer, buttons, category or language afterwards means submitting again.</p>
                   <div class="meta__actions">
-                    <app-button variant="stroked" [loading]="metaBusy()" [disabled]="isNew() || !!template()!.metaStatus"
+                    <app-button variant="stroked" [loading]="metaBusy()" [disabled]="isNew() || !!template()!.metaStatus || needsPdfHeader()"
                       (pressed)="submitToMeta()">Submit to Meta</app-button>
                     <app-button variant="stroked" [loading]="metaBusy()" [disabled]="isNew()" (pressed)="refreshMeta()">Check status</app-button>
                     @if (isNew()) { <span class="text-caption">Create the template first, then submit it.</span> }
+                    @else if (needsPdfHeader()) { <span class="text-caption">This template needs a PDF header: create it in WhatsApp Manager, then press Check status.</span> }
                   </div>
                 </div>
               </app-card>
@@ -427,8 +428,12 @@ export class TemplateDetail implements OnInit {
   protected readonly bodyLength = computed(() => this.typed().content.trim().length);
   protected readonly headerLength = computed(() => this.typed().header.length);
   protected readonly footerLength = computed(() => this.typed().footer.length);
+  /** Needs a PDF header Meta only accepts with its own sample file: made once in WhatsApp Manager, never submitted from here. */
+  protected readonly needsPdfHeader = computed(() => this.template()?.eventType === 'BRANCH_MONTHLY_REPORT');
   protected readonly subtitle = computed(() => this.template()?.eventType === 'DAILY_BUSINESS_SUMMARY'
     ? "Sent every morning at 9:00 AM (IST) with yesterday's figures, to the numbers in Channel Settings → WhatsApp → Daily report numbers."
+    : this.template()?.eventType === 'BRANCH_MONTHLY_REPORT'
+    ? "Sent to each branch with its monthly statement PDF attached as the message header."
     : 'Fill in {{variables}} wherever the shipment’s own details should appear.');
 
   /** Variables actually used by this message (body, header, button links) — one sample row each. */

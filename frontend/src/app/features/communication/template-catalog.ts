@@ -3,12 +3,13 @@ import { CommunicationChannel, CommunicationEventType } from '@core/models/commu
 /**
  * Which (event, channel) templates a company can still create. There is exactly one template per
  * event + channel, so "new" only ever means a combination that does not exist yet — and the daily
- * business summary has no SMS or Email form at all. Pure, so it is tested without Angular.
+ * business summary and branch monthly report have no SMS or Email form at all. Pure, so it is tested without Angular.
  */
 
 export const ALL_EVENTS: CommunicationEventType[] = [
   'SHIPMENT_BOOKED', 'SHIPMENT_DISPATCHED', 'SHIPMENT_RECEIVED', 'OUT_FOR_DELIVERY',
-  'SHIPMENT_DELIVERED', 'SHIPMENT_CANCELLED', 'RTO_INITIATED', 'RTO_DELIVERED', 'DAILY_BUSINESS_SUMMARY'
+  'SHIPMENT_DELIVERED', 'SHIPMENT_CANCELLED', 'RTO_INITIATED', 'RTO_DELIVERED', 'DAILY_BUSINESS_SUMMARY',
+  'BRANCH_MONTHLY_REPORT'
 ];
 
 export const ALL_CHANNELS: CommunicationChannel[] = ['WHATSAPP', 'SMS', 'EMAIL'];
@@ -16,7 +17,7 @@ export const ALL_CHANNELS: CommunicationChannel[] = ['WHATSAPP', 'SMS', 'EMAIL']
 export interface TemplateKey { eventType: CommunicationEventType; channel: CommunicationChannel; }
 
 export function channelsFor(event: CommunicationEventType): CommunicationChannel[] {
-  return event === 'DAILY_BUSINESS_SUMMARY' ? ['WHATSAPP'] : ALL_CHANNELS;
+  return event === 'DAILY_BUSINESS_SUMMARY' || event === 'BRANCH_MONTHLY_REPORT' ? ['WHATSAPP'] : ALL_CHANNELS;
 }
 
 /** Channels on which this event has no template yet. */
@@ -37,6 +38,9 @@ export function eventNote(event: CommunicationEventType): string | null {
   }
   if (event === 'DAILY_BUSINESS_SUMMARY') {
     return 'This is the owner’s 9:00 AM summary. It goes to the numbers in Channel Settings → WhatsApp → Daily report numbers.';
+  }
+  if (event === 'BRANCH_MONTHLY_REPORT') {
+    return 'This sends each branch its monthly statement PDF. Meta needs a PDF header on it, so create it once in WhatsApp Manager, then press Check status here.';
   }
   return null;
 }

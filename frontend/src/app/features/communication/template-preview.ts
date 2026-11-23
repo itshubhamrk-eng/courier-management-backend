@@ -19,12 +19,15 @@ export const DAILY_VARIABLES = [
   'delivered', 'cancelled', 'codToPaySettled', 'inTransit', 'outForDelivery'
 ];
 
+export const BRANCH_REPORT_VARIABLES = ['branchName', 'month'];
+
 export const SHIPMENT_VARIABLES = [
   'customerName', 'companyName', 'shipmentNumber', 'trackingNumber', 'pickupLocation',
   'deliveryLocation', 'amount', 'deliveryDate', 'receiverName', 'trackingUrl', 'podUrl'
 ];
 
 export function variablesFor(eventType: string): string[] {
+  if (eventType === 'BRANCH_MONTHLY_REPORT') return BRANCH_REPORT_VARIABLES;
   return eventType === 'DAILY_BUSINESS_SUMMARY' ? DAILY_VARIABLES : SHIPMENT_VARIABLES;
 }
 
@@ -50,7 +53,9 @@ export function sampleValues(companyName?: string | null): Record<string, string
     cancelled: '2',
     codToPaySettled: '2,120.00',
     inTransit: '8',
-    outForDelivery: '5'
+    outForDelivery: '5',
+    branchName: 'Pune Central',
+    month: 'October 2026'
   };
 }
 
