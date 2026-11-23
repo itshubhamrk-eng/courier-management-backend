@@ -41,8 +41,8 @@ class BranchStatementPdfTest {
 
     private static BranchStatement statement(int n) {
         UUID b = UUID.randomUUID();
-        VendorAuditRow audit = new VendorAuditRow(b, 3, 7, d("300"), 2, 4, d("200"), d("30"), d("20"),
-                5, 4, d("30"), d("20"), d("5"), d("6"), 1, null, null, null, null, null);
+        VendorAuditRow audit = new VendorAuditRow(b, 3, 7, d("300"), 2, 4, d("200"), d("30"), d("77.77"),
+                5, 4, d("30"), d("77.77"), d("5"), d("6"), 1, null, null, null, null, null);
         WalletService.PeriodSummary w = new WalletService.PeriodSummary(d("100"), d("1234.50"), 2, d("500"),
                 d("12"), d("3"), d("20"), d("300"));
         return new BranchStatement(b, "BR01", "Pune Central", LocalDate.of(2026, 10, 1),
@@ -70,6 +70,13 @@ class BranchStatementPdfTest {
         for (int i = 0; i < 5; i++) {
             assertThat(t).contains("TXN" + String.format("%06d", i));
         }
+    }
+
+    @Test
+    void deliveryCommissionComesFromLedgerOnly() throws Exception {
+        String t = text(BranchStatementPdf.render(statement(1), "Amazing Logistics"));
+        assertThat(t).contains("Delivery (DRS) commission credited").contains("20.00");
+        assertThat(t).doesNotContain("77.77");
     }
 
     @Test

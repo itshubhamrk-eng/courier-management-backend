@@ -75,8 +75,7 @@ public final class BranchStatementPdf {
         row(t, "Wallet recharges", w.rechargeCount() + " / " + money(w.rechargeAmount()), false);
         row(t, "Booking charges debited", money(w.bookingDebited()), false);
         row(t, "Booking commission", money(a.bookingTotalCommission()), false);
-        row(t, "Delivery commission credited", money(a.deliveryTotalCommission()), false);
-        row(t, "DRS charge credited", money(w.drsChargeCredited()), false);
+        row(t, "Delivery (DRS) commission credited", money(w.drsChargeCredited()), false);
         row(t, "Commission credited", money(w.commissionCredited()), false);
         row(t, "Commission debited", money(w.commissionDebited()), false);
         row(t, "ODA charges", money(a.odaCharges()), false);
