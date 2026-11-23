@@ -151,4 +151,28 @@ class WhatsAppSpendServiceImplTest {
         assertThat(s.periodEnd()).isEqualTo(Instant.parse("2026-11-23T04:30:00Z"));
         assertThat(s.spent()).isEqualByComparingTo("0");
     }
+
+    @Test
+    void budgetTypedWithCommasOrCurrencySymbolStillCounts() {
+        for (String typed : new String[] {"5,000", "₹5000", " Rs. 5,000.50 "}) {
+            configure("{\"businessAccountId\":\"W1\",\"monthlyBudget\":\"" + typed + "\"}", "tok");
+            when(provider.fetchPricing(any(), any(), any())).thenReturn(new PricingReport("INR", List.of(pt("10"))));
+
+            Spend s = service.current();
+
+            assertThat(s.budget()).as(typed).isNotNull();
+            assertThat(s.level()).as(typed).isEqualTo("OK");
+        }
+    }
+
+    @Test
+    void negativeBudgetTypedInSettingsIsStillNoBudget() {
+        configure("{\"businessAccountId\":\"W1\",\"monthlyBudget\":\"-5\"}", "tok");
+        when(provider.fetchPricing(any(), any(), any())).thenReturn(new PricingReport("INR", List.of(pt("10"))));
+
+        Spend s = service.current();
+
+        assertThat(s.budget()).isNull();
+        assertThat(s.level()).isEqualTo("NO_BUDGET");
+    }
 }

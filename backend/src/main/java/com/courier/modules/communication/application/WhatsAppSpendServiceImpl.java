@@ -105,11 +105,16 @@ public class WhatsAppSpendServiceImpl implements WhatsAppSpendService {
     }
 
     private static BigDecimal parseBudget(String raw) {
-        if (raw == null || raw.isBlank()) {
+        if (raw == null || raw.isBlank() || raw.trim().startsWith("-")) {
             return null;
         }
         try {
-            BigDecimal value = new BigDecimal(raw.trim());
+            // Admins type "5,000", "₹5000" or "Rs. 5,000.50": take the first number once commas are dropped.
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d+(\\.\\d+)?").matcher(raw.replace(",", ""));
+            if (!m.find()) {
+                return null;
+            }
+            BigDecimal value = new BigDecimal(m.group());
             return value.signum() > 0 ? value : null;
         } catch (NumberFormatException e) {
             return null;
