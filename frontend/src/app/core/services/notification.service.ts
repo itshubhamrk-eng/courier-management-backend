@@ -8,6 +8,7 @@ export class NotificationService {
 
   success(msg: string) { this.show(msg, 'toast-success'); }
   info(msg: string) { this.show(msg, 'toast-info'); }
+  warn(msg: string) { this.show(msg, 'toast-warn', 5000); }
   error(msg: string) { this.show(msg, 'toast-error', 6000); }
 
   private show(message: string, panelClass: string, duration = 3500) {

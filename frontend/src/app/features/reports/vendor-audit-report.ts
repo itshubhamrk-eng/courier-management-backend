@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DecimalPipe } from '@angular/common';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
-import { VendorAuditRow, ShipmentSearchRequest } from '@core/models/shipment.model';
+import { VendorAuditRow, ShipmentSearchRequest, BranchSendStatus, SendOutcome } from '@core/models/shipment.model';
 import { TableColumn } from '@shared/components/ui-table/ui-table';
 import { UiTable } from '@shared/components/ui-table/ui-table';
 import { UiButton } from '@shared/components/ui-button/ui-button';
@@ -10,6 +10,8 @@ import { SelectOption } from '@shared/components/ui-select/ui-select';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { ShipmentService } from '../shipment/shipment.service';
 import { excludingCancelled } from './non-cancelled.util';
+import { DialogService } from '@shared/components/ui-dialog/dialog.service';
+import { apiMessage } from '@features/communication/api-error';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 /**
@@ -36,6 +38,10 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
           <label class="dfld">From <input type="date" [value]="from()" (change)="onFrom($event)" /></label>
           <label class="dfld">To <input type="date" [value]="to()" (change)="onTo($event)" /></label>
           <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
+          <span [title]="datesSet() ? '' : dateHint">
+            <app-button variant="stroked" icon="send" [loading]="sendingAll()"
+                        [disabled]="!datesSet()" (pressed)="sendAll()">Send to all branches</app-button>
+          </span>
         </div>
       </header>
 
@@ -75,6 +81,18 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
             <td class="num">{{ r.rechargeCount === null ? '—' : r.rechargeCount }}</td>
             <td class="num">{{ r.drsChargeCredited === null ? '—' : ('₹' + (r.drsChargeCredited | number: '1.2-2')) }}</td>
             <td class="num">{{ r.closingBalance === null ? '—' : ('₹' + (r.closingBalance | number: '1.2-2')) }}</td>
+            <td>{{ statusText(r.branchId) }}</td>
+            <td class="acts">
+              <span [title]="datesSet() ? '' : dateHint">
+                <app-button variant="text" icon="picture_as_pdf" [disabled]="!datesSet() || isBusy(r.branchId)"
+                            (pressed)="downloadPdf(r)">Download PDF</app-button>
+              </span>
+              <span [title]="datesSet() ? '' : dateHint">
+                <app-button variant="text" icon="send" [disabled]="!datesSet() || isBusy(r.branchId) || noPhone(r.branchId)"
+                            (pressed)="send(r)">Send on WhatsApp</app-button>
+              </span>
+              @if (noPhone(r.branchId)) { <span class="text-caption">No phone</span> }
+            </td>
           </ng-template>
         </app-table>
       </div>
@@ -93,6 +111,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
     .stat__v { font:700 23px var(--font-sans); color:var(--content-fg); }
     .twrap { overflow-x:auto; }
     .num { text-align:right; }
+    .acts { white-space:nowrap; }
     .strong { font-weight:700; }
   `]
 })
@@ -101,6 +120,14 @@ export class VendorAuditReport implements OnInit {
   private readonly masters = inject(MasterDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
+  private readonly dialogs = inject(DialogService);
+
+  protected readonly dateHint = 'Pick a From and To date to send reports.';
+  protected readonly sendStatuses = signal<BranchSendStatus[]>([]);
+  protected readonly statusById = computed(() =>
+    Object.fromEntries(this.sendStatuses().map((s) => [s.branchId, s])) as Record<string, BranchSendStatus>);
+  protected readonly busyIds = signal<ReadonlySet<string>>(new Set());
+  protected readonly sendingAll = signal(false);
 
   protected readonly branchOptions = signal<SelectOption[]>([]);
   protected readonly loading = signal(true);
@@ -128,8 +155,12 @@ export class VendorAuditReport implements OnInit {
     { key: 'openingBalance', header: 'Opening Balance', align: 'right' },
     { key: 'rechargeCount', header: 'Recharges', align: 'right' },
     { key: 'drsChargeCredited', header: 'DRS Charge Credited', align: 'right' },
-    { key: 'closingBalance', header: 'Closing Balance', align: 'right' }
+    { key: 'closingBalance', header: 'Closing Balance', align: 'right' },
+    { key: 'whatsapp', header: 'WhatsApp' },
+    { key: 'report', header: 'Report' }
   ];
+
+  protected readonly datesSet = computed(() => !!this.from() && !!this.to());
 
   protected readonly totals = computed(() => this.rows().reduce((t, r) => ({
     paidOrderCount: t.paidOrderCount + r.paidOrderCount,
@@ -168,8 +199,116 @@ export class VendorAuditReport implements OnInit {
     });
   }
 
-  onFrom(e: Event): void { this.from.set((e.target as HTMLInputElement).value); this.load(); }
-  onTo(e: Event): void { this.to.set((e.target as HTMLInputElement).value); this.load(); }
+  onFrom(e: Event): void { this.from.set((e.target as HTMLInputElement).value); this.load(); this.loadStatus(); }
+  onTo(e: Event): void { this.to.set((e.target as HTMLInputElement).value); this.load(); this.loadStatus(); }
+
+  /** Send-status per branch for the chosen range; a failure leaves the report table untouched. */
+  private loadStatus(): void {
+    if (!this.datesSet()) { this.sendStatuses.set([]); return; }
+    this.service.vendorAuditSendStatus(this.from(), this.to()).subscribe({
+      next: (s) => this.sendStatuses.set(s),
+      error: (e) => this.notify.error(apiMessage(e, 'Could not load WhatsApp send status.'))
+    });
+  }
+
+  protected isBusy(id: string): boolean { return this.busyIds().has(id); }
+  protected noPhone(id: string): boolean { return this.statusById()[id]?.managerPhoneCount === 0; }
+
+  protected statusText(id: string): string {
+    const s = this.statusById()[id];
+    if (!s?.lastStatus) return 'Not sent';
+    const label = ({ SENT: 'Sent', DELIVERED: 'Delivered', FAILED: 'Failed', PENDING: 'Pending' } as Record<string, string>)[s.lastStatus]
+      ?? s.lastStatus;
+    return s.lastSentAt ? `${label} · ${new Date(s.lastSentAt).toLocaleString()}` : label;
+  }
+
+  private setBusy(id: string, on: boolean): void {
+    this.busyIds.update((set) => { const next = new Set(set); if (on) next.add(id); else next.delete(id); return next; });
+  }
+
+  downloadPdf(r: VendorAuditRow): void {
+    this.setBusy(r.branchId, true);
+    this.service.vendorAuditPdf(r.branchId, this.from(), this.to()).subscribe({
+      next: ({ blob, filename }) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.setBusy(r.branchId, false);
+      },
+      error: (e) => { this.setBusy(r.branchId, false); this.notify.error(apiMessage(e, 'Could not download the report.')); }
+    });
+  }
+
+  send(r: VendorAuditRow): void {
+    const last = this.statusById()[r.branchId]?.lastStatus;
+    if (last === 'SENT' || last === 'DELIVERED') this.confirmThen(r, () => this.doSend(r, true));
+    else this.doSend(r, false);
+  }
+
+  private confirmThen(r: VendorAuditRow, go: () => void): void {
+    this.dialogs.confirm({
+      title: 'Send report again',
+      message: `This report was already sent to ${this.statusById()[r.branchId]?.branchName ?? this.branchLabel(r.branchId)}. Send it again?`,
+      confirmLabel: 'Send again'
+    }).subscribe((ok) => { if (ok) go(); });
+  }
+
+  private doSend(r: VendorAuditRow, force: boolean): void {
+    this.setBusy(r.branchId, true);
+    this.service.sendVendorAuditReport(r.branchId, this.from(), this.to(), force).subscribe({
+      next: (o) => {
+        if (o.result === 'ALREADY_SENT' && !force) {
+          this.setBusy(r.branchId, false);
+          this.confirmThen(r, () => this.doSend(r, true));
+          return;
+        }
+        this.announce(o);
+        this.setBusy(r.branchId, false);
+        this.loadStatus();
+      },
+      error: (e) => {
+        this.setBusy(r.branchId, false);
+        this.notify.error(apiMessage(e, 'Could not send the report.'));
+        this.loadStatus();
+      }
+    });
+  }
+
+  private announce(o: SendOutcome): void {
+    switch (o.result) {
+      case 'SENT': this.notify.success(`Report sent to ${o.branchName} on WhatsApp`); break;
+      case 'NO_PHONE': this.notify.warn(`No manager phone number for ${o.branchName}`); break;
+      case 'TEMPLATE_NOT_APPROVED':
+        this.notify.warn('Template not approved by Meta yet. Create branch_monthly_report in WhatsApp Manager and check its status in Communication > Templates.');
+        break;
+      case 'FAILED':
+        this.notify.error(`Could not send the report to ${o.branchName}. Check Communication > Dashboard for the reason.`);
+        break;
+      default: break;
+    }
+  }
+
+  sendAll(): void {
+    this.sendingAll.set(true);
+    this.service.sendVendorAuditReportToAll(this.from(), this.to(), false).subscribe({
+      next: (outcomes) => {
+        const n = (res: SendOutcome['result']) => outcomes.filter((o) => o.result === res).length;
+        const parts = [`Sent ${n('SENT')}`, `no phone ${n('NO_PHONE')}`, `failed ${n('FAILED')}`];
+        if (n('ALREADY_SENT')) parts.push(`already sent ${n('ALREADY_SENT')}`);
+        if (n('TEMPLATE_NOT_APPROVED')) parts.push(`template not approved ${n('TEMPLATE_NOT_APPROVED')}`);
+        this.notify.success(parts.join(', '));
+        this.sendingAll.set(false);
+        this.loadStatus();
+      },
+      error: (e) => {
+        this.sendingAll.set(false);
+        this.notify.error(apiMessage(e, 'Could not send the reports.'));
+        this.loadStatus();
+      }
+    });
+  }
 
   protected branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
 

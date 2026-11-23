@@ -1,12 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
+import { map } from 'rxjs/operators';
 import { PageQuery } from '@core/models/page.model';
 import {
   Shipment, ShipmentResponse, ShipmentCharge, ShipmentStatusHistoryEntry, ShipmentDocument,
   ShipmentItem, CreateShipmentRequest, UpdateShipmentRequest, AddShipmentDocumentRequest,
   PricingRequest, PricingResponse, TimelineStep, ShipmentDrs, ShipmentSearchRequest, ShipmentSummaryStats,
-  BranchCommissionSummary, CommissionLedgerRow, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse, PaymentModeChange
+  BranchCommissionSummary, CommissionLedgerRow, BranchPerformanceSummary, VendorAuditRow, BulkTrackResponse, PaymentModeChange,
+  SendOutcome, BranchSendStatus
 } from '@core/models/shipment.model';
 
 /**
@@ -51,6 +53,24 @@ export class ShipmentService {
    *  filters as `list`. */
   vendorAudit(filters: ShipmentSearchRequest) {
     return this.api.get<VendorAuditRow[]>(`${API.shipments}/vendor-audit`, filters as Record<string, unknown>);
+  }
+  /** Branch monthly report PDF for [from, to]; filename comes from Content-Disposition. */
+  vendorAuditPdf(branchId: string, from: string, to: string) {
+    return this.api.getBlobResponse(`${API.shipments}/vendor-audit/${branchId}/pdf`, { from, to }).pipe(
+      map((res) => {
+        const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') ?? '');
+        return { blob: res.body as Blob, filename: m ? decodeURIComponent(m[1]) : 'branch-report.pdf' };
+      }));
+  }
+  /** Sends one branch's report to its managers on WhatsApp. `force` resends an already-sent one. */
+  sendVendorAuditReport(branchId: string, from: string, to: string, force: boolean) {
+    return this.api.post<SendOutcome>(`${API.shipments}/vendor-audit/${branchId}/send`, {}, { from, to, force });
+  }
+  sendVendorAuditReportToAll(from: string, to: string, force: boolean) {
+    return this.api.post<SendOutcome[]>(`${API.shipments}/vendor-audit/send-all`, {}, { from, to, force });
+  }
+  vendorAuditSendStatus(from: string, to: string) {
+    return this.api.get<BranchSendStatus[]>(`${API.shipments}/vendor-audit/send-status`, { from, to });
   }
   get(id: string) { return this.api.get<ShipmentResponse>(`${API.shipments}/${id}`); }
   getByTrackingNumber(trackingNumber: string) {

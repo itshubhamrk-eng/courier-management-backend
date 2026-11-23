@@ -592,6 +592,18 @@ export interface VendorAuditRow {
   drsChargeCredited: number | null;
 }
 
+/** Outcome of sending the branch monthly report to one branch's managers. */
+export type SendResult = 'SENT' | 'NO_PHONE' | 'ALREADY_SENT' | 'TEMPLATE_NOT_APPROVED' | 'FAILED';
+export interface SendOutcome { branchId: string; branchName: string; result: SendResult; }
+/** One row of GET /shipments/vendor-audit/send-status; `lastStatus` is null when never attempted. */
+export interface BranchSendStatus {
+  branchId: string;
+  branchName: string;
+  managerPhoneCount: number;
+  lastStatus: string | null;
+  lastSentAt: string | null;
+}
+
 /** One row of GET /shipments/branch-performance — the Branch Performance Report's
  *  per-branch summary table. Mirrors backend `BranchPerformanceSummaryResponse`. */
 export interface BranchPerformanceSummary {

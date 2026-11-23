@@ -124,6 +124,7 @@ body {
 // Toast tones for the notification service.
 .toast-success { --mdc-snackbar-container-color: var(--success); }
 .toast-info { --mdc-snackbar-container-color: var(--info); }
+.toast-warn { --mdc-snackbar-container-color: var(--warning, #b45309); }
 .toast-error { --mdc-snackbar-container-color: var(--danger); }
 
 // driver.js popover, restyled to match the app instead of its own default look — scoped to

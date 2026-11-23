@@ -1,4 +1,4 @@
-import { HttpClient, HttpContext, HttpContextToken, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpResponse, HttpContextToken, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -36,8 +36,8 @@ export class ApiService {
       .pipe(map((r) => r.data));
   }
 
-  post<T>(path: string, body: unknown): Observable<T> {
-    return this.http.post<ApiResponse<T>>(this.base + path, body).pipe(map((r) => r.data));
+  post<T>(path: string, body: unknown, query?: Record<string, unknown>): Observable<T> {
+    return this.http.post<ApiResponse<T>>(this.base + path, body, { params: toParams(query) }).pipe(map((r) => r.data));
   }
 
   put<T>(path: string, body: unknown): Observable<T> {
@@ -55,6 +55,11 @@ export class ApiService {
   /** Raw file download (CSV export, ...) — no ApiResponse envelope to unwrap. */
   getBlob(path: string, query?: Record<string, unknown>): Observable<Blob> {
     return this.http.get(this.base + path, { params: toParams(query), responseType: 'blob' });
+  }
+
+  /** Raw file download that also hands back the response headers (e.g. Content-Disposition). */
+  getBlobResponse(path: string, query?: Record<string, unknown>): Observable<HttpResponse<Blob>> {
+    return this.http.get(this.base + path, { params: toParams(query), responseType: 'blob', observe: 'response' });
   }
 }
 
