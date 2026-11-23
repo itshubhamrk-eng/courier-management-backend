@@ -584,6 +584,12 @@ export interface VendorAuditRow {
   odaCharges: number;
   otherCharges: number;
   cancelledOrderCount: number;
+  /** Wallet figures over the booking date range; all null when the search had no date range. */
+  openingBalance: number | null;
+  closingBalance: number | null;
+  rechargeCount: number | null;
+  rechargeAmount: number | null;
+  drsChargeCredited: number | null;
 }
 
 /** One row of GET /shipments/branch-performance — the Branch Performance Report's

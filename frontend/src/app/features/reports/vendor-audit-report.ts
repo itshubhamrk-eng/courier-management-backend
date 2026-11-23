@@ -48,6 +48,8 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
         <div class="stat"><span class="stat__l">Delivery Commission</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().deliveryTotalCommission | number: '1.2-2')) }}</span></div>
         <div class="stat"><span class="stat__l">ODA Charges</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().odaCharges | number: '1.2-2')) }}</span></div>
         <div class="stat"><span class="stat__l">Other Charges</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().otherCharges | number: '1.2-2')) }}</span></div>
+        <div class="stat"><span class="stat__l">Total Recharged</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().rechargeAmount | number: '1.2-2')) }}</span></div>
+        <div class="stat"><span class="stat__l">Total DRS Credited</span><span class="stat__v">{{ loading() ? '—' : ('₹' + (totals().drsChargeCredited | number: '1.2-2')) }}</span></div>
       </div>
 
       <div class="twrap">
@@ -69,6 +71,10 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
             <td class="num strong">₹{{ r.deliveryTotalCommission | number: '1.2-2' }}</td>
             <td class="num">₹{{ r.odaCharges | number: '1.2-2' }}</td>
             <td class="num">₹{{ r.otherCharges | number: '1.2-2' }}</td>
+            <td class="num">{{ r.openingBalance === null ? '—' : ('₹' + (r.openingBalance | number: '1.2-2')) }}</td>
+            <td class="num">{{ r.rechargeCount === null ? '—' : r.rechargeCount }}</td>
+            <td class="num">{{ r.drsChargeCredited === null ? '—' : ('₹' + (r.drsChargeCredited | number: '1.2-2')) }}</td>
+            <td class="num">{{ r.closingBalance === null ? '—' : ('₹' + (r.closingBalance | number: '1.2-2')) }}</td>
           </ng-template>
         </app-table>
       </div>
@@ -118,7 +124,11 @@ export class VendorAuditReport implements OnInit {
     { key: 'bookingTotalCommission', header: 'Booking Total Commission', align: 'right' },
     { key: 'deliveryTotalCommission', header: 'Delivery Total Commission', align: 'right' },
     { key: 'odaCharges', header: 'ODA Charges', align: 'right' },
-    { key: 'otherCharges', header: 'Other Charges', align: 'right' }
+    { key: 'otherCharges', header: 'Other Charges', align: 'right' },
+    { key: 'openingBalance', header: 'Opening Balance', align: 'right' },
+    { key: 'rechargeCount', header: 'Recharges', align: 'right' },
+    { key: 'drsChargeCredited', header: 'DRS Charge Credited', align: 'right' },
+    { key: 'closingBalance', header: 'Closing Balance', align: 'right' }
   ];
 
   protected readonly totals = computed(() => this.rows().reduce((t, r) => ({
@@ -129,10 +139,13 @@ export class VendorAuditReport implements OnInit {
     bookingTotalCommission: t.bookingTotalCommission + r.bookingTotalCommission,
     deliveryTotalCommission: t.deliveryTotalCommission + r.deliveryTotalCommission,
     odaCharges: t.odaCharges + r.odaCharges,
-    otherCharges: t.otherCharges + r.otherCharges
+    otherCharges: t.otherCharges + r.otherCharges,
+    rechargeAmount: t.rechargeAmount + (r.rechargeAmount ?? 0),
+    drsChargeCredited: t.drsChargeCredited + (r.drsChargeCredited ?? 0)
   }), {
     paidOrderCount: 0, topayOrderCount: 0, totalBookedOrderCount: 0, totalDeliveredOrderCount: 0,
-    bookingTotalCommission: 0, deliveryTotalCommission: 0, odaCharges: 0, otherCharges: 0
+    bookingTotalCommission: 0, deliveryTotalCommission: 0, odaCharges: 0, otherCharges: 0,
+    rechargeAmount: 0, drsChargeCredited: 0
   }));
 
   ngOnInit(): void {
@@ -173,13 +186,14 @@ export class VendorAuditReport implements OnInit {
     const header = ['branch', 'paidOrderCount', 'paidOrderQuantity', 'paidOrderAmount',
       'topayOrderCount', 'topayOrderQuantity', 'topayOrderAmount', 'paidCommission', 'deliveryCommission',
       'totalBookedOrderCount', 'totalDeliveredOrderCount', 'bookingTotalCommission', 'deliveryTotalCommission',
-      'odaCharges', 'otherCharges'];
+      'odaCharges', 'otherCharges', 'openingBalance', 'rechargeCount', 'drsChargeCredited', 'closingBalance'];
     const lines = rows.map((r) => [this.branchLabel(r.branchId), r.paidOrderCount, r.paidOrderQuantity,
       r.paidOrderAmount, r.topayOrderCount, r.topayOrderQuantity, r.topayOrderAmount, r.paidCommission,
       r.deliveryCommission, r.totalBookedOrderCount, r.totalDeliveredOrderCount, r.bookingTotalCommission,
-      r.deliveryTotalCommission, r.odaCharges, r.otherCharges]);
+      r.deliveryTotalCommission, r.odaCharges, r.otherCharges,
+      r.openingBalance, r.rechargeCount, r.drsChargeCredited, r.closingBalance]);
     downloadCsv(`vendor-audit-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
     this.notify.info(`Exported ${rows.length} branch row(s).`);
   }
 }
