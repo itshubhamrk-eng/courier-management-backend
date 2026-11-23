@@ -37,7 +37,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DailyReportServiceImpl implements DailyReportService {
 
-    static final int MAX_ATTEMPTS = 3;
+    static final int MAX_ATTEMPTS = ReportSendSupport.MAX_ATTEMPTS;
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
 
     private final CommunicationSettingRepository settingRepository;
@@ -134,8 +134,8 @@ public class DailyReportServiceImpl implements DailyReportService {
             row.setSentAt(Instant.now());
         } catch (RuntimeException e) { // includes ProviderSendException
             row.setStatus(CommunicationStatus.FAILED);
-            String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            row.setErrorMessage(message.length() > 1000 ? message.substring(0, 1000) : message);
+            String message = ReportSendSupport.errorText(e);
+            row.setErrorMessage(message);
             log.warn("Daily report send failed: company={} day={} attempt={} — {}", row.getCompanyId(),
                     row.getReportDate(), row.getAttemptCount() + 1, message);
         }
