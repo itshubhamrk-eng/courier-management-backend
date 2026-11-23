@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { MatMenuModule } from '@angular/material/menu';
@@ -45,7 +46,7 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
         <td>{{ s.deliveryType === 'DOOR' ? 'Door Delivery' : 'Office Delivery' }}</td>
         <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
         <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
-        <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
+        <td class="num">{{ isTbb(s.paymentModeId) ? 'Credit' : s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
         <td class="num">{{ s.branchCommissionOnOtherAmount != null ? ('₹' + (s.branchCommissionOnOtherAmount | number: '1.2-2')) : '—' }}</td>
         @if (showCompanyCommission()) {
@@ -140,5 +141,6 @@ export class ShipmentTable {
   isEditable(s: Shipment): boolean { return s.status === 'BOOKED'; }
   isCancellable(s: Shipment): boolean { return CANCELLABLE_STATUSES.includes(s.status); }
   branchLabel(id: string): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  isTbb(id: string): boolean { return isTbbLabel(this.paymentModeLabel(id)); }
   paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 }

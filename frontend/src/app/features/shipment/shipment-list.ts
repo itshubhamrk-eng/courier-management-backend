@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
@@ -230,7 +231,8 @@ export class ShipmentList implements OnInit {
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact,
-      r.numberOfPackages ?? '', r.chargeableWeight, r.netAmount ?? '',
+      r.numberOfPackages ?? '', r.chargeableWeight,
+      isTbbLabel(this.paymentModeOptions().find((o) => o.value === r.paymentModeId)?.label) ? 'Credit' : (r.netAmount ?? ''),
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
       ...(withCompany ? [r.companyCommissionOnBasicFreight ?? ''] : []), r.status]);
     downloadCsv(`shipments-${new Date().toISOString().slice(0, 10)}.csv`, header, lines,

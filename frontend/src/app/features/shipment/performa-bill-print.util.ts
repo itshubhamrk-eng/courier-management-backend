@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ConsignmentPrintData, amountInWords, qrSvg } from './consignment-print.util';
 
 /** "Print 3" — a third consignment-note layout matching a real courier's "Performa
@@ -45,7 +46,9 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     ['Reschedule Fine', 0]
   ];
   // Paid: amount only on the Customer copy. ToPay: amount on the Customer, Driver and Delivery (POD) copies.
+  const isTbb = isTbbLabel(d.paymentModeLabel);
   const amountMode: 'normal' | 'paid' | 'collect' | 'hidden' =
+    isTbb ? 'hidden' :
     isPaid ? (label === 'Customer Copy' ? 'paid' : 'hidden') :
     isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' || label === 'Driver Copy' ? 'collect' : 'hidden') :
     label === 'Driver Copy' ? 'normal' :
@@ -53,7 +56,7 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
     'normal';
   const collectTotal = isPaid ? 0 : total;
 
-  const amountSection = amountMode === 'hidden' ? '' : amountMode === 'paid' ? `
+  const amountSection = isTbb ? '<div class="words"><b>Credit Customer</b></div>' : amountMode === 'hidden' ? '' : amountMode === 'paid' ? `
         <table class="desc">
           <tr><th>Description</th><th>Amount</th></tr>
           ${taxRowsHtml}

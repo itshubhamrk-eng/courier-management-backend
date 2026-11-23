@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -73,7 +74,7 @@ const DEFAULT_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELI
           <td class="mono">{{ s.receiverContact }}</td>
           <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
           <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
-          <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
+          <td class="num">{{ isTbb(s.paymentModeId) ? 'Credit' : s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td><app-shipment-status-badge [status]="s.status" /></td>
           <td>{{ s.deliveredAt ? (s.deliveredAt | date: 'dd MMM y, h:mm a') : '—' }}</td>
         </ng-template>
@@ -197,6 +198,7 @@ export class DeliveryReport implements OnInit {
   view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
   protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected isTbb(id: string | null | undefined): boolean { return isTbbLabel(this.paymentModeLabel(id as string)); }
   protected paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   exportCsv(): void {
@@ -213,7 +215,7 @@ export class DeliveryReport implements OnInit {
       'branchCommissionOnOtherAmount', 'companyCommissionOnBasicFreight', 'status', 'deliveredAt'];
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, this.branchLabel(r.deliveryBranchId),
       r.receiverName, r.receiverContact, this.paymentModeLabel(r.paymentModeId),
-      r.numberOfPackages ?? '', r.netAmount ?? '', r.totalCommission ?? '', r.commissionOnBasicFreight ?? '',
+      r.numberOfPackages ?? '', this.isTbb(r.paymentModeId) ? 'Credit' : (r.netAmount ?? ''), r.totalCommission ?? '', r.commissionOnBasicFreight ?? '',
       r.branchCommissionOnOtherAmount ?? '', r.companyCommissionOnBasicFreight ?? '',
       r.status, r.deliveredAt ?? '']);
     downloadCsv(`delivery-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [6, 7, 8, 9, 10]);

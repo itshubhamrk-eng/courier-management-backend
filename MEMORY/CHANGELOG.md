@@ -6,6 +6,11 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-23 - TBB shipments hide amounts (frontend only)
+- Payment mode TBB (`isTbbLabel`, `core/utils/tbb.util.ts`) hides customer amounts everywhere except the business billing invoice: booking summary (shows a "billed later" note), all four receipt prints (consignment, performa/Booking Receipt, ambox, Shipment Copy print "Credit Customer"), shipment list/view/charges, Booking and Delivery report rows + CSV (show "Credit").
+- Not done: aggregate totals (report Total Amount tiles, branch/commission/vendor-audit amounts) still include TBB; needs backend exclusion. Commission columns left visible.
+- Verified live on a :5173 dev server (list, view, charges, booking report, receipt HTML); booking pricing block untested (Company Admin has no branch).
+
 ## 2026-11-23 - Branch monthly report on WhatsApp (V152, V153)
 - Each branch gets a monthly statement PDF (previous calendar month) on its BRANCH_MANAGER's own phone: automatically on the 1st of every month at 09:00 IST, and on demand from buttons on the Vendor Audit Report (`/reports/vendor-audit`): per-row PDF download / send, plus Send to all branches. Sending the same branch and month twice is refused unless forced (resend).
 - Vendor Audit Report gained wallet columns: Opening Balance, Recharges, DRS Charge Credited, Closing Balance (`periodSummary*` / `transactionsBetween` on the wallet service).

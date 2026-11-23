@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -7,6 +8,7 @@ import { UiLoader } from '@shared/components/ui-loader/ui-loader';
 import { ShipmentCharge } from '@core/models/shipment.model';
 import { ChargeSummary } from './components/charge-summary';
 import { ShipmentService } from './shipment.service';
+import { MasterDataService } from '@features/masters/master-data.service';
 
 /** Shipment Charges — the Pricing Engine's own breakup, persisted at booking time and
  *  never recomputed from a later rate/config change. GET /shipments/{id}/charges. */
@@ -26,6 +28,8 @@ import { ShipmentService } from './shipment.service';
         <app-loader [minHeight]="240" caption="Loading…" />
       } @else if (!charges()) {
         <app-card><p class="empty">No charge breakup on file for this shipment.</p></app-card>
+      } @else if (tbb()) {
+        <app-card title="Charge Breakup"><p class="empty">Credit customer (TBB) — amount is shown only on the billing invoice.</p></app-card>
       } @else {
         <app-card title="Charge Breakup"
                   [subtitle]="(charges()!.matchedRouteCode ? 'Route ' + charges()!.matchedRouteCode + ' · ' : '') + (charges()!.matchedRateCode ? 'Rate ' + charges()!.matchedRateCode : '')">
@@ -67,11 +71,24 @@ export class ShipmentCharges implements OnInit {
 
   readonly loading = signal(true);
   readonly charges = signal<ShipmentCharge | null>(null);
+  readonly tbb = signal(false);
+  private readonly masters = inject(MasterDataService);
   id = '';
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
     this.breadcrumb.set([{ label: 'Shipments', route: '/shipments' }, { label: 'Charges' }]);
+    // Charges are shown only once the payment mode is known, so a TBB amount never flashes.
+    this.service.get(this.id).subscribe({
+      next: (s) => this.masters.options('payment-modes').subscribe({
+        next: (o) => { this.tbb.set(isTbbLabel(o.find((x) => x.value === s.paymentModeId)?.label)); this.loadCharges(); },
+        error: () => { this.tbb.set(true); this.loadCharges(); }
+      }),
+      error: () => { this.tbb.set(true); this.loadCharges(); }
+    });
+  }
+
+  private loadCharges(): void {
     this.service.charges(this.id).subscribe({
       next: (c) => { this.charges.set(c); this.loading.set(false); },
       error: () => { this.charges.set(null); this.loading.set(false); }

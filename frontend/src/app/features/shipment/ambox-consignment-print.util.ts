@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ConsignmentPrintData, qrSvg } from './consignment-print.util';
 
 /** "Print 2" — an alternate consignment-note layout matching a specific 12in × 6in
@@ -48,7 +49,7 @@ function sheet(d: ConsignmentPrintData, label: CopyLabel): string {
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
   // Paid: amounts only on the Consignor (customer) copy. ToPay: on the Consignor, Driver and P.O.D. copies.
-  const showAmount = isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' || label === 'CONSIGNOR COPY' || label === 'DRIVER COPY' : true;
+  const showAmount = isTbbLabel(d.paymentModeLabel) ? false : isPaid ? label === 'CONSIGNOR COPY' : isToPay ? label === 'P.O.D. COPY' || label === 'CONSIGNOR COPY' || label === 'DRIVER COPY' : true;
 
   const rows: Array<[string, number]> = [
     ['FREIGHT', d.charges.freight],

@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ShipmentBusCrossingCard } from '@features/bus-depot/shipment-bus-crossing-card';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
@@ -153,7 +154,8 @@ const TIMELINE_ICONS: Record<string, string> = {
             @if (loadingDetails()) {
               <app-loader [minHeight]="140" caption="Loading…" />
             } @else if (charge(); as c) {
-              <app-charge-summary [charges]="c" />
+              @if (isTbb()) { <p class="empty">Credit customer (TBB) — amount is shown only on the billing invoice.</p> }
+              @else { <app-charge-summary [charges]="c" /> }
               @if (paymentMode(); as pm) {
                 @if (pm.changeable) {
                   <div class="pm-edit">
@@ -179,10 +181,12 @@ const TIMELINE_ICONS: Record<string, string> = {
                   <span class="rate-edit__h">Calculate to preview the new charges, then update.</span>
                 </div>
                 @if (ratePreview(); as p) {
+                  @if (!isTbb()) {
                   <div class="rate-preview">
                     <div class="rate-preview__t">Preview at {{ rateInput() | number: '1.2-2' }}/KG — not saved yet</div>
                     <app-charge-summary [charges]="p" />
                   </div>
+                  }
                 }
               }
             } @else {
@@ -775,6 +779,7 @@ export class ShipmentView implements OnInit {
   branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
   serviceTypeLabel(id: string): string { return this.serviceTypeOptions().find((o) => o.value === id)?.label ?? id; }
   packageTypeLabel(id: string | null | undefined): string { return this.packageTypeOptions().find((o) => o.value === id)?.label ?? id ?? '—'; }
+  isTbb(): boolean { const s = this.shipment(); return !!s && isTbbLabel(this.paymentModeLabel(s.paymentModeId)); }
   paymentModeLabel(id: string): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? id; }
 
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }

@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -68,7 +69,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
           <td>{{ paymentModeLabel(s.paymentModeId) }}</td>
           <td class="num">{{ s.numberOfPackages ?? '—' }}</td>
           <td class="num">{{ s.chargeableWeight | number: '1.3-3' }} kg</td>
-          <td class="num">{{ s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
+          <td class="num">{{ isTbb(s.paymentModeId) ? 'Credit' : s.netAmount != null ? ('₹' + (s.netAmount | number: '1.2-2')) : '—' }}</td>
           <td class="num">{{ s.commissionOnBasicFreight != null ? ('₹' + (s.commissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
           <td class="num">{{ s.branchCommissionOnOtherAmount != null ? ('₹' + (s.branchCommissionOnOtherAmount | number: '1.2-2')) : '—' }}</td>
           <td class="num">{{ s.companyCommissionOnBasicFreight != null ? ('₹' + (s.companyCommissionOnBasicFreight | number: '1.2-2')) : '—' }}</td>
@@ -197,6 +198,7 @@ export class BookingReport implements OnInit {
   view(s: Shipment): void { this.router.navigate(['/shipments', s.id]); }
 
   protected branchLabel(id: string | null | undefined): string { return this.branchOptions().find((o) => o.value === id)?.label ?? '—'; }
+  protected isTbb(id: string | null | undefined): boolean { return isTbbLabel(this.paymentModeLabel(id as string)); }
   protected paymentModeLabel(id: string | null | undefined): string { return this.paymentModeOptions().find((o) => o.value === id)?.label ?? '—'; }
 
   exportCsv(): void {
@@ -215,7 +217,7 @@ export class BookingReport implements OnInit {
     const lines = rows.map((r) => [r.shipmentNumber, r.trackingNumber, r.bookingDate,
       this.branchLabel(r.bookingBranchId), this.branchLabel(r.deliveryBranchId),
       r.senderName, r.senderContact, r.receiverName, r.receiverContact, this.paymentModeLabel(r.paymentModeId),
-      r.numberOfPackages ?? '', r.chargeableWeight, r.netAmount ?? '',
+      r.numberOfPackages ?? '', r.chargeableWeight, this.isTbb(r.paymentModeId) ? 'Credit' : (r.netAmount ?? ''),
       r.totalCommission ?? '', r.commissionOnBasicFreight ?? '', r.branchCommissionOnOtherAmount ?? '',
       r.companyCommissionOnBasicFreight ?? '', r.status]);
     downloadCsv(`booking-report-${new Date().toISOString().slice(0, 10)}.csv`, header, lines, [10, 11, 12, 13, 14, 15]);

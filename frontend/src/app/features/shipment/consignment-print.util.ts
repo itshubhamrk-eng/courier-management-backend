@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ChargeBreakup, DeliveryType } from '@core/models/shipment.model';
 import { CompanyLetterhead } from '@features/company/company-profile.service';
 import JsBarcode from 'jsbarcode';
@@ -259,7 +260,9 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const isPaid = d.paymentModeLabel.includes('(PAID)');
   const isToPay = d.paymentModeLabel.includes('(TO_PAY)');
   // Paid: amount only on the Customer copy. ToPay: amount on the Customer, Driver and Delivery (POD) copies.
+  const isTbb = isTbbLabel(d.paymentModeLabel);
   const amountMode: 'normal' | 'paid' | 'omitted' | 'collect' =
+    isTbb ? 'omitted' :
     isPaid ? (label === 'Customer Copy' ? 'paid' : 'omitted') :
     isToPay ? (label === 'Delivery Copy' || label === 'Customer Copy' || label === 'Driver Copy' ? 'collect' : 'omitted') :
     label === 'Delivery Copy' ? 'collect' :
@@ -267,7 +270,7 @@ function copy(d: ConsignmentPrintData, label: CopyLabel): string {
   const collectTotal = isPaid ? 0 : total;
   const taxRowsHtml = `<tr><td>Taxable Amount</td><td>${taxableAmount.toFixed(2)}</td></tr>` +
     `<tr><td>GST</td><td>${d.charges.gstAmount.toFixed(2)}</td></tr>`;
-  const amountSection = amountMode === 'omitted' ? '' : amountMode === 'paid' ? `
+  const amountSection = isTbb ? '<div class="zero"><b>Credit Customer</b></div>' : amountMode === 'omitted' ? '' : amountMode === 'paid' ? `
           <table class="charges">
             <tr><th style="text-align:left">Description</th><th style="text-align:right">Amount(Rs.)</th></tr>
             ${taxRowsHtml}

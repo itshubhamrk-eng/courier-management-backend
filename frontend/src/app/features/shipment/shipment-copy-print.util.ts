@@ -1,3 +1,4 @@
+import { isTbbLabel } from '@core/utils/tbb.util';
 import { ConsignmentPrintData, qrSvg } from './consignment-print.util';
 
 /** "Shipment Copy" — compact black-and-white LR matching the legacy Ambox consignment
@@ -32,7 +33,11 @@ function copy(d: ConsignmentPrintData, label: string): string {
   const isCredit = mode.includes('CREDIT') || mode.includes('TBB');
   const tick = (on: boolean) => (on ? '&#9745;' : '&#9744;');
 
-  const charges: Array<[string, string]> = [
+  const isTbb = isTbbLabel(d.paymentModeLabel);
+  const charges: Array<[string, string]> = isTbb ? [
+    ['Freight', ''], ['Docket Ch', ''], ['DOD/COD Ch', ''], ['ODA Ch', ''], ['Mathadi Ch.', ''], ['Packaging Ch', ''],
+    ['Total Charges', ''], ['FOV', ''], ['GST', ''], ['Grand Total', 'Credit Customer']
+  ] : [
     ['Freight', money(d.charges.freight)],
     ['Docket Ch', money(d.charges.handlingCharge)],
     ['DOD/COD Ch', ''],

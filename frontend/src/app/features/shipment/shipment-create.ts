@@ -38,6 +38,7 @@ import { FreightCalculationService } from './freight-calculation.service';
 import { companyAddressLine } from './consignment-print.util';
 import { printPerformaBillCopies } from './performa-bill-print.util';
 import { parseVoiceBooking } from './voice-booking.util';
+import { isTbbLabel } from '@core/utils/tbb.util';
 
 /** `yyyy-MM-dd` in the local timezone — a native `<input type="date">` value, and what
  *  `bookingDate` defaults to on the server if omitted; setting it explicitly here just
@@ -426,7 +427,10 @@ type FreightOutcome =
               }
             }
 
-            <div class="sum__body">
+            @if (isTbbMode()) {
+              <p class="hint">Credit customer (TBB) — amount is billed later, not shown at booking.</p>
+            }
+            <div class="sum__body" [hidden]="isTbbMode()">
               @if (freightCalc(); as f) {
                 <div class="factor-row">
                   <span class="sum__lbl">Rate / KG
@@ -1357,6 +1361,13 @@ export class ShipmentCreate implements OnInit {
    *  backend decides and adds it (`ShipmentServiceImpl.toPayChargeFor`); this only mirrors it
    *  so the live total matches what gets booked. To-Pay is recognised by its `(TO_PAY)` code,
    *  the same way `PAID` is above. */
+  /** TBB (To Be Billed) is the credit account — amounts are hidden at booking and on the
+   *  receipt; they only appear on the business billing invoice. */
+  protected isTbbMode(): boolean {
+    const id = this.c('paymentModeId').value;
+    return isTbbLabel(this.paymentModeOptions().find((o) => o.value === id)?.label);
+  }
+
   protected toPayCharge(): number {
     const id = this.c('paymentModeId').value;
     const label = this.paymentModeOptions().find((o) => o.value === id)?.label ?? '';
