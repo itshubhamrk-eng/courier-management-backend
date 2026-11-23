@@ -27,6 +27,14 @@ public interface WhatsAppProvider {
      */
     TemplateSubmissionResult submitTemplate(TemplateSubmission submission, WhatsAppCredentials credentials);
 
+    /**
+     * Uploads a PDF to Meta ({@code POST /{phoneNumberId}/media}, multipart) and returns the media id
+     * to put in a message's document header (see {@link WhatsAppMessage#withDocument}).
+     *
+     * @throws ProviderSendException on any failure, with Meta's own reason when it gave one
+     */
+    String uploadDocument(byte[] pdf, String fileName, WhatsAppCredentials credentials);
+
     /** Asks Meta where a template stands. {@code status} is {@code NOT_FOUND} when Meta has no
      *  template of that name and language. */
     TemplateStatusResult fetchTemplateStatus(String name, String language, WhatsAppCredentials credentials);
@@ -93,11 +101,28 @@ public interface WhatsAppProvider {
             /** Value for the header's single variable; null when the header has none. */
             String headerParameter,
             /** Values for URL buttons that end in a variable. */
-            java.util.List<ButtonParameter> buttonParameters
+            java.util.List<ButtonParameter> buttonParameters,
+            /** Meta media id of an uploaded PDF for a DOCUMENT header; null for none. Wins over {@code headerParameter}. */
+            String documentMediaId,
+            /** File name the recipient sees; used only with {@code documentMediaId}. */
+            String documentFileName
     ) {
         /** Body parameters only, deployment-default language — the original shape. */
         public WhatsAppMessage(String toE164, String approvedTemplateName, java.util.List<String> templateParameters) {
-            this(toE164, approvedTemplateName, templateParameters, null, null, java.util.List.of());
+            this(toE164, approvedTemplateName, templateParameters, null, null, java.util.List.of(), null, null);
+        }
+
+        /** Everything but a document — the shape {@code WhatsAppPayloadBuilder} builds. */
+        public WhatsAppMessage(String toE164, String approvedTemplateName, java.util.List<String> templateParameters,
+                               String languageCode, String headerParameter, java.util.List<ButtonParameter> buttonParameters) {
+            this(toE164, approvedTemplateName, templateParameters, languageCode, headerParameter, buttonParameters,
+                    null, null);
+        }
+
+        /** A copy that carries a PDF in a DOCUMENT header. */
+        public WhatsAppMessage withDocument(String mediaId, String fileName) {
+            return new WhatsAppMessage(toE164, approvedTemplateName, templateParameters, languageCode,
+                    headerParameter, buttonParameters, mediaId, fileName);
         }
     }
 

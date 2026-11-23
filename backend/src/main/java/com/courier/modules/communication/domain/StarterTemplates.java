@@ -16,14 +16,18 @@ public final class StarterTemplates {
     private StarterTemplates() {
     }
 
-    /** The only event with no SMS/Email sibling. */
+    /** The events with no SMS/Email sibling: the daily summary and the monthly branch report. */
     public static boolean isAllowed(CommunicationEventType event, CommunicationChannel channel) {
-        return event != CommunicationEventType.DAILY_BUSINESS_SUMMARY || channel == CommunicationChannel.WHATSAPP;
+        boolean whatsAppOnly = event == CommunicationEventType.DAILY_BUSINESS_SUMMARY
+                || event == CommunicationEventType.BRANCH_MONTHLY_REPORT;
+        return !whatsAppOnly || channel == CommunicationChannel.WHATSAPP;
     }
 
     public static DefaultCommunicationTemplates.Seed starter(CommunicationEventType event, CommunicationChannel channel) {
         if (!isAllowed(event, channel)) {
-            throw new BusinessRuleException("The daily business summary is sent on WhatsApp only.");
+            throw new BusinessRuleException(event == CommunicationEventType.BRANCH_MONTHLY_REPORT
+                    ? "The branch monthly report is sent on WhatsApp only."
+                    : "The daily business summary is sent on WhatsApp only.");
         }
         for (var seed : DefaultCommunicationTemplates.all()) {
             if (seed.eventType() == event && seed.channel() == channel) {

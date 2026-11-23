@@ -58,6 +58,9 @@ public final class TemplateSampleValues {
         m.put("codToPaySettled", "2,120.00");
         m.put("inTransit", "8");
         m.put("outForDelivery", "5");
+        // branch monthly report
+        m.put("branchName", "Pune Central");
+        m.put("month", "October 2026");
         return java.util.Collections.unmodifiableMap(m);
     }
 }

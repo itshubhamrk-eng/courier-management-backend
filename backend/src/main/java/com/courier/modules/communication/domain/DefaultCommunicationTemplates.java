@@ -32,6 +32,12 @@ public final class DefaultCommunicationTemplates {
                     + "Right now: {{inTransit}} in transit, {{outForDelivery}} out for delivery.\n\n"
                     + "Have a great day!");
 
+    /** The monthly branch statement: a short WhatsApp message carrying the PDF as a document header.
+     *  Neither starts nor ends with a variable (Meta rule); the product name closes it on purpose. */
+    public static final Seed BRANCH_MONTHLY_REPORT = new Seed(CommunicationEventType.BRANCH_MONTHLY_REPORT,
+            CommunicationChannel.WHATSAPP, "branch_monthly_report", null,
+            "Monthly statement for {{branchName}} - {{month}}. Your branch report PDF is attached. - SKRA");
+
     public static List<Seed> all() {
         return List.of(
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.WHATSAPP,
@@ -95,7 +101,8 @@ public final class DefaultCommunicationTemplates {
                                 + "(AWB {{trackingNumber}}) has been delivered. Amount: {{amount}}.</p>"
                                 + "<p>Proof of delivery: <a href=\"{{podUrl}}\">view</a></p>"
                                 + "<p>Thank you for choosing {{companyName}}!</p>"),
-                DAILY_SUMMARY
+                DAILY_SUMMARY,
+                BRANCH_MONTHLY_REPORT
         );
     }
 }

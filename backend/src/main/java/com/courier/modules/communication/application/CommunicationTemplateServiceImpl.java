@@ -226,7 +226,8 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     @PreAuthorize(READERS + " or hasAuthority('NOTIFICATION_READ')")
     public RenderedPreview preview(UUID id) {
         CommunicationTemplate template = loadOrThrow(id, requireCompany());
-        if (template.getEventType() == CommunicationEventType.DAILY_BUSINESS_SUMMARY) {
+        if (template.getEventType() == CommunicationEventType.DAILY_BUSINESS_SUMMARY
+                || template.getEventType() == CommunicationEventType.BRANCH_MONTHLY_REPORT) {
             return new RenderedPreview(null,
                     templateRenderer.renderWith(template.getContent(), TemplateSampleValues.all()));
         }

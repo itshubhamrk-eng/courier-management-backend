@@ -212,6 +212,7 @@ class CommunicationOrchestratorTest {
                 CommunicationEventType.SHIPMENT_RECEIVED, CommunicationEventType.OUT_FOR_DELIVERY,
                 CommunicationEventType.SHIPMENT_DELIVERED, CommunicationEventType.SHIPMENT_CANCELLED,
                 CommunicationEventType.RTO_INITIATED, CommunicationEventType.RTO_DELIVERED,
-                CommunicationEventType.DAILY_BUSINESS_SUMMARY, CommunicationEventType.CUSTOM);
+                CommunicationEventType.DAILY_BUSINESS_SUMMARY, CommunicationEventType.BRANCH_MONTHLY_REPORT,
+                CommunicationEventType.CUSTOM);
     }
 }

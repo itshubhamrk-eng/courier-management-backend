@@ -68,8 +68,8 @@ class CommunicationTemplateServiceImplTest {
 
         service.list();
 
-        // 4 default events x 3 channels + the WhatsApp-only daily summary
-        verify(repository, times(13)).save(any());
+        // 4 default events x 3 channels + the WhatsApp-only daily summary and branch monthly report
+        verify(repository, times(14)).save(any());
     }
 
     @Test
@@ -86,14 +86,14 @@ class CommunicationTemplateServiceImplTest {
     void list_addsOnlyTheMissingDefaultToACompanySeededBeforeItExisted() {
         var all = com.courier.modules.communication.domain.DefaultCommunicationTemplates.all();
         when(repository.findAllByCompanyIdOrderByEventTypeAscChannelAsc(COMPANY)).thenReturn(
-                existingFor(all.subList(0, 12)));
+                existingFor(all.subList(0, all.size() - 1)));
 
         service.list();
 
         var saved = org.mockito.ArgumentCaptor.forClass(CommunicationTemplate.class);
         verify(repository, times(1)).save(saved.capture());
-        assertThat(saved.getValue().getEventType()).isEqualTo(CommunicationEventType.DAILY_BUSINESS_SUMMARY);
-        assertThat(saved.getValue().getTemplateName()).isEqualTo("daily_business_summary");
+        assertThat(saved.getValue().getEventType()).isEqualTo(CommunicationEventType.BRANCH_MONTHLY_REPORT);
+        assertThat(saved.getValue().getTemplateName()).isEqualTo("branch_monthly_report");
     }
 
     @Test
@@ -134,6 +134,18 @@ class CommunicationTemplateServiceImplTest {
         var preview = service.preview(java.util.UUID.randomUUID());
 
         assertThat(preview.content()).contains("Bookings: 15").contains("13 Oct 2026").doesNotContain("{{");
+    }
+
+    @Test
+    void preview_ofTheBranchMonthlyReportFillsItsSampleValues() {
+        var seed = com.courier.modules.communication.domain.DefaultCommunicationTemplates.BRANCH_MONTHLY_REPORT;
+        when(repository.findByIdWithinCompany(any(), any())).thenReturn(Optional.of(CommunicationTemplate.builder()
+                .eventType(seed.eventType()).channel(seed.channel()).templateName(seed.templateName())
+                .content(seed.content()).build()));
+
+        var preview = service.preview(java.util.UUID.randomUUID());
+
+        assertThat(preview.content()).startsWith("Monthly statement for ").doesNotContain("{{");
     }
 
     @Test

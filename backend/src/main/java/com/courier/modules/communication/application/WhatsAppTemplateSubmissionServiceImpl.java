@@ -3,6 +3,7 @@ package com.courier.modules.communication.application;
 import com.courier.modules.communication.application.provider.ProviderSendException;
 import com.courier.modules.communication.application.provider.WhatsAppProvider;
 import com.courier.modules.communication.domain.CommunicationChannel;
+import com.courier.modules.communication.domain.CommunicationEventType;
 import com.courier.modules.communication.domain.CommunicationSetting;
 import com.courier.modules.communication.domain.CommunicationSettingRepository;
 import com.courier.modules.communication.domain.CommunicationTemplate;
@@ -48,6 +49,12 @@ public class WhatsAppTemplateSubmissionServiceImpl implements WhatsAppTemplateSu
     public CommunicationTemplate submit(UUID templateId, String category, String language) {
         UUID companyId = requireCompany();
         CommunicationTemplate template = loadWhatsAppTemplate(templateId, companyId);
+        if (template.getEventType() == CommunicationEventType.BRANCH_MONTHLY_REPORT) {
+            // A document-header template needs a header_handle sample from Meta's resumable upload API,
+            // which this app does not drive: it is created once in WhatsApp Manager instead.
+            throw new BusinessRuleException("This template needs a PDF header: create it in WhatsApp Manager, "
+                    + "then press Refresh status.");
+        }
         if (template.hasMetaSubmission()) {
             throw new BusinessRuleException("This template was already submitted to Meta (status "
                     + template.getMetaStatus() + "). Use Check status — or change its name or content to "

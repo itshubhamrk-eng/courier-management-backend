@@ -19,6 +19,8 @@ public enum CommunicationEventType {
     RTO_DELIVERED,
     /** The 09:00 IST owner summary — not tied to a shipment; see {@code DailyReportService}. */
     DAILY_BUSINESS_SUMMARY,
+    /** The monthly per-branch statement PDF, sent over WhatsApp as a document — not tied to a shipment. */
+    BRANCH_MONTHLY_REPORT,
     /** A template made by hand, tied to no event and never sent automatically — only submitted to
      *  Meta and sent by name (e.g. the Send Test Message button). Any number per channel. */
     CUSTOM;

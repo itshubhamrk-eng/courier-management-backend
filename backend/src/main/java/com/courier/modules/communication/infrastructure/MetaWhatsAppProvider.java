@@ -70,7 +70,10 @@ public class MetaWhatsAppProvider implements WhatsAppProvider {
         }
         try {
             List<Map<String, Object>> components = new java.util.ArrayList<>();
-            if (message.headerParameter() != null) {
+            if (message.documentMediaId() != null) {
+                components.add(Map.of("type", "header", "parameters", List.of(Map.of("type", "document",
+                        "document", documentRef(message)))));
+            } else if (message.headerParameter() != null) {
                 components.add(Map.of("type", "header", "parameters",
                         List.of(Map.of("type", "text", "text", message.headerParameter()))));
             }
@@ -112,6 +115,57 @@ public class MetaWhatsAppProvider implements WhatsAppProvider {
             throw new ProviderSendException("Meta WhatsApp Cloud API rejected the send: " + metaError(e), e);
         } catch (Exception e) {
             throw new ProviderSendException("Meta WhatsApp Cloud API call failed: " + e.getMessage(), e);
+        }
+    }
+
+    private static Map<String, Object> documentRef(WhatsAppMessage message) {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("id", message.documentMediaId());
+        if (message.documentFileName() != null) {
+            document.put("filename", message.documentFileName());
+        }
+        return document;
+    }
+
+    @Override
+    public String uploadDocument(byte[] pdf, String fileName, WhatsAppCredentials credentials) {
+        if (!credentials.isComplete()) {
+            throw new ProviderSendException("WhatsApp is not configured for this company "
+                    + "(missing Phone Number ID or Access Token).");
+        }
+        try {
+            org.springframework.http.HttpHeaders fileHeaders = new org.springframework.http.HttpHeaders();
+            fileHeaders.setContentType(MediaType.APPLICATION_PDF);
+            org.springframework.util.LinkedMultiValueMap<String, Object> form =
+                    new org.springframework.util.LinkedMultiValueMap<>();
+            form.add("messaging_product", "whatsapp");
+            form.add("type", "application/pdf");
+            form.add("file", new org.springframework.http.HttpEntity<>(new org.springframework.core.io.ByteArrayResource(pdf) {
+                @Override
+                public String getFilename() {
+                    return fileName;
+                }
+            }, fileHeaders));
+
+            Map<String, Object> response = parse(restClient.post()
+                    .uri("/{phoneNumberId}/media", credentials.phoneNumberId())
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.accessToken())
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(form)
+                    .retrieve()
+                    .body(String.class));
+            String id = text(response, "id");
+            if (id == null) {
+                throw new ProviderSendException("Meta accepted the document upload but returned no media id.");
+            }
+            log.info("WhatsApp document '{}' uploaded to Meta, media id {}", fileName, id);
+            return id;
+        } catch (ProviderSendException e) {
+            throw e;
+        } catch (RestClientResponseException e) {
+            throw new ProviderSendException("Meta rejected the document upload: " + metaError(e), e);
+        } catch (Exception e) {
+            throw new ProviderSendException("Meta document upload failed: " + e.getMessage(), e);
         }
     }
 

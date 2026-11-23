@@ -76,6 +76,21 @@ class StarterTemplatesTest {
     }
 
     @Test
+    void theBranchMonthlyReportIsWhatsAppOnlyAndSeeded() {
+        var e = CommunicationEventType.BRANCH_MONTHLY_REPORT;
+        assertThat(StarterTemplates.isAllowed(e, CommunicationChannel.WHATSAPP)).isTrue();
+        assertThat(StarterTemplates.isAllowed(e, CommunicationChannel.SMS)).isFalse();
+        assertThat(StarterTemplates.isAllowed(e, CommunicationChannel.EMAIL)).isFalse();
+        assertThatThrownBy(() -> StarterTemplates.starter(e, CommunicationChannel.SMS))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("WhatsApp only");
+        var seed = StarterTemplates.starter(e, CommunicationChannel.WHATSAPP);
+        assertThat(seed.templateName()).isEqualTo("branch_monthly_report");
+        assertThat(seed.content()).isEqualTo("Monthly statement for {{branchName}} - {{month}}. "
+                + "Your branch report PDF is attached. - SKRA");
+        assertThat(seed.content()).doesNotStartWith("{{").doesNotEndWith("}}");
+    }
+
+    @Test
     void namesForSmsAndEmailAreReadableTitles() {
         assertThat(StarterTemplates.starter(CommunicationEventType.SHIPMENT_CANCELLED, CommunicationChannel.SMS).templateName())
                 .isEqualTo("Shipment Cancelled - SMS");

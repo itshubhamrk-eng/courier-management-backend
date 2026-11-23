@@ -23,6 +23,14 @@ public class LogOnlyWhatsAppProvider implements WhatsAppProvider {
         return new ProviderSendResult(id);
     }
 
+    @Override
+    public String uploadDocument(byte[] pdf, String fileName, WhatsAppCredentials credentials) {
+        String id = "log-media-" + java.util.UUID.randomUUID();
+        log.info("[LogOnlyWhatsAppProvider] document upload file={} bytes={} -> {}", fileName,
+                pdf == null ? 0 : pdf.length, id);
+        return id;
+    }
+
     private static String mask(String phone) {
         if (phone == null || phone.length() < 4) {
             return "****";
