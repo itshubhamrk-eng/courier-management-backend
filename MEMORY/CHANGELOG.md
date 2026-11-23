@@ -6,6 +6,12 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-23 - WhatsApp spend card + Recharge on Meta button (no migration)
+- Communication Dashboard: "WhatsApp spend this month" card (spend vs a monthly budget; green <80%, amber >=80%, red >=100%) and a **Recharge on Meta** button opening `https://business.facebook.com/billing_hub/payment_settings` (generic page, not verified to deep-link to the account). Meta exposes no prepaid balance and no top-up API, so this is spend-vs-budget, never "balance".
+- Backend: `GET /api/v1/communication/dashboard/whatsapp-spend` (`WhatsAppSpendService`), reuses `WhatsAppProvider.fetchPricing` (same call as "Fetch from Meta"); period = 1st of month 00:00 IST to now. Budget = `monthlyBudget` in the WHATSAPP `configJson` (Channel Settings field; "5,000" / "Rs. 5,000" accepted). Levels NOT_CONFIGURED / NO_BUDGET / OK / WARN / OVER; a Meta error comes back as a `note`, HTTP 200. Read guard COMPANY_ADMIN or NOTIFICATION_READ; the UI only loads it for COMPANY_ADMIN.
+- Verified live on a cloned DB with a throwaway key (log-only WhatsApp provider, so real Meta call untested; amber/red covered by unit tests only). Branch `feat/meta-spend-card`, not merged or deployed.
+- **Known minors (deferred):** API reports `level=OK` with `spent=null` when Meta fails (UI handles it; a distinct level would be cleaner); daily pricing buckets may shift the month boundary by a day if Meta buckets by UTC (check against Meta Insights on the 1st).
+
 ## 2026-11-23 - TBB shipments hide amounts (frontend only)
 - Payment mode TBB (`isTbbLabel`, `core/utils/tbb.util.ts`) hides customer amounts everywhere except the business billing invoice: booking summary (shows a "billed later" note), all four receipt prints (consignment, performa/Booking Receipt, ambox, Shipment Copy print "Credit Customer"), shipment list/view/charges, Booking and Delivery report rows + CSV (show "Credit").
 - Not done: aggregate totals (report Total Amount tiles, branch/commission/vendor-audit amounts) still include TBB; needs backend exclusion. Commission columns left visible.
