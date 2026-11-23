@@ -674,11 +674,14 @@ public class AuthService {
                             ErrorCode.SESSION_EXPIRED, "Session has expired. Sign in again.");
                 });
 
-        sessionService.touch(session);
-
         Duration refreshTtl = session.isRememberMe()
                 ? properties.getRememberMeDuration()
                 : jwtTokenProvider.refreshTokenTtl();
+
+        // Slide the session's own deadline with each refresh. It was fixed at login, so an
+        // actively-working user still got SESSION_EXPIRED when login + refresh TTL elapsed.
+        session.slideExpiry(refreshTtl);
+        sessionService.touch(session);
 
         TokenIssuer.TokenPair tokens = tokenIssuer.completeRotation(
                 user, session, presented, refreshTtl, ipAddress, userAgent);

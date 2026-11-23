@@ -96,6 +96,18 @@ public class UserSession extends CompanyOwnedEntity {
         this.lastSeenAt = Instant.now();
     }
 
+    /**
+     * Sliding expiry: each successful refresh pushes the deadline out, so a user who is
+     * actively working is never cut off by the fixed login-time deadline. Never shortens
+     * (a remember-me session keeps its longer window).
+     */
+    public void slideExpiry(java.time.Duration ttl) {
+        Instant candidate = Instant.now().plus(ttl);
+        if (candidate.isAfter(this.expiresAt)) {
+            this.expiresAt = candidate;
+        }
+    }
+
     public void revoke(String reason) {
         if (this.revokedAt == null) {
             this.revokedAt = Instant.now();
