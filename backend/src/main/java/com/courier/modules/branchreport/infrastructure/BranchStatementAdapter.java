@@ -56,12 +56,46 @@ public class BranchStatementAdapter implements BranchStatementPort {
     @Override
     public Optional<GeneratedStatement> generate(UUID companyId, UUID branchId, LocalDate from, LocalDate to) {
         return statementService.build(companyId, branchId, from, to).map(statement -> {
-            String companyName = companyDirectory.findById(companyId)
-                    .map(CompanyDirectoryPort.CompanyRef::name).orElse("");
-            return new GeneratedStatement(BranchStatementPdf.render(statement, companyName),
+            Optional<CompanyDirectoryPort.CompanyRef> company = companyDirectory.findById(companyId);
+            String companyName = company.map(CompanyDirectoryPort.CompanyRef::name).orElse("");
+            byte[] logo = company.map(CompanyDirectoryPort.CompanyRef::logo).map(BranchStatementAdapter::fetchLogo)
+                    .orElse(null);
+            return new GeneratedStatement(BranchStatementPdf.render(statement, companyName, logo),
                     slug(statement.branchName()) + "-" + FILE_MONTH.format(from) + ".pdf",
                     statement.branchName(), monthLabel(from, to));
         });
+    }
+
+    private static final int LOGO_MAX_BYTES = 2 * 1024 * 1024;
+    private static final java.time.Duration LOGO_TIMEOUT = java.time.Duration.ofSeconds(3);
+
+    /**
+     * The company logo as image bytes, or null on any problem: the statement is still worth
+     * sending without it. Only https URLs on the object store's own domain are fetched, so a
+     * logo field pointing elsewhere cannot make the server call an arbitrary address.
+     */
+    static byte[] fetchLogo(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(url.trim());
+            String host = uri.getHost();
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null
+                    || !host.toLowerCase(Locale.ROOT).endsWith(".amazonaws.com")) {
+                return null;
+            }
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(LOGO_TIMEOUT).followRedirects(java.net.http.HttpClient.Redirect.NEVER).build();
+            java.net.http.HttpResponse<byte[]> response = client.send(
+                    java.net.http.HttpRequest.newBuilder(uri).timeout(LOGO_TIMEOUT).GET().build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+            byte[] body = response.body();
+            return response.statusCode() == 200 && body != null && body.length > 0 && body.length <= LOGO_MAX_BYTES
+                    ? body : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private List<String> managerPhones(UUID companyId, UUID branchId) {

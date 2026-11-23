@@ -31,16 +31,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
- * Renders a {@link BranchStatement}: a branded first page (header band, key figures, wallet
- * reconciliation, orders and commission) followed by the full transaction ledger with running
- * balance. Every page carries a footer with the page number.
+ * Renders a {@link BranchStatement} as a single branded page: header band with the company logo,
+ * key figures, wallet account, wallet movements by transaction type, and orders/charges. The
+ * transaction-by-transaction ledger is deliberately left out so the statement stays one page
+ * however busy the month was.
  */
 public final class BranchStatementPdf {
 
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
-    private static final DateTimeFormatter STAMP =
-            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH).withZone(IST);
 
     private static final Color INK = new Color(0x1E, 0x29, 0x3B);
     private static final Color BRAND = new Color(0xB3, 0x12, 0x3A);
@@ -74,41 +73,100 @@ public final class BranchStatementPdf {
     }
 
     public static byte[] render(BranchStatement s, String companyName) {
+        return render(s, companyName, null);
+    }
+
+    /** @param logo image bytes (PNG/JPEG/GIF) for the header, or null / unreadable for a name-only header */
+    public static byte[] render(BranchStatement s, String companyName, byte[] logo) {
+        byte[] pdf = renderOnce(s, companyName, logo, false);
+        if (pageCount(pdf) > 1) {
+            // Many transaction types: render again with tighter spacing so it stays one page.
+            pdf = renderOnce(s, companyName, logo, true);
+        }
+        return pdf;
+    }
+
+    private static int pageCount(byte[] pdf) {
+        try {
+            return new com.lowagie.text.pdf.PdfReader(pdf).getNumberOfPages();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Could not read back the rendered statement", e);
+        }
+    }
+
+    /** Tighter paddings/gaps for the second attempt; confined to the rendering thread. */
+    private static final ThreadLocal<Boolean> COMPACT = ThreadLocal.withInitial(() -> false);
+
+    private static float pad(float normal) {
+        return COMPACT.get() ? Math.max(1.5f, normal * 0.5f) : normal;
+    }
+
+    private static byte[] renderOnce(BranchStatement s, String companyName, byte[] logo, boolean compact) {
+        COMPACT.set(compact);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Document doc = new Document(PageSize.A4, 36, 36, 36, 48);
+        Document doc = new Document(PageSize.A4, 36, 36, compact ? 24 : 32, 44);
         try {
             PdfWriter writer = PdfWriter.getInstance(doc, out);
             writer.setPageEvent(new Footer(companyName, s.branchName()));
             doc.open();
-            header(doc, s, companyName);
+            header(doc, s, companyName, logo);
             keyFigures(doc, s);
             walletSection(doc, s);
             ordersSection(doc, s);
-            appendix(doc, s);
             doc.close();
         } catch (DocumentException e) {
             throw new IllegalStateException("Could not render branch statement", e);
+        } finally {
+            COMPACT.remove();
         }
         return out.toByteArray();
     }
 
     // ------------------------------------------------------------------ page 1
 
-    private static void header(Document doc, BranchStatement s, String companyName) throws DocumentException {
-        PdfPTable band = new PdfPTable(new float[] {3f, 2f});
+    private static void header(Document doc, BranchStatement s, String companyName, byte[] logo)
+            throws DocumentException {
+        com.lowagie.text.Image image = null;
+        if (logo != null && logo.length > 0) {
+            try {
+                image = com.lowagie.text.Image.getInstance(logo);
+                image.scaleToFit(62f, 46f);
+            } catch (Exception e) {
+                image = null; // unsupported format (SVG/WEBP) or corrupt: fall back to the name only
+            }
+        }
+        PdfPTable band = image == null ? new PdfPTable(new float[] {3f, 2f}) : new PdfPTable(new float[] {1.1f, 3f, 2f});
         band.setWidthPercentage(100);
+        if (image != null) {
+            PdfPCell logoCell = new PdfPCell();
+            logoCell.setBackgroundColor(BRAND);
+            logoCell.setBorder(Rectangle.NO_BORDER);
+            logoCell.setPadding(10f);
+            logoCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            PdfPTable plate = new PdfPTable(1);
+            PdfPCell inner = new PdfPCell(image, false);
+            inner.setBackgroundColor(Color.WHITE);
+            inner.setBorder(Rectangle.NO_BORDER);
+            inner.setPadding(5f);
+            inner.setHorizontalAlignment(Element.ALIGN_CENTER);
+            inner.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            plate.addCell(inner);
+            logoCell.addElement(plate);
+            band.addCell(logoCell);
+        }
         PdfPCell left = new PdfPCell();
         left.setBackgroundColor(BRAND);
         left.setBorder(Rectangle.NO_BORDER);
-        left.setPadding(14f);
+        left.setPadding(pad(14f));
+        left.setVerticalAlignment(Element.ALIGN_MIDDLE);
         left.addElement(new Paragraph(companyName, H_COMPANY));
         left.addElement(new Paragraph("BRANCH MONTHLY STATEMENT", H_SUB));
         band.addCell(left);
         PdfPCell right = new PdfPCell();
         right.setBackgroundColor(BRAND);
         right.setBorder(Rectangle.NO_BORDER);
-        right.setPadding(14f);
-        right.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        right.setPadding(pad(14f));
+        right.setVerticalAlignment(Element.ALIGN_MIDDLE);
         Paragraph p = new Paragraph(DAY.format(s.from()) + " to " + DAY.format(s.to()), H_PERIOD);
         p.setAlignment(Element.ALIGN_RIGHT);
         right.addElement(p);
@@ -120,7 +178,7 @@ public final class BranchStatementPdf {
 
         PdfPTable info = new PdfPTable(new float[] {1f, 1f, 1f});
         info.setWidthPercentage(100);
-        info.setSpacingBefore(10f);
+        info.setSpacingBefore(pad(10f));
         info.addCell(infoCell("BRANCH", s.branchName()));
         info.addCell(infoCell("BRANCH CODE", s.branchCode()));
         info.addCell(infoCell("STATEMENT PERIOD", DAY.format(s.from()) + " to " + DAY.format(s.to())));
@@ -133,7 +191,7 @@ public final class BranchStatementPdf {
         c.setBorder(Rectangle.NO_BORDER);
         c.setBorderWidthLeft(3f);
         c.setBorderColorLeft(BRAND);
-        c.setPadding(8f);
+        c.setPadding(pad(8f));
         c.addElement(new Paragraph(label, LABEL));
         c.addElement(new Paragraph(value == null ? "" : value, VALUE));
         return c;
@@ -145,7 +203,7 @@ public final class BranchStatementPdf {
         BigDecimal earned = nz(a.bookingTotalCommission()).add(nz(w.drsChargeCredited()));
         PdfPTable t = new PdfPTable(4);
         t.setWidthPercentage(100);
-        t.setSpacingBefore(12f);
+        t.setSpacingBefore(pad(12f));
         t.addCell(kpi("Closing balance", "Rs " + money(w.closingBalance())));
         t.addCell(kpi("Orders booked", String.valueOf(a.totalBookedOrderCount())));
         t.addCell(kpi("Orders delivered", String.valueOf(a.totalDeliveredOrderCount())));
@@ -157,7 +215,7 @@ public final class BranchStatementPdf {
         PdfPCell c = new PdfPCell();
         c.setBorderColor(RULE);
         c.setBorderWidth(1f);
-        c.setPadding(9f);
+        c.setPadding(pad(9f));
         c.addElement(new Paragraph(label, LABEL));
         Paragraph v = new Paragraph(value, KPI);
         v.setSpacingBefore(2f);
@@ -167,8 +225,8 @@ public final class BranchStatementPdf {
 
     private static void section(Document doc, String title) throws DocumentException {
         Paragraph p = new Paragraph(title, SECTION);
-        p.setSpacingBefore(16f);
-        p.setSpacingAfter(5f);
+        p.setSpacingBefore(pad(12f));
+        p.setSpacingAfter(pad(5f));
         doc.add(p);
     }
 
@@ -250,7 +308,7 @@ public final class BranchStatementPdf {
         row4(t, "Other charges", "", "", money(a.otherCharges()), false);
         row4(t, "Booking commission", "", "", money(a.bookingTotalCommission()), true);
         doc.add(t);
-        Paragraph note = new Paragraph("Delivery commission is shown as credited in the wallet ledger above.", NOTE);
+        Paragraph note = new Paragraph("Delivery commission is the amount credited to the wallet. The full transaction-by-transaction ledger is available in the app.", NOTE);
         note.setSpacingBefore(4f);
         doc.add(note);
     }
@@ -279,71 +337,12 @@ public final class BranchStatementPdf {
         t.addCell(cell(value, font, Element.ALIGN_RIGHT, bg));
     }
 
-    // ---------------------------------------------------------------- appendix
-
-    private static void appendix(Document doc, BranchStatement s) throws DocumentException {
-        doc.newPage();
-        BigDecimal debit = BigDecimal.ZERO;
-        BigDecimal credit = BigDecimal.ZERO;
-        for (WalletTransaction x : s.transactions()) {
-            if (x.isDebit()) {
-                debit = debit.add(nz(x.getAmount()));
-            } else if (x.isCredit()) {
-                credit = credit.add(nz(x.getAmount()));
-            }
-        }
-        Paragraph title = new Paragraph("Transaction ledger", SECTION);
-        title.setSpacingAfter(2f);
-        doc.add(title);
-        Paragraph sub = new Paragraph(s.transactions().size() + " transactions, " + DAY.format(s.from()) + " to "
-                + DAY.format(s.to()) + "  |  Total debits Rs " + money(debit) + "  |  Total credits Rs "
-                + money(credit), NOTE);
-        sub.setSpacingAfter(6f);
-        doc.add(sub);
-
-        PdfPTable t = new PdfPTable(new float[] {2.2f, 2.3f, 2.7f, 2.7f, 1.6f, 1.6f, 1.9f});
-        t.setWidthPercentage(100);
-        t.setHeaderRows(1);
-        String[] heads = {"Date (IST)", "Txn no", "Type", "Reference", "Debit", "Credit", "Balance"};
-        for (int i = 0; i < heads.length; i++) {
-            PdfPCell h = new PdfPCell(new Phrase(heads[i], TH));
-            h.setBackgroundColor(INK);
-            h.setBorder(Rectangle.NO_BORDER);
-            h.setPadding(5f);
-            h.setHorizontalAlignment(i >= 4 ? Element.ALIGN_RIGHT : Element.ALIGN_LEFT);
-            t.addCell(h);
-        }
-        int n = 0;
-        for (WalletTransaction x : s.transactions()) {
-            Color bg = n++ % 2 == 1 ? ZEBRA : null;
-            t.addCell(cell(x.getCreatedAt() == null ? "" : STAMP.format(x.getCreatedAt()), SMALL,
-                    Element.ALIGN_LEFT, bg));
-            t.addCell(cell(str(x.getTransactionNo()), SMALL, Element.ALIGN_LEFT, bg));
-            t.addCell(cell(x.getSubTransactionType() == null ? "" : x.getSubTransactionType().getLabel(),
-                    SMALL, Element.ALIGN_LEFT, bg));
-            t.addCell(cell((x.getReferenceType() == null ? "" : x.getReferenceType().name())
-                    + (x.getReferenceId() == null ? "" : " " + x.getReferenceId()), SMALL, Element.ALIGN_LEFT, bg));
-            t.addCell(cell(x.isDebit() ? money(x.getAmount()) : "",
-                    font(FontFactory.HELVETICA, 8, DEBIT), Element.ALIGN_RIGHT, bg));
-            t.addCell(cell(x.isCredit() ? money(x.getAmount()) : "",
-                    font(FontFactory.HELVETICA, 8, CREDIT), Element.ALIGN_RIGHT, bg));
-            t.addCell(cell(money(x.getBalanceAfter()), SMALL, Element.ALIGN_RIGHT, bg));
-            // Flush completed rows to the writer so a big ledger is not held as one page-less table.
-            if (t.getRows().size() >= 200) {
-                doc.add(t);
-                t.deleteBodyRows();
-                t.setSkipFirstHeader(true);
-            }
-        }
-        doc.add(t);
-    }
-
     // ----------------------------------------------------------------- helpers
 
     private static PdfPCell cell(String text, Font font, int align, Color background) {
         PdfPCell c = new PdfPCell(new Phrase(text, font));
         c.setHorizontalAlignment(align);
-        c.setPadding(4f);
+        c.setPadding(pad(4f));
         c.setBorder(Rectangle.BOTTOM);
         c.setBorderColor(RULE);
         if (background != null) {

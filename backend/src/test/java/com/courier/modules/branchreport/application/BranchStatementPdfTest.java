@@ -60,16 +60,32 @@ class BranchStatementPdfTest {
     }
 
     @Test
-    void rendersHeaderSummaryAndEveryTransaction() throws Exception {
+    void rendersHeaderSummaryAndMovementsByTypeOnOnePage() throws Exception {
         byte[] pdf = BranchStatementPdf.render(statement(5), "Amazing Logistics");
         assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThat(new PdfReader(pdf).getNumberOfPages()).isEqualTo(1);
         String t = text(pdf);
         assertThat(t).contains("Pune Central").contains("BR01").contains("Amazing Logistics")
                 .contains("01 Oct 2026 to 31 Oct 2026").contains("1,234.50")
-                .contains("Shipment Booking").contains("05 Oct 2026 15:30");
-        for (int i = 0; i < 5; i++) {
-            assertThat(t).contains("TXN" + String.format("%06d", i));
-        }
+                .contains("Wallet movements by type").contains("Shipment Booking");
+    }
+
+    @Test
+    void embedsTheCompanyLogoWhenGivenOne() throws Exception {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", png);
+        byte[] with = BranchStatementPdf.render(statement(1), "Amazing Logistics", png.toByteArray());
+        byte[] without = BranchStatementPdf.render(statement(1), "Amazing Logistics", null);
+        assertThat(with.length).isGreaterThan(without.length);
+        assertThat(new PdfReader(with).getNumberOfPages()).isEqualTo(1);
+    }
+
+    @Test
+    void anUnreadableLogoFallsBackToTheNameOnlyHeader() throws Exception {
+        byte[] pdf = BranchStatementPdf.render(statement(1), "Amazing Logistics", new byte[] {1, 2, 3, 4});
+        assertThat(new PdfReader(pdf).getNumberOfPages()).isEqualTo(1);
+        assertThat(text(pdf)).contains("Amazing Logistics");
     }
 
     @Test
@@ -80,11 +96,31 @@ class BranchStatementPdfTest {
     }
 
     @Test
-    void manyTransactionsSpanPagesWithinBound() throws Exception {
+    void everyTransactionTypeAtOnceStillFitsOnOnePage() throws Exception {
+        UUID b = UUID.randomUUID();
+        VendorAuditRow audit = new VendorAuditRow(b, 3, 7, d("300"), 2, 4, d("200"), d("30"), d("77.77"),
+                5, 4, d("30"), d("77.77"), d("5"), d("6"), 1, null, null, null, null, null);
+        WalletService.PeriodSummary w = new WalletService.PeriodSummary(d("100"), d("1234.50"), 2, d("500"),
+                d("12"), d("3"), d("20"), d("300"));
+        List<WalletTransaction> all = new ArrayList<>();
+        for (SubTransactionType type : SubTransactionType.values()) {
+            WalletTransaction t = WalletTransaction.builder().transactionNo("T" + type.name())
+                    .transactionType(TransactionType.DR).subTransactionType(type)
+                    .amount(d("10")).balanceBefore(d("1000")).balanceAfter(d("990"))
+                    .referenceType(ReferenceType.SHIPMENT).referenceId("X").build();
+            t.setCreatedAt(Instant.parse("2026-10-05T10:00:00Z"));
+            all.add(t);
+        }
+        BranchStatement s = new BranchStatement(b, "BR01", "Pune Central", LocalDate.of(2026, 10, 1),
+                LocalDate.of(2026, 10, 31), audit, w, all);
+        assertThat(new PdfReader(BranchStatementPdf.render(s, "Amazing Logistics")).getNumberOfPages()).isEqualTo(1);
+    }
+
+    @Test
+    void aBusyMonthStillFitsOnOnePageAndRendersQuickly() throws Exception {
         long start = System.nanoTime();
         byte[] pdf = BranchStatementPdf.render(statement(5000), "Amazing Logistics");
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(30));
-        assertThat(new PdfReader(pdf).getNumberOfPages()).isGreaterThan(1);
-        assertThat(text(pdf)).contains("TXN004999");
+        assertThat(new PdfReader(pdf).getNumberOfPages()).isEqualTo(1);
     }
 }
