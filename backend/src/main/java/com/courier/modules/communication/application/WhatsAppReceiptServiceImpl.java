@@ -1,13 +1,9 @@
 package com.courier.modules.communication.application;
 
-import com.courier.modules.communication.domain.BranchReportLog;
 import com.courier.modules.communication.domain.BranchReportLogRepository;
-import com.courier.modules.communication.domain.CommunicationLog;
 import com.courier.modules.communication.domain.CommunicationLogRepository;
 import com.courier.modules.communication.domain.CommunicationStatus;
-import com.courier.modules.communication.domain.DailyReportLog;
 import com.courier.modules.communication.domain.DailyReportLogRepository;
-import com.courier.modules.communication.domain.WhatsAppTestLog;
 import com.courier.modules.communication.domain.WhatsAppTestLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +14,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Meta reports each message's journey after our send: sent -> delivered -> read, or failed. The
@@ -44,9 +43,46 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
     private final WhatsAppTestLogRepository testLogRepository;
     private final BranchReportLogRepository branchReportLogRepository;
 
+    /**
+     * One ledger row seen through the few fields a receipt touches, so the state machine below is
+     * written once for all four tables. {@code onFailed} is the one per-table extra (the shipment
+     * log also clears its retry time).
+     */
+    private record Target(Supplier<CommunicationStatus> status, Consumer<CommunicationStatus> setStatus,
+                          Supplier<Instant> deliveredAt, Consumer<Instant> setDeliveredAt,
+                          Supplier<Instant> readAt, Consumer<Instant> setReadAt,
+                          Consumer<String> setError, Runnable onFailed, Runnable save) {
+    }
+
+    private Optional<Target> findShipmentLog(String messageId) {
+        return logRepository.findFirstByProviderMessageId(messageId).map(r -> new Target(
+                r::getStatus, r::setStatus, r::getDeliveredAt, r::setDeliveredAt, r::getReadAt, r::setReadAt,
+                r::setErrorMessage, () -> r.setNextRetryAt(null), () -> logRepository.save(r)));
+    }
+
+    private Optional<Target> findDaily(String messageId) {
+        return dailyReportLogRepository.findFirstByProviderMessageId(messageId).map(r -> new Target(
+                r::getStatus, r::setStatus, r::getDeliveredAt, r::setDeliveredAt, r::getReadAt, r::setReadAt,
+                r::setErrorMessage, () -> { }, () -> dailyReportLogRepository.save(r)));
+    }
+
+    private Optional<Target> findTest(String messageId) {
+        return testLogRepository.findFirstByProviderMessageId(messageId).map(r -> new Target(
+                r::getStatus, r::setStatus, r::getDeliveredAt, r::setDeliveredAt, r::getReadAt, r::setReadAt,
+                r::setErrorMessage, () -> { }, () -> testLogRepository.save(r)));
+    }
+
+    private Optional<Target> findBranchReport(String messageId) {
+        return branchReportLogRepository.findFirstByProviderMessageId(messageId).map(r -> new Target(
+                r::getStatus, r::setStatus, r::getDeliveredAt, r::setDeliveredAt, r::getReadAt, r::setReadAt,
+                r::setErrorMessage, () -> { }, () -> branchReportLogRepository.save(r)));
+    }
+
     @Override
     @Transactional
     public int apply(List<Receipt> receipts) {
+        List<Function<String, Optional<Target>>> sources = List.of(
+                this::findShipmentLog, this::findDaily, this::findTest, this::findBranchReport);
         int matched = 0;
         for (Receipt receipt : receipts) {
             if (receipt == null || receipt.messageId() == null || receipt.messageId().isBlank()) {
@@ -55,175 +91,52 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
             String status = receipt.status() == null ? "" : receipt.status().toLowerCase(Locale.ROOT);
             Instant at = receipt.at() == null ? Instant.now() : receipt.at();
 
-            Optional<CommunicationLog> shipmentMessage = logRepository.findFirstByProviderMessageId(receipt.messageId());
-            if (shipmentMessage.isPresent()) {
-                matched++;
-                applyToLog(shipmentMessage.get(), status, at, receipt.error());
-                continue;
-            }
-            Optional<DailyReportLog> dailyMessage = dailyReportLogRepository.findFirstByProviderMessageId(receipt.messageId());
-            if (dailyMessage.isPresent()) {
-                matched++;
-                applyToDaily(dailyMessage.get(), status, at, receipt.error());
-                continue;
-            }
-            Optional<WhatsAppTestLog> testMessage = testLogRepository.findFirstByProviderMessageId(receipt.messageId());
-            if (testMessage.isPresent()) {
-                matched++;
-                applyToTest(testMessage.get(), status, at, receipt.error());
-                continue;
-            }
-            Optional<BranchReportLog> branchMessage = branchReportLogRepository.findFirstByProviderMessageId(receipt.messageId());
-            if (branchMessage.isPresent()) {
-                matched++;
-                applyToBranchReport(branchMessage.get(), status, at, receipt.error());
+            for (var source : sources) {
+                Optional<Target> target = source.apply(receipt.messageId());
+                if (target.isPresent()) {
+                    matched++;
+                    applyReceipt(target.get(), status, at, receipt.error());
+                    break;
+                }
             }
         }
         return matched;
     }
 
-    private void applyToLog(CommunicationLog row, String status, Instant at, String error) {
+    private void applyReceipt(Target row, String status, Instant at, String error) {
         switch (status) {
             case "delivered" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
+                if (row.deliveredAt().get() == null) {
+                    row.setDeliveredAt().accept(at);
                 }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
+                if (row.status().get() == CommunicationStatus.SENT) {
+                    row.setStatus().accept(CommunicationStatus.DELIVERED);
                 }
             }
             case "read" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
+                if (row.deliveredAt().get() == null) {
+                    row.setDeliveredAt().accept(at);
                 }
-                if (row.getReadAt() == null) {
-                    row.setReadAt(at);
+                if (row.readAt().get() == null) {
+                    row.setReadAt().accept(at);
                 }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
+                if (row.status().get() == CommunicationStatus.SENT) {
+                    row.setStatus().accept(CommunicationStatus.DELIVERED);
                 }
             }
             case "failed" -> {
-                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
+                if (row.status().get() == CommunicationStatus.DELIVERED || row.deliveredAt().get() != null) {
                     return;
                 }
-                row.setStatus(CommunicationStatus.FAILED);
-                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
-                row.setNextRetryAt(null);
+                row.setStatus().accept(CommunicationStatus.FAILED);
+                row.setError().accept(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
+                row.onFailed().run();
             }
             default -> {
                 return; // "sent" and anything new Meta invents: nothing to record
             }
         }
-        logRepository.save(row);
-    }
-
-    private void applyToDaily(DailyReportLog row, String status, Instant at, String error) {
-        switch (status) {
-            case "delivered" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "read" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getReadAt() == null) {
-                    row.setReadAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "failed" -> {
-                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
-                    return;
-                }
-                // Not retried automatically: FAILED with attempts left WOULD be re-sent by the daily job,
-                // which is exactly right for a message Meta could not deliver — but the attempt budget is
-                // what bounds it, so just record the reason.
-                row.setStatus(CommunicationStatus.FAILED);
-                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
-            }
-            default -> {
-                return;
-            }
-        }
-        dailyReportLogRepository.save(row);
-    }
-
-    private void applyToTest(WhatsAppTestLog row, String status, Instant at, String error) {
-        switch (status) {
-            case "delivered" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "read" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getReadAt() == null) {
-                    row.setReadAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "failed" -> {
-                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
-                    return;
-                }
-                row.setStatus(CommunicationStatus.FAILED);
-                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
-            }
-            default -> {
-                return;
-            }
-        }
-        testLogRepository.save(row);
-    }
-
-    private void applyToBranchReport(BranchReportLog row, String status, Instant at, String error) {
-        switch (status) {
-            case "delivered" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "read" -> {
-                if (row.getDeliveredAt() == null) {
-                    row.setDeliveredAt(at);
-                }
-                if (row.getReadAt() == null) {
-                    row.setReadAt(at);
-                }
-                if (row.getStatus() == CommunicationStatus.SENT) {
-                    row.setStatus(CommunicationStatus.DELIVERED);
-                }
-            }
-            case "failed" -> {
-                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
-                    return;
-                }
-                row.setStatus(CommunicationStatus.FAILED);
-                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
-            }
-            default -> {
-                return;
-            }
-        }
-        branchReportLogRepository.save(row);
+        row.save().run();
     }
 
     private static String truncate(String value) {

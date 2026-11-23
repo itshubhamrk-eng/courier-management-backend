@@ -188,4 +188,34 @@ class WhatsAppReceiptServiceImplTest {
         assertThat(report.getStatus()).isEqualTo(CommunicationStatus.DELIVERED);
         assertThat(report.getErrorMessage()).isNull();
     }
+
+    @Test
+    void aBranchReportFailureBeforeDeliveryMarksItFailedWithMetasReason() {
+        var report = com.courier.modules.communication.domain.BranchReportLog.builder().providerMessageId("wamid.branch")
+                .status(CommunicationStatus.SENT).build();
+        when(logRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.empty());
+        when(branchReportRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.of(report));
+
+        service.apply(List.of(new Receipt("wamid.branch", "failed", T1, "131026 undeliverable")));
+
+        assertThat(report.getStatus()).isEqualTo(CommunicationStatus.FAILED);
+        assertThat(report.getErrorMessage()).isEqualTo("Meta could not deliver it: 131026 undeliverable");
+        assertThat(report.getDeliveredAt()).isNull();
+    }
+
+    @Test
+    void replayingABranchReportsDeliveredReceiptChangesNothing() {
+        var report = com.courier.modules.communication.domain.BranchReportLog.builder().providerMessageId("wamid.branch")
+                .status(CommunicationStatus.SENT).build();
+        when(logRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.empty());
+        when(branchReportRepository.findFirstByProviderMessageId("wamid.branch")).thenReturn(Optional.of(report));
+
+        service.apply(List.of(new Receipt("wamid.branch", "delivered", T1, null)));
+        int again = service.apply(List.of(new Receipt("wamid.branch", "delivered", T2, null)));
+
+        assertThat(again).isEqualTo(1);
+        assertThat(report.getStatus()).isEqualTo(CommunicationStatus.DELIVERED);
+        assertThat(report.getDeliveredAt()).isEqualTo(T1);   // first time kept, not overwritten
+        assertThat(report.getReadAt()).isNull();
+    }
 }
