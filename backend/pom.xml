@@ -26,6 +26,13 @@
     </properties>
 
     <dependencies>
+        <!-- PDF generation (branch monthly statement) -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
         <!-- Web / API -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
