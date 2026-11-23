@@ -48,6 +48,7 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
 
     private final CommunicationLogRepository repository;
     private final DailyReportLogRepository dailyReportLogRepository;
+    private final com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
     private final CommunicationSettingRepository settingRepository;
     private final CommunicationTemplateRepository templateRepository;
     private final ObjectMapper objectMapper;
@@ -84,12 +85,21 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
         }
 
         long totalSent = 0, totalDelivered = 0, totalFailed = 0, totalPending = 0;
-        for (var row : repository.countByChannelAndStatusBetween(companyId, from, to)) {
-            ChannelSummary current = channels.get(row.getChannel());
+        List<WhatsAppExtra> extras = whatsAppExtras(companyId, from, to);
+        List<StatusCount> rows = new ArrayList<>();
+        for (var r : repository.countByChannelAndStatusBetween(companyId, from, to)) {
+            rows.add(new StatusCount(r.getChannel(), r.getStatus(), r.getTotal()));
+        }
+        // Daily summaries and test messages are WhatsApp messages too.
+        for (WhatsAppExtra e : extras) {
+            rows.add(new StatusCount(CommunicationChannel.WHATSAPP, e.status(), 1));
+        }
+        for (var row : rows) {
+            ChannelSummary current = channels.get(row.channel());
             long sent = current.sent(), delivered = current.delivered(), failed = current.failed(),
                     pending = current.pending(), cancelled = current.cancelled();
-            long count = row.getTotal();
-            switch (row.getStatus()) {
+            long count = row.total();
+            switch (row.status()) {
                 case SENT -> {
                     sent += count;
                     totalSent += count;
@@ -112,22 +122,44 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
                 default -> {
                 }
             }
-            channels.put(row.getChannel(), new ChannelSummary(sent, delivered, failed, pending, cancelled));
+            channels.put(row.channel(), new ChannelSummary(sent, delivered, failed, pending, cancelled));
         }
 
         Instant lastReceiptAt = repository.findLastDeliveredAt(companyId);
         long totalRead = repository.countByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanAndReadAtNotNull(
-                companyId, from, to);
+                companyId, from, to)
+                + extras.stream().filter(e -> e.readAt() != null).count();
 
         return new CommunicationDashboardSummary(totalSent, totalDelivered, totalFailed, totalPending, channels,
                 period, from, to, totalRead,
                 percent(totalDelivered, totalSent), percent(totalRead, totalSent),
-                daily(companyId, firstDay, lastDay, from, to, z), failures(companyId, from, to),
+                daily(companyId, firstDay, lastDay, from, to, z, extras), failures(companyId, from, to),
                 dailyReport(companyId), templateHealth(companyId), lastReceiptAt, whatsAppCost(companyId, from, to, lastReceiptAt != null));
     }
 
+    private record StatusCount(CommunicationChannel channel, CommunicationStatus status, long total) {
+    }
+
+    private record WhatsAppExtra(CommunicationStatus status, Instant at, Instant readAt) {
+    }
+
+    /** Daily business summaries and test messages in the window, as WhatsApp rows. */
+    private List<WhatsAppExtra> whatsAppExtras(UUID companyId, Instant from, Instant to) {
+        List<WhatsAppExtra> out = new ArrayList<>();
+        for (DailyReportLog d : dailyReportLogRepository
+                .findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(companyId, from, to)) {
+            out.add(new WhatsAppExtra(d.getStatus(), d.getCreatedAt(), d.getReadAt()));
+        }
+        for (var t : testLogRepository
+                .findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(companyId, from, to)) {
+            out.add(new WhatsAppExtra(t.getStatus(), t.getCreatedAt(), t.getReadAt()));
+        }
+        return out;
+    }
+
     /** One zero-filled point per calendar day, so the chart never skips a quiet day. */
-    private List<DayPoint> daily(UUID companyId, LocalDate firstDay, LocalDate lastDay, Instant from, Instant to, ZoneId z) {
+    private List<DayPoint> daily(UUID companyId, LocalDate firstDay, LocalDate lastDay, Instant from, Instant to, ZoneId z,
+                                 List<WhatsAppExtra> extras) {
         Map<LocalDate, long[]> buckets = new TreeMap<>();
         for (LocalDate d = firstDay; !d.isAfter(lastDay); d = d.plusDays(1)) {
             buckets.put(d, new long[3]);
@@ -138,6 +170,22 @@ public class CommunicationDashboardServiceImpl implements CommunicationDashboard
                 continue;
             }
             switch (row.getStatus()) {
+                case SENT -> b[0]++;
+                case DELIVERED -> {
+                    b[0]++;
+                    b[1]++;
+                }
+                case FAILED -> b[2]++;
+                default -> {
+                }
+            }
+        }
+        for (WhatsAppExtra e : extras) {
+            long[] b = buckets.get(e.at().atZone(z).toLocalDate());
+            if (b == null) {
+                continue;
+            }
+            switch (e.status()) {
                 case SENT -> b[0]++;
                 case DELIVERED -> {
                     b[0]++;

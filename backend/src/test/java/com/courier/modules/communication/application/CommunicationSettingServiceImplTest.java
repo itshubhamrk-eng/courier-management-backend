@@ -38,10 +38,12 @@ class CommunicationSettingServiceImplTest {
 
     private CommunicationSettingServiceImpl service;
 
+    @Mock private com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
+
     @BeforeEach
     void setUp() {
         service = new CommunicationSettingServiceImpl(repository, auditService, new ObjectMapper(), whatsAppProvider,
-                templateRepository, new TemplateRenderer("http://x/{trackingNumber}"));
+                templateRepository, new TemplateRenderer("http://x/{trackingNumber}"), testLogRepository);
         CompanyContext.setCompanyId(COMPANY);
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
     }

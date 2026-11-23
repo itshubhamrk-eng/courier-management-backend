@@ -3,6 +3,7 @@ package com.courier.modules.communication.domain;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,9 @@ public interface DailyReportLogRepository extends JpaRepository<DailyReportLog, 
     Optional<DailyReportLog> findFirstByProviderMessageId(String providerMessageId);
 
     Optional<DailyReportLog> findFirstByCompanyIdOrderByReportDateDescCreatedAtDesc(UUID companyId);
+
+    List<DailyReportLog> findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            UUID companyId, java.time.Instant from, java.time.Instant to);
 
     /** Daily summaries that actually went out in the window — they are WhatsApp messages too, and cost the same. */
     long countByCompanyIdAndStatusInAndSentAtGreaterThanEqualAndSentAtLessThan(

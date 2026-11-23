@@ -37,6 +37,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     private final com.courier.modules.communication.application.provider.WhatsAppProvider whatsAppProvider;
     private final com.courier.modules.communication.domain.CommunicationTemplateRepository templateRepository;
     private final TemplateRenderer templateRenderer;
+    private final com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
 
     @Override
     @Transactional
@@ -122,7 +123,7 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     @PreAuthorize(WRITERS + " or hasAuthority('NOTIFICATION_UPDATE')")
     public ConnectionTestResult sendTestMessage(String recipient, String templateName, String language) {
         if (recipient == null || recipient.replaceAll("\\D", "").length() < 10) {
@@ -147,11 +148,15 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
                 return new ConnectionTestResult(false, "Nothing was sent: this server runs the log-only WhatsApp "
                         + "provider. Set COMMUNICATION_WHATSAPP_ENABLED=true and restart the backend for real sends.");
             }
+            recordTest(recipient, templateName, com.courier.modules.communication.domain.CommunicationStatus.SENT,
+                    result.providerMessageId(), null);
             return new ConnectionTestResult(true, "Meta accepted the test message"
                     + (result.providerMessageId() == null ? "." : " (id " + result.providerMessageId() + "). Check the phone."));
         } catch (com.courier.modules.communication.application.provider.ProviderSendException e) {
             log.warn("WhatsApp test message failed in company {}: {}", CompanyContext.getCompanyId().orElse(null),
                     e.getMessage());
+            recordTest(recipient, templateName, com.courier.modules.communication.domain.CommunicationStatus.FAILED,
+                    null, e.getMessage());
             return new ConnectionTestResult(false, e.getMessage());
         }
     }
@@ -170,6 +175,22 @@ public class CommunicationSettingServiceImpl implements CommunicationSettingServ
 
     private UUID companyId() {
         return requireCompany();
+    }
+
+    /** So the send shows on the Communication dashboard and can take Meta's delivery/read receipts. */
+    private void recordTest(String recipient, String templateName,
+                            com.courier.modules.communication.domain.CommunicationStatus status,
+                            String providerMessageId, String error) {
+        var row = com.courier.modules.communication.domain.WhatsAppTestLog.builder()
+                .recipient(recipient.trim())
+                .templateName(templateName == null || templateName.isBlank() ? null : templateName.trim())
+                .status(status).providerMessageId(providerMessageId)
+                .errorMessage(error == null ? null : (error.length() > 1000 ? error.substring(0, 1000) : error))
+                .sentAt(status == com.courier.modules.communication.domain.CommunicationStatus.FAILED
+                        ? null : java.time.Instant.now())
+                .build();
+        row.setCompanyId(companyId());
+        testLogRepository.save(row);
     }
 
     private com.courier.modules.communication.application.provider.WhatsAppProvider.WhatsAppMessage testMessage(

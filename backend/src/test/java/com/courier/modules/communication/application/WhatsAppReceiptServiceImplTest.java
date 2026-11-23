@@ -37,9 +37,11 @@ class WhatsAppReceiptServiceImplTest {
     private WhatsAppReceiptServiceImpl service;
     private CommunicationLog row;
 
+    @Mock private com.courier.modules.communication.domain.WhatsAppTestLogRepository testRepository;
+
     @BeforeEach
     void setUp() {
-        service = new WhatsAppReceiptServiceImpl(logRepository, dailyRepository);
+        service = new WhatsAppReceiptServiceImpl(logRepository, dailyRepository, testRepository);
         row = CommunicationLog.builder().providerMessageId("wamid.1").status(CommunicationStatus.SENT).build();
         when(logRepository.findFirstByProviderMessageId("wamid.1")).thenReturn(Optional.of(row));
         when(logRepository.findFirstByProviderMessageId("wamid.unknown")).thenReturn(Optional.empty());

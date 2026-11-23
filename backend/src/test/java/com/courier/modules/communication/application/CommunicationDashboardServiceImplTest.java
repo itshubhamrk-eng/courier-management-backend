@@ -29,6 +29,7 @@ class CommunicationDashboardServiceImplTest {
 
     @Mock private CommunicationLogRepository repository;
     @Mock private com.courier.modules.communication.domain.DailyReportLogRepository dailyReportLogRepository;
+    @Mock private com.courier.modules.communication.domain.WhatsAppTestLogRepository testLogRepository;
     @Mock private com.courier.modules.communication.domain.CommunicationSettingRepository settingRepository;
     @Mock private com.courier.modules.communication.domain.CommunicationTemplateRepository templateRepository;
 
@@ -36,7 +37,7 @@ class CommunicationDashboardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CommunicationDashboardServiceImpl(repository, dailyReportLogRepository, settingRepository,
+        service = new CommunicationDashboardServiceImpl(repository, dailyReportLogRepository, testLogRepository, settingRepository,
                 templateRepository, new com.fasterxml.jackson.databind.ObjectMapper());
         when(dailyReportLogRepository.findFirstByCompanyIdOrderByReportDateDescCreatedAtDesc(any()))
                 .thenReturn(java.util.Optional.empty());
@@ -78,6 +79,30 @@ class CommunicationDashboardServiceImplTest {
         assertThat(summary.channels().get(CommunicationChannel.WHATSAPP).failed()).isEqualTo(50);
         assertThat(summary.totalSent()).isEqualTo(1200);
         assertThat(summary.totalDelivered()).isEqualTo(1150);
+    }
+
+    @Test
+    void dailySummariesAndTestMessagesCountAsWhatsAppMessages() {
+        when(repository.countByChannelAndStatusBetween(any(), any(), any())).thenReturn(List.of(
+                row(CommunicationChannel.WHATSAPP, CommunicationStatus.SENT, 2)));
+        var now = java.time.Instant.now();
+        var daily = com.courier.modules.communication.domain.DailyReportLog.builder()
+                .status(CommunicationStatus.DELIVERED).readAt(now).build();
+        daily.setCreatedAt(now);
+        var test = com.courier.modules.communication.domain.WhatsAppTestLog.builder()
+                .status(CommunicationStatus.FAILED).build();
+        test.setCreatedAt(now);
+        when(dailyReportLogRepository.findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any(), any()))
+                .thenReturn(List.of(daily));
+        when(testLogRepository.findAllByCompanyIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any(), any()))
+                .thenReturn(List.of(test));
+
+        var summary = service.today();
+
+        assertThat(summary.totalSent()).isEqualTo(3);
+        assertThat(summary.totalDelivered()).isEqualTo(1);
+        assertThat(summary.totalFailed()).isEqualTo(1);
+        assertThat(summary.totalRead()).isEqualTo(1);
     }
 
     @Test

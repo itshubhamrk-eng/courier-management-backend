@@ -5,6 +5,8 @@ import com.courier.modules.communication.domain.CommunicationLogRepository;
 import com.courier.modules.communication.domain.CommunicationStatus;
 import com.courier.modules.communication.domain.DailyReportLog;
 import com.courier.modules.communication.domain.DailyReportLogRepository;
+import com.courier.modules.communication.domain.WhatsAppTestLog;
+import com.courier.modules.communication.domain.WhatsAppTestLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
 
     private final CommunicationLogRepository logRepository;
     private final DailyReportLogRepository dailyReportLogRepository;
+    private final WhatsAppTestLogRepository testLogRepository;
 
     @Override
     @Transactional
@@ -59,6 +62,12 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
             if (dailyMessage.isPresent()) {
                 matched++;
                 applyToDaily(dailyMessage.get(), status, at, receipt.error());
+                continue;
+            }
+            Optional<WhatsAppTestLog> testMessage = testLogRepository.findFirstByProviderMessageId(receipt.messageId());
+            if (testMessage.isPresent()) {
+                matched++;
+                applyToTest(testMessage.get(), status, at, receipt.error());
             }
         }
         return matched;
@@ -136,6 +145,41 @@ public class WhatsAppReceiptServiceImpl implements WhatsAppReceiptService {
             }
         }
         dailyReportLogRepository.save(row);
+    }
+
+    private void applyToTest(WhatsAppTestLog row, String status, Instant at, String error) {
+        switch (status) {
+            case "delivered" -> {
+                if (row.getDeliveredAt() == null) {
+                    row.setDeliveredAt(at);
+                }
+                if (row.getStatus() == CommunicationStatus.SENT) {
+                    row.setStatus(CommunicationStatus.DELIVERED);
+                }
+            }
+            case "read" -> {
+                if (row.getDeliveredAt() == null) {
+                    row.setDeliveredAt(at);
+                }
+                if (row.getReadAt() == null) {
+                    row.setReadAt(at);
+                }
+                if (row.getStatus() == CommunicationStatus.SENT) {
+                    row.setStatus(CommunicationStatus.DELIVERED);
+                }
+            }
+            case "failed" -> {
+                if (row.getStatus() == CommunicationStatus.DELIVERED || row.getDeliveredAt() != null) {
+                    return;
+                }
+                row.setStatus(CommunicationStatus.FAILED);
+                row.setErrorMessage(truncate("Meta could not deliver it: " + (error == null ? "no reason given" : error)));
+            }
+            default -> {
+                return;
+            }
+        }
+        testLogRepository.save(row);
     }
 
     private static String truncate(String value) {
