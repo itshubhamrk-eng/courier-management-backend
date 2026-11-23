@@ -1039,6 +1039,18 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public List<VendorAuditRow> vendorAudit(ShipmentCriteria criteria) {
+        return vendorAuditUnguarded(criteria);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorAuditRow> vendorAuditUnguarded(ShipmentCriteria criteria) {
+        UUID companyId = requireCompany();
+        java.time.ZoneId ist = java.time.ZoneId.of("Asia/Kolkata");
+        boolean hasRange = criteria.bookingDateFrom() != null && criteria.bookingDateTo() != null;
+        java.time.Instant walletFrom = hasRange ? criteria.bookingDateFrom().atStartOfDay(ist).toInstant() : null;
+        java.time.Instant walletTo = hasRange
+                ? criteria.bookingDateTo().plusDays(1).atStartOfDay(ist).toInstant() : null;
         List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
         List<UUID> ids = matches.stream().map(Shipment::getId).toList();
         Map<UUID, ShipmentCharge> charges = chargesFor(ids);
@@ -1084,13 +1096,21 @@ public class ShipmentServiceImpl implements ShipmentService {
             long deliveredQty = sumQty(delivered, quantities);
             BigDecimal deliveryCommission = drsRate.multiply(BigDecimal.valueOf(deliveredQty));
 
+            WalletService.PeriodSummary wallet = hasRange
+                    ? walletService.periodSummaryUnguarded(companyId, branchId, walletFrom, walletTo) : null;
+
             return new VendorAuditRow(branchId,
                     paid.size(), sumQty(paid, quantities), paidAmount,
                     topay.size(), sumQty(topay, quantities), topayAmount,
                     paidCommission, deliveryCommission,
                     booked.size(), delivered.size(),
                     bookingTotalCommission, deliveryCommission,
-                    odaCharges, otherCharges, cancelledCount);
+                    odaCharges, otherCharges, cancelledCount,
+                    wallet == null ? null : wallet.openingBalance(),
+                    wallet == null ? null : wallet.closingBalance(),
+                    wallet == null ? null : Long.valueOf(wallet.rechargeCount()),
+                    wallet == null ? null : wallet.rechargeAmount(),
+                    wallet == null ? null : wallet.drsChargeCredited());
         })
         .sorted(Comparator.comparing(VendorAuditRow::totalBookedOrderCount).reversed())
         .toList();

@@ -197,7 +197,9 @@ public class ShipmentMapper {
                 r.topayOrderCount(), r.topayOrderQuantity(), r.topayOrderAmount(),
                 r.paidCommission(), r.deliveryCommission(), r.totalBookedOrderCount(), r.totalDeliveredOrderCount(),
                 r.bookingTotalCommission(), r.deliveryTotalCommission(),
-                r.odaCharges(), r.otherCharges(), r.cancelledOrderCount());
+                r.odaCharges(), r.otherCharges(), r.cancelledOrderCount(),
+                r.openingBalance(), r.closingBalance(), r.rechargeCount(), r.rechargeAmount(),
+                r.drsChargeCredited());
     }
 
     public ShipmentSummaryResponse toSummary(Shipment s, BigDecimal netAmount, ShipmentCharge charge,

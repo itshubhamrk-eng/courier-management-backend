@@ -25,6 +25,11 @@ public record VendorAuditRowResponse(
         BigDecimal deliveryTotalCommission,
         BigDecimal odaCharges,
         BigDecimal otherCharges,
-        long cancelledOrderCount
+        long cancelledOrderCount,
+        BigDecimal openingBalance,
+        BigDecimal closingBalance,
+        Long rechargeCount,
+        BigDecimal rechargeAmount,
+        BigDecimal drsChargeCredited
 ) {
 }

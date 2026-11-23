@@ -1074,6 +1074,61 @@ class ShipmentServiceImplTest {
                 null, null, null, null, null, null, null);
     }
 
+    // ------------------------------------------------------------ vendor audit wallet figures
+
+    private static com.courier.modules.shipment.domain.ShipmentCriteria auditCriteria(LocalDate from, LocalDate to) {
+        return new com.courier.modules.shipment.domain.ShipmentCriteria(null, null, null, null, null, null,
+                from, to, null, null, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("vendor audit rows carry the branch wallet period figures for the booking date range, read through the unguarded path in IST")
+    void vendorAuditCarriesWalletFigures() {
+        Shipment s = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(s));
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+        java.time.ZoneId ist = java.time.ZoneId.of("Asia/Kolkata");
+        java.time.Instant from = LocalDate.of(2026, 10, 1).atStartOfDay(ist).toInstant();
+        java.time.Instant to = LocalDate.of(2026, 11, 1).atStartOfDay(ist).toInstant();
+        when(walletService.periodSummaryUnguarded(COMPANY, BOOKING_BRANCH, from, to)).thenReturn(
+                new WalletService.PeriodSummary(new BigDecimal("100.00"), new BigDecimal("250.00"), 3L,
+                        new BigDecimal("400.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                        new BigDecimal("55.00"), BigDecimal.ZERO));
+
+        var rows = service.vendorAudit(auditCriteria(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)));
+
+        assertThat(rows).hasSize(1);
+        var row = rows.get(0);
+        assertThat(row.openingBalance()).isEqualByComparingTo("100.00");
+        assertThat(row.closingBalance()).isEqualByComparingTo("250.00");
+        assertThat(row.rechargeCount()).isEqualTo(3L);
+        assertThat(row.rechargeAmount()).isEqualByComparingTo("400.00");
+        assertThat(row.drsChargeCredited()).isEqualByComparingTo("55.00");
+        assertThat(row.totalBookedOrderCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("vendor audit wallet figures are null, rows still returned, when the criteria has no booking date range")
+    void vendorAuditWithoutDateRangeHasNullWalletFigures() {
+        Shipment s = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(s));
+        when(paymentModeService.getById(PAYMENT_MODE)).thenReturn(paymentMode(true));
+
+        var rows = service.vendorAudit(auditCriteria(null, null));
+
+        assertThat(rows).hasSize(1);
+        var row = rows.get(0);
+        assertThat(row.openingBalance()).isNull();
+        assertThat(row.closingBalance()).isNull();
+        assertThat(row.rechargeCount()).isNull();
+        assertThat(row.rechargeAmount()).isNull();
+        assertThat(row.drsChargeCredited()).isNull();
+        assertThat(row.totalBookedOrderCount()).isEqualTo(1L);
+        verify(walletService, never()).periodSummaryUnguarded(any(), any(), any(), any());
+    }
+
     private static Shipment existingShipment(ShipmentStatus status) {
         Shipment shipment = Shipment.builder()
                 .shipmentNumber("SHP2607300000001")

@@ -167,6 +167,13 @@ public interface ShipmentService {
     List<VendorAuditRow> vendorAudit(ShipmentCriteria criteria);
 
     /**
+     * {@link #vendorAudit} without the caller-authentication guard — the scheduler/system
+     * path. The caller must bind a company ({@code CompanyContext}) first; the wallet figures
+     * are read for that company.
+     */
+    List<VendorAuditRow> vendorAuditUnguarded(ShipmentCriteria criteria);
+
+    /**
      * Net amount per shipment, for the list row — batch-fetched (one query for the whole
      * page, not one per row) since {@code netAmount} lives on the separate
      * {@code shipment_charges} row, not on {@code Shipment} itself. A shipment missing

@@ -34,6 +34,12 @@ import java.util.UUID;
  *                           branch booked (paid, to-pay, and any other configured mode)
  * @param deliveryTotalCommission total DRS commission across every shipment this branch
  *                           delivered — see {@code deliveryCommission}
+ * @param openingBalance    wallet balance at the start of the booking date range (IST); the
+ *                           five wallet fields are null when the search has no booking date range
+ * @param closingBalance    wallet balance at the end of that range
+ * @param rechargeCount     number of wallet recharges in the range
+ * @param rechargeAmount    total recharged in the range
+ * @param drsChargeCredited DRS charge credited to the wallet in the range
  */
 public record VendorAuditRow(
         UUID branchId,
@@ -51,6 +57,11 @@ public record VendorAuditRow(
         BigDecimal deliveryTotalCommission,
         BigDecimal odaCharges,
         BigDecimal otherCharges,
-        long cancelledOrderCount
+        long cancelledOrderCount,
+        BigDecimal openingBalance,
+        BigDecimal closingBalance,
+        Long rechargeCount,
+        BigDecimal rechargeAmount,
+        BigDecimal drsChargeCredited
 ) {
 }
