@@ -19,6 +19,8 @@ import { ShipmentTable, ShipmentPerms, ShipmentAction } from './components/shipm
 import { ShipmentFilter } from './components/shipment-filter';
 import { ShipmentService } from './shipment.service';
 import { excludingCancelled } from '../reports/non-cancelled.util';
+import { ShipmentPrintDataService } from './shipment-print-data.service';
+import { printShipmentCopies } from './shipment-copy-print.util';
 import { downloadCsv } from '@shared/utils/csv-export.util';
 
 const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_OPERATOR];
@@ -44,6 +46,9 @@ const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_
           <app-button variant="stroked" icon="filter_list" (pressed)="filterOpen.set(true)">
             Filters@if (activeFilters()) { <span class="fbadge">{{ activeFilters() }}</span> }
           </app-button>
+          <app-button variant="stroked" icon="print" [loading]="printing()" [disabled]="!selectedCount()" (pressed)="printSelected()">
+            Print Selected@if (selectedCount()) { ({{ selectedCount() }}) }
+          </app-button>
           <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
           @if (can().create) { <app-button icon="add" (pressed)="create()">New Shipment</app-button> }
         </div>
@@ -52,6 +57,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN, AppRole.BRANCH_MANAGER, AppRole.BOOKING_
       <app-shipment-table [showCompanyCommission]="!myBranchId" [rows]="page().content" [loading]="loading()" [sort]="sort()" [perms]="tablePerms()"
         [startIndex]="page().page * page().size"
                           [branchOptions]="branchOptions()" [paymentModeOptions]="paymentModeOptions()"
+                          [selectedIds]="selected()" (selectionChange)="onSelect($event)"
                           (sortChange)="onSort($event)" (action)="onAction($event)" />
 
       <app-pagination [page]="page()" (pageChange)="onPage($event)" />
@@ -76,6 +82,7 @@ export class ShipmentList implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
+  private readonly printData = inject(ShipmentPrintDataService);
 
   /** A branch-tier viewer sees only their own branch's bookings — booking branch is
    *  fixed to it in every query and the filter's own picker is hidden. Company-level
@@ -86,6 +93,10 @@ export class ShipmentList implements OnInit {
   readonly paymentModeOptions = signal<SelectOption[]>([]);
   readonly loading = signal(true);
   readonly exporting = signal(false);
+  readonly printing = signal(false);
+  /** Shipment ids ticked for bulk print; kept across pages, cleared after a print. */
+  readonly selected = signal<ReadonlySet<string>>(new Set<string>());
+  readonly selectedCount = computed(() => this.selected().size);
   readonly filterOpen = signal(false);
   readonly page = signal<Page<Shipment>>(emptyPage<Shipment>());
   readonly sort = signal<SortState | null>({ active: 'createdDate', direction: 'desc' });
@@ -147,6 +158,35 @@ export class ShipmentList implements OnInit {
   onPage(i: number) { this.query = { ...this.query, page: i }; this.load(); }
   onSort(s: SortState) { this.sort.set(s); this.query = { ...this.query, sort: `${s.active},${s.direction}`, page: 0 }; this.load(); }
   onFilter(f: ShipmentSearchRequest) { this.filters.set(f); this.query = { ...this.query, page: 0 }; this.filterOpen.set(false); this.load(); }
+
+  /** Each shipment prints 3 copies, and every one costs a shipment + charge fetch — cap the batch. */
+  private static readonly MAX_BULK_PRINT = 50;
+
+  onSelect({ ids, selected }: { ids: string[]; selected: boolean }): void {
+    const next = new Set(this.selected());
+    for (const id of ids) {
+      if (!selected) next.delete(id);
+      else if (next.size < ShipmentList.MAX_BULK_PRINT) next.add(id);
+      else { this.notify.info(`Select up to ${ShipmentList.MAX_BULK_PRINT} shipments per print.`); break; }
+    }
+    this.selected.set(next);
+  }
+
+  printSelected(): void {
+    const ids = [...this.selected()];
+    if (!ids.length) return;
+    this.printing.set(true);
+    this.printData.buildMany(ids).subscribe({
+      next: (list) => {
+        this.printing.set(false);
+        if (!list.length) return void this.notify.error('Nothing to print — no charge record found for the selection.');
+        if (list.length < ids.length) this.notify.info(`${ids.length - list.length} shipment(s) skipped (no charge record).`);
+        printShipmentCopies(list);
+        this.selected.set(new Set());
+      },
+      error: () => { this.printing.set(false); this.notify.error('Could not prepare the print.'); }
+    });
+  }
 
   create() { this.router.navigate(['/shipments/new']); }
 

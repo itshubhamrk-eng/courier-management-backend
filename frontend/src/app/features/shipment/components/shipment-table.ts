@@ -21,7 +21,15 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
                emptyTitle="No shipments" emptyHint="Book your first shipment to get started."
                emptyIllustration="package"
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
+      <ng-template #head>
+        <input type="checkbox" class="sel" aria-label="Select all on this page" [checked]="allSelected()"
+               (click)="$event.stopPropagation()" (change)="toggleAll($any($event.target).checked)" />
+      </ng-template>
       <ng-template #row let-s>
+        <td class="col-sel" (click)="$event.stopPropagation()">
+          <input type="checkbox" class="sel" [attr.aria-label]="'Select ' + s.shipmentNumber"
+                 [checked]="selectedIds().has(s.id)" (change)="toggle(s, $any($event.target).checked)" />
+        </td>
         <td><span class="mono">{{ s.shipmentNumber }}</span></td>
         <td><span class="mono awb">{{ s.trackingNumber }}</span></td>
         <td>{{ s.bookingDate }}</td>
@@ -64,6 +72,8 @@ export type ShipmentAction = 'view' | 'edit' | 'cancel';
     .mono { font:600 16px var(--font-mono, ui-monospace); color:var(--content-fg); }
     .awb { color:var(--brand-600); }
     .num { text-align:right; }
+    .col-sel { width:44px; }
+    .sel { width:18px; height:18px; cursor:pointer; accent-color:var(--brand-600); }
     .col-actions { text-align:right; width:56px; }
     .kebab { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:inline-flex; padding:4px; border-radius:8px; }
     .kebab:hover { background:var(--surface-muted); }
@@ -85,10 +95,15 @@ export class ShipmentTable {
   /** Branch logins don't see the company's own commission. */
   readonly showCompanyCommission = input(true);
 
+  /** Ids ticked for bulk print — owned by the list so selection survives paging. */
+  readonly selectedIds = input<ReadonlySet<string>>(new Set<string>());
+  readonly selectionChange = output<{ ids: string[]; selected: boolean }>();
+
   readonly sortChange = output<SortState>();
   readonly action = output<{ type: ShipmentAction; shipment: Shipment }>();
 
   readonly columns: TableColumn<Shipment>[] = [
+    { key: 'select', header: '', width: '44px' },
     { key: 'shipmentNumber', header: 'Shipment No.', sortable: true },
     { key: 'trackingNumber', header: 'AWB', sortable: true },
     { key: 'bookingDate', header: 'Booking Date', sortable: true },
@@ -116,6 +131,10 @@ export class ShipmentTable {
   readonly visibleColumns = computed(() => this.showCompanyCommission()
     ? this.columns
     : this.columns.filter((c) => c.key !== 'companyCommissionOnBasicFreight'));
+
+  readonly allSelected = computed(() => this.rows().length > 0 && this.rows().every((r) => this.selectedIds().has(r.id)));
+  toggle(s: Shipment, selected: boolean): void { this.selectionChange.emit({ ids: [s.id], selected }); }
+  toggleAll(selected: boolean): void { this.selectionChange.emit({ ids: this.rows().map((r) => r.id), selected }); }
 
   act(type: ShipmentAction, shipment: Shipment): void { this.action.emit({ type, shipment }); }
   isEditable(s: Shipment): boolean { return s.status === 'BOOKED'; }

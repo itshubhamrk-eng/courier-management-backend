@@ -21,7 +21,8 @@ import { matchesScan } from '@features/shipment/shipment-label-print.util';
     <div class="row">
       <app-input [control]="searchControl" label="AWB / Shipment No." placeholder="AWB… / SHP-…" (keydown.enter)="track()" />
       <app-button icon="search" [loading]="searching()" (pressed)="track()">Track</app-button>
-      <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track(true)">Print Labels (A4)</app-button>
+      <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track('labels')">Print Labels (A4)</app-button>
+      <app-button icon="print" variant="stroked" [loading]="searching()" (pressed)="track('copy')">Shipment Copy</app-button>
     </div>
     @if (notFound()) {
       <p class="empty">No shipment matches "{{ lastQuery() }}".</p>
@@ -56,8 +57,8 @@ export class TrackBox {
     });
   }
 
-  /** `labels`: land on the shipment with the A4 label print dialog already open. */
-  track(labels = false): void {
+  /** `print`: land on the shipment with that print (A4 labels dialog / Shipment Copy) already triggered. */
+  track(print?: 'labels' | 'copy'): void {
     const raw = this.searchControl.value?.trim();
     if (!raw) return;
     this.searching.set(true);
@@ -68,7 +69,7 @@ export class TrackBox {
       next: (p) => {
         this.searching.set(false);
         const shipment = p.content.find((s) => matchesScan(s, raw));
-        if (shipment) this.router.navigate(['/shipments', shipment.id], labels ? { queryParams: { labels: 1 } } : {});
+        if (shipment) this.router.navigate(['/shipments', shipment.id], print ? { queryParams: { [print]: 1 } } : {});
         else this.notFound.set(true);
       },
       error: (e: HttpErrorResponse) => {

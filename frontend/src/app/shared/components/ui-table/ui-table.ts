@@ -37,6 +37,9 @@ export interface SortState { active: string; direction: 'asc' | 'desc'; }
             @for (col of columns(); track col.key) {
               <th [style.width]="col.width" [style.text-align]="col.align || 'left'"
                   [class.tbl__th--sortable]="col.sortable" (click)="onSort(col)">
+                @if (headTpl() && col.key === 'select') {
+                  <ng-container [ngTemplateOutlet]="headTpl()!" />
+                }
                 <span class="tbl__th">{{ col.header }}
                   @if (col.sortable && sort()?.active === col.key) {
                     <mat-icon class="tbl__sort">{{ sort()!.direction === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
@@ -113,6 +116,9 @@ export class UiTable<T = Record<string, unknown>> {
   readonly emptyHint = input('Nothing to show yet.');
   readonly emptyIllustration = input<TableEmptyIllustration>(null);
   readonly rowTpl = contentChild<TemplateRef<{ $implicit: T }>>('row');
+  /** Optional `#head` template, rendered inside the header cell of the column keyed `select`
+   *  (a select-all checkbox) — other columns are untouched. */
+  readonly headTpl = contentChild<TemplateRef<unknown>>('head');
 
   readonly sortChange = output<SortState>();
   readonly rowClick = output<T>();

@@ -26,6 +26,8 @@ import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
 import { printPerformaBillCopies } from './performa-bill-print.util';
+import { ShipmentPrintDataService } from './shipment-print-data.service';
+import { printShipmentCopies } from './shipment-copy-print.util';
 import { ShipmentLabelsDialog } from './shipment-labels-dialog';
 import { ShipmentLabelData } from './shipment-label-print.util';
 import { emptyPage } from '@core/models/page.model';
@@ -100,6 +102,7 @@ const TIMELINE_ICONS: Record<string, string> = {
           <app-button variant="stroked" icon="label" (pressed)="printLabels()">Print Labels</app-button>
           @if (charge(); as c) {
             <app-button variant="stroked" icon="print" (pressed)="print3(c)">Booking Receipt</app-button>
+            <app-button variant="stroked" icon="print" (pressed)="printCopy(c)">Shipment Copy</app-button>
           }
           @if (can().update && shipment()!.status === 'BOOKED') {
             <app-button variant="stroked" icon="edit" (pressed)="edit()">Edit</app-button>
@@ -500,6 +503,7 @@ export class ShipmentView implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly masters = inject(MasterDataService);
   private readonly companyProfile = inject(CompanyProfileService);
+  private readonly printData = inject(ShipmentPrintDataService);
   private readonly breadcrumb = inject(BreadcrumbService);
   private readonly notify = inject(NotificationService);
   private readonly perms = inject(PermissionService);
@@ -623,19 +627,31 @@ export class ShipmentView implements OnInit {
   /** `?labels=1` (from the Track page's Print Labels): open the labels dialog once the shipment
    *  and the three masters the label text needs (branch/service/payment names) have all arrived. */
   private wantLabels = false;
+  /** `?copy=1` (Track page's Shipment Copy): same wait, plus the charge record. */
+  private wantCopy = false;
   private labelsWaiting = 4;
   private labelsPartReady(): void {
-    if (this.wantLabels && --this.labelsWaiting === 0 && this.shipment()) {
-      this.wantLabels = false;
-      // Drop ?labels=1 so a refresh / Back doesn't reopen the dialog.
-      this.router.navigate([], { queryParams: { labels: null }, queryParamsHandling: 'merge', replaceUrl: true });
-      this.printLabels();
+    if (!(this.wantLabels || this.wantCopy)) return;
+    if (--this.labelsWaiting === 0 && this.shipment()) {
+      // Drop the query param so a refresh / Back doesn't reprint.
+      if (this.wantLabels) {
+        this.wantLabels = false;
+        this.router.navigate([], { queryParams: { labels: null }, queryParamsHandling: 'merge', replaceUrl: true });
+        this.printLabels();
+      } else {
+        this.wantCopy = false;
+        this.router.navigate([], { queryParams: { copy: null }, queryParamsHandling: 'merge', replaceUrl: true });
+        const c = this.charge();
+        if (c) this.printCopy(c);
+      }
     }
   }
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
     this.wantLabels = this.route.snapshot.queryParamMap.get('labels') === '1';
+    this.wantCopy = this.route.snapshot.queryParamMap.get('copy') === '1';
+    if (this.wantCopy) this.labelsWaiting = 5;
     // A failed master still counts as "arrived" so the dialog opens (names fall back) instead of silently never opening.
     this.masters.options('branches').subscribe({ next: (o) => { this.branchOptions.set(o); this.labelsPartReady(); }, error: () => this.labelsPartReady() });
     this.masters.options('service-types').subscribe({ next: (o) => { this.serviceTypeOptions.set(o); this.labelsPartReady(); }, error: () => this.labelsPartReady() });
@@ -671,8 +687,9 @@ export class ShipmentView implements OnInit {
         this.steps.set(steps);
         this.charge.set(charge);
         this.loadingDetails.set(false);
+        if (this.wantCopy) this.labelsPartReady();
       },
-      error: () => this.loadingDetails.set(false)
+      error: () => { this.loadingDetails.set(false); this.wantCopy = false; }
     });
   }
 
@@ -763,61 +780,7 @@ export class ShipmentView implements OnInit {
   edit(): void { this.router.navigate(['/shipments', this.id, 'edit']); }
 
   private buildPrintData(c: ShipmentCharge) {
-    const s = this.shipment()!;
-    return forkJoin({
-      company: this.companyProfile.get().pipe(catchError(() => of(null))),
-      bookingGeo: s.pickupPincode
-        ? this.masters.pincodeGeo(s.pickupPincode).pipe(catchError(() => of(null)))
-        : of(null),
-      deliveryGeo: s.deliveryPincode
-        ? this.masters.pincodeGeo(s.deliveryPincode, s.destinationAreaId).pipe(catchError(() => of(null)))
-        : of(null)
-    }).pipe(map(({ company, bookingGeo, deliveryGeo }): ConsignmentPrintData => ({
-      companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
-      companyLogo: company?.logo ?? this.auth.companyLogo(),
-      companyAddress: companyAddressLine(company),
-      companyGst: company?.gstNumber ?? null,
-      companyContact: company?.mobile ?? null,
-      companyWebsite: company?.website ?? null,
-      shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-      expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-      bookingBranchLabel: this.branchLabel(s.bookingBranchId),
-      deliveryBranchLabel: s.deliveryBranchId
-        ? this.branchLabel(s.deliveryBranchId)
-        : s.toCity || '—',
-      bookingPincode: s.pickupPincode || null,
-      bookingDistrict: bookingGeo?.districtName ?? null,
-      bookingArea: bookingGeo?.areaName ?? null,
-      deliveryPincode: s.deliveryPincode || null,
-      deliveryDistrict: deliveryGeo?.districtName ?? null,
-      deliveryArea: deliveryGeo?.areaName ?? null,
-      senderName: s.senderName, senderAddress: s.senderAddress, senderContact: s.senderContact,
-      receiverName: s.receiverName, receiverAddress: s.receiverAddress, receiverContact: s.receiverContact,
-      serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId), packageTypeLabel: this.packageTypeLabel(s.packageTypeId),
-      paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
-      deliveryType: s.deliveryType,
-      numberOfPackages: s.numberOfPackages, chargeableWeight: s.chargeableWeight,
-      declaredValue: s.declaredValue ?? null,
-      charges: {
-        freight: c.freight, fuelCharge: c.fuelCharge, handlingCharge: c.handlingCharge, odaCharge: c.odaCharge,
-        insuranceCharge: c.insuranceCharge, applicableCharges: c.applicableCharges,
-        applicableChargeLines: c.applicableChargeLines, gstAmount: c.gstAmount,
-        discount: c.discountAmount, roundOff: c.roundOff,
-        // The saved netAmount already includes Other, Appointment, Door-delivery and To-Pay
-        // charges, and the print totals add each back on top (same shape as the booking-time
-        // print) — take them out here so they are counted once.
-        netAmount: c.netAmount - (c.otherCharges ?? 0) - (c.appointmentDeliveryCharge ?? 0)
-          - (c.doorDeliveryCharge ?? 0) - (c.toPayCharge ?? 0)
-      },
-      otherCharges: c.otherCharges,
-      appointmentDeliveryCharge: c.appointmentDeliveryCharge,
-      doorDeliveryCharge: c.doorDeliveryCharge,
-      toPayCharge: c.toPayCharge,
-      remarks: s.remarks ?? null,
-      createdByName: s.createdByName ?? null,
-      invoiceValue: s.invoiceValue ?? null,
-      items: s.items.map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
-    })));
+    return this.printData.build(this.shipment()!, c);
   }
 
   /** One label per package (`numberOfPackages`), all under this shipment's single AWB. */
@@ -842,6 +805,10 @@ export class ShipmentView implements OnInit {
       };
       this.matDialog.open(ShipmentLabelsDialog, { data, width: '860px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
     });
+  }
+
+  printCopy(c: ShipmentCharge): void {
+    this.buildPrintData(c).subscribe((data) => printShipmentCopies([data]));
   }
 
   print3(c: ShipmentCharge): void {
