@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CommunicationDashboard } from '@core/models/communication.model';
+import { CommunicationDashboard, WhatsAppSpend } from '@core/models/communication.model';
 import {
-  costView, dailySummaryView, formatRate, hasTrend, inr, money, periodLabel, receiptState, timeAgo, trendSeries
+  costView, dailySummaryView, formatRate, hasTrend, inr, money, periodLabel, receiptState, spendView, timeAgo, trendSeries, META_BILLING_URL
 } from './dashboard-view';
 
 const base = (over: Partial<CommunicationDashboard> = {}): CommunicationDashboard => ({
@@ -159,5 +159,57 @@ describe('dashboard view helpers', () => {
       expect(delivered.basis).toContain('delivered');
       expect(sent.basis).toContain('every sent message');
     });
+  });
+});
+
+describe('spendView', () => {
+  const spend = (over: Partial<WhatsAppSpend> = {}): WhatsAppSpend => ({
+    level: 'OK', currency: 'INR', spent: 400, budget: 1000, percentUsed: 40,
+    periodStart: '2026-10-31T18:30:00Z', periodEnd: '2026-11-23T04:30:00Z', note: 'As reported by Meta.', ...over
+  });
+
+  it('is green under the warning line', () => {
+    const v = spendView(spend());
+    expect(v.tone).toBe('success');
+    expect(v.barPercent).toBe(40);
+    expect(v.headline).toContain('₹400.00');
+    expect(v.headline).toContain('₹1,000.00');
+  });
+
+  it('is amber from 80% and red from 100%, with the bar capped at 100', () => {
+    expect(spendView(spend({ level: 'WARN', percentUsed: 85, spent: 850 })).tone).toBe('warning');
+    const over = spendView(spend({ level: 'OVER', percentUsed: 140, spent: 1400 }));
+    expect(over.tone).toBe('danger');
+    expect(over.barPercent).toBe(100);
+  });
+
+  it('without a budget points the admin to Channel Settings', () => {
+    const v = spendView(spend({ level: 'NO_BUDGET', budget: null, percentUsed: null }));
+    expect(v.tone).toBe('neutral');
+    expect(v.hint).toContain('Channel Settings');
+    expect(v.barPercent).toBe(0);
+  });
+
+  it('not configured shows the backend note and no figures', () => {
+    const v = spendView(spend({ level: 'NOT_CONFIGURED', spent: null, budget: null, percentUsed: null, note: 'Set it up.' }));
+    expect(v.tone).toBe('neutral');
+    expect(v.hint).toBe('Set it up.');
+  });
+
+  it('when Meta could not be read says so instead of showing zero', () => {
+    const v = spendView(spend({ spent: null, percentUsed: null, note: '(#200) permission' }));
+    expect(v.headline).toBe('Spend unavailable');
+    expect(v.hint).toBe('(#200) permission');
+  });
+
+  it('never calls it a balance', () => {
+    for (const level of ['OK', 'WARN', 'OVER', 'NO_BUDGET', 'NOT_CONFIGURED'] as const) {
+      const v = spendView(spend({ level }));
+      expect(`${v.headline} ${v.hint}`.toLowerCase()).not.toContain('balance');
+    }
+  });
+
+  it('exposes the Meta billing url', () => {
+    expect(META_BILLING_URL).toBe('https://business.facebook.com/billing_hub/payment_settings');
   });
 });

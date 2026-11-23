@@ -8,14 +8,14 @@ import { NotificationService } from '@core/services/notification.service';
 import { CommunicationService } from './communication.service';
 import { apiMessage } from './api-error';
 import {
-  CommunicationDashboard as Dashboard, COMMUNICATION_CHANNELS, CommunicationFailureRow, DashboardPeriod, FetchedRates
+  CommunicationDashboard as Dashboard, COMMUNICATION_CHANNELS, CommunicationFailureRow, DashboardPeriod, FetchedRates, WhatsAppSpend
 } from '@core/models/communication.model';
 import { StatisticCard } from '@shared/components/statistic-card/statistic-card';
 import { UiCard } from '@shared/components/ui-card/ui-card';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { ChartCard } from '@features/dashboard/components/chart-card';
 import {
-  PERIODS, costView, dailySummaryView, formatRate, hasTrend, money, periodLabel, receiptState, timeAgo, trendSeries
+  PERIODS, costView, dailySummaryView, formatRate, hasTrend, money, periodLabel, receiptState, spendView, timeAgo, trendSeries, META_BILLING_URL
 } from './dashboard-view';
 
 function words(value: string): string {
@@ -143,6 +143,24 @@ function words(value: string): string {
             <a class="link" routerLink="/communication/settings">Channel settings</a>
           </app-card>
 
+          @if (spendCard(); as sp) {
+            <app-card title="WhatsApp spend this month" subtitle="Against your monthly budget, as reported by Meta">
+              <div class="spend spend--{{ sp.tone }}">
+                <strong>{{ sp.headline }}</strong>
+                @if (sp.tone !== 'neutral') {
+                  <div class="bar" role="progressbar" [attr.aria-valuenow]="sp.barPercent" aria-valuemin="0" aria-valuemax="100">
+                    <span [style.width.%]="sp.barPercent"></span>
+                  </div>
+                }
+                @if (sp.hint) { <span class="text-caption">{{ sp.hint }}</span> }
+              </div>
+              <div class="cost__actions">
+                <app-button variant="stroked" icon="account_balance_wallet" (pressed)="recharge()">Recharge on Meta</app-button>
+                <a class="link" routerLink="/communication/settings">Set budget</a>
+              </div>
+            </app-card>
+          }
+
           <app-card title="WhatsApp cost estimate" [subtitle]="label()">
             @if (cost().rows.length) {
               <table class="cost">
@@ -234,6 +252,14 @@ function words(value: string): string {
     .sum--success { background:var(--success-bg); }
     .sum--warning { background:var(--warning-bg); }
     .sum--danger { background:var(--danger-bg); }
+    .spend { display:flex; flex-direction:column; gap:8px; padding:10px 14px; border-radius:var(--r-field); margin-bottom:10px; background:var(--surface-muted); }
+    .spend--success { background:var(--success-bg); }
+    .spend--warning { background:var(--warning-bg); }
+    .spend--danger { background:var(--danger-bg); }
+    .bar { height:8px; border-radius:999px; background:var(--surface-border); overflow:hidden; }
+    .bar span { display:block; height:100%; background:var(--success); }
+    .spend--warning .bar span { background:var(--warning); }
+    .spend--danger .bar span { background:var(--danger); }
     .cost { width:100%; border-collapse:collapse; font:400 16px var(--font-sans); margin-bottom:6px; }
     .cost th { text-align:left; font:600 14px var(--font-sans); color:var(--content-muted); text-transform:uppercase; letter-spacing:.04em; padding:4px 0; }
     .cost td { padding:6px 0; border-top:1px solid var(--surface-border); }
@@ -277,10 +303,25 @@ export class CommunicationDashboardPage implements OnInit {
   protected readonly failures = computed(() => this.dashboard()?.recentFailures ?? []);
   protected readonly summary = computed(() => dailySummaryView(this.dashboard()));
   protected readonly cost = computed(() => costView(this.dashboard()));
+  /** Null until Meta's spend loads, and stays null if it cannot — the card is a bonus, never a blocker. */
+  private readonly spend = signal<WhatsAppSpend | null>(null);
+  protected readonly spendCard = computed(() => { const s = this.spend(); return s ? spendView(s) : null; });
 
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Communication' }, { label: 'Dashboard' }]);
     this.load();
+    if (this.isAdmin()) this.loadSpend();
+  }
+
+  private loadSpend(): void {
+    this.service.whatsAppSpend().subscribe({
+      next: (s) => this.spend.set(s),
+      error: () => this.spend.set(null)
+    });
+  }
+
+  protected recharge(): void {
+    window.open(META_BILLING_URL, '_blank', 'noopener');
   }
 
   protected select(period: DashboardPeriod): void {

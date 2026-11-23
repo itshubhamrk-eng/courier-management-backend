@@ -232,6 +232,20 @@ export interface FetchedRates {
   note: string;
 }
 
+/** Mirrors backend `WhatsAppSpendResponse` — spend this month vs the admin's budget (Meta exposes no balance). */
+export type WhatsAppSpendLevel = 'NOT_CONFIGURED' | 'NO_BUDGET' | 'OK' | 'WARN' | 'OVER';
+export interface WhatsAppSpend {
+  level: WhatsAppSpendLevel;
+  currency?: string | null;
+  /** Null when Meta could not be read — see `note`. */
+  spent: number | null;
+  budget: number | null;
+  percentUsed: number | null;
+  periodStart: string;
+  periodEnd: string;
+  note?: string | null;
+}
+
 /** Mirrors backend `CommunicationDashboardResponse`. */
 export interface CommunicationDashboard {
   totalSent: number;

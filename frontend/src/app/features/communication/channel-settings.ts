@@ -29,6 +29,7 @@ const CARDS: ChannelCard[] = [
       { key: 'rateMarketing', label: 'Rate — Marketing (per message)', placeholder: 'e.g. 0.78' },
       { key: 'rateAuthentication', label: 'Rate — Authentication (per message)', placeholder: 'e.g. 0.115' },
       { key: 'rateCurrency', label: 'Currency of the rates', placeholder: 'INR (default) — set automatically when rates are fetched' },
+      { key: 'monthlyBudget', label: 'Monthly WhatsApp budget', placeholder: 'e.g. 5000 — the dashboard turns amber at 80% and red at 100% of it' },
       { key: 'dailyReportPhones', label: 'Daily report numbers', placeholder: '9876543210, 9123456780 — empty = no 9:00 AM summary' }
     ],
     secretLabel: 'Access Token', providerPlaceholder: 'META_CLOUD_API'
@@ -157,7 +158,7 @@ export class ChannelSettings implements OnInit {
       enabled: [false],
       provider: ['', Validators.maxLength(50)],
       phoneNumberId: [''], businessAccountId: [''],
-      dailyReportPhones: [''], rateUtility: [''], rateMarketing: [''], rateAuthentication: [''], rateCurrency: [''],
+      dailyReportPhones: [''], rateUtility: [''], rateMarketing: [''], rateAuthentication: [''], rateCurrency: [''], monthlyBudget: [''],
       apiUrl: [''], senderId: [''],
       fromName: [''], fromEmail: [''],
       secret: ['']

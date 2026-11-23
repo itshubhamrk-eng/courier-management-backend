@@ -4,7 +4,7 @@ import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import { Page, PageQuery } from '@core/models/page.model';
 import {
-  CommunicationChannel, CommunicationDashboard, DashboardPeriod, FetchedRates, CommunicationLog, CommunicationLogSearchRequest,
+  CommunicationChannel, CommunicationDashboard, DashboardPeriod, FetchedRates, WhatsAppSpend, CommunicationLog, CommunicationLogSearchRequest,
   CommunicationEventType, CommunicationSetting, CommunicationTemplate, CommunicationTemplatePreview, TemplateStarter,
   TemplateStatus,
   ConnectionTestResult, CreateCommunicationTemplateRequest, SubmitTemplateToMetaRequest,
@@ -111,6 +111,11 @@ export class CommunicationService {
   /** Reads what Meta actually billed (last 90 days), works out each category's price per message and saves it. */
   fetchRates() {
     return this.api.post<FetchedRates>(`${API.communicationDashboard}/fetch-rates`, {});
+  }
+
+  /** What Meta billed this month against the monthly budget in Channel Settings. */
+  whatsAppSpend() {
+    return this.api.get<WhatsAppSpend>(`${API.communicationDashboard}/whatsapp-spend`);
   }
 
   dashboard(period: DashboardPeriod = 'TODAY') {

@@ -3,7 +3,7 @@
  * here turns the backend's numbers into what the page shows; none of it invents a figure.
  */
 import {
-  CommunicationDashboard, CommunicationDayPoint, DashboardPeriod
+  CommunicationDashboard, CommunicationDayPoint, DashboardPeriod, WhatsAppSpend
 } from '@core/models/communication.model';
 
 export const PERIODS: { value: DashboardPeriod; label: string }[] = [
@@ -156,4 +156,43 @@ export function costView(d: CommunicationDashboard | null): CostView {
   }
   return { state: 'ok', basis, rows, total: money(c.total, cur),
     hint: 'An estimate from your own rates — Meta’s Insights page has the real bill. Some utility messages sent inside a customer’s 24-hour window can be free.' };
+}
+
+/** Meta's billing settings — Meta has no API to top up, so this is where an admin recharges. */
+export const META_BILLING_URL = 'https://business.facebook.com/billing_hub/payment_settings';
+
+export interface SpendView {
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+  /** 0-100, for the progress bar. */
+  barPercent: number;
+  headline: string;
+  hint: string;
+}
+
+/**
+ * The WhatsApp spend card. It is spend against the admin's own budget — Meta exposes no prepaid
+ * balance, so nothing here says "balance" or implies how much credit is left.
+ */
+export function spendView(spend: WhatsAppSpend): SpendView {
+  const note = spend.note ?? '';
+  if (spend.level === 'NOT_CONFIGURED') {
+    return { tone: 'neutral', barPercent: 0, headline: 'WhatsApp spend', hint: note };
+  }
+  if (spend.spent === null || spend.spent === undefined) {
+    return { tone: 'neutral', barPercent: 0, headline: 'Spend unavailable', hint: note };
+  }
+  const currency = spend.currency || 'INR';
+  const spent = money(spend.spent, currency);
+  if (spend.level === 'NO_BUDGET' || spend.budget === null) {
+    return {
+      tone: 'neutral', barPercent: 0, headline: `${spent} spent this month`,
+      hint: 'Set a monthly budget in Channel Settings to get a warning before it runs out.'
+    };
+  }
+  const bar = Math.min(100, Math.max(0, spend.percentUsed ?? 0));
+  const tone = spend.level === 'OVER' ? 'danger' : spend.level === 'WARN' ? 'warning' : 'success';
+  const hint = spend.level === 'OVER'
+    ? 'Over budget — recharge on Meta so messages keep sending.'
+    : spend.level === 'WARN' ? 'Close to the budget — consider recharging on Meta.' : note;
+  return { tone, barPercent: bar, headline: `${spent} of ${money(spend.budget, currency)} budget`, hint };
 }

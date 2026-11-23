@@ -173,4 +173,11 @@ describe('CommunicationService', () => {
     expect(request.request.method).toBe('POST');
     request.flush({ success: true, data: { days: 90, rates: [], saved: [], billedTotal: 0, note: 'x' } });
   });
+
+  it('reads WhatsApp spend with GET to the dashboard whatsapp-spend path', () => {
+    service.whatsAppSpend().subscribe();
+    const request = http.expectOne(`${base}/communication/dashboard/whatsapp-spend`);
+    expect(request.request.method).toBe('GET');
+    request.flush({ success: true, data: { level: 'OK', spent: 10 } });
+  });
 });
