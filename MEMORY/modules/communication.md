@@ -348,3 +348,14 @@ Also: New template page + Reset to default (`StarterTemplates`), and a WhatsApp 
 only from rates the company enters (`rateUtility`/`rateMarketing`/`rateAuthentication` in the WhatsApp
 channel config) — see the CHANGELOG entry "New template page, Reset to default, WhatsApp cost estimate".
 
+## Branch monthly report (2026-11-23, V152 + V153)
+
+Per-branch monthly statement PDF over WhatsApp. Full design in `docs/superpowers/specs/2026-11-23-branch-monthly-report-whatsapp-design.md`.
+
+- **Schedule:** `BranchReportJob`, 1st of each month 09:00 IST, covering the previous calendar month; sends to each branch's BRANCH_MANAGER phone.
+- **On demand:** Vendor Audit Report buttons (`/reports/vendor-audit`): download PDF, send one branch, send all. `GET /api/v1/shipments/vendor-audit/{branchId}/pdf`, `POST .../{branchId}/send`, `POST .../send-all`, `GET .../send-status`. Roles COMPANY_ADMIN / FINANCE_USER / ACCOUNTS. A branch+month already sent is refused unless `force=true`.
+- **PDF:** `branchreport` module, `BranchStatementService` + `BranchStatementPdf` (OpenPDF 2.0.3). Delivery commission comes from the wallet ledger (`drsChargeCredited`).
+- **WhatsApp:** `uploadDocument` plus a document header on the template; event `BRANCH_MONTHLY_REPORT`, template `branch_monthly_report` (Utility, en_US, {{1}} branch name, {{2}} month). Create it by hand in WhatsApp Manager (Submit-to-Meta is blocked for this event); the Check status button picks up approval.
+- **Ledger:** `branch_report_log` (V153) with receipts, shown with cost on the Communication dashboard. Receipt state machine and send helpers are shared with the daily summary (`ReportSendSupport`).
+- **Not verified live:** a real Meta send (the test number only reaches verified recipients).
+

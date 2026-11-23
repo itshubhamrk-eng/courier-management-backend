@@ -6,6 +6,18 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-23 - Branch monthly report on WhatsApp (V152, V153)
+- Each branch gets a monthly statement PDF (previous calendar month) on its BRANCH_MANAGER's own phone: automatically on the 1st of every month at 09:00 IST, and on demand from buttons on the Vendor Audit Report (`/reports/vendor-audit`): per-row PDF download / send, plus Send to all branches. Sending the same branch and month twice is refused unless forced (resend).
+- Vendor Audit Report gained wallet columns: Opening Balance, Recharges, DRS Charge Credited, Closing Balance (`periodSummary*` / `transactionsBetween` on the wallet service).
+- New module `com.courier.modules.branchreport`: `BranchStatementService` builds the statement, `BranchStatementPdf` renders it with OpenPDF 2.0.3 (summary, plus a full transaction appendix). Delivery commission is shown from the wallet ledger (`drsChargeCredited`), never the recomputed current-DRS-rate figure.
+- WhatsApp: `uploadDocument` + document header support, new template event `BRANCH_MONTHLY_REPORT` (`branch_monthly_report`). `branch_report_log` (V153) is the send ledger with delivery/read receipts, shown with cost on the Communication dashboard. `BranchReportServiceImpl` / `BranchReportJob` / `BranchStatementAdapter`; report-send helpers shared with the daily summary through `ReportSendSupport`.
+- Endpoints: `GET /api/v1/shipments/vendor-audit/{branchId}/pdf`, `POST .../{branchId}/send`, `POST .../send-all`, `GET .../send-status` (COMPANY_ADMIN / FINANCE_USER / ACCOUNTS).
+- V152 (already on main, 3392f55): daily summaries and test-message counts on the Communication dashboard.
+- **Template must be created by hand once** in WhatsApp Manager (Header: Document, category Utility, en_US, body from the seeded template with {{1}} = branch name, {{2}} = month). "Submit to Meta" is deliberately blocked for this event (needs Meta resumable upload and app id). Approval is picked up by the existing Check status button. The Meta test number only reaches verified recipients; real managers need the production WhatsApp number.
+- Verified live on a cloned DB (`courier_verify_br`): PDF totals equal raw SQL for Kolhapur, Oct 2026; 516-row appendix complete; send / resend / send-all / 404 / 400 / 401 and the UI confirm dialog all behave.
+- **Deploy notes:** V152 and V153 both run on backend boot (prod's last migration is below V152): check `flyway_schema_history` first and commit migrations in version order. Single backend node on prod; the retry race / crash window is left as in the daily summary (see the comment on `claim`).
+- **Known minors (deferred):** report page status load has a race (no switchMap); forced-resend ALREADY_SENT toast is silent; confirm button allows a double click; send-all toast is always "success"; a same-company branch with no targets returns 404 "Branch not found"; `GET /vendor-audit` is only `isAuthenticated()` server-side (route gate is frontend-only, pre-existing).
+
 ## 2026-11-21 - THC driver typed in, not picked (V150)
 - Manifest Finalization (THC) dispatch now takes `driverName` + `driverMobile` typed in, stored on the manifest (`manifests.driver_name/driver_mobile`, V150) and shown on the THC print, THC report and shipment movement table. `driverUserId` is optional (legacy/old manifests still resolve through the user directory); old 8-arg `ManifestService.dispatch` kept as a default delegate.
 - Driver OTP UI removed from the THC form (it needed a driver user id); backend OTP endpoints untouched.

@@ -7,6 +7,8 @@
 
 ## Current Version
 
+**2026-11-23 — branch monthly report on WhatsApp (V152, V153):** per-branch statement PDF sent to each BRANCH_MANAGER on the 1st (09:00 IST) and on demand from the Vendor Audit Report, which also gained wallet columns. New module `com.courier.modules.branchreport`. The Meta template `branch_monthly_report` must be created by hand in WhatsApp Manager. See `MEMORY/modules/communication.md`, `CHANGELOG.md` 2026-11-23. Branch `worktree-branch-monthly-report`, not deployed.
+
 **2026-11-18 — Legacy consignment import (V145/V146):** `/legacy-import` brings the old software's `Consignments_*.xls` in as history-only DELIVERED shipments (no wallet/commission/WhatsApp), existing consignments never touched, per-origin branch mapping. See `MEMORY/modules/legacy-import.md`, `CHANGELOG.md` 2026-11-18. Branch `feat/legacy-consignment-import`, not deployed.
 
 **2026-10-23 — mobile app backend gaps (V135):** booking preview `POST /shipments/preview` (shares `quote()` with create), user list open to THC/DRS permissions, failed delivery attempts with RTO on the 3rd (`delivery_attempts`). See `CHANGELOG.md` 2026-10-23.
