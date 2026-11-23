@@ -1066,10 +1066,15 @@ public class ShipmentServiceImpl implements ShipmentService {
         Map<UUID, Long> quantities = itemRepository.findByShipmentIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ShipmentItem::getShipmentId,
                         Collectors.summingLong(ShipmentItem::getQuantity)));
-        Map<UUID, PaymentMode> paymentModes = matches.stream()
-                .map(Shipment::getPaymentModeId).distinct()
-                .collect(Collectors.toMap(id -> id, id -> callerScoped
-                        ? paymentModeService.getById(id) : paymentModeService.getByIdUnguarded(companyId, id)));
+        // A shipment can point at a payment mode that has since been removed; it then counts as
+        // neither Paid nor To-Pay instead of failing the whole report. (Optional lookup, not a
+        // caught exception: a throw inside this transaction would mark it rollback-only.)
+        Map<UUID, PaymentMode> paymentModes = new java.util.HashMap<>();
+        for (UUID modeId : matches.stream().map(Shipment::getPaymentModeId).distinct().toList()) {
+            paymentModeService.findByIdUnguarded(companyId, modeId).ifPresentOrElse(
+                    mode -> paymentModes.put(modeId, mode),
+                    () -> log.warn("Vendor audit: payment mode {} no longer exists, its shipments are not counted as Paid/To-Pay", modeId));
+        }
 
         Map<UUID, List<Shipment>> byBookingBranch = matches.stream()
                 .collect(Collectors.groupingBy(Shipment::getBookingBranchId));
@@ -1090,9 +1095,11 @@ public class ShipmentServiceImpl implements ShipmentService {
             List<Shipment> delivered = byDeliveryBranch.getOrDefault(branchId, List.of());
 
             List<Shipment> paid = booked.stream()
-                    .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtBooking()).toList();
+                    .filter(s -> paymentModes.containsKey(s.getPaymentModeId())
+                            && paymentModes.get(s.getPaymentModeId()).isCollectAtBooking()).toList();
             List<Shipment> topay = booked.stream()
-                    .filter(s -> paymentModes.get(s.getPaymentModeId()).isCollectAtDelivery()).toList();
+                    .filter(s -> paymentModes.containsKey(s.getPaymentModeId())
+                            && paymentModes.get(s.getPaymentModeId()).isCollectAtDelivery()).toList();
 
             BigDecimal paidAmount = sumCharge(paid, charges, ShipmentCharge::getNetAmount);
             BigDecimal topayAmount = sumCharge(topay, charges, ShipmentCharge::getNetAmount);

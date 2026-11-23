@@ -8,6 +8,8 @@ import java.util.UUID;
 public interface PaymentModeService extends MasterDataService<PaymentMode, PaymentModeCommand> {
 
     /** System path only (scheduler threads with no logged-in user): no authorization, the
-     *  caller passes the company id and is responsible for it being right. */
-    PaymentMode getByIdUnguarded(UUID companyId, UUID id);
+     *  caller passes the company id and is responsible for it being right. Empty, rather
+     *  than an exception, for an unknown id: a throw inside a caller's transaction marks it
+     *  rollback-only even when the caller catches it. */
+    java.util.Optional<PaymentMode> findByIdUnguarded(UUID companyId, UUID id);
 }
