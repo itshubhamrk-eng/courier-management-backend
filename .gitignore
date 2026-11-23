@@ -32,3 +32,6 @@ logs/
 
 # Local data
 docker/data/
+
+# superpowers scratch
+.superpowers/
