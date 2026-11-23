@@ -3,6 +3,8 @@ package com.courier.modules.communication.api;
 import com.courier.modules.communication.api.dto.CommunicationDashboardResponse;
 import com.courier.modules.communication.application.CommunicationDashboardService;
 import com.courier.modules.communication.application.WhatsAppRateSyncService;
+import com.courier.modules.communication.application.WhatsAppSpendService;
+import com.courier.modules.communication.api.dto.WhatsAppSpendResponse;
 import com.courier.modules.communication.api.dto.FetchedRatesResponse;
 import com.courier.shared.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +28,7 @@ public class CommunicationDashboardController {
     private final CommunicationDashboardService service;
     private final CommunicationMapper mapper;
     private final WhatsAppRateSyncService rateSync;
+    private final WhatsAppSpendService spendService;
 
     @GetMapping
     @Operation(summary = "Communication statistics for a period", description = "period = TODAY (default), "
@@ -46,5 +49,16 @@ public class CommunicationDashboardController {
         return ApiResponse.success(new FetchedRatesResponse(r.currency(), r.days(),
                 r.rates().stream().map(d -> new FetchedRatesResponse.Derived(d.category(), d.volume(), d.cost(), d.rate())).toList(),
                 r.saved(), r.billedTotal(), r.note()), r.saved().isEmpty() ? "Nothing to fetch yet" : "Rates saved");
+    }
+
+    @GetMapping("/whatsapp-spend")
+    @Operation(summary = "WhatsApp spend this month versus the monthly budget", description = "Everything Meta billed "
+            + "from the 1st of the month (India time) to now, against the budget set in Channel Settings. This is "
+            + "spend, not a balance: Meta exposes no prepaid balance. level = NOT_CONFIGURED, NO_BUDGET, OK, WARN "
+            + "(>= 80%) or OVER (>= 100%). A Meta error comes back as a note, not an HTTP error.")
+    public ApiResponse<WhatsAppSpendResponse> whatsAppSpend() {
+        var s = spendService.current();
+        return ApiResponse.success(new WhatsAppSpendResponse(s.level(), s.currency(), s.spent(), s.budget(),
+                s.percentUsed(), s.periodStart(), s.periodEnd(), s.note()));
     }
 }
