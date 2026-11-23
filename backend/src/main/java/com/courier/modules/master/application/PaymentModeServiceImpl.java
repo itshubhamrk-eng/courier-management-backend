@@ -64,6 +64,13 @@ public class PaymentModeServiceImpl extends AbstractMasterDataService<PaymentMod
 
     @Override
     @Transactional(readOnly = true)
+    public PaymentMode getByIdUnguarded(UUID companyId, UUID id) {
+        return repository.findByIdWithinCompany(id, companyId)
+                .orElseThrow(() -> new com.courier.shared.exception.ResourceNotFoundException("Payment mode", id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     @PreAuthorize(READ)
     public Page<PaymentMode> search(MasterDataCriteria criteria, Pageable pageable) {
         return doSearch(criteria, pageable);

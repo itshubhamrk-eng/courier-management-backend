@@ -1129,6 +1129,38 @@ class ShipmentServiceImplTest {
         verify(walletService, never()).periodSummaryUnguarded(any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("vendorAuditUnguarded works with no logged-in user (scheduler thread) and uses only unguarded lookups")
+    void vendorAuditUnguardedNeedsNoSignedInUser() {
+        SecurityContextHolder.clearContext();
+        Shipment s = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(s));
+        when(paymentModeService.getByIdUnguarded(COMPANY, PAYMENT_MODE)).thenReturn(paymentMode(true));
+
+        var rows = service.vendorAuditUnguarded(auditCriteria(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).totalBookedOrderCount()).isEqualTo(1L);
+        verify(paymentModeService, never()).getById(any());
+        verify(branchService, never()).drsChargePerQtyOf(any());
+        verify(userService, never()).getCurrent();
+    }
+
+    @Test
+    @DisplayName("vendorAuditUnguarded is never narrowed to a branch-bound caller's own branch")
+    void vendorAuditUnguardedIgnoresCallerBranchScope() {
+        signedIn(Roles.BRANCH_MANAGER);
+        Shipment s = existingShipment(ShipmentStatus.BOOKED);
+        when(shipmentRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(s));
+        when(paymentModeService.getByIdUnguarded(COMPANY, PAYMENT_MODE)).thenReturn(paymentMode(true));
+
+        service.vendorAuditUnguarded(auditCriteria(null, null));
+
+        verify(userService, never()).getCurrent();
+    }
+
     private static Shipment existingShipment(ShipmentStatus status) {
         Shipment shipment = Shipment.builder()
                 .shipmentNumber("SHP2607300000001")

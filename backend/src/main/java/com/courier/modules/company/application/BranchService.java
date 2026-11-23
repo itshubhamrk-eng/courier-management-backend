@@ -66,6 +66,10 @@ public interface BranchService {
      */
     BigDecimal drsChargePerQtyOf(UUID branchId);
 
+    /** System path only (scheduler threads with no logged-in user): {@link #drsChargePerQtyOf}
+     *  with an explicit company id and no authorization. Zero for an unknown branch. */
+    BigDecimal drsChargePerQtyOfUnguarded(UUID companyId, UUID branchId);
+
     /** Same not-visibility-gated shape as {@link #drsChargePerQtyOf} — the wallet
      *  dashboard's pending-commission figures need this for the booking branch, which is
      *  not always the caller's own branch (a {@code COMPANY_ADMIN} picking another

@@ -66,6 +66,21 @@ class BranchStatementServiceImplTest {
     }
 
     @Test
+    void buildingSeveralBranchesInARunLoadsTheCompanyAuditOnce() {
+        UUID b1 = UUID.randomUUID();
+        UUID b2 = UUID.randomUUID();
+        when(branches.findBranch(b1, COMPANY)).thenReturn(Optional.of(ref(b1, "B1")));
+        when(branches.findBranch(b2, COMPANY)).thenReturn(Optional.of(ref(b2, "B2")));
+        when(shipments.vendorAuditUnguarded(any())).thenReturn(List.of());
+        stubWallet();
+
+        service.build(COMPANY, b1, FROM, TO);
+        service.build(COMPANY, b2, FROM, TO);
+
+        verify(shipments, times(1)).vendorAuditUnguarded(any(ShipmentCriteria.class));
+    }
+
+    @Test
     void buildAllCallsAuditOnceAndCoversEveryActiveBranch() {
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();

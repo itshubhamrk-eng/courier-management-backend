@@ -1039,27 +1039,37 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public List<VendorAuditRow> vendorAudit(ShipmentCriteria criteria) {
-        return vendorAuditUnguarded(criteria);
+        return computeVendorAudit(criteria, true);
     }
 
+    /** System path (scheduler threads, no logged-in user): company-wide, never narrowed to a
+     *  caller's branch, and no authenticated lookups — a branch statement must show the same
+     *  figures whoever triggers it. */
     @Override
     @Transactional(readOnly = true)
     public List<VendorAuditRow> vendorAuditUnguarded(ShipmentCriteria criteria) {
+        return computeVendorAudit(criteria, false);
+    }
+
+    private List<VendorAuditRow> computeVendorAudit(ShipmentCriteria criteria, boolean callerScoped) {
         UUID companyId = requireCompany();
         java.time.ZoneId ist = java.time.ZoneId.of("Asia/Kolkata");
         boolean hasRange = criteria.bookingDateFrom() != null && criteria.bookingDateTo() != null;
         java.time.Instant walletFrom = hasRange ? criteria.bookingDateFrom().atStartOfDay(ist).toInstant() : null;
         java.time.Instant walletTo = hasRange
                 ? criteria.bookingDateTo().plusDays(1).atStartOfDay(ist).toInstant() : null;
-        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria));
+        List<Shipment> matches = shipmentRepository.findAll(buildSpecification(criteria, callerScoped));
         List<UUID> ids = matches.stream().map(Shipment::getId).toList();
-        Map<UUID, ShipmentCharge> charges = chargesFor(ids);
+        Map<UUID, ShipmentCharge> charges = ids.isEmpty() ? Map.of()
+                : chargeRepository.findByShipmentIdIn(ids).stream()
+                        .collect(Collectors.toMap(ShipmentCharge::getShipmentId, c -> c));
         Map<UUID, Long> quantities = itemRepository.findByShipmentIdIn(ids).stream()
                 .collect(Collectors.groupingBy(ShipmentItem::getShipmentId,
                         Collectors.summingLong(ShipmentItem::getQuantity)));
         Map<UUID, PaymentMode> paymentModes = matches.stream()
                 .map(Shipment::getPaymentModeId).distinct()
-                .collect(Collectors.toMap(id -> id, paymentModeService::getById));
+                .collect(Collectors.toMap(id -> id, id -> callerScoped
+                        ? paymentModeService.getById(id) : paymentModeService.getByIdUnguarded(companyId, id)));
 
         Map<UUID, List<Shipment>> byBookingBranch = matches.stream()
                 .collect(Collectors.groupingBy(Shipment::getBookingBranchId));
@@ -1069,7 +1079,8 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         Map<UUID, BigDecimal> drsRates = new java.util.HashMap<>();
         byDeliveryBranch.keySet().forEach(branchId ->
-                drsRates.put(branchId, branchService.drsChargePerQtyOf(branchId)));
+                drsRates.put(branchId, callerScoped ? branchService.drsChargePerQtyOf(branchId)
+                        : branchService.drsChargePerQtyOfUnguarded(companyId, branchId)));
 
         Set<UUID> branchIds = new java.util.HashSet<>(byBookingBranch.keySet());
         branchIds.addAll(byDeliveryBranch.keySet());
@@ -1130,6 +1141,10 @@ public class ShipmentServiceImpl implements ShipmentService {
      *  {@code ShipmentCriteria.deliveredDateFrom}/{@code deliveredDateTo} for why this can't
      *  live entirely inside {@link ShipmentSpecifications}. */
     private Specification<Shipment> buildSpecification(ShipmentCriteria criteria) {
+        return buildSpecification(criteria, true);
+    }
+
+    private Specification<Shipment> buildSpecification(ShipmentCriteria criteria, boolean callerScoped) {
         ShipmentCriteria safe = criteria == null ? ShipmentCriteria.none() : criteria;
         var spec = ShipmentSpecifications.matching(safe);
         if (safe.deliveredDateFrom() != null || safe.deliveredDateTo() != null) {
@@ -1141,7 +1156,7 @@ public class ShipmentServiceImpl implements ShipmentService {
             spec = spec.and((root, query, cb) -> deliveredIds.isEmpty()
                     ? cb.disjunction() : root.get("id").in(deliveredIds));
         }
-        return spec.and(ownBranchScope());
+        return callerScoped ? spec.and(ownBranchScope()) : spec;
     }
 
     /** A branch-bound caller (not a company/platform admin) only sees shipments their own

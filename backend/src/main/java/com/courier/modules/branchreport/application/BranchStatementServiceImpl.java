@@ -35,9 +35,21 @@ public class BranchStatementServiceImpl implements BranchStatementService {
         this.branchDirectory = branchDirectory;
     }
 
+    /** Send-all and the monthly job call {@link #build} once per branch; the company-wide audit
+     *  behind each call loads every shipment in the range, so it is computed once and shared
+     *  for a short window instead of once per branch. Short enough that an on-demand statement
+     *  never shows figures older than a minute. */
+    private static final long AUDIT_TTL_MS = 60_000;
+
+    private record AuditKey(UUID companyId, LocalDate from, LocalDate to) { }
+
+    private AuditKey cachedKey;
+    private Map<UUID, VendorAuditRow> cachedAudit;
+    private long cachedAt;
+
     @Override
     public List<BranchStatement> buildAll(UUID companyId, LocalDate from, LocalDate to) {
-        Map<UUID, VendorAuditRow> audit = auditRows(from, to);
+        Map<UUID, VendorAuditRow> audit = auditRows(companyId, from, to);
         return branchDirectory.listBranches(companyId).stream()
                 .map(ref -> assemble(companyId, ref, from, to, audit.get(ref.branchId())))
                 .toList();
@@ -49,10 +61,23 @@ public class BranchStatementServiceImpl implements BranchStatementService {
         if (ref.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(assemble(companyId, ref.get(), from, to, auditRows(from, to).get(branchId)));
+        return Optional.of(assemble(companyId, ref.get(), from, to, auditRows(companyId, from, to).get(branchId)));
     }
 
-    private Map<UUID, VendorAuditRow> auditRows(LocalDate from, LocalDate to) {
+    private synchronized Map<UUID, VendorAuditRow> auditRows(UUID companyId, LocalDate from, LocalDate to) {
+        AuditKey key = new AuditKey(companyId, from, to);
+        long now = System.currentTimeMillis();
+        if (key.equals(cachedKey) && now - cachedAt < AUDIT_TTL_MS) {
+            return cachedAudit;
+        }
+        Map<UUID, VendorAuditRow> fresh = loadAuditRows(from, to);
+        cachedKey = key;
+        cachedAudit = fresh;
+        cachedAt = now;
+        return fresh;
+    }
+
+    private Map<UUID, VendorAuditRow> loadAuditRows(LocalDate from, LocalDate to) {
         ShipmentCriteria criteria = new ShipmentCriteria(null, null, null, null, null, null, from, to,
                 null, null, null, null, null, null);
         Map<UUID, VendorAuditRow> byBranch = new HashMap<>();

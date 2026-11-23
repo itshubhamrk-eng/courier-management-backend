@@ -391,6 +391,14 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     @Transactional(readOnly = true)
+    public BigDecimal drsChargePerQtyOfUnguarded(UUID companyId, UUID branchId) {
+        return repository.findByIdWithinCompany(branchId, companyId)
+                .map(Branch::getDrsChargePerQty)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     @PreAuthorize(READERS)
     public boolean isHubBranch(UUID branchId) {
         return repository.findByIdWithinCompany(branchId, CompanyContext.requireCompanyId())
