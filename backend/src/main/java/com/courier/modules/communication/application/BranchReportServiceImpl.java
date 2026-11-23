@@ -41,7 +41,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BranchReportServiceImpl implements BranchReportService {
 
-    static final int MAX_ATTEMPTS = 3;
+    static final int MAX_ATTEMPTS = ReportSendSupport.MAX_ATTEMPTS;
 
     private final CommunicationSettingRepository settingRepository;
     private final BranchReportLogRepository logRepository;
@@ -211,11 +211,13 @@ public class BranchReportServiceImpl implements BranchReportService {
                 row.setSentAt(Instant.now());
                 sent++;
             } catch (RuntimeException e) { // includes ProviderSendException
-                row.setStatus(CommunicationStatus.FAILED);
-                String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-                row.setErrorMessage(message.length() > 1000 ? message.substring(0, 1000) : message);
-                log.warn("Branch report send failed: company={} branch={} to=***{} attempt={} — {}", companyId,
-                        target.branchId(), last4(phone), row.getAttemptCount() + 1, message);
+                if (row.getSentAt() == null && row.getProviderMessageId() == null) {
+                    row.setStatus(CommunicationStatus.FAILED);
+                } // else a forced resend of an already-delivered row: keep it SENT/DELIVERED so the scheduler never re-sends
+                String message = ReportSendSupport.errorText(e);
+                row.setErrorMessage(message);
+                log.warn("Branch report send failed: company={} branch={} to={} attempt={} — {}", companyId,
+                        target.branchId(), ReportSendSupport.maskPhone(phone), row.getAttemptCount() + 1, message);
                 failed++;
             }
             row.setAttemptCount(row.getAttemptCount() + 1);
@@ -237,7 +239,12 @@ public class BranchReportServiceImpl implements BranchReportService {
     private record Claim(BranchReportLog row, Skip skip) {
     }
 
-    /** The row to send on (existing, or a fresh one inserted now so a second node/tick sees it).
+    /** Known window, same as DailyReportServiceImpl: the unique key only guards FRESH inserts. Two
+     *  nodes/ticks that both find an existing FAILED/PENDING row under the cap can both send, and a crash
+     *  after Meta accepts but before the save re-sends next tick. Acceptable with one backend node on
+     *  prod; the future fix is a conditional-claim UPDATE or a version column.
+     *
+     *  The row to send on (existing, or a fresh one inserted now so a second node/tick sees it).
      *  {@code force} ignores both the already-sent and the attempt cap. */
     private Claim claim(UUID companyId, UUID branchId, LocalDate from, LocalDate to, String phone, boolean force) {
         BranchReportLog existing = logRepository
@@ -261,9 +268,5 @@ public class BranchReportServiceImpl implements BranchReportService {
         } catch (DataIntegrityViolationException e) {
             return new Claim(null, Skip.DONE); // another node inserted it between the lookup and here
         }
-    }
-
-    private static String last4(String phone) {
-        return phone.length() <= 4 ? phone : phone.substring(phone.length() - 4);
     }
 }

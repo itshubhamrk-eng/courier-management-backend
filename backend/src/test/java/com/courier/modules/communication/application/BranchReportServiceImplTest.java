@@ -193,6 +193,33 @@ class BranchReportServiceImplTest {
     }
 
     @Test
+    void failedForcedResendKeepsSentAndDeliveredRowsAndSchedulerSendsNothing() {
+        targets(new BranchTarget(branchA, "A", List.of("919876543210", "919123456780")));
+        Instant sentAt = Instant.parse("2027-01-01T04:00:00Z");
+        BranchReportLog sent = row(branchA, "919876543210", CommunicationStatus.SENT, 1);
+        sent.setSentAt(sentAt);
+        sent.setProviderMessageId("wamid.old1");
+        BranchReportLog delivered = row(branchA, "919123456780", CommunicationStatus.DELIVERED, 1);
+        delivered.setSentAt(sentAt);
+        delivered.setProviderMessageId("wamid.old2");
+        when(whatsAppProvider.send(any(), any())).thenThrow(new ProviderSendException("Meta said no"));
+
+        assertThat(service.sendForBranch(branchA, FROM, TO, true).result()).isEqualTo("FAILED");
+
+        assertThat(sent.getStatus()).isEqualTo(CommunicationStatus.SENT);
+        assertThat(delivered.getStatus()).isEqualTo(CommunicationStatus.DELIVERED);
+        for (BranchReportLog r : List.of(sent, delivered)) {
+            assertThat(r.getErrorMessage()).contains("Meta said no");
+            assertThat(r.getAttemptCount()).isEqualTo(2);
+            assertThat(r.getLastAttemptAt()).isNotNull();
+        }
+        org.mockito.Mockito.clearInvocations(whatsAppProvider);
+
+        assertThat(service.sendReportsFor(FROM, TO)).isZero();
+        verify(whatsAppProvider, never()).send(any(), any());
+    }
+
+    @Test
     void forceIgnoresTheAttemptCap() {
         targets(new BranchTarget(branchA, "Pune Branch", List.of("919876543210")));
         BranchReportLog existing = row(branchA, "919876543210", CommunicationStatus.FAILED, 3);
