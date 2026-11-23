@@ -99,7 +99,7 @@ class WhatsAppTemplateSubmissionServiceImplTest {
 
         assertThatThrownBy(() -> service.submit(UUID.randomUUID(), null, null))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("This template needs a PDF header: create it in WhatsApp Manager, then press Refresh status.");
+                .hasMessage("This template needs a PDF header: create it in WhatsApp Manager, then press Check status.");
         verify(provider, never()).submitTemplate(any(), any());
     }
 

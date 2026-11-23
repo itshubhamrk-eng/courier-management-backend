@@ -53,7 +53,7 @@ public class WhatsAppTemplateSubmissionServiceImpl implements WhatsAppTemplateSu
             // A document-header template needs a header_handle sample from Meta's resumable upload API,
             // which this app does not drive: it is created once in WhatsApp Manager instead.
             throw new BusinessRuleException("This template needs a PDF header: create it in WhatsApp Manager, "
-                    + "then press Refresh status.");
+                    + "then press Check status.");
         }
         if (template.hasMetaSubmission()) {
             throw new BusinessRuleException("This template was already submitted to Meta (status "
