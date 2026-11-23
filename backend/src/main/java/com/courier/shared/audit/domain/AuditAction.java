@@ -364,6 +364,9 @@ public enum AuditAction {
     USER_UNBANNED,
     SECURITY_INCIDENT_RAISED,
 
+    // --- Branch monthly report sent over WhatsApp by hand (one event per call).
+    BRANCH_REPORT_SENT,
+
     // --- generic CRUD, for modules that need nothing more specific
     CREATED,
     UPDATED,
