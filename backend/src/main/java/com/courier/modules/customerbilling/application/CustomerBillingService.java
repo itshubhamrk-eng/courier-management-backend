@@ -25,6 +25,32 @@ public interface CustomerBillingService {
     /** Bills everything unbilled up to {@code asOf} (default today). Refused when there is nothing to bill. */
     InvoiceView generate(UUID customerId, LocalDate asOf);
 
+    /** Every booking of the customer that is not cancelled and not on a live invoice — what can be added to an invoice. */
+    List<UnbilledShipment> unbilledShipments(UUID customerId);
+
+    /** Adds unbilled bookings of the invoice's customer to a pending invoice and recalculates it. */
+    InvoiceView addShipments(UUID invoiceId, List<UUID> shipmentIds);
+
+    /** Takes one booking off a pending invoice (it becomes billable again) and recalculates. The last booking cannot be removed. */
+    InvoiceView removeShipment(UUID invoiceId, UUID shipmentId);
+
+    /** Flags one billed shipment as disputed with a reason. Allowed on any non-cancelled invoice. */
+    InvoiceView raiseDispute(UUID invoiceId, UUID shipmentId, String reason);
+
+    /** Closes the open dispute on a shipment with a resolution note. */
+    InvoiceView resolveDispute(UUID invoiceId, UUID shipmentId, String resolution);
+
+    /** Overrides the GST and amount (incl. GST) billed on lines of a pending invoice, then recalculates it. The shipments' own charges are not touched. */
+    InvoiceView updateCharges(UUID invoiceId, List<LineCharge> charges);
+
+    record LineCharge(UUID shipmentId, BigDecimal gstAmount, BigDecimal amount) {
+    }
+
+    record UnbilledShipment(UUID shipmentId, String shipmentNumber, LocalDate bookingDate, String consignee,
+                            String destinationPincode, int quantity, BigDecimal weight, String paymentMode,
+                            boolean prepaid, BigDecimal gst, BigDecimal amount) {
+    }
+
     /** Runs the billing cycle for the caller's company now — what the daily job does for every company. */
     int runCycleNow();
 

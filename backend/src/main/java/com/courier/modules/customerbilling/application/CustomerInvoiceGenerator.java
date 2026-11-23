@@ -110,6 +110,14 @@ public class CustomerInvoiceGenerator {
         return out;
     }
 
+    /** Builds (not saves) the invoice line for one unbilled booking. */
+    public static CustomerInvoiceLine lineFor(UUID invoiceId, Unbilled u) {
+        return CustomerInvoiceLine.builder().invoiceId(invoiceId).shipmentId(u.shipmentId())
+                .shipmentNumber(u.shipmentNumber()).bookingDate(u.bookingDate()).consignee(u.consignee())
+                .destinationPincode(u.destinationPincode()).quantity(u.quantity()).actualWeight(u.weight())
+                .paymentMode(u.paymentMode()).prepaid(u.prepaid()).gstAmount(u.gst()).amount(u.amount()).build();
+    }
+
     /**
      * Invoices everything unbilled up to {@code periodTo}. Empty when there is nothing to bill.
      */

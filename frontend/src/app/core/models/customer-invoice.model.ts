@@ -34,6 +34,14 @@ export interface InvoiceLine {
   id: string; shipmentId: string; shipmentNumber: string; bookingDate?: string | null; consignee?: string | null;
   destinationPincode?: string | null; quantity: number; actualWeight: number; paymentMode?: string | null;
   prepaid: boolean; gstAmount: number; amount: number;
+  disputeStatus?: 'OPEN' | 'RESOLVED' | null; disputeReason?: string | null; disputeRaisedAt?: string | null; disputeResolution?: string | null;
+}
+
+/** A booking not yet on any live invoice — can be added to a pending invoice. */
+export interface UnbilledShipment {
+  shipmentId: string; shipmentNumber: string; bookingDate?: string | null; consignee?: string | null;
+  destinationPincode?: string | null; quantity: number; weight: number; paymentMode?: string | null;
+  prepaid: boolean; gst: number; amount: number;
 }
 
 export interface InvoicePayment {

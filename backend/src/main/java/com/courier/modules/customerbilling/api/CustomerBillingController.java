@@ -1,6 +1,10 @@
 package com.courier.modules.customerbilling.api;
 
+import com.courier.modules.customerbilling.api.CustomerBillingDtos.AddShipmentsRequest;
 import com.courier.modules.customerbilling.api.CustomerBillingDtos.CustomerInfoResponse;
+import com.courier.modules.customerbilling.api.CustomerBillingDtos.DisputeRequest;
+import com.courier.modules.customerbilling.api.CustomerBillingDtos.UpdateChargesRequest;
+import com.courier.modules.customerbilling.api.CustomerBillingDtos.ResolveDisputeRequest;
 import com.courier.modules.customerbilling.api.CustomerBillingDtos.CycleResult;
 import com.courier.modules.customerbilling.api.CustomerBillingDtos.GenerateRequest;
 import com.courier.modules.customerbilling.api.CustomerBillingDtos.InvoiceResponse;
@@ -33,6 +37,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -82,6 +87,45 @@ public class CustomerBillingController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
         var u = service.unbilled(customerId, asOf);
         return ApiResponse.success(new UnbilledResponse(u.customerId(), u.shipments(), u.quantity(), u.weight(), u.amount(), u.prepaid()));
+    }
+
+    @GetMapping("/unbilled/shipments")
+    @Operation(summary = "Bookings a customer could still be billed for", description = "Not cancelled and not on a live invoice. Used to add shipments to a pending invoice.")
+    public ApiResponse<List<CustomerBillingService.UnbilledShipment>> unbilledShipments(@RequestParam UUID customerId) {
+        return ApiResponse.success(service.unbilledShipments(customerId));
+    }
+
+    @PostMapping("/{id}/shipments")
+    @Operation(summary = "Add shipments to a pending invoice", description = "Pending-approval invoices with no payments only. Totals are recalculated. "
+            + "A shipment already on another live invoice is refused.")
+    public ApiResponse<InvoiceResponse> addShipments(@PathVariable UUID id, @Valid @RequestBody AddShipmentsRequest r) {
+        return ApiResponse.success(toResponse(service.addShipments(id, r.shipmentIds())), "Shipments added");
+    }
+
+    @DeleteMapping("/{id}/shipments/{shipmentId}")
+    @Operation(summary = "Remove a shipment from a pending invoice", description = "It becomes billable again; totals are recalculated. The last shipment cannot be removed.")
+    public ApiResponse<InvoiceResponse> removeShipment(@PathVariable UUID id, @PathVariable UUID shipmentId) {
+        return ApiResponse.success(toResponse(service.removeShipment(id, shipmentId)), "Shipment removed");
+    }
+
+    @PostMapping("/{id}/shipments/{shipmentId}/dispute")
+    @Operation(summary = "Raise a dispute on a billed shipment", description = "Any non-cancelled invoice, approved or not. One open dispute per shipment. Totals are not changed.")
+    public ApiResponse<InvoiceResponse> raiseDispute(@PathVariable UUID id, @PathVariable UUID shipmentId, @Valid @RequestBody DisputeRequest r) {
+        return ApiResponse.success(toResponse(service.raiseDispute(id, shipmentId, r.reason())), "Dispute raised");
+    }
+
+    @PostMapping("/{id}/shipments/{shipmentId}/dispute/resolve")
+    @Operation(summary = "Resolve a dispute", description = "Closes the open dispute with a resolution note.")
+    public ApiResponse<InvoiceResponse> resolveDispute(@PathVariable UUID id, @PathVariable UUID shipmentId, @Valid @RequestBody ResolveDisputeRequest r) {
+        return ApiResponse.success(toResponse(service.resolveDispute(id, shipmentId, r.resolution())), "Dispute resolved");
+    }
+
+    @PutMapping("/{id}/charges")
+    @Operation(summary = "Edit the charges billed on a pending invoice", description = "Overrides GST and amount (incl. GST) per line, then recalculates the invoice. "
+            + "Pending-approval invoices with no payments only. The shipments' own charges are not changed.")
+    public ApiResponse<InvoiceResponse> updateCharges(@PathVariable UUID id, @Valid @RequestBody UpdateChargesRequest r) {
+        return ApiResponse.success(toResponse(service.updateCharges(id, r.lines().stream()
+                .map(l -> new CustomerBillingService.LineCharge(l.shipmentId(), l.gstAmount(), l.amount())).toList())), "Billing saved");
     }
 
     @PostMapping("/generate")
@@ -140,14 +184,14 @@ public class CustomerBillingController {
     }
 
     @PostMapping("/{id}/approve")
-    @Operation(summary = "Approve an invoice", description = "Approving e-mails the invoice to the TBB customer's e-mail address. "
-            + "A mail failure does not undo the approval; see emailStatus / emailError and use resend-email.")
+    @Operation(summary = "Approve an invoice", description = "Approving only marks it approved (payments can then be recorded). "
+            + "Sending it to the customer is a separate step: resend-email.")
     public ApiResponse<InvoiceResponse> approve(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.approve(id)), "Invoice approved");
     }
 
     @PostMapping("/{id}/resend-email")
-    @Operation(summary = "E-mail the invoice again", description = "Approved invoices only.")
+    @Operation(summary = "E-mail the invoice to the customer", description = "Approved invoices only. First send or a re-send after a failure / address fix.")
     public ApiResponse<InvoiceResponse> resendEmail(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.resendEmail(id)), "Invoice e-mail attempted");
     }
@@ -168,7 +212,8 @@ public class CustomerBillingController {
                 new CustomerInfoResponse(c.id(), c.code(), c.name(), c.mobile(), c.email(), c.gstNumber(), c.billingAddress()),
                 v.lines().stream().map(l -> new LineResponse(l.getId(), l.getShipmentId(), l.getShipmentNumber(), l.getBookingDate(),
                         l.getConsignee(), l.getDestinationPincode(), l.getQuantity(), l.getActualWeight(), l.getPaymentMode(),
-                        l.isPrepaid(), l.getGstAmount(), l.getAmount())).toList(),
+                        l.isPrepaid(), l.getGstAmount(), l.getAmount(),
+                        l.getDisputeStatus(), l.getDisputeReason(), l.getDisputeRaisedAt(), l.getDisputeResolution())).toList(),
                 v.payments().stream().map(p -> new PaymentResponse(p.getId(), p.getAmount(), p.getPaidOn(), p.getMethod(),
                         p.getReference(), p.getRemarks(), p.getProofName(), service.proofLink(p.getProofUrl()), p.getCreatedAt())).toList(),
                 i.getCreatedAt(), i.getVersion());

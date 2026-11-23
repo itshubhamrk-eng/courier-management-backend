@@ -9,7 +9,7 @@ import { PermissionService } from '@core/auth/permission.service';
 import { AppRole } from '@core/models/role.model';
 import {
   APPROVAL_LABELS, EMAIL_LABELS, INVOICE_STATUS_LABELS, Invoice, InvoicePayment, PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
-  PaymentMethod
+  PaymentMethod, UnbilledShipment, InvoiceLine
 } from '@core/models/customer-invoice.model';
 import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiCard } from '@shared/components/ui-card/ui-card';
@@ -45,10 +45,10 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
           <app-button variant="stroked" (pressed)="back()">Back</app-button>
           @if (inv() && inv()!.status !== 'CANCELLED') {
             @if (canApprove() && inv()!.approvalStatus === 'PENDING_APPROVAL') {
-              <app-button icon="mark_email_read" [loading]="approving()" (pressed)="approve()">Approve &amp; send</app-button>
+              <app-button icon="verified" [loading]="approving()" [disabled]="charging()" (pressed)="approve()">Approve</app-button>
             }
             @if (canApprove() && inv()!.approvalStatus === 'APPROVED') {
-              <app-button variant="stroked" icon="forward_to_inbox" [loading]="approving()" (pressed)="resend()">Resend e-mail</app-button>
+              <app-button variant="stroked" icon="forward_to_inbox" [loading]="approving()" (pressed)="sendEmail()">{{ inv()!.emailStatus === 'SENT' ? 'Resend e-mail' : 'Send e-mail' }}</app-button>
             }
             <app-button variant="stroked" icon="print" (pressed)="print()">Print</app-button>
             @if (canCancel() && inv()!.payments.length === 0) { <app-button variant="stroked" icon="block" (pressed)="cancel()">Cancel invoice</app-button> }
@@ -62,12 +62,12 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
         <app-card><p class="inv-empty">Invoice not found or outside your scope.</p></app-card>
       } @else {
         @if (inv()!.status !== 'CANCELLED') {
-          <div class="inv-banner inv-noprint" [class.inv-banner--warn]="inv()!.approvalStatus === 'PENDING_APPROVAL' || inv()!.emailStatus === 'FAILED' || inv()!.emailStatus === 'NO_EMAIL'">
+          <div class="inv-banner inv-noprint" [class.inv-banner--warn]="inv()!.approvalStatus === 'PENDING_APPROVAL' || inv()!.emailStatus === 'NOT_SENT' || inv()!.emailStatus === 'FAILED' || inv()!.emailStatus === 'NO_EMAIL'">
             @if (inv()!.approvalStatus === 'PENDING_APPROVAL') {
-              <strong>Pending approval.</strong> Approving sends this invoice to {{ inv()!.customer.email || 'the customer (no e-mail address on file yet)' }}. Payments can be recorded once it is approved.
+              <strong>Pending approval.</strong> Approve it to start recording payments, then send it to {{ inv()!.customer.email || 'the customer (no e-mail address on file yet)' }} with Send e-mail.
             } @else {
               <strong>Approved</strong> {{ inv()!.approvedAt | date: 'dd MMM yyyy, HH:mm' }} ·
-              {{ emailLabel() }}@if (inv()!.emailTo) { to {{ inv()!.emailTo }} }@if (inv()!.emailSentAt) { on {{ inv()!.emailSentAt | date: 'dd MMM yyyy, HH:mm' }} }
+              {{ inv()!.emailStatus === 'NOT_SENT' ? 'Not e-mailed yet — use Send e-mail' : emailLabel() }}@if (inv()!.emailTo) { to {{ inv()!.emailTo }} }@if (inv()!.emailSentAt) { on {{ inv()!.emailSentAt | date: 'dd MMM yyyy, HH:mm' }} }
               @if (inv()!.emailError) { — {{ inv()!.emailError }} }
             }
           </div>
@@ -93,29 +93,89 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
 
           <table class="inv-t">
             <thead><tr><th>#</th><th>Shipment</th><th>Date</th><th>Consignee</th><th>To</th><th class="n">Qty</th><th class="n">Wt (kg)</th>
-              <th>Payment</th><th class="n">GST</th><th class="n">Amount</th></tr></thead>
+              <th>Payment</th><th class="n">GST</th><th class="n">Amount</th>@if (inv()!.status !== 'CANCELLED') { <th class="inv-noprint"></th> }</tr></thead>
             <tbody>
               @for (l of inv()!.lines; track l.id; let i = $index) {
                 <tr><td>{{ i + 1 }}</td><td>{{ l.shipmentNumber }}</td><td>{{ l.bookingDate | date: 'dd MMM' }}</td><td>{{ l.consignee || '—' }}</td>
                   <td>{{ l.destinationPincode || '—' }}</td><td class="n">{{ l.quantity }}</td><td class="n">{{ l.actualWeight | number: '1.0-3' }}</td>
                   <td>{{ l.paymentMode || '—' }}@if (l.prepaid) { <em> (paid)</em> }</td>
-                  <td class="n">{{ l.gstAmount | number: '1.2-2' }}</td><td class="n">{{ l.amount | number: '1.2-2' }}</td></tr>
+                  @if (charging()) {
+                    <td class="n"><input class="inv-num" type="number" min="0" step="0.01" [value]="draftOf(l).gst" (input)="setDraft(l, 'gst', $any($event.target).value)" /></td>
+                    <td class="n"><input class="inv-num" type="number" min="0" step="0.01" [value]="draftOf(l).amount" (input)="setDraft(l, 'amount', $any($event.target).value)" /></td>
+                  } @else {
+                    <td class="n">{{ l.gstAmount | number: '1.2-2' }}</td><td class="n">{{ l.amount | number: '1.2-2' }}</td>
+                  }
+                  @if (inv()!.status !== 'CANCELLED') {
+                    <td class="n inv-noprint inv-act">
+                      @if (l.disputeStatus === 'OPEN') { <span class="inv-disp" title="{{ l.disputeReason }}">Disputed</span>
+                        @if (canEdit()) { <button type="button" class="inv-link-btn" (click)="startDispute(l, 'resolve')">Resolve</button> } }
+                      @else if (canEdit()) { <button type="button" class="inv-link-btn" (click)="startDispute(l, 'raise')">Dispute</button> }
+                      @if (editable()) { <button type="button" class="inv-x" title="Remove from this invoice" (click)="removeLine(l)">✕</button> }
+                    </td>
+                  }</tr>
+                @if (l.disputeStatus) {
+                  <tr class="inv-noprint inv-disprow"><td></td><td colspan="9">
+                    @if (l.disputeStatus === 'OPEN') { <strong>Dispute open:</strong> {{ l.disputeReason }} }
+                    @else { <strong>Dispute resolved:</strong> {{ l.disputeResolution }} <em>(was: {{ l.disputeReason }})</em> }
+                  </td><td></td></tr>
+                }
               }
             </tbody>
             <tfoot>
               <tr><td colspan="5">Total ({{ inv()!.shipmentsCount }} booking(s))</td><td class="n">{{ inv()!.totalQuantity }}</td>
                 <td class="n">{{ inv()!.totalWeight | number: '1.0-3' }}</td><td></td>
-                <td class="n">{{ inv()!.gstAmount | number: '1.2-2' }}</td><td class="n">{{ inv()!.totalAmount | number: '1.2-2' }}</td></tr>
+                <td class="n">{{ tot().gst | number: '1.2-2' }}</td><td class="n">{{ tot().total | number: '1.2-2' }}</td></tr>
             </tfoot>
           </table>
 
           <div class="inv-totals">
-            <p><span>Invoice total (incl. GST)</span><strong>₹{{ inv()!.totalAmount | number: '1.2-2' }}</strong></p>
-            <p><span>Paid at booking</span><strong>− ₹{{ inv()!.prepaidAmount | number: '1.2-2' }}</strong></p>
+            <p><span>Invoice total (incl. GST)</span><strong>₹{{ tot().total | number: '1.2-2' }}</strong></p>
+            <p><span>Paid at booking</span><strong>− ₹{{ tot().prepaid | number: '1.2-2' }}</strong></p>
             <p><span>Received since</span><strong>− ₹{{ inv()!.amountPaid | number: '1.2-2' }}</strong></p>
-            <p class="inv-bal"><span>Balance due</span><strong>₹{{ inv()!.balance | number: '1.2-2' }}</strong></p>
+            <p class="inv-bal"><span>Balance due</span><strong>₹{{ tot().balance | number: '1.2-2' }}</strong></p>
           </div>
         </div>
+
+        @if (dispute(); as d) {
+          <app-card class="inv-noprint" [title]="d.mode === 'raise' ? 'Raise dispute — ' + d.line.shipmentNumber : 'Resolve dispute — ' + d.line.shipmentNumber"
+            [subtitle]="d.mode === 'raise' ? 'Record what the customer is disputing about this billed shipment. Invoice totals are not changed.' : 'Disputed: ' + d.line.disputeReason">
+            <app-input [control]="disputeText" [label]="d.mode === 'raise' ? 'Reason' : 'Resolution'" [maxLength]="500" />
+            <div class="inv-pay__actions">
+              <app-button [icon]="d.mode === 'raise' ? 'report' : 'task_alt'" [loading]="editing()" (pressed)="submitDispute()">{{ d.mode === 'raise' ? 'Raise dispute' : 'Resolve dispute' }}</app-button>
+              <app-button variant="stroked" (pressed)="dispute.set(null)">Cancel</app-button>
+            </div>
+          </app-card>
+        }
+        @if (editable()) {
+          <app-card class="inv-noprint" title="Billing charges" subtitle="Change the GST and amount billed per shipment. Totals recalculate as you type; nothing is saved until you press Save billing. The shipments' own charges are not changed.">
+            @if (!charging()) {
+              <app-button variant="stroked" icon="edit" (pressed)="startCharging()">Edit charges</app-button>
+            } @else {
+              <p class="inv-empty">Editing in the table above — new total ₹{{ tot().total | number: '1.2-2' }} (was ₹{{ inv()!.totalAmount | number: '1.2-2' }}).</p>
+              <div class="inv-pay__actions">
+                <app-button icon="save" [loading]="editing()" (pressed)="saveCharges()">Save billing</app-button>
+                <app-button variant="stroked" (pressed)="charging.set(false)">Discard changes</app-button>
+              </div>
+            }
+          </app-card>
+        }
+        @if (editable()) {
+          <app-card class="inv-noprint" title="Add shipments" subtitle="Unbilled bookings of this customer. Tick the ones to add; totals recalculate. Remove a booking with ✕ above. Editing closes once the invoice is approved.">
+            @if (loadingUnbilled()) { <p class="inv-empty">Loading…</p> }
+            @else if (!unbilled().length) { <p class="inv-empty">No unbilled bookings for this customer.</p> }
+            @else {
+              <table class="inv-t inv-t--plain"><thead><tr><th></th><th>Shipment</th><th>Date</th><th>Consignee</th><th>To</th><th class="n">Amount</th></tr></thead>
+                <tbody>@for (u of unbilled(); track u.shipmentId) {
+                  <tr><td><input type="checkbox" [checked]="picked().has(u.shipmentId)" (change)="toggle(u.shipmentId)" /></td>
+                    <td>{{ u.shipmentNumber }}</td><td>{{ u.bookingDate | date: 'dd MMM' }}</td><td>{{ u.consignee || '—' }}</td>
+                    <td>{{ u.destinationPincode || '—' }}</td><td class="n">{{ u.amount | number: '1.2-2' }}</td></tr>
+                }</tbody></table>
+              <div class="inv-pay__actions">
+                <app-button icon="playlist_add" [loading]="editing()" [disabled]="!picked().size" (pressed)="addPicked()">Add {{ picked().size }} selected</app-button>
+              </div>
+            }
+          </app-card>
+        }
 
         <app-card class="inv-noprint" title="Payments" subtitle="Receipts recorded against this invoice, with proof of payment.">
           @if (!inv()!.payments.length) { <p class="inv-empty">No payment recorded yet.</p> }
@@ -179,6 +239,10 @@ const METHOD_OPTS: SelectOption[] = PAYMENT_METHODS.map((m) => ({ value: m, labe
     .inv-banner { background:var(--success-bg); color:var(--success); border-radius:var(--r-field); padding:10px 14px; margin-bottom:12px; font:400 17px var(--font-sans); }
     .inv-banner--warn { background:var(--warning-bg); color:var(--content-fg); }
     .inv-link { color:var(--brand-700); font-weight:600; } .inv-upload { color:var(--brand-700); font-weight:600; cursor:pointer; }
+    .inv-act { white-space:nowrap; } .inv-disp { color:var(--danger); font-weight:600; margin-right:8px; }
+    .inv-link-btn { border:0; background:transparent; color:var(--brand-700); font:600 15px var(--font-sans); cursor:pointer; margin-right:6px; }
+    .inv-disprow td { font-size:15px; color:var(--content-muted); border-bottom:1px solid var(--surface-border); }
+    .inv-num { width:96px; text-align:right; font:400 15px var(--font-sans); padding:4px 6px; border:1px solid var(--surface-border); border-radius:6px; background:var(--surface); color:inherit; }
     .inv-x { border:0; background:transparent; color:var(--content-muted); cursor:pointer; font-size:18px; } .inv-x:hover { color:var(--danger); }
     @media (max-width:960px){ .inv-pay { grid-template-columns:1fr 1fr; } .inv-file { grid-column:1 / -1; } }
     @media print {
@@ -224,6 +288,32 @@ export class BillingInvoice implements OnInit {
   protected readonly paying = signal(false);
   protected readonly approving = signal(false);
   protected readonly proof = signal<File | null>(null);
+  protected readonly charging = signal(false);
+  protected readonly draft = signal<Record<string, { gst: string; amount: string }>>({});
+  protected readonly tot = computed(() => {
+    const i = this.inv()!;
+    if (!this.charging()) return { gst: i.gstAmount, total: i.totalAmount, prepaid: i.prepaidAmount, balance: i.balance };
+    let gst = 0, total = 0, prepaid = 0;
+    for (const l of i.lines) {
+      const d = this.draft()[l.shipmentId] ?? { gst: String(l.gstAmount), amount: String(l.amount) };
+      const g = Number(d.gst) || 0, a = Number(d.amount) || 0;
+      gst += g; total += a; if (l.prepaid) prepaid += a;
+    }
+    return { gst, total, prepaid, balance: Math.max(0, total - prepaid - i.amountPaid) };
+  });
+  protected readonly dispute = signal<{ line: InvoiceLine; mode: 'raise' | 'resolve' } | null>(null);
+  protected readonly disputeText = new FormControl<string>('', { nonNullable: true });
+  protected readonly loadingUnbilled = signal(false);
+  protected readonly editing = signal(false);
+  protected readonly unbilled = signal<UnbilledShipment[]>([]);
+  protected readonly picked = signal<Set<string>>(new Set());
+  /** Shipments can change only while pending approval with no receipts (backend enforces the same). */
+  protected readonly canEdit = computed(() => this.perms.canAccess({ roles: [AppRole.COMPANY_ADMIN], permissions: ['CUSTOMER_BILLING_UPDATE'] }));
+  protected readonly editable = computed(() => {
+    const i = this.inv();
+    return !!i && i.status !== 'CANCELLED' && i.approvalStatus === 'PENDING_APPROVAL' && i.payments.length === 0
+      && this.perms.canAccess({ roles: [AppRole.COMPANY_ADMIN], permissions: ['CUSTOMER_BILLING_UPDATE'] });
+  });
   protected readonly methodOpts = METHOD_OPTS;
   protected readonly amount = new FormControl<number | null>(null, [Validators.required, Validators.min(0.01)]);
   protected readonly paidOn = new FormControl<string>(new Date().toISOString().slice(0, 10), { nonNullable: true });
@@ -264,6 +354,9 @@ export class BillingInvoice implements OnInit {
   private set(i: Invoice): void {
     this.inv.set(i);
     this.amount.setValue(i.balance > 0 ? i.balance : null);
+    this.dispute.set(null);
+    this.charging.set(false);
+    if (this.editable()) this.loadUnbilled(i.customer.id);
   }
 
   protected methodLabel(m: PaymentMethod): string { return PAYMENT_METHOD_LABELS[m] ?? m; }
@@ -323,16 +416,101 @@ export class BillingInvoice implements OnInit {
     });
   }
 
+  private loadUnbilled(customerId: string): void {
+    this.loadingUnbilled.set(true);
+    this.billing.unbilledShipments(customerId).subscribe({
+      next: (list) => { this.unbilled.set(list); this.picked.set(new Set()); this.loadingUnbilled.set(false); },
+      error: (e) => { this.loadingUnbilled.set(false); this.notify.error(e?.error?.message ?? 'Could not load unbilled shipments.'); }
+    });
+  }
+
+  protected startDispute(line: InvoiceLine, mode: 'raise' | 'resolve'): void {
+    this.disputeText.setValue('');
+    this.dispute.set({ line, mode });
+  }
+
+  protected submitDispute(): void {
+    const d = this.dispute();
+    const text = this.disputeText.value.trim();
+    if (!d) return;
+    if (!text) { this.notify.error(d.mode === 'raise' ? 'Enter the reason for the dispute.' : 'Enter how it was resolved.'); return; }
+    this.editing.set(true);
+    const call = d.mode === 'raise'
+      ? this.billing.raiseDispute(this.id, d.line.shipmentId, text)
+      : this.billing.resolveDispute(this.id, d.line.shipmentId, text);
+    call.subscribe({
+      next: (i) => { this.editing.set(false); this.set(i); this.notify.success(d.mode === 'raise' ? 'Dispute raised.' : 'Dispute resolved.'); },
+      error: (e) => { this.editing.set(false); this.notify.error(e?.error?.message ?? 'Could not save the dispute.'); }
+    });
+  }
+
+  protected draftOf(l: InvoiceLine): { gst: string; amount: string } {
+    return this.draft()[l.shipmentId] ?? { gst: String(l.gstAmount), amount: String(l.amount) };
+  }
+
+  protected setDraft(l: InvoiceLine, field: 'gst' | 'amount', value: string): void {
+    this.draft.set({ ...this.draft(), [l.shipmentId]: { ...this.draftOf(l), [field]: value } });
+  }
+
+  protected startCharging(): void {
+    const d: Record<string, { gst: string; amount: string }> = {};
+    for (const l of this.inv()!.lines) d[l.shipmentId] = { gst: String(l.gstAmount), amount: String(l.amount) };
+    this.draft.set(d);
+    this.charging.set(true);
+  }
+
+  protected saveCharges(): void {
+    const lines = this.inv()!.lines.map((l) => {
+      const d = this.draftOf(l);
+      return { shipmentId: l.shipmentId, gstAmount: Number(d.gst), amount: Number(d.amount) };
+    });
+    if (lines.some((l) => !Number.isFinite(l.gstAmount) || !Number.isFinite(l.amount) || l.gstAmount < 0 || l.amount < 0 || l.gstAmount > l.amount)) {
+      this.notify.error('Check the charges: amounts cannot be negative and GST cannot be more than the amount.');
+      return;
+    }
+    this.editing.set(true);
+    this.billing.saveCharges(this.id, lines).subscribe({
+      next: (i) => { this.editing.set(false); this.set(i); this.notify.success('Billing saved; totals recalculated.'); },
+      error: (e) => { this.editing.set(false); this.notify.error(e?.error?.message ?? 'Could not save the billing.'); }
+    });
+  }
+
+  protected toggle(id: string): void {
+    const next = new Set(this.picked());
+    if (!next.delete(id)) next.add(id);
+    this.picked.set(next);
+  }
+
+  protected addPicked(): void {
+    this.editing.set(true);
+    this.billing.addShipments(this.id, [...this.picked()]).subscribe({
+      next: (i) => { this.editing.set(false); this.set(i); this.notify.success('Shipments added; totals recalculated.'); },
+      error: (e) => { this.editing.set(false); this.notify.error(e?.error?.message ?? 'Could not add the shipments.'); }
+    });
+  }
+
+  protected removeLine(l: { shipmentId: string; shipmentNumber: string }): void {
+    this.confirm.confirm({
+      title: `Remove ${l.shipmentNumber}?`, message: 'It leaves this invoice, becomes billable again, and the totals are recalculated.',
+      confirmLabel: 'Remove', danger: true
+    }).subscribe((ok) => {
+      if (!ok) return;
+      this.billing.removeShipment(this.id, l.shipmentId).subscribe({
+        next: (i) => { this.set(i); this.notify.success('Shipment removed; totals recalculated.'); },
+        error: (e) => this.notify.error(e?.error?.message ?? 'Could not remove the shipment.')
+      });
+    });
+  }
+
   protected approve(): void {
     this.approving.set(true);
     this.billing.approve(this.id).subscribe({
-      next: (i) => { this.approving.set(false); this.set(i);
-        this.notify.success(i.emailStatus === 'SENT' ? `Approved and e-mailed to ${i.emailTo}.` : `Approved. ${EMAIL_LABELS[i.emailStatus]}${i.emailError ? ' — ' + i.emailError : ''}`); },
+      next: (i) => { this.approving.set(false); this.set(i); this.notify.success('Invoice approved. Use Send e-mail to send it to the customer.'); },
       error: (e) => { this.approving.set(false); this.notify.error(e?.error?.message ?? 'Could not approve the invoice.'); }
     });
   }
 
-  protected resend(): void {
+  protected sendEmail(): void {
     this.approving.set(true);
     this.billing.resendEmail(this.id).subscribe({
       next: (i) => { this.approving.set(false); this.set(i);

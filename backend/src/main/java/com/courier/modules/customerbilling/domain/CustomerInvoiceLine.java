@@ -70,4 +70,54 @@ public class CustomerInvoiceLine extends CompanyOwnedEntity {
 
     @Column(name = "amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "dispute_status", length = 10)
+    private String disputeStatus;
+
+    @Column(name = "dispute_reason", length = 500)
+    private String disputeReason;
+
+    @Column(name = "dispute_raised_at")
+    private java.time.Instant disputeRaisedAt;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "dispute_raised_by", columnDefinition = "BINARY(16)")
+    private UUID disputeRaisedBy;
+
+    @Column(name = "dispute_resolution", length = 500)
+    private String disputeResolution;
+
+    @Column(name = "dispute_resolved_at")
+    private java.time.Instant disputeResolvedAt;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "dispute_resolved_by", columnDefinition = "BINARY(16)")
+    private UUID disputeResolvedBy;
+
+    public boolean isDisputeOpen() {
+        return "OPEN".equals(disputeStatus);
+    }
+
+    public void raiseDispute(String reason, UUID actor) {
+        if (isDisputeOpen()) {
+            throw new com.courier.shared.exception.BusinessRuleException("This shipment already has an open dispute.");
+        }
+        this.disputeStatus = "OPEN";
+        this.disputeReason = reason;
+        this.disputeRaisedAt = java.time.Instant.now();
+        this.disputeRaisedBy = actor;
+        this.disputeResolution = null;
+        this.disputeResolvedAt = null;
+        this.disputeResolvedBy = null;
+    }
+
+    public void resolveDispute(String resolution, UUID actor) {
+        if (!isDisputeOpen()) {
+            throw new com.courier.shared.exception.BusinessRuleException("This shipment has no open dispute.");
+        }
+        this.disputeStatus = "RESOLVED";
+        this.disputeResolution = resolution;
+        this.disputeResolvedAt = java.time.Instant.now();
+        this.disputeResolvedBy = actor;
+    }
 }

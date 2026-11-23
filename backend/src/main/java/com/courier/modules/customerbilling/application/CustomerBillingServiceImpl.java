@@ -109,6 +109,165 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_READ')")
+    public List<UnbilledShipment> unbilledShipments(UUID customerId) {
+        requireCompany();
+        return generator.unbilled(customerId, today()).stream().map(CustomerBillingServiceImpl::toShipment).toList();
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
+    public InvoiceView addShipments(UUID invoiceId, List<UUID> shipmentIds) {
+        UUID company = requireCompany();
+        CustomerInvoice invoice = load(invoiceId, company);
+        invoice.requireEditable();
+        if (shipmentIds == null || shipmentIds.isEmpty()) {
+            throw new BusinessRuleException("Pick at least one shipment to add.");
+        }
+        Map<UUID, CustomerInvoiceGenerator.Unbilled> available = new HashMap<>();
+        // Anything booked up to today; a shipment already on a live invoice is excluded by the query itself.
+        for (CustomerInvoiceGenerator.Unbilled u : generator.unbilled(invoice.getCustomerId(), today())) {
+            available.put(u.shipmentId(), u);
+        }
+        List<CustomerInvoiceGenerator.Unbilled> picked = new java.util.ArrayList<>();
+        for (UUID id : new java.util.LinkedHashSet<>(shipmentIds)) {
+            CustomerInvoiceGenerator.Unbilled u = available.get(id);
+            if (u == null) {
+                throw new BusinessRuleException("A selected shipment is already on an invoice, is cancelled, or is not this customer's. Refresh and retry.");
+            }
+            picked.add(u);
+        }
+        for (CustomerInvoiceGenerator.Unbilled u : picked) {
+            lines.save(CustomerInvoiceGenerator.lineFor(invoice.getId(), u));
+        }
+        return recalculated(company, invoice, "added", picked.size());
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
+    public InvoiceView removeShipment(UUID invoiceId, UUID shipmentId) {
+        UUID company = requireCompany();
+        CustomerInvoice invoice = load(invoiceId, company);
+        invoice.requireEditable();
+        List<CustomerInvoiceLine> live = lines.findByInvoice(company, invoiceId);
+        CustomerInvoiceLine target = live.stream().filter(l -> l.getShipmentId().equals(shipmentId)).findFirst()
+                .orElseThrow(() -> new BusinessRuleException("That shipment is not on this invoice."));
+        if (live.size() == 1) {
+            throw new BusinessRuleException("An invoice needs at least one shipment. Cancel the invoice instead.");
+        }
+        target.softDelete(SecurityUtils.getCurrentUserId().orElse(null));
+        lines.save(target);
+        return recalculated(company, invoice, "removed", 1);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
+    public InvoiceView raiseDispute(UUID invoiceId, UUID shipmentId, String reason) {
+        UUID company = requireCompany();
+        CustomerInvoice invoice = load(invoiceId, company);
+        if (invoice.isCancelled()) {
+            throw new BusinessRuleException("A cancelled invoice has no billed shipments to dispute.");
+        }
+        CustomerInvoiceLine line = lineOf(company, invoiceId, shipmentId);
+        line.raiseDispute(reason.trim(), SecurityUtils.getCurrentUserId().orElse(null));
+        lines.save(line);
+        log.info("Dispute raised on {} of invoice {} in company {} by {}", line.getShipmentNumber(), invoice.getInvoiceNumber(), company, actor());
+        auditService.record(AuditAction.CUSTOMER_INVOICE_DISPUTE_RAISED, ENTITY, invoice.getId(),
+                Map.of("invoiceNumber", invoice.getInvoiceNumber(), "shipmentNumber", line.getShipmentNumber(), "reason", reason.trim()));
+        return view(company, invoice);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
+    public InvoiceView resolveDispute(UUID invoiceId, UUID shipmentId, String resolution) {
+        UUID company = requireCompany();
+        CustomerInvoice invoice = load(invoiceId, company);
+        CustomerInvoiceLine line = lineOf(company, invoiceId, shipmentId);
+        line.resolveDispute(resolution.trim(), SecurityUtils.getCurrentUserId().orElse(null));
+        lines.save(line);
+        auditService.record(AuditAction.CUSTOMER_INVOICE_DISPUTE_RESOLVED, ENTITY, invoice.getId(),
+                Map.of("invoiceNumber", invoice.getInvoiceNumber(), "shipmentNumber", line.getShipmentNumber(), "resolution", resolution.trim()));
+        return view(company, invoice);
+    }
+
+    private CustomerInvoiceLine lineOf(UUID company, UUID invoiceId, UUID shipmentId) {
+        return lines.findByInvoice(company, invoiceId).stream().filter(l -> l.getShipmentId().equals(shipmentId)).findFirst()
+                .orElseThrow(() -> new BusinessRuleException("That shipment is not on this invoice."));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_UPDATE')")
+    public InvoiceView updateCharges(UUID invoiceId, List<LineCharge> charges) {
+        UUID company = requireCompany();
+        CustomerInvoice invoice = load(invoiceId, company);
+        invoice.requireEditable();
+        if (charges == null || charges.isEmpty()) {
+            throw new BusinessRuleException("No charges to save.");
+        }
+        Map<UUID, CustomerInvoiceLine> byShipment = new HashMap<>();
+        for (CustomerInvoiceLine l : lines.findByInvoice(company, invoiceId)) {
+            byShipment.put(l.getShipmentId(), l);
+        }
+        BigDecimal before = invoice.getTotalAmount();
+        int changed = 0;
+        for (LineCharge c : charges) {
+            CustomerInvoiceLine l = byShipment.get(c.shipmentId());
+            if (l == null) {
+                throw new BusinessRuleException("A shipment in the request is not on this invoice.");
+            }
+            if (c.amount() == null || c.gstAmount() == null || c.amount().signum() < 0 || c.gstAmount().signum() < 0) {
+                throw new BusinessRuleException("Charges cannot be negative.");
+            }
+            if (c.gstAmount().compareTo(c.amount()) > 0) {
+                throw new BusinessRuleException("GST cannot be more than the amount for " + l.getShipmentNumber() + ".");
+            }
+            BigDecimal amount = c.amount().setScale(2, java.math.RoundingMode.HALF_UP);
+            BigDecimal gst = c.gstAmount().setScale(2, java.math.RoundingMode.HALF_UP);
+            if (amount.compareTo(l.getAmount()) != 0 || gst.compareTo(l.getGstAmount()) != 0) {
+                l.setAmount(amount);
+                l.setGstAmount(gst);
+                lines.save(l);
+                changed++;
+            }
+        }
+        if (changed == 0) {
+            return view(company, invoice);
+        }
+        lines.flush();
+        invoice.recalculate(lines.findByInvoice(company, invoiceId));
+        invoices.save(invoice);
+        log.info("Invoice {} charges edited in company {} by {}: {} line(s), total {} -> {}", invoice.getInvoiceNumber(), company,
+                actor(), changed, before, invoice.getTotalAmount());
+        auditService.record(AuditAction.CUSTOMER_INVOICE_EDITED, ENTITY, invoice.getId(),
+                Map.of("invoiceNumber", invoice.getInvoiceNumber(), "change", "charges", "lines", changed,
+                        "totalBefore", before.toPlainString(), "total", invoice.getTotalAmount().toPlainString()));
+        return view(company, invoice);
+    }
+
+    private InvoiceView recalculated(UUID company, CustomerInvoice invoice, String what, int count) {
+        lines.flush();
+        invoice.recalculate(lines.findByInvoice(company, invoice.getId()));
+        invoices.save(invoice);
+        log.info("Invoice {} edited in company {} by {}: {} {} shipment(s), total now {}", invoice.getInvoiceNumber(), company,
+                actor(), what, count, invoice.getTotalAmount());
+        auditService.record(AuditAction.CUSTOMER_INVOICE_EDITED, ENTITY, invoice.getId(),
+                Map.of("invoiceNumber", invoice.getInvoiceNumber(), "change", what, "shipments", count,
+                        "total", invoice.getTotalAmount().toPlainString()));
+        return view(company, invoice);
+    }
+
+    private static UnbilledShipment toShipment(CustomerInvoiceGenerator.Unbilled u) {
+        return new UnbilledShipment(u.shipmentId(), u.shipmentNumber(), u.bookingDate(), u.consignee(), u.destinationPincode(),
+                u.quantity(), u.weight(), u.paymentMode(), u.prepaid(), u.gst(), u.amount());
+    }
+
+    @Override
     @PreAuthorize(ADMIN + " or hasAuthority('CUSTOMER_BILLING_CREATE') or hasAuthority('CUSTOMER_BILLING_UPDATE')")
     public int runCycleNow() {
         requireCompany();
@@ -221,7 +380,7 @@ public class CustomerBillingServiceImpl implements CustomerBillingService {
         log.info("Invoice {} approved in company {} by {}", invoice.getInvoiceNumber(), company, actor());
         auditService.record(AuditAction.CUSTOMER_INVOICE_APPROVED, ENTITY, invoice.getId(),
                 Map.of("invoiceNumber", invoice.getInvoiceNumber()));
-        sendEmail(company, invoice);
+        // Approval no longer e-mails: sending is its own step (sendEmail / resend-email).
         return view(company, invoice);
     }
 

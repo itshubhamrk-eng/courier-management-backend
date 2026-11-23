@@ -148,6 +148,47 @@ public class CustomerInvoice extends CompanyOwnedEntity {
         }
     }
 
+    /** Shipments may be added or removed only while the invoice is cancelled-free, unapproved and has no receipts. */
+    public void requireEditable() {
+        if (isCancelled()) {
+            throw new BusinessRuleException("A cancelled invoice cannot be edited.");
+        }
+        if (isApproved()) {
+            throw new BusinessRuleException("An approved invoice has already gone to the customer and cannot be edited.");
+        }
+        if (amountPaid.signum() > 0) {
+            throw new BusinessRuleException("This invoice has payments recorded and cannot be edited.");
+        }
+    }
+
+    /** Re-derives every total from the live lines (after a shipment was added or removed). */
+    public void recalculate(java.util.List<CustomerInvoiceLine> live) {
+        int qty = 0;
+        BigDecimal weight = BigDecimal.ZERO, gst = BigDecimal.ZERO, total = BigDecimal.ZERO, prepaid = BigDecimal.ZERO;
+        LocalDate first = null, last = null;
+        for (CustomerInvoiceLine l : live) {
+            qty += l.getQuantity();
+            weight = weight.add(l.getActualWeight());
+            gst = gst.add(l.getGstAmount());
+            total = total.add(l.getAmount());
+            if (l.isPrepaid()) prepaid = prepaid.add(l.getAmount());
+            LocalDate d = l.getBookingDate();
+            if (d != null) {
+                if (first == null || d.isBefore(first)) first = d;
+                if (last == null || d.isAfter(last)) last = d;
+            }
+        }
+        this.shipmentsCount = live.size();
+        this.totalQuantity = qty;
+        this.totalWeight = weight;
+        this.gstAmount = gst;
+        this.totalAmount = total;
+        this.prepaidAmount = prepaid;
+        if (first != null) this.periodFrom = first;
+        if (last != null && last.isAfter(periodTo)) this.periodTo = last;
+        refreshStatus();
+    }
+
     public boolean isCancelled() {
         return status == InvoiceStatus.CANCELLED;
     }

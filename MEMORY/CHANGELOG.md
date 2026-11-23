@@ -6,6 +6,16 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-23 - TBB invoice editing: shipments, charges, disputes, separate Send e-mail (V154)
+
+A generated TBB invoice is editable while PENDING_APPROVAL with no receipts (`CustomerInvoice.requireEditable`, totals via `recalculate`):
+- Add / remove shipments: `POST /customer-invoices/{id}/shipments`, `DELETE .../shipments/{shipmentId}` (last line refused), `GET /customer-invoices/unbilled/shipments?customerId=`. A shipment on a live invoice can never join another.
+- Edit charges: `PUT /customer-invoices/{id}/charges` overrides GST + amount per line, then recalculates; UI edits a draft with live totals and a Save billing button. The shipments' own charges are not touched.
+- Disputes (any non-cancelled invoice, approved too): `POST .../shipments/{shipmentId}/dispute` and `.../dispute/resolve`; columns on `customer_invoice_lines` (V154), one open dispute per line, totals unchanged.
+- Approve no longer e-mails: it only approves; Send e-mail (`resend-email`) is its own button/step. Invoices approved before this show NOT_SENT until sent.
+- Audit: CUSTOMER_INVOICE_EDITED / _DISPUTE_RAISED / _DISPUTE_RESOLVED. UI in `billing-invoice.ts`.
+Verified through the API and clicked through in the browser on :4200. Not deployed.
+
 ## 2026-11-23 - WhatsApp spend card + Recharge on Meta button (no migration)
 - Communication Dashboard: "WhatsApp spend this month" card (spend vs a monthly budget; green <80%, amber >=80%, red >=100%) and a **Recharge on Meta** button opening `https://business.facebook.com/billing_hub/payment_settings` (generic page, not verified to deep-link to the account). Meta exposes no prepaid balance and no top-up API, so this is spend-vs-budget, never "balance".
 - Backend: `GET /api/v1/communication/dashboard/whatsapp-spend` (`WhatsAppSpendService`), reuses `WhatsAppProvider.fetchPricing` (same call as "Fetch from Meta"); period = 1st of month 00:00 IST to now. Budget = `monthlyBudget` in the WHATSAPP `configJson` (Channel Settings field; "5,000" / "Rs. 5,000" accepted). Levels NOT_CONFIGURED / NO_BUDGET / OK / WARN / OVER; a Meta error comes back as a `note`, HTTP 200. Read guard COMPANY_ADMIN or NOTIFICATION_READ; the UI only loads it for COMPANY_ADMIN.

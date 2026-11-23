@@ -63,7 +63,8 @@ public final class CustomerBillingDtos {
 
     public record LineResponse(UUID id, UUID shipmentId, String shipmentNumber, LocalDate bookingDate, String consignee,
                                String destinationPincode, int quantity, BigDecimal actualWeight, String paymentMode,
-                               boolean prepaid, BigDecimal gstAmount, BigDecimal amount) {
+                               boolean prepaid, BigDecimal gstAmount, BigDecimal amount,
+                               String disputeStatus, String disputeReason, Instant disputeRaisedAt, String disputeResolution) {
     }
 
     public record PaymentResponse(UUID id, BigDecimal amount, LocalDate paidOn, PaymentMethod method,
@@ -82,6 +83,21 @@ public final class CustomerBillingDtos {
 
     public record UnbilledResponse(UUID customerId, int shipments, int quantity, BigDecimal weight,
                                    BigDecimal amount, BigDecimal prepaid) {
+    }
+
+    public record AddShipmentsRequest(@NotNull @jakarta.validation.constraints.NotEmpty List<UUID> shipmentIds) {
+    }
+
+    public record DisputeRequest(@NotNull @jakarta.validation.constraints.NotBlank @Size(max = 500) String reason) {
+    }
+
+    public record ResolveDisputeRequest(@NotNull @jakarta.validation.constraints.NotBlank @Size(max = 500) String resolution) {
+    }
+
+    public record ChargeLine(@NotNull UUID shipmentId, @NotNull @DecimalMin("0") BigDecimal gstAmount, @NotNull @DecimalMin("0") BigDecimal amount) {
+    }
+
+    public record UpdateChargesRequest(@NotNull @jakarta.validation.constraints.NotEmpty List<@jakarta.validation.Valid ChargeLine> lines) {
     }
 
     public record CycleResult(int invoicesIssued) {

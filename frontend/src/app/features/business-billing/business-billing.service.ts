@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import { API } from '@core/config/api-endpoints';
 import {
-  ApprovalStatus, Invoice, InvoiceStatus, InvoiceSummary, MarkPaidRequest, RecordPaymentRequest, UnbilledSummary, UploadedProof
+  ApprovalStatus, Invoice, InvoiceStatus, InvoiceSummary, MarkPaidRequest, RecordPaymentRequest, UnbilledShipment, UnbilledSummary, UploadedProof
 } from '@core/models/customer-invoice.model';
 
 /** TBB customer invoices and receipts — mirrors the backend endpoints one-to-one. */
@@ -15,6 +15,12 @@ export class BusinessBillingService {
   }
   invoice(id: string) { return this.api.get<Invoice>(`${API.customerInvoices}/${id}`); }
   unbilled(customerId: string, asOf?: string) { return this.api.get<UnbilledSummary>(`${API.customerInvoices}/unbilled`, { customerId, asOf }); }
+  unbilledShipments(customerId: string) { return this.api.get<UnbilledShipment[]>(`${API.customerInvoices}/unbilled/shipments`, { customerId }); }
+  addShipments(id: string, shipmentIds: string[]) { return this.api.post<Invoice>(`${API.customerInvoices}/${id}/shipments`, { shipmentIds }); }
+  removeShipment(id: string, shipmentId: string) { return this.api.delete<Invoice>(`${API.customerInvoices}/${id}/shipments/${shipmentId}`); }
+  raiseDispute(id: string, shipmentId: string, reason: string) { return this.api.post<Invoice>(`${API.customerInvoices}/${id}/shipments/${shipmentId}/dispute`, { reason }); }
+  resolveDispute(id: string, shipmentId: string, resolution: string) { return this.api.post<Invoice>(`${API.customerInvoices}/${id}/shipments/${shipmentId}/dispute/resolve`, { resolution }); }
+  saveCharges(id: string, lines: { shipmentId: string; gstAmount: number; amount: number }[]) { return this.api.put<Invoice>(`${API.customerInvoices}/${id}/charges`, { lines }); }
   generate(customerId: string, asOf?: string | null) { return this.api.post<Invoice>(`${API.customerInvoices}/generate`, { customerId, asOf: asOf || null }); }
   runCycle() { return this.api.post<{ invoicesIssued: number }>(`${API.customerInvoices}/run-cycle`, {}); }
   pay(id: string, body: RecordPaymentRequest) { return this.api.post<Invoice>(`${API.customerInvoices}/${id}/payments`, body); }
