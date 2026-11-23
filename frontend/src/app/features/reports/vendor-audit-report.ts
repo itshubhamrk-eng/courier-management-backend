@@ -182,7 +182,15 @@ export class VendorAuditReport implements OnInit {
   ngOnInit(): void {
     this.breadcrumb.set([{ label: 'Reports' }, { label: 'Vendor Audit Report' }]);
     this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+    // Opens on the current month so far; the report buttons need a range, so this also
+    // enables them from the start.
+    const today = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    this.from.set(iso(new Date(today.getFullYear(), today.getMonth(), 1)));
+    this.to.set(iso(today));
     this.load();
+    this.loadStatus();
   }
 
   /** No branch lock, on purpose — this report is company-level, not scoped to the
