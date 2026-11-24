@@ -6,7 +6,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, forkJoin, merge, of, switchMap } from 'rxjs';
+import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, merge, of, switchMap } from 'rxjs';
 import { AuthService } from '@core/auth/auth.service';
 import { BreadcrumbService } from '@core/services/breadcrumb.service';
 import { NotificationService } from '@core/services/notification.service';
@@ -35,8 +35,8 @@ import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { PickupService } from '@features/pdp/pickup.service';
 import { FreightCalculationService } from './freight-calculation.service';
-import { companyAddressLine } from './consignment-print.util';
-import { printPerformaBillCopies } from './performa-bill-print.util';
+import { printShipmentCopies } from './shipment-copy-print.util';
+import { ShipmentPrintDataService } from './shipment-print-data.service';
 import { parseVoiceBooking } from './voice-booking.util';
 import { isTbbLabel } from '@core/utils/tbb.util';
 
@@ -617,6 +617,7 @@ type FreightOutcome =
 export class ShipmentCreate implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ShipmentService);
+  private readonly printData = inject(ShipmentPrintDataService);
   private readonly ewayBillService = inject(EwayBillService);
   private readonly freightCalculationService = inject(FreightCalculationService);
   private readonly customers = inject(CustomerService);
@@ -1861,72 +1862,11 @@ export class ShipmentCreate implements OnInit {
             error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but the pickup request could not be linked to it.`)
           });
         }
-        forkJoin({
-          company: this.companyProfile.get().pipe(catchError(() => of(null))),
-          bookingGeo: v.pickupPincode
-            ? this.masters.pincodeGeo(v.pickupPincode).pipe(catchError(() => of(null)))
-            : of(null),
-          deliveryGeo: v.deliveryPincode
-            ? this.masters.pincodeGeo(v.deliveryPincode).pipe(catchError(() => of(null)))
-            : of(null)
-        }).subscribe(({ company, bookingGeo, deliveryGeo }) => {
-          printPerformaBillCopies({
-            companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
-            companyLogo: company?.logo ?? this.auth.companyLogo(),
-            companyAddress: companyAddressLine(company),
-            companyGst: company?.gstNumber ?? null,
-            companyContact: company?.mobile ?? null,
-            companyWebsite: company?.website ?? null,
-            shipmentNumber: s.shipmentNumber, trackingNumber: s.trackingNumber, bookingDate: s.bookingDate,
-            expectedDeliveryDate: s.expectedDeliveryDate ?? null,
-            bookingBranchLabel: this.myBranchCity() ?? this.myBranchLabel(),
-            deliveryBranchLabel: f.destinationCityName ?? '—',
-            bookingPincode: v.pickupPincode || null,
-            bookingDistrict: bookingGeo?.districtName ?? null,
-            bookingArea: bookingGeo?.areaName ?? null,
-            deliveryPincode: v.deliveryPincode || null,
-            deliveryDistrict: deliveryGeo?.districtName ?? null,
-            deliveryArea: deliveryGeo?.areaName ?? null,
-            senderName: v.senderName, senderAddress: v.senderAddress, senderContact: v.senderContact,
-            receiverName: v.receiverName, receiverAddress: v.receiverAddress, receiverContact: v.receiverContact,
-            serviceTypeLabel: this.labelOf(this.serviceTypeOptions(), v.serviceTypeId),
-            packageTypeLabel: '—',
-            paymentModeLabel: this.labelOf(this.paymentModeOptions(), v.paymentModeId),
-            deliveryType: v.deliveryType,
-            numberOfPackages: v.numberOfPackages || 1, chargeableWeight: this.weight().chargeable,
-            declaredValue: v.declaredValue || null,
-            charges: {
-              ...p.chargeBreakup,
-              freight: this.effectiveBaseFreight(),
-              odaCharge: this.odaChargeOverride() ?? f.odaCharge,
-              insuranceCharge: this.finalInsuranceCharge(),
-              gstAmount: p.chargeBreakup.gstAmount + this.gstOnOtherCharges() + this.gstOnOdaChargeDelta()
-                + this.gstOnFreightDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
-                + this.gstOnToPayCharge(),
-              // `roundOff`/`netAmount` deliberately exclude raw otherCharges/appointmentDeliveryCharge/
-              // doorDeliveryCharge here (unlike the sidebar preview) — this file's own `total`
-              // (performa-bill-print.util.ts `sheet()`) adds those three back on top of
-              // `charges.netAmount` itself, so including them here would double-count them on the
-              // printed bill. Only the round-off delta is folded in, so the printed total still lands
-              // on the company's own rounding rule once Other Charges/ODA/Freight/Insurance are edited.
-              roundOff: this.computedRoundOff(),
-              netAmount: p.chargeBreakup.netAmount + this.gstOnOtherCharges()
-                + this.odaChargeDelta() + this.gstOnOdaChargeDelta() + this.freightDelta() + this.gstOnFreightDelta()
-                + this.insuranceChargeDelta() + this.gstOnInsuranceChargeDelta() + this.gstOnDoorDeliveryCharge()
-                + this.gstOnToPayCharge()
-                + (this.computedRoundOff() - p.chargeBreakup.roundOff)
-            },
-            otherCharges: this.otherCharges(),
-            appointmentDeliveryCharge: v.appointmentDelivery ? this.appointmentDeliveryCharge() : undefined,
-            appointmentDate: v.appointmentDelivery ? v.appointmentDate : null,
-            appointmentTimeSlot: v.appointmentDelivery ? v.appointmentTimeSlot : null,
-            doorDeliveryCharge: v.deliveryType === 'DOOR' ? this.doorDeliveryCharge() : undefined,
-            toPayCharge: this.toPayCharge(),
-            remarks: v.remarks || null,
-            createdByName: s.createdByName ?? null,
-            invoiceValue: v.invoiceValue || null,
-            items: this.items().map((i) => ({ weight: i.weight, lengthCm: i.lengthCm, widthCm: i.widthCm, heightCm: i.heightCm }))
-          });
+        // Open the Shipment Copy print of the shipment just booked (loaded back from the
+        // server, so it prints exactly what was stored, not the form's in-flight numbers).
+        this.printData.buildMany([s.id]).subscribe({
+          next: (list) => printShipmentCopies(list),
+          error: () => this.notify.error(`Shipment ${s.shipmentNumber} booked, but its print could not be prepared. Print it from the shipment list.`)
         });
         const image = this.selectedImageFile();
         if (image) {

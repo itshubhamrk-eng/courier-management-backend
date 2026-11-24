@@ -26,7 +26,6 @@ import { ShipmentCommunicationCard } from '@features/communication/components/sh
 import { ShipmentService } from './shipment.service';
 import { EwayBillService } from './eway-bill.service';
 import { companyAddressLine, ConsignmentPrintData } from './consignment-print.util';
-import { printPerformaBillCopies } from './performa-bill-print.util';
 import { ShipmentPrintDataService } from './shipment-print-data.service';
 import { printShipmentCopies } from './shipment-copy-print.util';
 import { ShipmentLabelsDialog } from './shipment-labels-dialog';
@@ -102,7 +101,6 @@ const TIMELINE_ICONS: Record<string, string> = {
           <span class="sv__spacer"></span>
           <app-button variant="stroked" icon="label" (pressed)="printLabels()">Print Labels</app-button>
           @if (charge(); as c) {
-            <app-button variant="stroked" icon="print" (pressed)="print3(c)">Booking Receipt</app-button>
             <app-button variant="stroked" icon="print" (pressed)="printCopy(c)">Shipment Copy</app-button>
           }
           @if (can().update && shipment()!.status === 'BOOKED') {
@@ -816,9 +814,6 @@ export class ShipmentView implements OnInit {
     this.buildPrintData(c).subscribe((data) => printShipmentCopies([data]));
   }
 
-  print3(c: ShipmentCharge): void {
-    this.buildPrintData(c).subscribe((data) => printPerformaBillCopies(data));
-  }
 
   // ------------------------------------------------------------------- E-Way Bill
 
