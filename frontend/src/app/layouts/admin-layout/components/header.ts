@@ -1,4 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
+import { navTrailForUrl } from '@core/navigation/nav-trail.util';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '@core/auth/auth.service';
 import { ThemeService } from '@core/services/theme.service';
@@ -25,6 +29,11 @@ import { AiAssistantButton } from './ai-assistant-button';
         <button class="hd__icon-btn" (click)="toggleSidebar.emit()" aria-label="Toggle navigation">
           <mat-icon>menu</mat-icon>
         </button>
+        @if (trail().group; as g) {
+          <span class="hd__group" [title]="g.title">
+            <mat-icon>{{ g.icon || 'folder' }}</mat-icon><span class="hd__group-name">{{ g.title }}</span>
+          </span>
+        }
       </div>
 
       <div class="hd__right">
@@ -48,6 +57,11 @@ import { AiAssistantButton } from './ai-assistant-button';
     .hd__left, .hd__right { display:flex; align-items:center; gap:8px; min-width:0; }
     .hd__left { flex:1 1 40px; min-width:40px; overflow:hidden; }
     .hd__icon-btn { flex-shrink:0; }
+    .hd__group { display:flex; align-items:center; gap:6px; min-width:0; padding:6px 12px; margin-left:8px;
+      border-radius:999px; background:var(--brand-50); color:var(--brand-700); font:600 15px var(--font-sans); }
+    .hd__group mat-icon { font-size:19px; width:19px; height:19px; flex-shrink:0; }
+    .hd__group-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    @media (max-width:640px){ .hd__group-name { display:none; } }
     .hd__right { flex:0 1 auto; }
     .hd__brand { flex-shrink:0; }
     app-global-search { flex:0 1 280px; min-width:140px; }
@@ -73,6 +87,15 @@ export class Header {
   protected readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
   readonly toggleSidebar = output<void>();
+
+  private readonly router = inject(Router);
+  /** The sidebar section the current page lives under (none for top-level leaves like Dashboard). */
+  protected readonly trail = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => navTrailForUrl(this.router.url)),
+      startWith(navTrailForUrl(this.router.url))),
+    { initialValue: {} as ReturnType<typeof navTrailForUrl> });
 
   /** Falls back to the generic app name until the signed-in company sets its own. */
   protected readonly companyName = computed(() => this.auth.companyName() || environment.appName);

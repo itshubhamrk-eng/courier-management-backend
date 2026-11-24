@@ -80,17 +80,38 @@ body {
   gap: 20px;
   width: 100%;
 }
+:root { --th-bg: var(--brand-50); --th-fg: var(--brand-700); }
+:root[data-theme='dark'] { --th-bg: var(--brand-900); --th-fg: var(--brand-200); }
+// Hand-rolled tables (not app-table) get the same themed header.
+table thead th { background: var(--th-bg); color: var(--th-fg); }
 .page__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--brand-50), var(--surface));
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-clay-sm);
+}
+:root[data-theme='dark'] .page__head { background: linear-gradient(135deg, var(--brand-900), var(--surface)); }
+.filters {
+  padding: 14px 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
 }
 .page__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 // Optional small illustration accent next to a page__head's title — used on a few
 // logistics-heavy pages (Manifest Creation, In Scan, Manifest Finalization, DRS, Delivery). Subtle, hidden on
 // narrow screens so it never competes with the title for space.
+.page-title-icon {
+  font-size: 0.9em; width: 1.5em; height: 1.5em; line-height: 1.5em; text-align: center;
+  vertical-align: -0.2em; margin-right: 10px; border-radius: 10px;
+  color: var(--brand-600); background: var(--brand-50);
+}
 .page__head-row { display: flex; align-items: center; gap: 14px; }
 .page__head-ill { flex-shrink: 0; }
 @media (max-width: 560px) { .page__head-ill { display: none; } }

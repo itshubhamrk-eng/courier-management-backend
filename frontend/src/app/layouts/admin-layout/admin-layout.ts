@@ -8,6 +8,7 @@ import { IdleTimeoutService } from '@core/auth/idle-timeout.service';
 import { Sidebar } from './components/sidebar';
 import { Header } from './components/header';
 import { Footer } from './components/footer';
+import { PageTitleIcon } from './page-title-icon.directive';
 
 /**
  * The authenticated shell. One toggle drives two behaviours by viewport:
@@ -20,7 +21,7 @@ import { Footer } from './components/footer';
   selector: 'app-admin-layout',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Sidebar, Header, Footer, MatIconModule],
+  imports: [RouterOutlet, Sidebar, Header, Footer, MatIconModule, PageTitleIcon],
   template: `
     <div class="shell">
       <app-sidebar [mobileOpen]="drawerOpen()" [drawerMode]="isMobile()" (navigate)="closeDrawer()" />
@@ -35,7 +36,7 @@ import { Footer } from './components/footer';
           </div>
         }
         <app-header (toggleSidebar)="toggle()" />
-        <main class="shell__content app-scroll"><router-outlet /></main>
+        <main class="shell__content app-scroll" appPageTitleIcon><router-outlet /></main>
         <app-footer />
       </div>
     </div>
