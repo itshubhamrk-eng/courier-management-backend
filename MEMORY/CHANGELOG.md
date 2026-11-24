@@ -6,6 +6,15 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-24 - shipment_booked WhatsApp matches the Meta-approved template (V155)
+
+Meta approved `shipment_booked` on prod; the app now sends exactly that body.
+- `DefaultCommunicationTemplates` seed for SHIPMENT_BOOKED + WHATSAPP is the approved text: 5 variables in order `customerName, shipmentNumber, pickupLocation, deliveryLocation, trackingUrl`; "Ambox Logistics" is fixed text in the body; paragraphs split by blank lines; starts "Hi", ends "Thanks". Variables go out positionally by first appearance, so they line up with Meta's {{1}}..{{5}}.
+- `V155`: rewrites existing SHIPMENT_BOOKED WhatsApp rows still named `Shipment Booked - WhatsApp` / `shipment_booked` to the approved name + body and clears the meta_* columns (null meta_status is allowed to send).
+- Default tracking link is now the public page `https://vendor.amazinglpl.com/track-shipment?q={trackingNumber}` (`application.yml` + `TemplateRenderer` fallback); no env var needed on prod. The old default `localhost:4200/track/...` was not a route. `/track-shipment` and `GET /api/v1/track/**` are public (checked live on prod). `amazinglpl.com` itself does not serve the app.
+- Test `CommunicationTemplateServiceImplTest` ending updated to "Thanks". `MetaTemplateConverterTest` and `CommunicationOrchestratorTest` were already failing (WELCOME_CREDENTIALS seed count), unrelated.
+- Commit `b1dbc61` pushed to main. Not deployed, no live send tested yet. If `COMMUNICATION_TRACKING_URL_TEMPLATE` is set on prod it overrides the default.
+
 ## 2026-11-23 - WhatsApp welcome with login details for new branch / user accounts (no migration)
 
 Creating a branch (its login) or a user **with a password** now sends that person a WhatsApp: login URL (`app.auth.app-base-url` + `/login`), company code, username (email), contact no and password.
