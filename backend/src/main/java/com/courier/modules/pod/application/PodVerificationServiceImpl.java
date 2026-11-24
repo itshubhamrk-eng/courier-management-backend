@@ -84,35 +84,14 @@ public class PodVerificationServiceImpl implements PodVerificationService {
         boolean duplicateSuspected = !podVerificationRepository
                 .findDuplicatesWithinCompany(companyId, podHash, shipmentId).isEmpty();
 
-        // A live camera scan (delivery app's own QR reader, before this upload) wins when
-        // present — it's the freshest read off the physical label. Falling back to decoding
-        // the already-uploaded photo itself means the cross-check still runs even when the
-        // delivery app has no live-scan step (or the operator's device lacks camera access),
-        // at the cost of depending on the label happening to be visible in the photo.
-        String qrScanValue = command.qrScanValue() != null && !command.qrScanValue().isBlank()
-                ? command.qrScanValue().trim()
-                : PodQrDecoder.decode(command.photoContent());
-
-        PodAnalysisResult result;
-        boolean providerAvailable = true;
-        try {
-            result = provider.analyze(new PodAnalysisRequest(
-                    command.photoContent(), command.photoContentType(),
-                    command.signatureContent(),
-                    command.receiverName(), command.awbNumber(), command.shipmentNumberClaim(),
-                    shipment.getTrackingNumber(), shipment.getShipmentNumber(),
-                    command.deliveryDateTime() == null ? Instant.now() : command.deliveryDateTime(),
-                    duplicateSuspected, qrScanValue));
-        } catch (PodProviderUnavailableException e) {
-            log.warn("POD AI provider unavailable for shipment {} — routing to manual review",
-                    shipment.getShipmentNumber());
-            providerAvailable = false;
-            result = new PodAnalysisResult(properties.getManualReviewThreshold(),
-                    List.of("AI provider unavailable — routed to manual review."),
-                    command.signatureContent() != null && command.signatureContent().length > 0,
-                    null, command.receiverName(), command.awbNumber(), null, false, true,
-                    false, command.shipmentNumberClaim());
-        }
+        // No AI analysis at delivery: the upload is stored PENDING and a human reviews it.
+        // (Bulk POD upload still reads photos with the AI provider — it has no shipment
+        // context to match against otherwise.)
+        PodAnalysisResult result = new PodAnalysisResult(0,
+                duplicateSuspected ? List.of("Same photo was already used on another shipment.") : List.of(),
+                command.signatureContent() != null && command.signatureContent().length > 0,
+                null, command.receiverName(), command.awbNumber(), null, false, true,
+                false, command.shipmentNumberClaim());
 
         // Uploaded to the existing object-store seam (ShipmentService.uploadPodFile ->
         // FileStoragePort, the same one POD capture has always used) and persisted
@@ -142,8 +121,8 @@ public class PodVerificationServiceImpl implements PodVerificationService {
                 .signatureDetected(result.signatureDetected())
                 .imageQuality(result.imageQuality())
                 .podHash(podHash)
-                .aiProvider(providerAvailable ? provider.providerName() : "unavailable")
-                .aiModel(providerAvailable ? provider.modelName() : "n/a")
+                .aiProvider("none")
+                .aiModel("n/a")
                 .verifiedAt(Instant.now())
                 .build();
         verification.reasons(result.reasons());

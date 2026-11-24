@@ -184,7 +184,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                   Mark as Delivered
                 </app-button>
                 <app-button icon="smart_toy" [loading]="verifying()" [disabled]="!photo()" (pressed)="runVerification()">
-                  Run AI Verification
+                  Upload POD
                 </app-button>
               </div>
             }
@@ -192,7 +192,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
             @if (verifying()) {
               <div class="ai-status ai-status--pending">
                 <mat-icon>hourglass_top</mat-icon>
-                <span>AI Verification — Processing…</span>
+                <span>Uploading POD…</span>
               </div>
             }
 
@@ -203,15 +203,7 @@ const LIST_STATUSES: ShipmentStatus[] = ['IN_SCAN', 'OUT_FOR_DELIVERY', 'DELIVER
                 <div class="ai-result__head">
                   <mat-icon>{{ statusIcon(v) }}</mat-icon>
                   <strong>{{ statusLabel(v) }}</strong>
-                  <span class="ai-result__score">{{ v.verificationScore }}/100</span>
                 </div>
-                <dl class="ai-result__grid">
-                  <div><dt>Receiver</dt><dd>{{ v.detectedReceiverName || '—' }}</dd></div>
-                  <div><dt>AWB</dt><dd>{{ v.detectedAwb || '—' }}</dd></div>
-                  <div><dt>Date</dt><dd>{{ v.detectedDate || '—' }}</dd></div>
-                  <div><dt>Signature</dt><dd>{{ v.signatureDetected ? 'Detected' : 'Not detected' }}</dd></div>
-                  <div><dt>Image Quality</dt><dd>{{ v.imageQuality || '—' }}</dd></div>
-                </dl>
                 @if (v.verificationReasons.length) {
                   <ul class="ai-result__reasons">
                     @for (r of v.verificationReasons; track r) { <li>{{ r }}</li> }
