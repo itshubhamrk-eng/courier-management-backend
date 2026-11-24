@@ -6,6 +6,13 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-25 - UI polish, print after booking, no AI at delivery (no migration)
+
+- **POD at delivery has no AI step.** `PodVerificationServiceImpl.verify()` no longer calls the provider; the upload is stored PENDING (score 0, `aiProvider` "none") for human approve/reject. Duplicate-photo hash still adds a reason. Bulk POD Upload still uses the AI. Delivery screen drops the score/AI grid and says "Upload POD".
+- **Page title icons**: `PageTitleIcon` directive on the shell `<main>` prepends the matching sidebar icon to every `h1.text-h1` (longest route prefix via `NAVIGATION`; fallback `article`). Swept 117 nav routes as Company Admin: none missing. `/unauthorized` title has no icon.
+- **Header shows the sidebar group** as a pill (`nav-trail.util.ts`); backgrounds on `.page__head` and `.filters`; table headers use `--th-bg`/`--th-fg` (brand tint, dark variant) for `app-table` and plain `table thead th`.
+- **Booking now opens the Shipment Copy print** (3 copies, loaded back from the server via `ShipmentPrintDataService.buildMany`) instead of the Performa Bill; "Booking Receipt" button removed from the shipment view page. Verified the Shipment Copy renders (3 slots) on CP-STR-000004; the auto-print after booking itself was not observed (capture hook missed the iframe). Booking test needs a branch login (Satara works, Pune password stale), To Pay mode (Paid needs wallet), item Value for Declared Value, and a configured lane (Satara -> Kolhapur 416001).
+
 ## 2026-11-24 - shipment_booked WhatsApp matches the Meta-approved template (V155)
 
 Meta approved `shipment_booked` on prod; the app now sends exactly that body.
