@@ -32,7 +32,7 @@ public class TemplateRenderer {
     private final String trackingUrlTemplate;
 
     public TemplateRenderer(
-            @Value("${app.communication.tracking-url-template:http://localhost:4200/track/{trackingNumber}}")
+            @Value("${app.communication.tracking-url-template:https://vendor.amazinglpl.com/track-shipment?q={trackingNumber}}")
             String trackingUrlTemplate) {
         this.trackingUrlTemplate = trackingUrlTemplate;
     }

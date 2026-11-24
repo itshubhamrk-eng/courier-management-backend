@@ -262,7 +262,7 @@ app:
       fixed-delay-ms: ${COMMUNICATION_DISPATCH_INTERVAL_MS:30000}
     # {trackingNumber} is substituted — the public tracking page this frontend already
     # serves at /track/:awb.
-    tracking-url-template: ${COMMUNICATION_TRACKING_URL_TEMPLATE:http://localhost:4200/track/{trackingNumber}}
+    tracking-url-template: ${COMMUNICATION_TRACKING_URL_TEMPLATE:https://vendor.amazinglpl.com/track-shipment?q={trackingNumber}}
 
   master:
     pincode-lookup:

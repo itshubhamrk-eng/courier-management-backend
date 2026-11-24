@@ -54,9 +54,13 @@ public final class DefaultCommunicationTemplates {
         return List.of(
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.WHATSAPP,
                         "shipment_booked", null,
-                        "Hi {{customerName}}, your shipment {{shipmentNumber}} (AWB {{trackingNumber}}) "
+                        // Exactly the body Meta approved for shipment_booked (5 variables, in this order).
+                        "Hi {{customerName}},\n\n"
+                                + "your shipment {{shipmentNumber}},\n\n"
                                 + "from {{pickupLocation}} to {{deliveryLocation}} has been booked with "
-                                + "{{companyName}}. Track it here: {{trackingUrl}} - thank you!"),
+                                + "Ambox Logistics.\n\n"
+                                + "Track it: {{trackingUrl}}\n\n"
+                                + "Thanks"),
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.SMS,
                         "Shipment Booked - SMS", null,
                         "{{companyName}}: Shipment {{shipmentNumber}} booked, AWB {{trackingNumber}}. "

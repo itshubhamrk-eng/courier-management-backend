@@ -338,7 +338,7 @@ class CommunicationTemplateServiceImplTest {
         var reset = service.resetToDefault(java.util.UUID.randomUUID());
 
         assertThat(reset.getTemplateName()).isEqualTo("shipment_booked");
-        assertThat(reset.getContent()).startsWith("Hi {{customerName}}").endsWith("thank you!");
+        assertThat(reset.getContent()).startsWith("Hi {{customerName}}").endsWith("Thanks");
         assertThat(reset.getCategory()).isEqualTo("UTILITY");
         assertThat(reset.getLanguage()).isEqualTo("en_US");
         assertThat(reset.getHeaderText()).isNull();
