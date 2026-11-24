@@ -21,6 +21,8 @@ public enum CommunicationEventType {
     DAILY_BUSINESS_SUMMARY,
     /** The monthly per-branch statement PDF, sent over WhatsApp as a document — not tied to a shipment. */
     BRANCH_MONTHLY_REPORT,
+    /** Login details sent to a freshly created branch/user account — not tied to a shipment; WhatsApp only. */
+    WELCOME_CREDENTIALS,
     /** A template made by hand, tied to no event and never sent automatically — only submitted to
      *  Meta and sent by name (e.g. the Send Test Message button). Any number per channel. */
     CUSTOM;

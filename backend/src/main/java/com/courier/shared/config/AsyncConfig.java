@@ -40,6 +40,22 @@ public class AsyncConfig implements AsyncConfigurer {
         return executor;
     }
 
+    /** Outbound customer/staff messages (welcome credentials): a slow Meta call must never hold a request thread. */
+    @Bean(name = "communicationExecutor")
+    public Executor communicationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("comm-");
+        // Dropping a welcome message beats blocking the request that created the account.
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(15);
+        executor.initialize();
+        return executor;
+    }
+
     @Override
     public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
         // Without this, an exception in a void @Async method vanishes entirely.

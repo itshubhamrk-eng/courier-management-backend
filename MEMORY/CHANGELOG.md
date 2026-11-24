@@ -6,6 +6,14 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-23 - WhatsApp welcome with login details for new branch / user accounts (no migration)
+
+Creating a branch (its login) or a user **with a password** now sends that person a WhatsApp: login URL (`app.auth.app-base-url` + `/login`), company code, username (email), contact no and password.
+- `shared.event.AccountCredentialsIssued` (password masked in `toString`) published by `BranchServiceImpl.create` (generated or typed password) and `UserServiceImpl.create` (typed only - a generated one is unusable, nothing to send).
+- `communication.application.WelcomeCredentialsListener`: AFTER_COMMIT + `@Async("communicationExecutor")`; skips silently when WhatsApp is off, no mobile, or template missing/off/not approved at Meta. No ledger row on purpose - the password is never persisted; failures are only logged (masked).
+- New WhatsApp-only event `WELCOME_CREDENTIALS`, seeded additively as template `welcome_credentials` (variables userName, companyName, loginUrl, companyCode, loginId, contactNo, password). **Must be submitted to Meta and approved** (Company -> Communication -> Templates -> Submit to Meta); Meta may re-categorise or reject a body that contains a password.
+- One `APP_BASE_URL` for the whole deployment, so the link is the same for every company.
+
 ## 2026-11-23 - TBB invoice editing: shipments, charges, disputes, separate Send e-mail (V154)
 
 A generated TBB invoice is editable while PENDING_APPROVAL with no receipts (`CustomerInvoice.requireEditable`, totals via `recalculate`):

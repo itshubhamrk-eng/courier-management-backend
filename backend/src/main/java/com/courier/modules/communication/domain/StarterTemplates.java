@@ -19,7 +19,8 @@ public final class StarterTemplates {
     /** The events with no SMS/Email sibling: the daily summary and the monthly branch report. */
     public static boolean isAllowed(CommunicationEventType event, CommunicationChannel channel) {
         boolean whatsAppOnly = event == CommunicationEventType.DAILY_BUSINESS_SUMMARY
-                || event == CommunicationEventType.BRANCH_MONTHLY_REPORT;
+                || event == CommunicationEventType.BRANCH_MONTHLY_REPORT
+                || event == CommunicationEventType.WELCOME_CREDENTIALS;
         return !whatsAppOnly || channel == CommunicationChannel.WHATSAPP;
     }
 
@@ -27,6 +28,8 @@ public final class StarterTemplates {
         if (!isAllowed(event, channel)) {
             throw new BusinessRuleException(event == CommunicationEventType.BRANCH_MONTHLY_REPORT
                     ? "The branch monthly report is sent on WhatsApp only."
+                    : event == CommunicationEventType.WELCOME_CREDENTIALS
+                    ? "The welcome message with login details is sent on WhatsApp only."
                     : "The daily business summary is sent on WhatsApp only.");
         }
         for (var seed : DefaultCommunicationTemplates.all()) {

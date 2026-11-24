@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_EVENTS, TemplateKey, channelLabel, channelsFor, eventLabel, eventNote, freeChannels, freeEvents } from './template-catalog';
 
-/** A company seeded with the 12 stock templates plus the WhatsApp daily summary and branch monthly report. */
+/** A company seeded with the 12 stock templates plus the WhatsApp daily summary, branch monthly report and welcome credentials. */
 const SEEDED: TemplateKey[] = [
   ...(['SHIPMENT_BOOKED', 'SHIPMENT_DISPATCHED', 'OUT_FOR_DELIVERY', 'SHIPMENT_DELIVERED'] as const).flatMap((eventType) =>
     (['WHATSAPP', 'SMS', 'EMAIL'] as const).map((channel) => ({ eventType, channel }))),
   { eventType: 'DAILY_BUSINESS_SUMMARY', channel: 'WHATSAPP' },
-  { eventType: 'BRANCH_MONTHLY_REPORT', channel: 'WHATSAPP' }
+  { eventType: 'BRANCH_MONTHLY_REPORT', channel: 'WHATSAPP' },
+  { eventType: 'WELCOME_CREDENTIALS', channel: 'WHATSAPP' }
 ];
 
 describe('template catalog', () => {
-  it('lists all ten events', () => {
-    expect(ALL_EVENTS).toHaveLength(10);
+  it('lists all eleven events', () => {
+    expect(ALL_EVENTS).toHaveLength(11);
   });
 
   it('the daily summary exists on WhatsApp only, every other event on all three channels', () => {
@@ -22,6 +23,11 @@ describe('template catalog', () => {
   it('the branch monthly report exists on WhatsApp only', () => {
     expect(channelsFor('BRANCH_MONTHLY_REPORT')).toEqual(['WHATSAPP']);
     expect(freeChannels('BRANCH_MONTHLY_REPORT', SEEDED)).toEqual([]);
+  });
+
+  it('welcome credentials exist on WhatsApp only', () => {
+    expect(channelsFor('WELCOME_CREDENTIALS')).toEqual(['WHATSAPP']);
+    expect(freeChannels('WELCOME_CREDENTIALS', SEEDED)).toEqual([]);
   });
 
   it('a fresh seeded company can still create the four unseeded events on every channel', () => {

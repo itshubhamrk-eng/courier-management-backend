@@ -61,6 +61,13 @@ public final class TemplateSampleValues {
         // branch monthly report
         m.put("branchName", "Pune Central");
         m.put("month", "October 2026");
+        // welcome credentials
+        m.put("userName", "Ashwin Patil");
+        m.put("loginUrl", "https://app.example.com/login");
+        m.put("companyCode", "AMAZING_LOGISTICS");
+        m.put("loginId", "pune@amazing.local");
+        m.put("contactNo", "9876543210");
+        m.put("password", "Xk7#mPq2Vn9@aB");
         return java.util.Collections.unmodifiableMap(m);
     }
 }

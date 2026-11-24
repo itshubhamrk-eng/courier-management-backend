@@ -6,6 +6,7 @@ import com.courier.modules.company.application.command.UpdateUserCommand;
 import com.courier.modules.company.application.event.UserEvent;
 import com.courier.modules.company.domain.Branch;
 import com.courier.modules.company.domain.BranchRepository;
+import com.courier.modules.company.domain.CompanyRepository;
 import com.courier.modules.company.domain.CompanyRole;
 import com.courier.modules.company.domain.CompanyRoleRepository;
 import com.courier.modules.company.domain.DefaultRoleCatalog;
@@ -123,6 +124,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordPolicy passwordPolicy;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final CompanyRepository companyRepository;
 
     // ------------------------------------------------------------------- create
 
@@ -260,6 +262,16 @@ public class UserServiceImpl implements UserService {
         eventPublisher.publishEvent(new UserEvent.UserCreated(
                 saved.getId(), companyId, saved.getEmail(),
                 SecurityUtils.getCurrentUserId().orElse(null), false, Instant.now()));
+
+        // A generated password is unusable, so only an admin-typed one is worth sending.
+        if (!passwordGenerated && saved.getMobile() != null && !saved.getMobile().isBlank()) {
+            var company = companyRepository.findByCompanyId(companyId).orElse(null);
+            eventPublisher.publishEvent(new com.courier.shared.event.AccountCredentialsIssued(
+                    companyId, saved.getId(),
+                    company == null ? "" : company.getCompanyCode(),
+                    company == null ? "" : company.getCompanyName(),
+                    saved.getFirstName(), saved.getEmail(), saved.getMobile(), rawPassword));
+        }
 
         return new CreatedUser(saved, passwordGenerated, roleCodes);
     }

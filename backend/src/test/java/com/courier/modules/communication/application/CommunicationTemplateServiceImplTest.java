@@ -68,8 +68,8 @@ class CommunicationTemplateServiceImplTest {
 
         service.list();
 
-        // 4 default events x 3 channels + the WhatsApp-only daily summary and branch monthly report
-        verify(repository, times(14)).save(any());
+        // 4 default events x 3 channels + the WhatsApp-only daily summary, branch monthly report and welcome credentials
+        verify(repository, times(15)).save(any());
     }
 
     @Test
@@ -92,8 +92,8 @@ class CommunicationTemplateServiceImplTest {
 
         var saved = org.mockito.ArgumentCaptor.forClass(CommunicationTemplate.class);
         verify(repository, times(1)).save(saved.capture());
-        assertThat(saved.getValue().getEventType()).isEqualTo(CommunicationEventType.BRANCH_MONTHLY_REPORT);
-        assertThat(saved.getValue().getTemplateName()).isEqualTo("branch_monthly_report");
+        assertThat(saved.getValue().getEventType()).isEqualTo(CommunicationEventType.WELCOME_CREDENTIALS);
+        assertThat(saved.getValue().getTemplateName()).isEqualTo("welcome_credentials");
     }
 
     @Test

@@ -281,6 +281,29 @@ class BranchServiceImplTest {
     }
 
     @Test
+    @DisplayName("the login details are published for a WhatsApp welcome — generated password")
+    void createPublishesWelcomeWithGeneratedPassword() {
+        service.create(createCommand("pune_main", "Pune Main", null, null));
+
+        var captor = ArgumentCaptor.forClass(com.courier.shared.event.AccountCredentialsIssued.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().password()).isEqualTo(GENERATED);
+        assertThat(captor.getValue().companyCode()).isEqualTo("LEGACY_CO");
+        assertThat(captor.getValue().userId()).isEqualTo(BRANCH_USER);
+    }
+
+    @Test
+    @DisplayName("the login details are published for a WhatsApp welcome — typed password")
+    void createPublishesWelcomeWithTypedPassword() {
+        service.create(createCommand("pune_main", "Pune Main", null, branchUser("latur@legacy.test", "Str0ng#Pass1")));
+
+        var captor = ArgumentCaptor.forClass(com.courier.shared.event.AccountCredentialsIssued.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().password()).isEqualTo("Str0ng#Pass1");
+        assertThat(captor.getValue().loginId()).isEqualTo("latur@legacy.test");
+    }
+
+    @Test
     @DisplayName("an explicit manager keeps the branch; the new user is staff, not manager")
     void createKeepsExplicitManager() {
         UUID manager = UUID.randomUUID();

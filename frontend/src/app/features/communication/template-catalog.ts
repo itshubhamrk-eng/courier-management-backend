@@ -9,7 +9,7 @@ import { CommunicationChannel, CommunicationEventType } from '@core/models/commu
 export const ALL_EVENTS: CommunicationEventType[] = [
   'SHIPMENT_BOOKED', 'SHIPMENT_DISPATCHED', 'SHIPMENT_RECEIVED', 'OUT_FOR_DELIVERY',
   'SHIPMENT_DELIVERED', 'SHIPMENT_CANCELLED', 'RTO_INITIATED', 'RTO_DELIVERED', 'DAILY_BUSINESS_SUMMARY',
-  'BRANCH_MONTHLY_REPORT'
+  'BRANCH_MONTHLY_REPORT', 'WELCOME_CREDENTIALS'
 ];
 
 export const ALL_CHANNELS: CommunicationChannel[] = ['WHATSAPP', 'SMS', 'EMAIL'];
@@ -17,7 +17,7 @@ export const ALL_CHANNELS: CommunicationChannel[] = ['WHATSAPP', 'SMS', 'EMAIL']
 export interface TemplateKey { eventType: CommunicationEventType; channel: CommunicationChannel; }
 
 export function channelsFor(event: CommunicationEventType): CommunicationChannel[] {
-  return event === 'DAILY_BUSINESS_SUMMARY' || event === 'BRANCH_MONTHLY_REPORT' ? ['WHATSAPP'] : ALL_CHANNELS;
+  return event === 'DAILY_BUSINESS_SUMMARY' || event === 'BRANCH_MONTHLY_REPORT' || event === 'WELCOME_CREDENTIALS' ? ['WHATSAPP'] : ALL_CHANNELS;
 }
 
 /** Channels on which this event has no template yet. */
@@ -41,6 +41,9 @@ export function eventNote(event: CommunicationEventType): string | null {
   }
   if (event === 'BRANCH_MONTHLY_REPORT') {
     return 'This sends each branch its monthly statement PDF. Meta needs a PDF header on it, so create it once in WhatsApp Manager, then press Check status here.';
+  }
+  if (event === 'WELCOME_CREDENTIALS') {
+    return 'Sent to the mobile number of every new branch login or user created with a password: app link, company code, username, contact number and password.';
   }
   return null;
 }

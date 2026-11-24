@@ -191,9 +191,35 @@ public class BranchServiceImpl implements BranchService {
         eventPublisher.publishEvent(new BranchEvent.BranchCreated(
                 saved.getId(), companyId, saved.getBranchCode(), saved.getBranchType(), Instant.now()));
 
+        publishWelcome(companyId, saved, user, command.branchUser());
+
         return new BranchCreation(saved, user.userId(), user.email(),
                 user.temporaryPassword(), assignedAsManager,
                 roleAssignment.role().getId(), roleAssignment.role().getRoleCode());
+    }
+
+    /**
+     * Hands the new login's details to Communication for a WhatsApp welcome. Nothing is published
+     * when the password is unknown (it is either generated-and-returned or typed, so it is always
+     * known here — the guard only covers a future change) or there is no mobile number to send to.
+     */
+    private void publishWelcome(UUID companyId, Branch branch, ProvisionedBranchUser user,
+                                CreateBranchCommand.NewBranchUser requested) {
+        String password = user.temporaryPassword() != null ? user.temporaryPassword()
+                : requested == null ? null : requested.password();
+        if (password == null || password.isBlank()) {
+            return;
+        }
+        String mobile = requested != null && isNotBlank(requested.mobile()) ? requested.mobile().trim()
+                : branch.getMobile();
+        String first = requested != null && isNotBlank(requested.firstName()) ? requested.firstName().trim()
+                : branch.getBranchName();
+        var company = companyRepository.findByCompanyId(companyId).orElse(null);
+        eventPublisher.publishEvent(new com.courier.shared.event.AccountCredentialsIssued(
+                companyId, user.userId(),
+                company == null ? "" : company.getCompanyCode(),
+                company == null ? "" : company.getCompanyName(),
+                first, user.email(), mobile, password));
     }
 
     /**

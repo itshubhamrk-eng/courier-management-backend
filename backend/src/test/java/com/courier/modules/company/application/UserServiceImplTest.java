@@ -75,6 +75,7 @@ class UserServiceImplTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuditService auditService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private com.courier.modules.company.domain.CompanyRepository companyRepository;
 
     private UserServiceImpl service;
     private CompanyRole defaultRole;
@@ -88,7 +89,7 @@ class UserServiceImplTest {
 
         service = new UserServiceImpl(userRepository, branchRepository, userRoleRepository, roleRepository,
                 departmentRepository, departmentRoleRepository,
-                passwordEncoder, passwordPolicy, auditService, eventPublisher);
+                passwordEncoder, passwordPolicy, auditService, eventPublisher, companyRepository);
 
         CompanyContext.setCompanyId(TENANT);
         planted(Roles.COMPANY_ADMIN);
@@ -172,6 +173,26 @@ class UserServiceImplTest {
         assertThat(created.user().getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(created.passwordGenerated()).isFalse();
         verify(passwordEncoder).encode("Str0ng!Pass99");
+    }
+
+    @Test
+    @DisplayName("create with a typed password publishes the credentials for the WhatsApp welcome")
+    void createWithPasswordPublishesWelcome() {
+        service.create(createCommand("ravi@legacy.test", "Str0ng!Pass99", null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.courier.shared.event.AccountCredentialsIssued.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().loginId()).isEqualTo("ravi@legacy.test");
+        assertThat(captor.getValue().contact()).isEqualTo("+91 9876500001");
+        assertThat(captor.getValue().password()).isEqualTo("Str0ng!Pass99");
+    }
+
+    @Test
+    @DisplayName("create without a password publishes no credentials: there is nothing usable to send")
+    void createWithoutPasswordPublishesNoWelcome() {
+        service.create(createCommand("asha@legacy.test", null, null));
+
+        verify(eventPublisher, never()).publishEvent(any(com.courier.shared.event.AccountCredentialsIssued.class));
     }
 
     @Test

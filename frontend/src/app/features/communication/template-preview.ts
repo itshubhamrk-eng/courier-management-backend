@@ -21,6 +21,8 @@ export const DAILY_VARIABLES = [
 
 export const BRANCH_REPORT_VARIABLES = ['branchName', 'month'];
 
+export const WELCOME_VARIABLES = ['userName', 'companyName', 'loginUrl', 'companyCode', 'loginId', 'contactNo', 'password'];
+
 export const SHIPMENT_VARIABLES = [
   'customerName', 'companyName', 'shipmentNumber', 'trackingNumber', 'pickupLocation',
   'deliveryLocation', 'amount', 'deliveryDate', 'receiverName', 'trackingUrl', 'podUrl'
@@ -28,6 +30,7 @@ export const SHIPMENT_VARIABLES = [
 
 export function variablesFor(eventType: string): string[] {
   if (eventType === 'BRANCH_MONTHLY_REPORT') return BRANCH_REPORT_VARIABLES;
+  if (eventType === 'WELCOME_CREDENTIALS') return WELCOME_VARIABLES;
   return eventType === 'DAILY_BUSINESS_SUMMARY' ? DAILY_VARIABLES : SHIPMENT_VARIABLES;
 }
 
@@ -55,7 +58,13 @@ export function sampleValues(companyName?: string | null): Record<string, string
     inTransit: '8',
     outForDelivery: '5',
     branchName: 'Pune Central',
-    month: 'October 2026'
+    month: 'October 2026',
+    userName: 'Ashwin Patil',
+    loginUrl: 'https://app.example.com/login',
+    companyCode: 'AMAZING_LOGISTICS',
+    loginId: 'pune@amazing.local',
+    contactNo: '9876543210',
+    password: 'Xk7#mPq2Vn9@aB'
   };
 }
 

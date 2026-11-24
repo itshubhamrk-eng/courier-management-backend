@@ -227,7 +227,8 @@ public class CommunicationTemplateServiceImpl implements CommunicationTemplateSe
     public RenderedPreview preview(UUID id) {
         CommunicationTemplate template = loadOrThrow(id, requireCompany());
         if (template.getEventType() == CommunicationEventType.DAILY_BUSINESS_SUMMARY
-                || template.getEventType() == CommunicationEventType.BRANCH_MONTHLY_REPORT) {
+                || template.getEventType() == CommunicationEventType.BRANCH_MONTHLY_REPORT
+                || template.getEventType() == CommunicationEventType.WELCOME_CREDENTIALS) {
             return new RenderedPreview(null,
                     templateRenderer.renderWith(template.getContent(), TemplateSampleValues.all()));
         }

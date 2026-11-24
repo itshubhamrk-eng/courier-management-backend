@@ -38,6 +38,18 @@ public final class DefaultCommunicationTemplates {
             CommunicationChannel.WHATSAPP, "branch_monthly_report", null,
             "Monthly statement for {{branchName}} - {{month}}. Your branch report PDF is attached. - SKRA");
 
+    /** Sent when a branch or user account is created with a known password. Starts with a word and ends
+     *  with the product name — Meta rejects a body that opens or closes on a variable. */
+    public static final Seed WELCOME_CREDENTIALS = new Seed(CommunicationEventType.WELCOME_CREDENTIALS,
+            CommunicationChannel.WHATSAPP, "welcome_credentials", null,
+            "Welcome {{userName}}! Your {{companyName}} account is ready.\n\n"
+                    + "Login: {{loginUrl}}\n"
+                    + "Company code: {{companyCode}}\n"
+                    + "Username: {{loginId}}\n"
+                    + "Contact no: {{contactNo}}\n"
+                    + "Password: {{password}}\n\n"
+                    + "Please change your password after you sign in. - SKRA");
+
     public static List<Seed> all() {
         return List.of(
                 new Seed(CommunicationEventType.SHIPMENT_BOOKED, CommunicationChannel.WHATSAPP,
@@ -102,7 +114,8 @@ public final class DefaultCommunicationTemplates {
                                 + "<p>Proof of delivery: <a href=\"{{podUrl}}\">view</a></p>"
                                 + "<p>Thank you for choosing {{companyName}}!</p>"),
                 DAILY_SUMMARY,
-                BRANCH_MONTHLY_REPORT
+                BRANCH_MONTHLY_REPORT,
+                WELCOME_CREDENTIALS
         );
     }
 }
