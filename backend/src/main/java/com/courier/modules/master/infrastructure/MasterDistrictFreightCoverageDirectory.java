@@ -116,7 +116,9 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
             }
             return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
                     link.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
-                    district.isActive(), area.getName() + ", " + city.getName(), city.getId()));
+                    // District, not City: City rows come from India Post's postal *Division*
+                    // (Shahada's is "Dhule" though its district is Nandurbar).
+                    district.isActive(), area.getName() + ", " + district.getName(), city.getId()));
         });
     }
 }
