@@ -277,10 +277,9 @@ class DistrictLevelFreightServiceImplTest {
     private void givenCopyFixtures(Set<UUID> targetExistingDistricts) {
         when(branchLookup.findBranch(eq(TARGET), eq(COMPANY)))
                 .thenReturn(Optional.of(new BranchLookupPort.BranchRef(TARGET, "KOLHAPUR", "Kolhapur", true)));
-        when(districtLookup.findDistrict(eq(DIST_A)))
-                .thenReturn(Optional.of(new DistrictLookupPort.DistrictRef(DIST_A, "A", "A", true)));
-        when(districtLookup.findDistrict(eq(DIST_B)))
-                .thenReturn(Optional.of(new DistrictLookupPort.DistrictRef(DIST_B, "B", "B", true)));
+        when(districtLookup.findDistricts(any())).thenReturn(java.util.Map.of(
+                DIST_A, new DistrictLookupPort.DistrictRef(DIST_A, "A", "A", true),
+                DIST_B, new DistrictLookupPort.DistrictRef(DIST_B, "B", "B", true)));
         when(repository.findByCompanyIdAndBranchIdAndStatus(COMPANY, BRANCH, DistrictFreightStatus.ACTIVE))
                 .thenReturn(java.util.List.of(sourceRow(DIST_A), sourceRow(DIST_B)));
         when(repository.findDistrictIdsIncludingDeleted(COMPANY, TARGET)).thenReturn(targetExistingDistricts);
@@ -351,8 +350,9 @@ class DistrictLevelFreightServiceImplTest {
     @DisplayName("copy: a source district gone inactive is skipped")
     void copySkipsInactiveDistrict() {
         givenCopyFixtures(Set.of());
-        when(districtLookup.findDistrict(eq(DIST_B)))
-                .thenReturn(Optional.of(new DistrictLookupPort.DistrictRef(DIST_B, "B", "B", false)));
+        when(districtLookup.findDistricts(any())).thenReturn(java.util.Map.of(
+                DIST_A, new DistrictLookupPort.DistrictRef(DIST_A, "A", "A", true),
+                DIST_B, new DistrictLookupPort.DistrictRef(DIST_B, "B", "B", false)));
         CopyDistrictFreightResult result = service.copyFromBranch(BRANCH, java.util.List.of(TARGET));
         assertThat(result.targets().get(0).copied()).isEqualTo(1);
         assertThat(result.targets().get(0).skipped()).isEqualTo(1);
@@ -380,5 +380,21 @@ class DistrictLevelFreightServiceImplTest {
         CopyDistrictFreightResult result = service.copyFromBranch(BRANCH, java.util.List.of(TARGET, TARGET));
         assertThat(result.targets()).hasSize(1);
         assertThat(result.targets().get(0).copied()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("copy: districts are looked up once for all targets, not once per target")
+    void copyLooksUpDistrictsOnce() {
+        givenCopyFixtures(Set.of());
+        UUID second = UUID.randomUUID();
+        when(branchLookup.findBranch(eq(second), eq(COMPANY)))
+                .thenReturn(Optional.of(new BranchLookupPort.BranchRef(second, "SATARA", "Satara", true)));
+        when(repository.findDistrictIdsIncludingDeleted(COMPANY, second)).thenReturn(Set.of());
+
+        CopyDistrictFreightResult result = service.copyFromBranch(BRANCH, java.util.List.of(TARGET, second));
+
+        assertThat(result.targets()).hasSize(2);
+        verify(districtLookup, org.mockito.Mockito.times(1)).findDistricts(any());
+        verify(districtLookup, never()).findDistrict(any());
     }
 }

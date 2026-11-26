@@ -226,15 +226,22 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         List<DistrictLevelFreight> sourceRows = repository.findByCompanyIdAndBranchIdAndStatus(
                 companyId, source.branchId(), DistrictFreightStatus.ACTIVE);
 
+        // One batch lookup for every target: which source districts are still active.
+        Set<UUID> activeDistricts = new LinkedHashSet<>();
+        districtLookup.findDistricts(sourceRows.stream().map(DistrictLevelFreight::getDistrictId).toList())
+                .forEach((id, ref) -> {
+                    if (ref.active()) {
+                        activeDistricts.add(id);
+                    }
+                });
+
         List<CopyDistrictFreightResult.TargetResult> results = new ArrayList<>();
         for (BranchLookupPort.BranchRef target : targets) {
             Set<UUID> existing = repository.findDistrictIdsIncludingDeleted(companyId, target.branchId());
             int copied = 0;
             int skipped = 0;
             for (DistrictLevelFreight row : sourceRows) {
-                boolean districtActive = districtLookup.findDistrict(row.getDistrictId())
-                        .map(DistrictLookupPort.DistrictRef::active).orElse(false);
-                if (existing.contains(row.getDistrictId()) || !districtActive) {
+                if (existing.contains(row.getDistrictId()) || !activeDistricts.contains(row.getDistrictId())) {
                     skipped++;
                     continue;
                 }
