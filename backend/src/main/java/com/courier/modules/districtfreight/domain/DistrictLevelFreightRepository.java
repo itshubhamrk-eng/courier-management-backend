@@ -6,8 +6,10 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,4 +47,22 @@ public interface DistrictLevelFreightRepository
                                        @Param("branchId") byte[] branchId,
                                        @Param("districtId") byte[] districtId,
                                        @Param("excludeId") byte[] excludeId);
+
+    /** Every district this branch already has a row for, soft-deleted rows included — the
+     *  unique key ignores {@code deleted}, so a copy must skip those districts too. */
+    default Set<UUID> findDistrictIdsIncludingDeleted(UUID companyId, UUID branchId) {
+        Set<UUID> ids = new HashSet<>();
+        for (byte[] raw : districtIdBytesIncludingDeleted(
+                TimeOrderedUuid.toBytes(companyId), TimeOrderedUuid.toBytes(branchId))) {
+            ids.add(TimeOrderedUuid.fromBytes(raw));
+        }
+        return ids;
+    }
+
+    @Query(value = """
+            SELECT district_id FROM district_level_freight
+            WHERE company_id = :companyId AND branch_id = :branchId
+            """, nativeQuery = true)
+    List<byte[]> districtIdBytesIncludingDeleted(@Param("companyId") byte[] companyId,
+                                                  @Param("branchId") byte[] branchId);
 }
