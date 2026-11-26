@@ -6,6 +6,12 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-26 - District Level Freight: copy rates from another branch (no migration)
+
+- `POST /api/v1/district-level-freight/copy` (`COMPANY_ADMIN`): body `{sourceBranchId, targetBranchIds[]}`; copies the source's ACTIVE rows to each target, one transaction, returns copied/skipped per target. A district the target already has a row for is skipped, never overwritten; the check includes soft-deleted rows (the unique key ignores `deleted`), via `DistrictLevelFreightRepository.findDistrictIdsIncludingDeleted`. A source district now inactive in the master is skipped too. New audit action `DISTRICT_FREIGHT_COPIED` (one entry per target).
+- UI: "Copy from branch" button on the District Level Freight list (shown with create permission) opens `district-freight-copy-dialog` (source select, multi-select targets that excludes the source, result chips). Verified live on dev DB; copy fixtures left on `PDP_TEST_01`.
+- Spec/plan: `docs/superpowers/specs|plans/2026-11-26-district-freight-copy-*`. Branch `feat/district-freight-copy`, not merged/deployed.
+
 ## 2026-11-25 - UI polish, print after booking, no AI at delivery (no migration)
 
 - **POD at delivery has no AI step.** `PodVerificationServiceImpl.verify()` no longer calls the provider; the upload is stored PENDING (score 0, `aiProvider` "none") for human approve/reject. Duplicate-photo hash still adds a reason. Bulk POD Upload still uses the AI. Delivery screen drops the score/AI grid and says "Upload POD".
