@@ -7,6 +7,8 @@
 
 ## Current Version
 
+**2026-11-26 — District freight copy-from-branch:** `POST /district-level-freight/copy` + list-page dialog; skips districts the target already has (soft-deleted included), never overwrites. See `CHANGELOG.md` 2026-11-26. Branch `feat/district-freight-copy`, not deployed.
+
 **2026-11-23 — branch monthly report on WhatsApp (V152, V153):** per-branch statement PDF sent to each BRANCH_MANAGER on the 1st (09:00 IST) and on demand from the Vendor Audit Report, which also gained wallet columns. New module `com.courier.modules.branchreport`. The Meta template `branch_monthly_report` must be created by hand in WhatsApp Manager. See `MEMORY/modules/communication.md`, `CHANGELOG.md` 2026-11-23. Branch `worktree-branch-monthly-report`, not deployed.
 
 **2026-11-18 — Legacy consignment import (V145/V146):** `/legacy-import` brings the old software's `Consignments_*.xls` in as history-only DELIVERED shipments (no wallet/commission/WhatsApp), existing consignments never touched, per-origin branch mapping. See `MEMORY/modules/legacy-import.md`, `CHANGELOG.md` 2026-11-18. Branch `feat/legacy-consignment-import`, not deployed.

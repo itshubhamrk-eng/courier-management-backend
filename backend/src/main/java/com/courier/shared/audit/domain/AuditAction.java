@@ -333,6 +333,7 @@ public enum AuditAction {
     DISTRICT_FREIGHT_DELETED,
     DISTRICT_FREIGHT_STATUS_CHANGED,
     DISTRICT_FREIGHT_IMPORTED,
+    DISTRICT_FREIGHT_COPIED,
 
     // --- Charge & Charge Settings: a standalone pricing/commission configuration module.
     // Configuration only — not wired into Shipment Booking/Commission/Pricing/Wallet yet;

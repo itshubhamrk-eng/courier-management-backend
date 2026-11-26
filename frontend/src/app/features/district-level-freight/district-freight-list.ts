@@ -17,6 +17,7 @@ import { downloadCsv } from '@shared/utils/csv-export.util';
 import { MasterDataService } from '@features/masters/master-data.service';
 import { DistrictFreightTable, DistrictFreightPerms, DistrictFreightAction } from './components/district-freight-table';
 import { DistrictFreightImportDialog } from './components/district-freight-import-dialog';
+import { DistrictFreightCopyDialog } from './components/district-freight-copy-dialog';
 import { DistrictLevelFreightService } from './district-level-freight.service';
 
 const WRITERS = [AppRole.COMPANY_ADMIN];
@@ -38,6 +39,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
       <header class="page__head">
         <div><h1 class="text-h1">District Level Freight</h1><p class="text-caption">Rate setup by From Station + District + weight slab — {{ page().totalElements }} in all.</p></div>
         <div class="page__actions">
+          @if (can().create) { <app-button variant="stroked" icon="content_copy" (pressed)="openCopy()">Copy from branch</app-button> }
           <app-button variant="stroked" icon="upload_file" (pressed)="openImport()">Import Excel</app-button>
           <app-button variant="stroked" icon="download" [loading]="exporting()" (pressed)="exportCsv()">Export</app-button>
           @if (can().create) { <app-button icon="add" (pressed)="create()">New Rate</app-button> }
@@ -151,6 +153,11 @@ export class DistrictFreightList implements OnInit {
 
   openImport(): void {
     this.dialog.open(DistrictFreightImportDialog, { autoFocus: false, panelClass: 'app-dialog' })
+      .afterClosed().subscribe((changed) => { if (changed) this.load(); });
+  }
+
+  openCopy(): void {
+    this.dialog.open(DistrictFreightCopyDialog, { autoFocus: false, panelClass: 'app-dialog' })
       .afterClosed().subscribe((changed) => { if (changed) this.load(); });
   }
 

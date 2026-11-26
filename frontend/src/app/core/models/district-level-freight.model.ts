@@ -90,6 +90,16 @@ export interface ImportRowResult {
   message: string | null;
 }
 
+/** Body of POST /district-level-freight/copy. */
+export interface CopyDistrictFreightRequest {
+  sourceBranchId: string;
+  targetBranchIds: string[];
+}
+
+export interface CopyDistrictFreightResponse {
+  targets: { branchId: string; branchCode: string; copied: number; skipped: number }[];
+}
+
 export interface ImportSummaryResponse {
   dryRun: boolean;
   totalDataRows: number;

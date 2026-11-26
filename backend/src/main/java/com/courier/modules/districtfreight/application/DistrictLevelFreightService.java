@@ -7,6 +7,7 @@ import com.courier.modules.districtfreight.domain.DistrictLevelFreightCriteria;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -33,4 +34,10 @@ public interface DistrictLevelFreightService {
     DistrictLevelFreight activate(UUID id);
 
     DistrictLevelFreight deactivate(UUID id);
+
+    /**
+     * Copies the source branch's ACTIVE rows to each target branch. A district the target
+     * already has a row for (soft-deleted included) is skipped, never overwritten.
+     */
+    CopyDistrictFreightResult copyFromBranch(UUID sourceBranchId, List<UUID> targetBranchIds);
 }

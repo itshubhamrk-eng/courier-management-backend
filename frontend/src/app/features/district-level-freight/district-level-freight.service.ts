@@ -4,7 +4,7 @@ import { API } from '@core/config/api-endpoints';
 import { PageQuery } from '@core/models/page.model';
 import {
   DistrictLevelFreight, CreateDistrictLevelFreightRequest, UpdateDistrictLevelFreightRequest,
-  ImportSummaryResponse
+  ImportSummaryResponse, CopyDistrictFreightRequest, CopyDistrictFreightResponse
 } from '@core/models/district-level-freight.model';
 
 /**
@@ -33,6 +33,11 @@ export class DistrictLevelFreightService {
   // ---- lifecycle (idempotent) -------------------------------------------------
   activate(id: string) { return this.api.patch<DistrictLevelFreight>(`${API.districtLevelFreight}/${id}/activate`, {}); }
   deactivate(id: string) { return this.api.patch<DistrictLevelFreight>(`${API.districtLevelFreight}/${id}/deactivate`, {}); }
+
+  // ---- copy rates from another branch ----------------------------------------
+  copy(body: CopyDistrictFreightRequest) {
+    return this.api.post<CopyDistrictFreightResponse>(API.districtLevelFreightCopy, body);
+  }
 
   // ---- Excel import -------------------------------------------------------------
   previewImport(file: File) {

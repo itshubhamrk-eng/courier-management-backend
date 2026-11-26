@@ -97,6 +97,7 @@ export const API = {
   districtLevelFreight: '/district-level-freight',
   districtLevelFreightImportPreview: '/district-level-freight/import/preview',
   districtLevelFreightImport: '/district-level-freight/import',
+  districtLevelFreightCopy: '/district-level-freight/copy',
   districtLevelFreightCalculate: '/district-level-freight/calculate',
   /** Legacy consignment import — history-only shipments from the old software's export. */
   legacyImportPreview: '/legacy-import/preview',

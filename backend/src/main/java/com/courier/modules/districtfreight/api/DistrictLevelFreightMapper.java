@@ -1,10 +1,12 @@
 package com.courier.modules.districtfreight.api;
 
+import com.courier.modules.districtfreight.api.dto.CopyDistrictLevelFreightResponse;
 import com.courier.modules.districtfreight.api.dto.CreateDistrictLevelFreightRequest;
 import com.courier.modules.districtfreight.api.dto.DistrictLevelFreightResponse;
 import com.courier.modules.districtfreight.api.dto.DistrictLevelFreightSearchRequest;
 import com.courier.modules.districtfreight.api.dto.FreightCalculationResponse;
 import com.courier.modules.districtfreight.api.dto.UpdateDistrictLevelFreightRequest;
+import com.courier.modules.districtfreight.application.CopyDistrictFreightResult;
 import com.courier.modules.districtfreight.application.FreightCalculationResult;
 import com.courier.modules.districtfreight.application.command.CreateDistrictLevelFreightCommand;
 import com.courier.modules.districtfreight.application.command.UpdateDistrictLevelFreightCommand;
@@ -48,6 +50,13 @@ public class DistrictLevelFreightMapper {
                 r.branchId(), r.districtId(), r.rate1To15(), r.rate16To50(), r.rate51To100(),
                 r.rate101To1000(), r.rate1001To1500(), r.rate1501To2000(),
                 r.odaApplicable(), r.odaCharge(), r.version());
+    }
+
+    public CopyDistrictLevelFreightResponse toResponse(CopyDistrictFreightResult r) {
+        return new CopyDistrictLevelFreightResponse(r.targets().stream()
+                .map(t -> new CopyDistrictLevelFreightResponse.Target(
+                        t.branchId(), t.branchCode(), t.copied(), t.skipped()))
+                .toList());
     }
 
     public DistrictLevelFreightCriteria toCriteria(DistrictLevelFreightSearchRequest r) {

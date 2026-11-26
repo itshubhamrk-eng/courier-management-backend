@@ -1,5 +1,7 @@
 package com.courier.modules.districtfreight.api;
 
+import com.courier.modules.districtfreight.api.dto.CopyDistrictLevelFreightRequest;
+import com.courier.modules.districtfreight.api.dto.CopyDistrictLevelFreightResponse;
 import com.courier.modules.districtfreight.api.dto.CreateDistrictLevelFreightRequest;
 import com.courier.modules.districtfreight.api.dto.DistrictLevelFreightResponse;
 import com.courier.modules.districtfreight.api.dto.DistrictLevelFreightSearchRequest;
@@ -100,6 +102,18 @@ public class DistrictLevelFreightController {
                 .created(UriComponentsBuilder.fromPath("/api/v1/district-level-freight/{id}")
                         .buildAndExpand(created.getId()).toUri())
                 .body(ApiResponse.success(mapper.toResponse(created), "District Level Freight rate created"));
+    }
+
+    @PostMapping("/copy")
+    @Operation(summary = "Copy rates from another branch",
+            description = "`COMPANY_ADMIN`. Copies the source branch's active rows to each target branch. "
+                    + "A district the target already has a row for (soft-deleted included) is skipped, "
+                    + "never overwritten. Returns copied/skipped counts per target.")
+    public ApiResponse<CopyDistrictLevelFreightResponse> copy(
+            @Valid @RequestBody CopyDistrictLevelFreightRequest request) {
+        return ApiResponse.success(mapper.toResponse(
+                service.copyFromBranch(request.sourceBranchId(), request.targetBranchIds())),
+                "District Level Freight rates copied");
     }
 
     @PutMapping("/{id}")

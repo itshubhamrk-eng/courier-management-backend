@@ -28,7 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -197,6 +200,71 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         auditService.record(AuditAction.DISTRICT_FREIGHT_STATUS_CHANGED, ENTITY, saved.getId(),
                 Map.of("status", "INACTIVE"));
         return saved;
+    }
+
+    // --------------------------------------------------------------------- copy
+
+    @Override
+    @Transactional
+    @PreAuthorize(WRITE)
+    public CopyDistrictFreightResult copyFromBranch(UUID sourceBranchId, List<UUID> targetBranchIds) {
+        UUID companyId = requireCompany();
+        if (targetBranchIds == null || targetBranchIds.isEmpty()) {
+            throw new BusinessRuleException("Choose at least one branch to copy the rates to.");
+        }
+        BranchLookupPort.BranchRef source = requireBranch(sourceBranchId, companyId);
+        Set<UUID> distinctTargets = new LinkedHashSet<>(targetBranchIds);
+        if (distinctTargets.contains(source.branchId())) {
+            throw new BusinessRuleException("The source branch cannot also be a target.");
+        }
+        // Validate every branch before writing anything.
+        List<BranchLookupPort.BranchRef> targets = new ArrayList<>();
+        for (UUID targetId : distinctTargets) {
+            targets.add(requireBranch(targetId, companyId));
+        }
+
+        List<DistrictLevelFreight> sourceRows = repository.findByCompanyIdAndBranchIdAndStatus(
+                companyId, source.branchId(), DistrictFreightStatus.ACTIVE);
+
+        // One batch lookup for every target: which source districts are still active.
+        Set<UUID> activeDistricts = new LinkedHashSet<>();
+        districtLookup.findDistricts(sourceRows.stream().map(DistrictLevelFreight::getDistrictId).toList())
+                .forEach((id, ref) -> {
+                    if (ref.active()) {
+                        activeDistricts.add(id);
+                    }
+                });
+
+        List<CopyDistrictFreightResult.TargetResult> results = new ArrayList<>();
+        for (BranchLookupPort.BranchRef target : targets) {
+            Set<UUID> existing = repository.findDistrictIdsIncludingDeleted(companyId, target.branchId());
+            int copied = 0;
+            int skipped = 0;
+            for (DistrictLevelFreight row : sourceRows) {
+                if (existing.contains(row.getDistrictId()) || !activeDistricts.contains(row.getDistrictId())) {
+                    skipped++;
+                    continue;
+                }
+                DistrictLevelFreight copy = new DistrictLevelFreight();
+                copy.setBranchId(target.branchId());
+                copy.setDistrictId(row.getDistrictId());
+                applyRates(copy, row.getRate1To15(), row.getRate16To50(), row.getRate51To100(),
+                        row.getRate101To1000(), row.getRate1001To1500(), row.getRate1501To2000(),
+                        row.isOdaApplicable(), row.getOdaCharge());
+                copy.setStatus(DistrictFreightStatus.ACTIVE);
+                copy.applyInvariants();
+                repository.save(copy);
+                copied++;
+            }
+            log.info("District Level Freight copied {} -> {} in company {} by {}: {} copied, {} skipped",
+                    source.branchCode(), target.branchCode(), companyId, currentActor(), copied, skipped);
+            auditService.record(AuditAction.DISTRICT_FREIGHT_COPIED, ENTITY, target.branchId(),
+                    Map.of("sourceBranchCode", source.branchCode(), "targetBranchCode", target.branchCode(),
+                            "copied", copied, "skipped", skipped));
+            results.add(new CopyDistrictFreightResult.TargetResult(
+                    target.branchId(), target.branchCode(), copied, skipped));
+        }
+        return new CopyDistrictFreightResult(results);
     }
 
     // -------------------------------------------------------------------- helpers
