@@ -314,4 +314,85 @@ class DistrictLevelFreightExcelImportServiceTest {
 
         assertThat(result.rows()).extracting("outcome").containsExactly("WOULD_UPDATE");
     }
+
+    // ------------------------------------------------------- branches picked in the dialog
+
+    private static final UUID OTHER_BRANCH = UUID.randomUUID();
+    private static final BranchLookupPort.BranchRef SATARA_BRANCH =
+            new BranchLookupPort.BranchRef(OTHER_BRANCH, "SATARA", "Satara", true);
+
+    /** District + six rates only — no From Station column at all. */
+    private MockMultipartFile sheetWithoutStation(String... districts) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet();
+            Row header = sheet.createRow(0);
+            List<String> headers = List.of("District", "1KG TO 15 KG", "16 KG TO 50KG", "51 KG TO 100 KG",
+                    "101 KG TO 1000 KG", "1001 KG TO 1500 KG", "1501 KG TO 2000KG");
+            for (int i = 0; i < headers.size(); i++) {
+                header.createCell(i).setCellValue(headers.get(i));
+            }
+            int r = 1;
+            for (String district : districts) {
+                Row row = sheet.createRow(r++);
+                row.createCell(0).setCellValue(district);
+                double[] rates = {10, 8, 7.5, 6, 5.5, 5};
+                for (int i = 0; i < rates.length; i++) {
+                    row.createCell(1 + i).setCellValue(rates[i]);
+                }
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return new MockMultipartFile("file", "rates.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+        }
+    }
+
+    @Test
+    @DisplayName("picked branches: every row applies to every picked branch, and the sheet has no From Station column")
+    void pickedBranchesReceiveEveryRow() throws IOException {
+        when(branchLookup.findBranch(eq(BRANCH), eq(COMPANY))).thenReturn(Optional.of(KARAD));
+        when(branchLookup.findBranch(eq(OTHER_BRANCH), eq(COMPANY))).thenReturn(Optional.of(SATARA_BRANCH));
+
+        ImportSummaryResponse result = importService.preview(
+                sheetWithoutStation("PUNE", "SATARA"), List.of(BRANCH, OTHER_BRANCH));
+
+        assertThat(result.totalDataRows()).isEqualTo(2);
+        assertThat(result.succeeded()).isEqualTo(4); // 2 rows x 2 picked branches
+        assertThat(result.failed()).isZero();
+        assertThat(result.rows()).extracting("fromStation").containsExactly("Karad", "Satara", "Karad", "Satara");
+        org.mockito.Mockito.verify(branchLookup, org.mockito.Mockito.never()).findBranchesByLabel(any(), any());
+    }
+
+    @Test
+    @DisplayName("picked branches: the sheet's own From Station column is ignored")
+    void pickedBranchesOverrideSheetColumn() throws IOException {
+        when(branchLookup.findBranch(eq(OTHER_BRANCH), eq(COMPANY))).thenReturn(Optional.of(SATARA_BRANCH));
+
+        ImportSummaryResponse result = importService.preview(new MockMultipartFile("file", "KARAD RATE.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buildRealWorldSheet()),
+                List.of(OTHER_BRANCH));
+
+        assertThat(result.succeeded()).isEqualTo(2);
+        assertThat(result.rows()).extracting("fromStation").containsExactly("Satara", "Satara");
+    }
+
+    @Test
+    @DisplayName("no picked branch: a sheet without a From Station column is still refused")
+    void noPickedBranchStillNeedsStationColumn() throws IOException {
+        assertThatThrownBy(() -> importService.preview(sheetWithoutStation("PUNE"), List.of()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("missing expected column");
+    }
+
+    @Test
+    @DisplayName("picked branches: an unknown or inactive branch refuses the whole import")
+    void pickedBranchMustBeUsable() throws IOException {
+        when(branchLookup.findBranch(eq(OTHER_BRANCH), eq(COMPANY)))
+                .thenReturn(Optional.of(new BranchLookupPort.BranchRef(OTHER_BRANCH, "SATARA", "Satara", false)));
+
+        assertThatThrownBy(() -> importService.preview(sheetWithoutStation("PUNE"), List.of(OTHER_BRANCH)))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("inactive");
+        assertThatThrownBy(() -> importService.preview(sheetWithoutStation("PUNE"), List.of(UUID.randomUUID())))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("No such branch");
+    }
 }

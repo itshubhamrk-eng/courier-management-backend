@@ -1,8 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { UiButton } from '@shared/components/ui-button/ui-button';
+import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
+import { MasterDataService } from '@features/masters/master-data.service';
 import { NotificationService } from '@core/services/notification.service';
 import { ImportSummaryResponse } from '@core/models/district-level-freight.model';
 import { DistrictLevelFreightService } from '../district-level-freight.service';
@@ -10,8 +14,10 @@ import { DistrictLevelFreightService } from '../district-level-freight.service';
 type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
 
 /**
- * Excel import: pick a file, preview it (parses + validates, writes nothing), then commit.
- * Expected columns: From Station, District, 1KG TO 15 KG, 16 KG TO 50KG, 51 KG TO 100 KG,
+ * Excel import: pick the branch(es) the rates are for, pick a file, preview it (parses +
+ * validates, writes nothing), then commit. Every row applies to every picked branch, so the
+ * sheet needs no From Station column (it is ignored if present).
+ * Expected columns: District and/or State, 1KG TO 15 KG, 16 KG TO 50KG, 51 KG TO 100 KG,
  * 101 KG TO 1000 KG, 1001 KG TO 1500 KG, 1501 KG TO 2000KG. Blank rows and the ODA note row
  * are ignored by the backend, not reported here. An existing From Station + District
  * combination is updated (upsert), never rejected as a duplicate — only a combination
@@ -21,13 +27,15 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
   selector: 'app-district-freight-import-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatDialogModule, MatIconModule, UiButton],
+  imports: [ReactiveFormsModule, MatDialogModule, MatIconModule, UiButton, UiSelect],
   template: `
     <div class="imp">
       <h2 class="text-h2">Import District Level Freight</h2>
-      <p class="text-caption">Columns: From Station, District and/or State (fill one per row — a State row applies when a district has no rate of its own), and the six weight-slab rate columns. Blank rows and the ODA note row are ignored automatically.</p>
+      <p class="text-caption">Pick the branches these rates are for — every row below is created for each of them, so the sheet needs no From Station column. Columns: District and/or State (fill one per row — a State row applies when a district has no rate of its own), and the six weight-slab rate columns. Blank rows and the ODA note row are ignored automatically.</p>
 
       @if (stage() === 'pick' || stage() === 'previewing') {
+        <app-select [control]="branches" label="Create rates for (branches)" [options]="branchOptions()" [multiple]="true"
+                    placeholder="Select one or more branches" />
         <div class="picker">
           <button type="button" class="picker__btn" (click)="fileInput.click()">
             <mat-icon>upload_file</mat-icon> {{ file() ? file()!.name : 'Choose Excel file (.xlsx)' }}
@@ -45,7 +53,7 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
         </div>
         <div class="rows app-scroll">
           <table class="rtbl">
-            <thead><tr><th>Row</th><th>From Station</th><th>District / State</th><th>Outcome</th><th>Message</th></tr></thead>
+            <thead><tr><th>Row</th><th>Branch</th><th>District / State</th><th>Outcome</th><th>Message</th></tr></thead>
             <tbody>
               @for (r of s.rows; track r.rowNumber) {
                 <tr [class.err]="r.outcome === 'ERROR'">
@@ -64,7 +72,7 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
       <div class="imp__actions">
         <app-button variant="stroked" (pressed)="close()">{{ stage() === 'imported' ? 'Done' : 'Cancel' }}</app-button>
         @if (stage() === 'pick' || stage() === 'previewing') {
-          <app-button icon="visibility" [disabled]="!file()" [loading]="stage() === 'previewing'" (pressed)="preview()">Preview</app-button>
+          <app-button icon="visibility" [disabled]="!canPreview()" [loading]="stage() === 'previewing'" (pressed)="preview()">Preview</app-button>
         }
         @if (stage() === 'previewed') {
           <app-button icon="cloud_upload" [disabled]="!summary() || summary()!.totalDataRows === 0" [loading]="stage() === 'importing'" (pressed)="commit()">Import</app-button>
@@ -95,14 +103,23 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
     .imp__actions { display:flex; justify-content:flex-end; gap:10px; }
   `]
 })
-export class DistrictFreightImportDialog {
+export class DistrictFreightImportDialog implements OnInit {
   readonly ref = inject(MatDialogRef<DistrictFreightImportDialog>);
   private readonly service = inject(DistrictLevelFreightService);
   private readonly notify = inject(NotificationService);
+  private readonly masters = inject(MasterDataService);
 
   readonly stage = signal<Stage>('pick');
   readonly file = signal<File | null>(null);
   readonly summary = signal<ImportSummaryResponse | null>(null);
+  readonly branches = new FormControl<string[]>([], { nonNullable: true });
+  readonly branchOptions = signal<SelectOption[]>([]);
+  private readonly pickedBranches = toSignal(this.branches.valueChanges, { initialValue: this.branches.value });
+  readonly canPreview = computed(() => !!this.file() && this.pickedBranches().length > 0);
+
+  ngOnInit(): void {
+    this.masters.options('branches').subscribe((o) => this.branchOptions.set(o));
+  }
 
   onFile(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -112,9 +129,9 @@ export class DistrictFreightImportDialog {
 
   preview(): void {
     const file = this.file();
-    if (!file) return;
+    if (!file || !this.canPreview()) return;
     this.stage.set('previewing');
-    this.service.previewImport(file).subscribe({
+    this.service.previewImport(file, this.branches.value).subscribe({
       next: (s) => { this.summary.set(s); this.stage.set('previewed'); },
       error: (e: HttpErrorResponse) => {
         this.stage.set('pick');
@@ -127,7 +144,7 @@ export class DistrictFreightImportDialog {
     const file = this.file();
     if (!file) return;
     this.stage.set('importing');
-    this.service.commitImport(file).subscribe({
+    this.service.commitImport(file, this.branches.value).subscribe({
       next: (s) => {
         this.summary.set(s);
         this.stage.set('imported');

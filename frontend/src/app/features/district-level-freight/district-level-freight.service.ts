@@ -40,15 +40,18 @@ export class DistrictLevelFreightService {
   }
 
   // ---- Excel import -------------------------------------------------------------
-  previewImport(file: File) {
+  /** `branchIds`: the branches the rates are created for — every sheet row applies to each. */
+  previewImport(file: File, branchIds: string[] = []) {
     const body = new FormData();
     body.append('file', file);
+    branchIds.forEach((id) => body.append('branchId', id));
     return this.api.post<ImportSummaryResponse>(API.districtLevelFreightImportPreview, body);
   }
 
-  commitImport(file: File) {
+  commitImport(file: File, branchIds: string[] = []) {
     const body = new FormData();
     body.append('file', file);
+    branchIds.forEach((id) => body.append('branchId', id));
     return this.api.post<ImportSummaryResponse>(API.districtLevelFreightImport, body);
   }
 }

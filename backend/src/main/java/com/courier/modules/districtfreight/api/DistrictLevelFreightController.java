@@ -171,9 +171,13 @@ public class DistrictLevelFreightController {
             + "and validates the sheet — From Station, District, and the six weight-slab "
             + "rate columns — without writing anything. Blank rows and the ODA note row "
             + "are ignored, not reported. Each row is classified WOULD_CREATE, "
-            + "WOULD_UPDATE (an existing From Station + District combination) or ERROR.")
-    public ApiResponse<ImportSummaryResponse> previewImport(@RequestParam("file") MultipartFile file) {
-        return ApiResponse.success(importService.preview(file), "Import preview ready");
+            + "WOULD_UPDATE (an existing From Station + District combination) or ERROR. "
+            + "Optional repeated `branchId`: the branches to create the rates for — every "
+            + "row applies to each, and the sheet's From Station column becomes optional and ignored.")
+    public ApiResponse<ImportSummaryResponse> previewImport(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "branchId", required = false) java.util.List<java.util.UUID> branchIds) {
+        return ApiResponse.success(importService.preview(file, branchIds), "Import preview ready");
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -182,8 +186,10 @@ public class DistrictLevelFreightController {
             + "Station + District combination is created, an existing one is updated "
             + "(upsert). Each row commits in its own transaction, so one bad row does not "
             + "block the rest.")
-    public ApiResponse<ImportSummaryResponse> commitImport(@RequestParam("file") MultipartFile file) {
-        ImportSummaryResponse result = importService.commit(file);
+    public ApiResponse<ImportSummaryResponse> commitImport(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "branchId", required = false) java.util.List<java.util.UUID> branchIds) {
+        ImportSummaryResponse result = importService.commit(file, branchIds);
         return ApiResponse.success(result, "Import complete: %d succeeded, %d failed"
                 .formatted(result.succeeded(), result.failed()));
     }

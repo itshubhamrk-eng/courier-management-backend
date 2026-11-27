@@ -97,20 +97,37 @@ public class DistrictLevelFreightExcelImportService {
     @Transactional(readOnly = true)
     @PreAuthorize(WRITE)
     public ImportSummaryResponse preview(MultipartFile file) {
-        return run(file, true);
+        return run(file, List.of(), true);
+    }
+
+    /** {@code branchIds}: the branches picked in the dialog. When given, every row applies to
+     *  every one of them and the sheet's own From Station column is ignored (and optional). */
+    @Transactional(readOnly = true)
+    @PreAuthorize(WRITE)
+    public ImportSummaryResponse preview(MultipartFile file, List<UUID> branchIds) {
+        return run(file, branchIds, true);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PreAuthorize(WRITE)
     public ImportSummaryResponse commit(MultipartFile file) {
-        return run(file, false);
+        return run(file, List.of(), false);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @PreAuthorize(WRITE)
+    public ImportSummaryResponse commit(MultipartFile file, List<UUID> branchIds) {
+        return run(file, branchIds, false);
     }
 
     // -------------------------------------------------------------------- pipeline
 
-    private ImportSummaryResponse run(MultipartFile file, boolean dryRun) {
+    private ImportSummaryResponse run(MultipartFile file, List<UUID> branchIds, boolean dryRun) {
         UUID companyId = CompanyContext.requireCompanyId();
-        List<ParsedRow> parsed = parse(file);
+        List<BranchLookupPort.BranchRef> picked = pickedBranches(branchIds, companyId);
+        List<ParsedRow> parsed = parse(file, !picked.isEmpty());
+        String pickedLabel = picked.stream().map(BranchLookupPort.BranchRef::branchName)
+                .collect(java.util.stream.Collectors.joining(", "));
 
         List<ImportRowResult> results = new ArrayList<>();
         Set<String> seenInFile = new HashSet<>();
@@ -122,7 +139,8 @@ public class DistrictLevelFreightExcelImportService {
                 // Branch name is not unique — a From Station label matching it by name (not
                 // code) can resolve to more than one branch. The row applies to every one of
                 // them, since the sheet has no other way to tell them apart.
-                List<BranchLookupPort.BranchRef> branches = branchLookup.findBranchesByLabel(row.branchLabel, companyId);
+                List<BranchLookupPort.BranchRef> branches = !picked.isEmpty() ? picked
+                        : branchLookup.findBranchesByLabel(row.branchLabel, companyId);
                 if (branches.isEmpty()) {
                     throw new BusinessRuleException(
                             "No branch matches From Station \"" + row.branchLabel + "\".");
@@ -184,8 +202,8 @@ public class DistrictLevelFreightExcelImportService {
                     }
                 }
             } catch (BusinessRuleException e) {
-                results.add(new ImportRowResult(row.rowNumber, row.branchLabel, row.districtLabel,
-                        row.stateLabel.isBlank() ? null : row.stateLabel, "ERROR", e.getMessage()));
+                results.add(new ImportRowResult(row.rowNumber, picked.isEmpty() ? row.branchLabel : pickedLabel,
+                        row.districtLabel, row.stateLabel.isBlank() ? null : row.stateLabel, "ERROR", e.getMessage()));
                 failed++;
             }
         }
@@ -193,6 +211,23 @@ public class DistrictLevelFreightExcelImportService {
         log.info("District Level Freight Excel import ({}) in company {}: {} row(s), {} ok, {} failed",
                 dryRun ? "preview" : "commit", companyId, parsed.size(), succeeded, failed);
         return new ImportSummaryResponse(dryRun, parsed.size(), succeeded, failed, results);
+    }
+
+    /** The branches chosen in the dialog, each checked to exist in this company and be active. */
+    private List<BranchLookupPort.BranchRef> pickedBranches(List<UUID> branchIds, UUID companyId) {
+        if (branchIds == null || branchIds.isEmpty()) {
+            return List.of();
+        }
+        List<BranchLookupPort.BranchRef> picked = new ArrayList<>();
+        for (UUID id : new java.util.LinkedHashSet<>(branchIds)) {
+            BranchLookupPort.BranchRef branch = branchLookup.findBranch(id, companyId)
+                    .orElseThrow(() -> new BusinessRuleException("No such branch: " + id));
+            if (!branch.active()) {
+                throw new BusinessRuleException("Branch \"" + branch.branchName() + "\" is inactive.");
+            }
+            picked.add(branch);
+        }
+        return picked;
     }
 
     private String applyRow(ParsedRow row, UUID branchId, UUID districtId, UUID stateId,
@@ -225,14 +260,14 @@ public class DistrictLevelFreightExcelImportService {
             BigDecimal odaCharge) {
     }
 
-    private List<ParsedRow> parse(MultipartFile file) {
+    private List<ParsedRow> parse(MultipartFile file, boolean branchPicked) {
         if (file == null || file.isEmpty()) {
             throw new BusinessRuleException("Choose an Excel file to import.");
         }
         DataFormatter formatter = new DataFormatter();
         try (InputStream in = file.getInputStream(); Workbook workbook = WorkbookFactory.create(in)) {
             Sheet sheet = workbook.getSheetAt(0);
-            Map<Integer, String> columns = readHeader(sheet, formatter);
+            Map<Integer, String> columns = readHeader(sheet, formatter, branchPicked);
 
             List<ParsedRow> rows = new ArrayList<>();
             for (int r = sheet.getFirstRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
@@ -246,7 +281,7 @@ public class DistrictLevelFreightExcelImportService {
                 String branchLabel = cells.getOrDefault("branch", "");
                 String districtLabel = cells.getOrDefault("district", "");
                 String stateLabel = cells.getOrDefault("state", "");
-                if (branchLabel.isBlank()) {
+                if (!branchPicked && branchLabel.isBlank()) {
                     continue; // blank spacer row or a note row with no station
                 }
 
@@ -276,7 +311,7 @@ public class DistrictLevelFreightExcelImportService {
         }
     }
 
-    private Map<Integer, String> readHeader(Sheet sheet, DataFormatter formatter) {
+    private Map<Integer, String> readHeader(Sheet sheet, DataFormatter formatter, boolean branchPicked) {
         Row header = sheet.getRow(sheet.getFirstRowNum());
         if (header == null) {
             throw new BusinessRuleException("The sheet has no header row.");
@@ -290,7 +325,8 @@ public class DistrictLevelFreightExcelImportService {
             }
         }
         Set<String> found = new HashSet<>(columns.values());
-        List<String> missing = REQUIRED_COLUMNS.stream().filter(c -> !found.contains(c)).toList();
+        List<String> missing = REQUIRED_COLUMNS.stream()
+                .filter(c -> !found.contains(c) && !(branchPicked && c.equals("branch"))).toList();
         if (!found.contains("district") && !found.contains("state")) {
             throw new BusinessRuleException(
                     "The sheet needs a District column, a State column, or both. Expected From Station, "
