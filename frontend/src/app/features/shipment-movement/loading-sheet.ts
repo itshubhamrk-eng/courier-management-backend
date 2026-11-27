@@ -54,6 +54,7 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
         <div class="mode-toggle">
           <app-button [variant]="mode() === 'hub' ? 'primary' : 'stroked'" (pressed)="setMode('hub')">Send to Hub</app-button>
           <app-button [variant]="mode() === 'branch' ? 'primary' : 'stroked'" (pressed)="setMode('branch')">Send to Branch</app-button>
+          <app-button [variant]="mode() === 'vendor' ? 'primary' : 'stroked'" (pressed)="setMode('vendor')">Send to Vendor</app-button>
           @if (atHub()) {
             <app-button [variant]="mode() === 'lane' ? 'primary' : 'stroked'" (pressed)="setMode('lane')">By Delivery Branch (crossing hub)</app-button>
           }
@@ -65,6 +66,10 @@ import { WarehouseIllustration } from '@shared/components/illustrations/warehous
             @else if (!assignedHubId()) { <p class="text-caption">No hub is assigned to your branch — pick one here, or assign one under Masters › Assign Hub to Branch.</p> }
             @else if (!assignedHubUsable()) { <p class="text-caption">Your branch's assigned hub is inactive — pick another hub here, or reassign under Masters › Assign Hub to Branch.</p> }
             <p class="text-caption">Pick a hub, then select the shipments to send. They go to the hub first; the hub scans in the Manifest Finalization, then creates a Manifest Creation or DRS from there.</p>
+          } @else if (mode() === 'vendor') {
+            <app-autocomplete [control]="c('deliveryBranchId')" label="Vendor" [options]="vendorOptions()" placeholder="Search vendor…" />
+            @if (!vendorOptions().length) { <p class="empty">No active vendor exists yet.</p> }
+            <p class="text-caption">Pick a vendor, then select the shipments at your branch to hand to it. The vendor in-scans the manifest, delivers with a POD photo, and TO-PAY freight is debited from its wallet at in-scan.</p>
           } @else if (mode() === 'branch') {
             <app-autocomplete [control]="cityControl" label="City" [options]="branchCityOptions()" placeholder="Search city…" />
             @if (cityValue()) {
@@ -180,9 +185,12 @@ export class LoadingSheet implements OnInit {
 
   /** 'hub' (default) = pick a hub, then the shipments; 'branch' = pick a branch, then the shipments; 'lane' = the old branch-first flow, still needed for a crossing hub's own
    *  shipments (already carrying a real next-stop branch) or any legacy shipment. */
-  readonly mode = signal<'hub' | 'branch' | 'lane'>('hub');
+  readonly mode = signal<'hub' | 'branch' | 'vendor' | 'lane'>('hub');
   readonly assignedHubId = signal<string | null>(null);
   readonly hubIds = signal<Set<string>>(new Set());
+  readonly vendorIds = signal<Set<string>>(new Set());
+  protected readonly vendorOptions = computed<SelectOption[]>(() =>
+    this.allBranchOptions().filter((o) => this.vendorIds().has(o.value) && o.value !== this.myBranchId));
   protected readonly hubOptions = computed<SelectOption[]>(() =>
     this.allBranchOptions().filter((o) => this.hubIds().has(o.value) && o.value !== this.myBranchId));
 
@@ -241,6 +249,7 @@ export class LoadingSheet implements OnInit {
     this.masterData.branchDirectory().subscribe((list) => {
       this.branchCities.set(new Map(list.filter((b) => !!b.city).map((b) => [b.id, b.city!.trim()])));
       this.hubIds.set(new Set(list.filter((b) => b.branchType === 'HUB').map((b) => b.id)));
+      this.vendorIds.set(new Set(list.filter((b) => b.branchType === 'PICKUP_DELIVERY_PARTNER').map((b) => b.id)));
       this.assignedHubId.set(list.find((b) => b.id === this.myBranchId)?.assignedHubId ?? null);
       this.branchNames.set(new Map(list.map((b) =>
         [b.id, `${b.branchName} (${b.branchCode})${b.city ? ' — ' + b.city : ''}`])));
@@ -265,7 +274,7 @@ export class LoadingSheet implements OnInit {
     this.loadEligibleDeliveryBranches();
   }
 
-  protected setMode(mode: 'hub' | 'branch' | 'lane'): void {
+  protected setMode(mode: 'hub' | 'branch' | 'vendor' | 'lane'): void {
     this.mode.set(mode);
     this.cityControl.reset(null, { emitEvent: false });
     this.cityValue.set(null);
@@ -403,7 +412,7 @@ export class LoadingSheet implements OnInit {
     const v = this.createForm.getRawValue();
     const mode = this.mode();
     if (!v.deliveryBranchId) {
-      this.notify.error(mode === 'hub' ? 'Pick a hub first.' : 'Pick a delivery branch first.');
+      this.notify.error(mode === 'hub' ? 'Pick a hub first.' : mode === 'vendor' ? 'Pick a vendor first.' : 'Pick a delivery branch first.');
       return;
     }
     this.creating.set(true);

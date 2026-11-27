@@ -2286,19 +2286,8 @@ public class ShipmentServiceImpl implements ShipmentService {
             int totalQty = itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
                     .mapToInt(ShipmentItem::getQuantity).sum();
             com.courier.modules.company.domain.Branch deliveryBranch = branchService.getById(shipment.getDeliveryBranchId());
-            if (deliveryBranch.getBranchType() == com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER) {
-                // A partner is paid from its own delivery rate card (pdp module), not the branch
-                // DRS / delivery-weight commission fields — publish for it and skip those two.
-                eventPublisher.publishEvent(new ShipmentEvent.PartnerDeliveryEarned(
-                        shipment.getId(), companyId, shipment.getDeliveryBranchId(), shipment.getShipmentNumber(),
-                        shipment.getDeliveryPincode(),
-                        shipment.getChargeableWeight() != null && shipment.getChargeableWeight().signum() > 0
-                                ? shipment.getChargeableWeight() : shipment.getActualWeight(),
-                        Instant.now()));
-                shipment.setCommissionCredited(true);
-                shipmentRepository.save(shipment);
-                return;
-            }
+            // A Vendor is a delivery branch like any other here: its own DRS charge, delivery
+            // commission and ODA amount are credited to its wallet (no separate rate-card accrual).
             BigDecimal drsCharge = deliveryBranch.getDrsChargePerQty().multiply(BigDecimal.valueOf(totalQty));
             if (drsCharge.compareTo(BigDecimal.ZERO) > 0) {
                 eventPublisher.publishEvent(new ShipmentEvent.DrsChargeApplicable(

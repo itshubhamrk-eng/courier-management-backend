@@ -858,7 +858,11 @@ class ShipmentMovementServiceImplTest {
         when(deliveryAssignmentRepository.save(any(DeliveryAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(paymentModeService.getById(shipment.getPaymentModeId())).thenReturn(paymentMode(true));
         when(branchService.getById(shipment.getDeliveryBranchId())).thenReturn(Branch.builder()
-                .branchCode("PDP-1").branchType(com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER).build());
+                .branchCode("PDP-1").branchType(com.courier.modules.company.domain.BranchType.PICKUP_DELIVERY_PARTNER)
+                .drsChargePerQty(new BigDecimal("1.50")).deliveryCommissionRatePerKg(new BigDecimal("3.00"))
+                .deliveryCommissionMinWeightKg(new BigDecimal("10")).build());
+        when(itemRepository.findAllByShipmentIdWithinCompany(shipment.getId(), COMPANY))
+                .thenReturn(List.of(ShipmentItem.builder().quantity(2).build()));
         return shipment;
     }
 
@@ -874,23 +878,23 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
-    @DisplayName("a partner delivery with a POD photo and an approved POD earns via the partner event, "
-            + "not the branch DRS / weight commission")
-    void partnerDeliveryPublishesPartnerEarning() {
+    @DisplayName("a vendor delivery with a POD photo and an approved POD earns the branch DRS charge and "
+            + "weight commission into its wallet, like any delivery branch, and no rate-card earning")
+    void partnerDeliveryCreditsBranchCommissions() {
         Shipment shipment = partnerDelivery(true);
 
         Shipment delivered = service.deliver(shipment.getId(),
                 new ShipmentService.DeliverCommand("Rahul Verma", null, null, null, "https://pod/photo.jpg"));
 
         assertThat(delivered.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
-        verify(eventPublisher).publishEvent(any(ShipmentEvent.PartnerDeliveryEarned.class));
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
-        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
+        verify(eventPublisher, never()).publishEvent(any(ShipmentEvent.PartnerDeliveryEarned.class));
+        verify(eventPublisher).publishEvent(any(ShipmentEvent.DrsChargeApplicable.class));
+        verify(eventPublisher).publishEvent(any(ShipmentEvent.DeliveryWeightCommissionApplicable.class));
         assertThat(delivered.isCommissionCredited()).isTrue();
     }
 
     @Test
-    @DisplayName("a partner delivery whose POD is not approved yet earns nothing until approval")
+    @DisplayName("a vendor delivery whose POD is not approved yet credits nothing until approval")
     void partnerDeliveryWaitsForPodApproval() {
         Shipment shipment = partnerDelivery(false);
 

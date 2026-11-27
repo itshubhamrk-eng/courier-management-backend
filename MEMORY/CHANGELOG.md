@@ -6,6 +6,12 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-28 - Vendor gets branch delivery credits; Manifest "Send to Vendor" (no migration)
+
+- A vendor delivery (delivered + POD approved) now credits the vendor's wallet with its own DRS charge, delivery commission per kg and ODA amount, like any delivery branch. The rate-card `PartnerDeliveryEarned` accrual is no longer published for deliveries (pickup earnings unchanged; the event class and listener remain, unused).
+- Manifest Creation gained a "Send to Vendor" mode: vendor-only picker, same shipment picker as Send to Hub, manifest's delivery branch = the vendor. Vendor in-scan already debits TO_PAY freight from its wallet.
+- Design: `docs/superpowers/specs/2026-11-27-manifest-send-to-vendor-design.md`. Generate DRS vendor option not built.
+
 ## 2026-11-27 - District Level Freight: State-level fallback rate (V156)
 
 - A rate row is keyed by a District **or** a State (`district_id` nullable, new `state_id`, CHECK exactly one; unique per branch+state). Booking resolves customer zone -> ACTIVE district row -> ACTIVE state row of the district's state -> refuse. An INACTIVE district row falls through to the state row (user-approved call).
