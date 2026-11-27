@@ -29,7 +29,7 @@ import { companyAddressLine, ConsignmentPrintData } from './consignment-print.ut
 import { ShipmentPrintDataService } from './shipment-print-data.service';
 import { printShipmentCopies } from './shipment-copy-print.util';
 import { ShipmentLabelsDialog } from './shipment-labels-dialog';
-import { ShipmentLabelData } from './shipment-label-print.util';
+import { LabelSize, ShipmentLabelData } from './shipment-label-print.util';
 import { emptyPage } from '@core/models/page.model';
 import { TicketService } from '@core/services/ticket.service';
 import { Ticket } from '@core/models/ticket.model';
@@ -629,6 +629,8 @@ export class ShipmentView implements OnInit {
   /** `?labels=1` (from the Track page's Print Labels): open the labels dialog once the shipment
    *  and the three masters the label text needs (branch/service/payment names) have all arrived. */
   private wantLabels = false;
+  /** `?labels=mobile` (Track page's Thermal Label Print): open the dialog on the 2x3in size. */
+  private wantMobileLabels = false;
   /** `?copy=1` (Track page's Shipment Copy): same wait, plus the charge record. */
   private wantCopy = false;
   private labelsWaiting = 4;
@@ -639,7 +641,9 @@ export class ShipmentView implements OnInit {
       if (this.wantLabels) {
         this.wantLabels = false;
         this.router.navigate([], { queryParams: { labels: null }, queryParamsHandling: 'merge', replaceUrl: true });
-        this.printLabels();
+        const mobile = this.wantMobileLabels;
+        this.wantMobileLabels = false;
+        this.printLabels(mobile ? 'mobile' : undefined);
       } else {
         this.wantCopy = false;
         this.router.navigate([], { queryParams: { copy: null }, queryParamsHandling: 'merge', replaceUrl: true });
@@ -651,7 +655,9 @@ export class ShipmentView implements OnInit {
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
-    this.wantLabels = this.route.snapshot.queryParamMap.get('labels') === '1';
+    const labelsParam = this.route.snapshot.queryParamMap.get('labels');
+    this.wantLabels = labelsParam === '1' || labelsParam === 'mobile';
+    this.wantMobileLabels = labelsParam === 'mobile';
     this.wantCopy = this.route.snapshot.queryParamMap.get('copy') === '1';
     if (this.wantCopy) this.labelsWaiting = 5;
     // A failed master still counts as "arrived" so the dialog opens (names fall back) instead of silently never opening.
@@ -787,10 +793,10 @@ export class ShipmentView implements OnInit {
   }
 
   /** One label per package (`numberOfPackages`), all under this shipment's single AWB. */
-  printLabels(): void {
+  printLabels(initialSize?: LabelSize): void {
     const s = this.shipment()!;
     this.companyProfile.get().pipe(catchError(() => of(null))).subscribe((company) => {
-      const data: ShipmentLabelData = {
+      const data: ShipmentLabelData & { initialSize?: LabelSize } = {
         companyName: company?.companyName ?? this.auth.companyName() ?? 'Courier SaaS',
         companyLogo: company?.logo ?? this.auth.companyLogo(),
         trackingNumber: s.trackingNumber,
@@ -804,7 +810,8 @@ export class ShipmentView implements OnInit {
         paymentModeLabel: this.paymentModeLabel(s.paymentModeId),
         serviceTypeLabel: this.serviceTypeLabel(s.serviceTypeId),
         routing: s.fromCity && s.toCity ? `${s.fromCity} → ${s.toCity}` : null,
-        numberOfPackages: Math.max(1, s.numberOfPackages || 1)
+        numberOfPackages: Math.max(1, s.numberOfPackages || 1),
+        initialSize
       };
       this.matDialog.open(ShipmentLabelsDialog, { data, width: '860px', maxWidth: '95vw', autoFocus: false, panelClass: 'app-dialog' });
     });

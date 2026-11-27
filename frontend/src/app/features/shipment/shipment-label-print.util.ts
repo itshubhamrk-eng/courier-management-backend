@@ -90,6 +90,40 @@ function label(d: ShipmentLabelData, n: number): string {
   </section>`;
 }
 
+/** Compact label for 2x3in rolls: only what a sorter needs at a glance. The barcode/QR still
+ *  encode the package id, so hub scanning resolves the shipment exactly as on the big label. */
+function mobileLabel(d: ShipmentLabelData, n: number): string {
+  const pkgId = packageId(d.trackingNumber, n);
+  return `
+  <section class="label m">
+    <div class="m-top"><span class="m-brand">${esc(d.companyName)}</span><span class="m-pkg">${n}/${d.numberOfPackages}</span></div>
+    <div class="m-awb">${esc(d.trackingNumber)}</div>
+    <div class="m-bar">${barcodeSvg(pkgId)}<div class="m-pid">${esc(pkgId)}</div></div>
+    <div class="m-dest">${esc(d.destinationLabel)} ${d.destinationPincode ? esc(d.destinationPincode) : ''}</div>
+    <div class="m-to"><b>${esc(d.receiverName)}</b> ${esc(d.receiverContact)}</div>
+    <div class="m-addr">${esc(d.receiverAddress)}</div>
+    <div class="m-pay">${esc(d.paymentModeLabel)}</div>
+  </section>`;
+}
+
+/** 2x3in portrait page. Overrides the base `.label` box (100x150mm) with the page size. */
+const MOBILE_CSS = `
+  @page{size:50.8mm 76.2mm;margin:0}
+  .label.m{width:50.8mm;height:76.2mm;border:0;padding:1.5mm;gap:.8mm;margin:0}
+  .m-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:.5mm}
+  .m-brand{font-size:7pt;font-weight:800;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:34mm}
+  .m-pkg{font-size:10pt;font-weight:900;border:1.5px solid #000;padding:0 1.5mm}
+  .m-awb{font-size:12pt;font-weight:900;letter-spacing:.3px;text-align:center;line-height:1.1;overflow-wrap:anywhere}
+  .m-bar{text-align:center}
+  .m-bar svg{width:100%;height:12mm}
+  .m-pid{font-size:6.5pt;font-weight:700;letter-spacing:.5px}
+  .m-dest{font-size:10pt;font-weight:900;text-transform:uppercase;line-height:1.1;border-top:1.5px solid #000;border-bottom:1.5px solid #000;padding:.8mm 0;overflow-wrap:anywhere}
+  .m-to{font-size:7.5pt;line-height:1.15}
+  .m-addr{font-size:6.5pt;line-height:1.15;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .m-pay{font-size:7.5pt;font-weight:800;margin-top:auto}
+  @media screen{body{background:#e9e9e9;padding:8px}.label.m{background:#fff;margin:0 auto 10px;border:1px solid #888}}
+`;
+
 /** 4x6in (100x150mm) thermal/laser label CSS — black on white, no graphics. Shared by the
  *  on-screen preview and the print document so what you preview is what prints. */
 const LABEL_CSS = `
@@ -121,8 +155,9 @@ const LABEL_CSS = `
   td.addr{font-size:8pt}
 `;
 
-/** `thermal` = one 100x150mm label per page; `a4` = 6 labels (2 x 3) per A4 sheet. */
-export type LabelSize = 'a4' | 'thermal';
+/** `thermal` = one 100x150mm label per page; `a4` = 6 labels (2 x 3) per A4 sheet;
+ *  `mobile` = one compact 2x3in (50.8x76.2mm) label per page, for small phone-connected printers. */
+export type LabelSize = 'a4' | 'thermal' | 'mobile';
 
 /** A4 sheet: 6 mm page margin leaves 198x285mm, i.e. a 2 x 3 grid of 99x95mm cells. Same label
  *  markup as thermal, just scaled down to fit; the dashed border is the cut line. */
@@ -151,7 +186,7 @@ const THERMAL_PAGE_CSS = `
  *  string so it can be previewed in an iframe or printed without touching the app DOM. */
 export function renderLabelsHtml(d: ShipmentLabelData, packages?: number[], autoPrint = false, size: LabelSize = 'a4'): string {
   const nums = packages?.length ? packages : Array.from({ length: Math.max(1, d.numberOfPackages) }, (_, i) => i + 1);
-  const labels = nums.map((n) => label(d, n));
+  const labels = nums.map((n) => (size === 'mobile' ? mobileLabel(d, n) : label(d, n)));
   let body = labels.join('');
   if (size === 'a4') {
     body = '';
@@ -160,7 +195,7 @@ export function renderLabelsHtml(d: ShipmentLabelData, packages?: number[], auto
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(d.trackingNumber)} labels</title>
 <style>
 ${LABEL_CSS}
-${size === 'a4' ? A4_CSS : THERMAL_PAGE_CSS}
+${size === 'a4' ? A4_CSS : size === 'mobile' ? MOBILE_CSS : THERMAL_PAGE_CSS}
 </style></head><body>
   ${body}
   ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 50);</script>' : ''}

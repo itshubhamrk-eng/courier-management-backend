@@ -19,6 +19,7 @@ import { LabelSize, ShipmentLabelData, printLabels, renderLabelsHtml } from './s
         <span class="text-caption">Paper:</span>
         <app-button [variant]="size() === 'a4' ? 'primary' : 'stroked'" (pressed)="size.set('a4')">A4 — 6 per page</app-button>
         <app-button [variant]="size() === 'thermal' ? 'primary' : 'stroked'" (pressed)="size.set('thermal')">4×6 in thermal</app-button>
+        <app-button [variant]="size() === 'mobile' ? 'primary' : 'stroked'" (pressed)="size.set('mobile')">2×3 in mobile</app-button>
       </div>
       <iframe class="lbl__frame" title="Label preview" [srcdoc]="preview()"></iframe>
       <div class="lbl__single">
@@ -40,10 +41,10 @@ import { LabelSize, ShipmentLabelData, printLabels, renderLabelsHtml } from './s
   `]
 })
 export class ShipmentLabelsDialog {
-  protected readonly data = inject<ShipmentLabelData>(MAT_DIALOG_DATA);
+  protected readonly data = inject<ShipmentLabelData & { initialSize?: LabelSize }>(MAT_DIALOG_DATA);
   private readonly sanitizer = inject(DomSanitizer);
   protected readonly nums = Array.from({ length: Math.max(1, this.data.numberOfPackages) }, (_, i) => i + 1);
-  protected readonly size = signal<LabelSize>('a4');
+  protected readonly size = signal<LabelSize>(this.data.initialSize ?? 'a4');
   // Everything interpolated into the document is HTML-escaped by the renderer.
   protected readonly preview = computed(() =>
     this.sanitizer.bypassSecurityTrustHtml(renderLabelsHtml(this.data, undefined, false, this.size())) as string);
