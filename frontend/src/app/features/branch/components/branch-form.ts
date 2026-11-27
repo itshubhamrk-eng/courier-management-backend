@@ -26,7 +26,7 @@ const PAN = /^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/;
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const TYPE_LABELS: Record<BranchType, string> = {
-  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', PICKUP_DELIVERY_PARTNER: 'Pickup-Delivery Partner (PDP)'
+  CP: 'CP (Channel Partner)', BRANCH: 'Branch', HUB: 'Hub', PICKUP_DELIVERY_PARTNER: 'Vendor'
 };
 const TYPE_OPTS: SelectOption[] = BRANCH_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
 const DAY_OPTS: SelectOption[] = DAYS.map((d) => ({ value: d, label: d }));
@@ -71,15 +71,32 @@ function emailish(control: AbstractControl): ValidationErrors | null {
           <app-input [control]="c('branchCode')" label="Branch Code" [required]="true" placeholder="PUNE_MAIN" [maxLength]="50" />
           <app-input [control]="c('branchName')" label="Branch Name" [required]="true" placeholder="Pune Main Branch" [maxLength]="150" />
           <app-select [control]="c('branchType')" label="Vendor / Branch Type" [options]="types" placeholder="Select a type" />
-          @if (isCreate()) {
-            <app-select [control]="c('managerId')" label="Manager" [options]="managerOptions()"
-                        [allowEmpty]="true" emptyLabel="Unassigned" placeholder="Select a company user" />
-          } @else {
+          @if (!isCreate()) {
             <div class="stat"><span class="stat__l">Manager</span>
               <span class="stat__v">{{ managerName() }}</span><span class="stat__h">Change via “Assign Manager”</span></div>
           }
         </div>
       </app-card>
+
+      @if (isCreate()) {
+        <app-card title="Branch User"
+                  subtitle="The login for this branch, created with it and its wallet. Login email and mobile are the Contact details below.">
+          <div class="grid">
+            <app-input [control]="u('firstName')" label="First Name" [maxLength]="100"
+                       placeholder="Defaults to the branch name" />
+            <app-input [control]="u('lastName')" label="Last Name" placeholder="Branch" [maxLength]="100" />
+            <app-input [control]="u('password')" label="Password" type="password" [maxLength]="128"
+                       [togglePassword]="true" autocomplete="new-password"
+                       placeholder="Leave blank to generate one" />
+          </div>
+          <p class="bform__hint">
+            The account is created active with the <strong>Branch Manager</strong> role and is
+            made this branch's manager. Leave the password blank
+            and the generated one is shown <strong>once</strong>, right after saving — it
+            cannot be read back, only reset.
+          </p>
+        </app-card>
+      }
 
       <app-card title="Contact" subtitle="How to reach this branch.">
         <div class="grid">
@@ -147,30 +164,6 @@ function emailish(control: AbstractControl): ValidationErrors | null {
             <span><strong>Instant Commission</strong><em>Credit branch commission the moment a PREPAID booking debits</em></span></label>
         </div>
       </app-card>
-
-      @if (isCreate()) {
-        <app-card title="Branch User"
-                  subtitle="The login for this branch. Created with it, along with its wallet.">
-          <div class="grid">
-            <app-input [control]="u('email')" label="Login Email" type="email" [maxLength]="255"
-                       placeholder="Defaults to the branch email, then to a derived address" />
-            <app-input [control]="u('mobile')" label="Mobile" type="tel" [maxLength]="20"
-                       placeholder="Defaults to the branch mobile" />
-            <app-input [control]="u('firstName')" label="First Name" [maxLength]="100"
-                       placeholder="Defaults to the branch name" />
-            <app-input [control]="u('lastName')" label="Last Name" placeholder="Branch" [maxLength]="100" />
-            <app-input [control]="u('password')" label="Password" type="password" [maxLength]="128"
-                       [togglePassword]="true" autocomplete="new-password"
-                       placeholder="Leave blank to generate one" />
-          </div>
-          <p class="bform__hint">
-            The account is created active with the <strong>Branch Manager</strong> role and is
-            made this branch's manager unless you picked one above. Leave the password blank
-            and the generated one is shown <strong>once</strong>, right after saving — it
-            cannot be read back, only reset.
-          </p>
-        </app-card>
-      }
 
       <app-card title="Tax Details" subtitle="Branch's registration numbers. Optional.">
         <div class="grid">
@@ -241,7 +234,7 @@ export class BranchForm {
   readonly branch = input<BranchResponse | null>(null);
   readonly managers = input<Lookup[]>([]);
   readonly saving = input(false);
-  /** Create mode: preselects (and the caller may rely on) a branch type, e.g. Pickup-Delivery Partner. */
+  /** Create mode: preselects (and the caller may rely on) a branch type, e.g. Vendor. */
   readonly presetType = input<BranchType | null>(null);
 
   readonly saved = output<CreateBranchRequest | UpdateBranchRequest>();
@@ -378,27 +371,25 @@ export class BranchForm {
       closingTime: [''],
       workingDays: [[] as string[]],
       allowBooking: [true], allowDelivery: [true], allowPickup: [true],
-      allowManifest: [true], allowCashCollection: [true], allowWallet: [false],
+      allowManifest: [true], allowCashCollection: [true], allowWallet: [true],
       instantCommission: [true],
       remarks: ['', Validators.maxLength(500)],
       gstNumber: ['', [Validators.pattern(GSTIN), Validators.maxLength(15)]],
       panNumber: ['', [Validators.pattern(PAN), Validators.maxLength(10)]],
-      gstPercentage: [18, [Validators.required, Validators.min(0), Validators.max(100)]],
+      gstPercentage: [5, [Validators.required, Validators.min(0), Validators.max(100)]],
       commissionOnOtherCharges: [20, [Validators.required, Validators.min(0), Validators.max(100)]],
-      commissionOnBasicFreight: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
+      commissionOnBasicFreight: [20, [Validators.required, Validators.min(0), Validators.max(100)]],
       companyServiceChargePercentage: [10, [Validators.required, Validators.min(0), Validators.max(100)]],
-      drsChargePerQty: [2, [Validators.required, Validators.min(0)]],
+      drsChargePerQty: [1.5, [Validators.required, Validators.min(0)]],
       deliveryCommissionRatePerKg: [1.5, [Validators.required, Validators.min(0)]],
       deliveryCommissionMinWeightKg: [10, [Validators.required, Validators.min(0)]],
-      odaChargeAmount: [0, [Validators.required, Validators.min(0)]],
+      odaChargeAmount: [150, [Validators.required, Validators.min(0)]],
       // Create-only. Kept as a group so the payload maps straight onto BranchUserRequest;
       // no minimum length on the password — the server's policy owns that rule and its
       // message names the one that failed.
       branchUser: this.fb.group({
-        email: ['', [emailish, Validators.maxLength(255)]],
         firstName: ['', Validators.maxLength(100)],
         lastName: ['', Validators.maxLength(100)],
-        mobile: ['', Validators.pattern(PHONE)],
         password: ['', Validators.maxLength(128)]
       })
     });
@@ -438,8 +429,8 @@ export class BranchForm {
 
     if (this.isCreate()) {
       this.saved.emit({
-        branchCode: v.branchCode.trim(), managerId: v.managerId || null, ...common,
-        branchUser: branchUser(v.branchUser, trim)
+        branchCode: v.branchCode.trim(), ...common,
+        branchUser: branchUser(v.branchUser, trim, trim(v.email), trim(v.mobile))
       });
     } else {
       this.saved.emit({ branchCode: v.branchCode.trim(), ...common, version: this.branch()!.version });
@@ -453,10 +444,12 @@ export class BranchForm {
  * suggest a choice nobody made.
  */
 function branchUser(v: Record<string, string | null>,
-                    trim: (s: string | null) => string | null): BranchUserRequest | null {
+                    trim: (s: string | null) => string | null,
+                    contactEmail: string | null, contactMobile: string | null): BranchUserRequest | null {
+  // Login email and mobile are always the branch's Contact details — one identity, not two.
   const block: BranchUserRequest = {
-    email: trim(v['email']), firstName: trim(v['firstName']), lastName: trim(v['lastName']),
-    mobile: trim(v['mobile']), password: v['password']?.trim() || null
+    email: contactEmail, firstName: trim(v['firstName']), lastName: trim(v['lastName']),
+    mobile: contactMobile, password: v['password']?.trim() || null
   };
   return Object.values(block).some((x) => x !== null) ? block : null;
 }

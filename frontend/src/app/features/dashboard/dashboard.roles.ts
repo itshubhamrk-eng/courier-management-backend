@@ -93,7 +93,6 @@ const QA = {
   book:     { id: 'book', label: 'Book Shipment', icon: 'add_box', tone: 'brand', route: '/shipments/new' },
   search:   { id: 'search', label: 'Search Shipment', icon: 'search', tone: 'info', route: '/shipments' },
   track:    { id: 'track', label: 'Track Shipment', icon: 'my_location', tone: 'success', route: '/track' },
-  print:    { id: 'print', label: 'Print Label', icon: 'print', tone: 'warning' },
   loadingSheet: { id: 'loadingSheet', label: 'Manifest Creation', icon: 'qr_code_scanner', tone: 'danger', route: '/movement/loading-sheet' },
   // Hub Operations (2026-09-21): these two were the last un-routed quick actions,
   // waiting on a Hub Operations screen to point at — see MEMORY/modules/hub-operations.md.
@@ -129,7 +128,7 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
   },
   BRANCH_MANAGER: {
     stats: [T.wallet, T.todayBookings, T.pendingDelivery, T.todayCollection],
-    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
+    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet],
     sections: {
       ...allSectionsOff, shipmentTrend: true, deliveryPerformance: true,
       recentActivity: true, recentShipments: true, branchOverview: true
@@ -137,7 +136,7 @@ export const DASHBOARD_LAYOUTS: Record<DashboardProfile, DashboardLayout> = {
   },
   BRANCH_OPERATOR: {
     stats: [T.todayBookings, T.todayShipments, { ...T.wallet, tone: 'success' }, T.pending],
-    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet, QA.print],
+    quickActions: [QA.book, QA.search, QA.track, QA.loadingSheet],
     sections: { ...allSectionsOff, recentActivity: true, recentShipments: true, branchOverview: true }
   },
   HUB_MANAGER: {

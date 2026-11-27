@@ -21,9 +21,11 @@ import { matchesScan } from '@features/shipment/shipment-label-print.util';
     <div class="row">
       <app-input [control]="searchControl" label="AWB / Shipment No." placeholder="AWB… / SHP-…" (keydown.enter)="track()" />
       <app-button icon="search" [loading]="searching()" (pressed)="track()">Track</app-button>
-      <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track('labels')">Print Labels (A4)</app-button>
-      <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track('labels', 'mobile')">Thermal Label Print</app-button>
-      <app-button icon="print" variant="stroked" [loading]="searching()" (pressed)="track('copy')">Shipment Copy</app-button>
+      @if (showPrint()) {
+        <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track('labels')">Print Labels (A4)</app-button>
+        <app-button icon="label" variant="stroked" [loading]="searching()" (pressed)="track('labels', 'mobile')">Thermal Label Print</app-button>
+        <app-button icon="print" variant="stroked" [loading]="searching()" (pressed)="track('copy')">Shipment Copy</app-button>
+      }
     </div>
     @if (notFound()) {
       <p class="empty">No shipment matches "{{ lastQuery() }}".</p>
@@ -44,6 +46,9 @@ export class TrackBox {
    *  search once, so "track SHP-000123" lands here already resolved instead of just
    *  typed into the box. */
   readonly initialQuery = input<string | null>(null);
+
+  /** Print Labels / Thermal Label / Shipment Copy buttons. Off on the dashboard, on in the Track page. */
+  readonly showPrint = input(true);
 
   readonly searching = signal(false);
   readonly notFound = signal(false);

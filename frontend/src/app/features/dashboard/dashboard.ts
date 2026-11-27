@@ -84,12 +84,12 @@ function dayFromLabel(label: string): string | null {
               <span>{{ now | date:'EEEE, d MMM y' }}</span>
             </div>
           </div>
-          <app-package-illustration class="dash__welcome-ill" [size]="88" />
+          <app-package-illustration class="dash__welcome-ill" [size]="80" />
         </header>
 
         @if (profile() !== 'PLATFORM') {
           <app-card class="dash__track" title="Track Shipment" subtitle="Enter an AWB (Tracking No.) or Shipment No.">
-            <app-track-box />
+            <app-track-box [showPrint]="false" />
           </app-card>
         }
       </section>
@@ -217,8 +217,11 @@ function dayFromLabel(label: string): string | null {
     .dash__hero { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:stretch; }
     @media (max-width:900px){ .dash__hero { grid-template-columns:1fr; } }
     .dash__welcome { display:flex; align-items:center; justify-content:space-between; gap:16px;
-      flex-wrap:wrap; padding:20px 26px; }
-    .dash__welcome-text { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+      flex-wrap:nowrap; padding:20px 26px; }
+    .dash__welcome-text { display:flex; flex-direction:column; gap:8px; align-items:flex-start; flex:1; min-width:0; }
+    .dash__welcome-text h1 { margin:0; overflow-wrap:anywhere; }
+    .dash__welcome-text p { margin:0; }
+    .dash__welcome-text .dash__date { margin-top:4px; }
     .dash__welcome-ill { flex-shrink:0; }
     @media (max-width:560px){ .dash__welcome-ill { display:none; } }
     .dash__track { display:flex; flex-direction:column; }

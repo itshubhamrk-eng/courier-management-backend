@@ -47,28 +47,25 @@ describe('BranchForm — the branchUser block', () => {
 
   it('sends what was typed, trimmed', () => {
     group().patchValue({
-      branchUser: {
-        email: '  latur@legacy.test ', firstName: ' Asha ', lastName: '', mobile: '',
-        password: ' Str0ng#Pass1 '
-      }
+      branchUser: { firstName: ' Asha ', lastName: '', password: ' Str0ng#Pass1 ' }
     });
 
     expect(emitted().branchUser).toEqual({
-      email: 'latur@legacy.test', firstName: 'Asha', lastName: null, mobile: null,
-      password: 'Str0ng#Pass1'
+      email: null, firstName: 'Asha', lastName: null, mobile: null, password: 'Str0ng#Pass1'
     });
   });
 
-  it('sends a partial block — one filled field is still a choice', () => {
-    group().patchValue({ branchUser: { email: 'latur@legacy.test' } });
+  it('login email and mobile are always the Contact details', () => {
+    group().patchValue({ email: ' latur@legacy.test ', mobile: '+91 90000 00000' });
 
     const block = emitted().branchUser!;
     expect(block.email).toBe('latur@legacy.test');
+    expect(block.mobile).toBe('+91 90000 00000');
     expect(block.password).toBeNull();
   });
 
-  it('refuses to submit an invalid login address', () => {
-    group().patchValue({ branchUser: { email: 'not-an-address' } });
+  it('refuses to submit an invalid contact email', () => {
+    group().patchValue({ email: 'not-an-address' });
 
     let called = false;
     form.saved.subscribe(() => (called = true));
