@@ -52,11 +52,9 @@ describe('NAVIGATION — branch staff visibility', () => {
     expect(leaf('branch-wallet').roles).not.toContain(AppRole.DELIVERY_OPERATOR);
   });
 
-  it('the money desk sees the wallet, payment and invoice, not the road', () => {
+  it('the money desk sees the wallet, not the road', () => {
     expect(leaf('branch-wallet').roles).toContain(AppRole.ACCOUNTS);
     expect(leaf('wallet-transactions').roles).toContain(AppRole.ACCOUNTS);
-    expect(leaf('payment').roles).toContain(AppRole.ACCOUNTS);
-    expect(leaf('invoice').roles).toContain(AppRole.ACCOUNTS);
     expect(leaf('finance-reports').roles).toContain(AppRole.ACCOUNTS);
     expect(leaf('dispatch').roles).not.toContain(AppRole.ACCOUNTS);
     expect(leaf('booking').roles).not.toContain(AppRole.ACCOUNTS);
@@ -117,14 +115,6 @@ describe('NAVIGATION — SUPER_ADMIN excluded from company-side sections', () =>
     expect(leaf('branch-wallet').roles).not.toContain(AppRole.SUPER_ADMIN);
     expect(leaf('branch-wallet').roles).toContain(AppRole.BRANCH_MANAGER);
     expect(leaf('branch-wallet').roles).toContain(AppRole.ACCOUNTS);
-    expect(leaf('hub-wallet').roles).not.toContain(AppRole.SUPER_ADMIN);
-    expect(leaf('hub-wallet').roles).toContain(AppRole.FINANCE_USER);
-  });
-
-  it('Pricing (aspirational) is COMPANY_ADMIN only', () => {
-    for (const id of ['rate-cards', 'zone-pricing', 'surcharges']) {
-      expect(leaf(id).roles).toEqual([AppRole.COMPANY_ADMIN]);
-    }
   });
 
   it('of the shared geography (under Masters) only Pincode is shown to COMPANY_ADMIN, unlike the company-only catalogues', () => {

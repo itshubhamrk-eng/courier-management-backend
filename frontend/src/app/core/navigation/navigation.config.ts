@@ -8,7 +8,7 @@ import { AppRole } from '../models/role.model';
  * Both are checked: `roles` narrows to who could ever have the right, `permission` is the
  * per-user grant (role default, overridable per user via Menu + Permission Management) that
  * decides whether this user still does. A leaf whose module has no permission-catalogue rows
- * yet (Freight Factor, Vehicles, POD, Settlement, the "(Soon)" Pricing section, ...) omits
+ * yet (Freight Factor, Vehicles, POD, ...) omits
  * `permission` and is gated on `roles` alone — do not invent a code for one of these, it would
  * never be grantable and would permanently hide the leaf once AND-checked.
  *
@@ -232,17 +232,6 @@ export const NAVIGATION: NavNode[] = [
   },
 
   {
-    id: 'pricing', title: 'Pricing (Soon)', icon: 'sell', order: 4,
-    children: [
-      // No `permission` key: aspirational, unbuilt feature — no RATE module exists in
-      // the catalogue (Rate Master's own rights are RATE_MASTER_*, a different module).
-      { id: 'rate-cards', title: 'Rate Cards (Soon)', icon: 'payments', route: '/pricing/rate-cards', roles: COMPANY_ONLY },
-      { id: 'zone-pricing', title: 'Zone Pricing (Soon)', icon: 'grid_on', route: '/pricing/zones', roles: COMPANY_ONLY },
-      { id: 'surcharges', title: 'Surcharges (Soon)', icon: 'local_gas_station', route: '/pricing/surcharges', roles: COMPANY_ONLY }
-    ]
-  },
-
-  {
     id: 'operations', title: 'Operations', icon: 'local_shipping', order: 5,
     children: [
       // Booking is the counter desk's job (SHIPMENT_CREATE); manifest through delivery is
@@ -324,17 +313,11 @@ export const NAVIGATION: NavNode[] = [
       // Recharging its own wallet is a branch responsibility; ACCOUNTS is the branch's
       // money desk and holds WALLET_RECHARGE alongside BRANCH_MANAGER.
       { id: 'branch-wallet', title: 'Branch Wallet', icon: 'account_balance_wallet', route: '/finance/branch-wallet', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
-      { id: 'hub-wallet', title: 'Hub Wallet (Soon)', icon: 'savings', route: '/finance/hub-wallet', permission: 'WALLET_READ', roles: FINANCE },
       { id: 'wallet-transactions', title: 'Wallet Transactions', icon: 'receipt', route: '/finance/branch-wallet/transactions', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
       { id: 'topup-requests', title: 'Top-up Requests', icon: 'fact_check', route: '/finance/branch-wallet/topup-requests', permission: 'WALLET_READ', roles: ACCOUNTS_DESK },
       // Company admin / finance see every branch; a branch manager sees only their own branch's
       // recharges (WalletServiceImpl.searchRechargeAttempts scopes the rows server-side).
       { id: 'wallet-recharge-report', title: 'Recharge Report', icon: 'account_balance_wallet', route: '/finance/branch-wallet/recharge-report', permission: 'WALLET_READ', roles: [...FINANCE, AppRole.BRANCH_MANAGER] },
-      // No `permission` key: aspirational, unbuilt feature — no SETTLEMENT module
-      // exists in the catalogue.
-      { id: 'settlement', title: 'Settlement (Soon)', icon: 'paid', route: '/finance/settlement', roles: FINANCE },
-      { id: 'payment', title: 'Payment (Soon)', icon: 'credit_card', route: '/finance/payment', permission: 'PAYMENT_READ', roles: [...FINANCE, AppRole.ACCOUNTS] },
-      { id: 'invoice', title: 'Invoice (Soon)', icon: 'description', route: '/finance/invoice', permission: 'INVOICE_READ', roles: [...FINANCE, AppRole.ACCOUNTS] }
     ]
   },
 
