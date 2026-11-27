@@ -7,6 +7,8 @@
 
 ## Current Version
 
+**2026-11-27 — Shipment Copy party details:** consignor/consignee address + mobile now on the Shipment Copy print (frontend only). See `CHANGELOG.md` 2026-11-27.
+
 **2026-11-26 — District freight copy-from-branch:** `POST /district-level-freight/copy` + list-page dialog; skips districts the target already has (soft-deleted included), never overwrites. See `CHANGELOG.md` 2026-11-26. Branch `feat/district-freight-copy`, not deployed.
 
 **2026-11-23 — branch monthly report on WhatsApp (V152, V153):** per-branch statement PDF sent to each BRANCH_MANAGER on the 1st (09:00 IST) and on demand from the Vendor Audit Report, which also gained wallet columns. New module `com.courier.modules.branchreport`. The Meta template `branch_monthly_report` must be created by hand in WhatsApp Manager. See `MEMORY/modules/communication.md`, `CHANGELOG.md` 2026-11-23. Branch `worktree-branch-monthly-report`, not deployed.

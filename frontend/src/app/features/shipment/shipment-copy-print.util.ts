@@ -9,7 +9,7 @@ import { ConsignmentPrintData, qrSvg } from './consignment-print.util';
 const esc = (s: string | null | undefined): string =>
   (s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
-const COPIES = ['CONSIGNOR COPY', 'DRIVER COPY', 'OFFICE COPY'];
+const COPIES = ['CUSTOMER COPY', 'POD COPY', 'OFFICE COPY'];
 
 const money = (v: number | null | undefined): string => (v ? v.toFixed(2) : '');
 const num = (v: number): string => (v % 1 === 0 ? v.toFixed(2) : v.toFixed(2));
@@ -21,7 +21,6 @@ function copy(d: ConsignmentPrintData, label: string): string {
     ? (dims.lengthCm * dims.widthCm * dims.heightCm) / 5000 : 0;
 
   const mathadi = d.otherCharges + (d.appointmentDeliveryCharge ?? 0) + (d.doorDeliveryCharge ?? 0) + (d.toPayCharge ?? 0);
-  const fov = d.charges.insuranceCharge + d.charges.fuelCharge + d.charges.applicableCharges;
   const total = d.charges.netAmount + mathadi;
   const gst = d.charges.gstAmount;
   const subtotal = total - gst;
@@ -31,23 +30,19 @@ function copy(d: ConsignmentPrintData, label: string): string {
   const isToPay = mode.includes('TO_PAY') || mode.includes('TO PAY');
   // To Be Billed (TBB) is the credit account — billed to the customer later.
   const isCredit = mode.includes('CREDIT') || mode.includes('TBB');
-  const tick = (on: boolean) => (on ? '&#9745;' : '&#9744;');
+  const modeText = isToPay ? 'TO PAY' : isPaid ? 'PAID' : isCredit ? 'CREDIT' : '';
 
   const isTbb = isTbbLabel(d.paymentModeLabel);
+  // Only the roll-up is shown on the copy — the individual charge heads are not printed.
+  // PAID: the customer already paid, so the POD copy (handed to the receiver) carries no amounts.
+  // TO PAY: every copy shows the amounts.
+  const hideAmounts = isPaid && !isToPay && label === 'POD COPY';
   const charges: Array<[string, string]> = isTbb ? [
-    ['Freight', ''], ['Docket Ch', ''], ['DOD/COD Ch', ''], ['ODA Ch', ''], ['Mathadi Ch.', ''], ['Packaging Ch', ''],
-    ['Total Charges', ''], ['FOV', ''], ['GST', ''], ['Grand Total', 'Credit Customer']
+    ['Total Charges', ''], ['GST', ''], ['Net Total', 'Credit Customer']
   ] : [
-    ['Freight', money(d.charges.freight)],
-    ['Docket Ch', money(d.charges.handlingCharge)],
-    ['DOD/COD Ch', ''],
-    ['ODA Ch', money(d.charges.odaCharge)],
-    ['Mathadi Ch.', money(mathadi)],
-    ['Packaging Ch', ''],
     ['Total Charges', money(subtotal)],
-    ['FOV', money(fov)],
     ['GST', money(gst)],
-    ['Grand Total', money(total)]
+    ['Net Total', money(total)]
   ];
 
   const dest = d.deliveryBranchLabel || '—';
@@ -63,8 +58,8 @@ function copy(d: ConsignmentPrintData, label: string): string {
       </div>
     </div>
     <div class="party">
-      <div class="p1"><div class="h">CONSIGNOR</div><div class="b">${esc(d.senderName)}</div></div>
-      <div class="p2"><div class="h">CONSIGNEE</div><div class="b">${esc(d.receiverName)}</div></div>
+      <div class="p1"><div class="h">CONSIGNOR</div><div class="b">${esc(d.senderName)}<div class="pd">${esc(d.senderAddress)}${d.senderContact ? `<br>Mob : ${esc(d.senderContact)}` : ''}</div></div></div>
+      <div class="p2"><div class="h">CONSIGNEE</div><div class="b">${esc(d.receiverName)}<div class="pd">${esc(d.receiverAddress)}${d.receiverContact ? `<br>Mob : ${esc(d.receiverContact)}` : ''}</div></div></div>
       <div class="p3"><div class="h">QR CODE</div><div class="bc">${qrSvg(d.trackingNumber)}</div></div>
     </div>
     <div class="grid">
@@ -83,7 +78,7 @@ function copy(d: ConsignmentPrintData, label: string): string {
           Policy No : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Insurance Company :<br>
           Insurance Value : ${(d.declaredValue ?? 0).toFixed(2)}<br>
           Invoice &#9744; Y &#9744; N &nbsp; Packing List &#9744; Y &#9744; N &nbsp; Permit / Form &#9744; Y &#9744; N</div>
-        <div class="terms">I/We hereby agree to the terms &amp; conditions setout on the reverse of this consignor's copy &amp; declare that contents on this way bill are true and correct. The To-pay Freight has may/our consent and will be paid by the Consignee along with Service Charges as applicable at the time of Delivery.</div>
+        <div class="terms">I/We hereby agree to the terms &amp; conditions setout on the reverse of this customer's copy &amp; declare that contents on this way bill are true and correct. The To-pay Freight has may/our consent and will be paid by the Consignee along with Service Charges as applicable at the time of Delivery.</div>
         <div class="sg">Name : <span class="ln w1"></span></div>
         <div class="sg">Signature : <span class="ln w2"></span></div>
         <div class="sg">Received By ${esc(d.companyName)}.</div>
@@ -99,17 +94,16 @@ function copy(d: ConsignmentPrintData, label: string): string {
         <div class="av"><div class="h">D.O.D</div><div class="h">C.O.D</div></div>
         <div class="av e"><div></div><div></div></div>
         <div class="mop"><b>MODE OF PAYMENT</b></div>
-        <div class="chk">PAID ${tick(isPaid)} &nbsp; CREDIT ${tick(isCredit)} &nbsp; TO PAY ${tick(isToPay)}</div>
+        <div class="chk">${esc(modeText)}</div>
         <div class="tp"><b>TO PAY</b><br>Amount : ${isToPay ? total.toFixed(2) : '<span class="ln w4"></span>'}</div>
       </div>
       <div class="g-chg">
         <div class="h one">CHARGES</div>
-        <div class="cr h2"><span class="hh">Freight</span></div>
-        ${charges.slice(1).map(([n]) => `<div class="cr"><span>${n}</span></div>`).join('')}
+        ${charges.map(([n]) => `<div class="cr"><span>${n}</span></div>`).join('')}
       </div>
       <div class="g-amt">
-        <div class="h one">FREIGHT Rs.</div>
-        ${charges.map(([, v]) => `<div class="ar">${v}</div>`).join('')}
+        <div class="h one">AMOUNT Rs.</div>
+        ${charges.map(([, v]) => `<div class="ar">${hideAmounts ? '' : v}</div>`).join('')}
       </div>
       <div class="g-si">
         <div class="h one">SPECIAL INSTRUCTIONS</div>
@@ -154,6 +148,8 @@ function renderHtml(list: ConsignmentPrintData[]): string {
   .p1{width:40%}.p2{width:49%}.p3{flex:1}
   .party .h{text-align:left;padding-left:2mm}
   .party .b{flex:1;font-weight:700;font-size:12px;padding:1mm 2mm}
+  .party .b{overflow:hidden;font-size:9.5px;padding:.6mm 2mm;line-height:1.15}
+  .pd{font-weight:400;font-size:7px;line-height:1.15;margin-top:.3mm}
   .bc{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .bc{padding:.5mm}.bc svg{height:9.5mm;width:9.5mm}
   .grid{display:flex;flex:1;min-height:0}
@@ -181,14 +177,14 @@ function renderHtml(list: ConsignmentPrintData[]): string {
   .av.v>div{font-weight:700;font-size:12px;padding:1.5mm}
   .av.e>div{height:6mm}
   .mop{padding:1mm;border-bottom:1px solid #000;font-size:8px;margin-top:2mm}
-  .chk{padding:1mm .5mm;font-size:7px;white-space:nowrap;border-bottom:1px solid #000}
+  .chk{padding:1.2mm 1.5mm;font-size:13px;font-weight:700;text-align:center;border-bottom:1px solid #000}
   .tp{padding:1mm;font-size:8px}
   .g-chg{width:9.5%;border-right:1px solid #000;display:flex;flex-direction:column}
   .g-amt{width:7.7%;border-right:1px solid #000;display:flex;flex-direction:column}
-  .cr{flex:1;border-bottom:1px solid #000;display:flex;align-items:center;justify-content:center;font-size:7.6px;text-align:center}
-  .cr.h2{font-weight:700}
-  .ar{flex:1;border-bottom:1px solid #000;text-align:right;padding:0 1mm;display:flex;align-items:center;justify-content:flex-end;font-size:7.6px}
-  .g-chg .cr:last-child,.g-amt .ar:last-child{border-bottom:none}
+  .cr,.ar{flex:none;height:8mm;border-bottom:1px solid #000;display:flex;align-items:center;font-size:9px;font-weight:700}
+  .cr{justify-content:center;text-align:center}
+  .ar{justify-content:flex-end;padding:0 1.5mm}
+  .g-chg .cr:last-child,.g-amt .ar:last-child{height:9mm;font-size:10.5px}
   .g-si{flex:1;display:flex;flex-direction:column}
   .si{height:15mm;padding:1.5mm;font-size:8px}
   .rcv{padding:1mm 1.5mm;font-weight:700;font-size:7.6px;border-top:1px solid #fff}

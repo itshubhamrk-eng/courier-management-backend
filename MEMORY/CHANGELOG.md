@@ -6,6 +6,14 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-27 - Shipment Copy shows consignor/consignee address + contact (no migration)
+
+- Shipment Copy Mode of Payment now prints only the selected mode (TO PAY / PAID / CREDIT) as plain bold 13px text; no checkbox list. Blank when the mode is unknown.
+- Shipment Copy charges rows are fixed-height (8mm, Net Total 9mm), bold, stacked at the top of the column; they no longer stretch into tall boxes.
+- Shipment Copy copies renamed CUSTOMER COPY / POD COPY / OFFICE COPY (was CONSIGNOR / DRIVER / OFFICE; terms text says "customer's copy"). PAID: POD copy prints no amounts. TO PAY: all three copies show amounts (as does the TO PAY Amount box). Verified on PAID `000024`/`TEST-000002` and TO PAY `CP-KOL-000024`.
+- Shipment Copy charges column now shows only Total Charges, GST, Net Total (header `AMOUNT Rs.`); Freight/Docket/DOD/ODA/Mathadi/Packaging/FOV rows no longer printed. TBB still shows `Credit Customer` on Net Total. Other prints (Performa Bill, Ambox) untouched.
+- `shipment-copy-print.util.ts`: CONSIGNOR/CONSIGNEE boxes now print name, address and `Mob : <contact>` (from `senderAddress/senderContact/receiverAddress/receiverContact`, already in `ConsignmentPrintData`). Party row height kept at 15mm (a taller row clipped the signature rows at the slot bottom); name font 12px -> 9.5px, address 7px, clipped on overflow (fits 2 address lines). Frontend only; verified on HB-PUN-000004 via :5173, print dialog stubbed.
+
 ## 2026-11-26 - District Level Freight: copy rates from another branch (no migration)
 
 - `POST /api/v1/district-level-freight/copy` (`COMPANY_ADMIN`): body `{sourceBranchId, targetBranchIds[]}`; copies the source's ACTIVE rows to each target, one transaction, returns copied/skipped per target. A district the target already has a row for is skipped, never overwritten; the check includes soft-deleted rows (the unique key ignores `deleted`), via `DistrictLevelFreightRepository.findDistrictIdsIncludingDeleted`. A source district now inactive in the master is skipped too. New audit action `DISTRICT_FREIGHT_COPIED` (one entry per target).
