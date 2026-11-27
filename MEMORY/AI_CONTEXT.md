@@ -7,6 +7,8 @@
 
 ## Current Version
 
+**2026-11-27 — District freight state-level fallback (V156):** rate rows keyed by District OR State; booking tries district then state (inactive district row falls through); copy + Excel import (`state` column) + list/form support it. See `CHANGELOG.md` 2026-11-27. Branch `feat/state-level-freight`, not deployed.
+
 **2026-11-27 — Shipment Copy party details:** consignor/consignee address + mobile now on the Shipment Copy print (frontend only). See `CHANGELOG.md` 2026-11-27.
 
 **2026-11-26 — District freight copy-from-branch:** `POST /district-level-freight/copy` + list-page dialog; skips districts the target already has (soft-deleted included), never overwrites. See `CHANGELOG.md` 2026-11-26. Branch `feat/district-freight-copy`, not deployed.
