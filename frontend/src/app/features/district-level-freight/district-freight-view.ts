@@ -31,7 +31,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
     } @else {
       <header class="rv__banner app-card">
         <div class="rv__id">
-          <span class="rv__name">{{ row()!.branchName || row()!.branchCode }} → {{ row()!.districtName || row()!.districtCode }}</span>
+          <span class="rv__name">{{ row()!.branchName || row()!.branchCode }} → {{ row()!.level === 'STATE' ? (row()!.stateName || row()!.stateCode) : (row()!.districtName || row()!.districtCode) }}</span>
           <app-status-badge [value]="row()!.status" />
         </div>
         <div class="rv__actions">
@@ -58,7 +58,12 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
         <app-card title="Route">
           <dl class="kv">
             <dt>From Station</dt><dd>{{ row()!.branchName || '—' }} <span class="mono muted">{{ row()!.branchCode }}</span></dd>
-            <dt>District</dt><dd>{{ row()!.districtName || '—' }} <span class="mono muted">{{ row()!.districtCode }}</span></dd>
+            <dt>Level</dt><dd>{{ row()!.level === 'STATE' ? 'State (fallback when no district rate)' : 'District' }}</dd>
+            @if (row()!.level === 'STATE') {
+              <dt>State</dt><dd>{{ row()!.stateName || '—' }} <span class="mono muted">{{ row()!.stateCode }}</span></dd>
+            } @else {
+              <dt>District</dt><dd>{{ row()!.districtName || '—' }} <span class="mono muted">{{ row()!.districtCode }}</span></dd>
+            }
           </dl>
         </app-card>
 
@@ -141,7 +146,7 @@ export class DistrictFreightView implements OnInit {
       next: (r) => {
         this.row.set(r);
         this.breadcrumb.set([{ label: 'District Level Freight', route: '/district-level-freight' },
-          { label: `${r.branchName ?? r.branchCode} → ${r.districtName ?? r.districtCode}` }]);
+          { label: `${r.branchName ?? r.branchCode} → ${r.level === 'STATE' ? (r.stateName ?? r.stateCode) : (r.districtName ?? r.districtCode)}` }]);
         this.loading.set(false);
       },
       error: () => { this.row.set(null); this.loading.set(false); }

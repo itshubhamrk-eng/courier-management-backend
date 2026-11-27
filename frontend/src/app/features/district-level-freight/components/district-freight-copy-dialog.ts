@@ -22,7 +22,7 @@ import { DistrictLevelFreightService } from '../district-level-freight.service';
   template: `
     <div class="cp">
       <h2 class="text-h2">Copy rates from another branch</h2>
-      <p class="text-caption">Every district rate of the source branch is copied to the chosen branches. Districts a target branch already has a rate for (or that are inactive) are skipped — existing rates are never changed.</p>
+      <p class="text-caption">Every district and state rate of the source branch is copied to the chosen branches. Districts or states a target branch already has a rate for (or that are inactive) are skipped — existing rates are never changed.</p>
 
       @if (!result()) {
         <app-select [control]="source" label="Copy from (source branch)" [options]="branchOptions()" />

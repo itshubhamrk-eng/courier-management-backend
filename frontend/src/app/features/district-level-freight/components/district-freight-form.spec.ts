@@ -65,4 +65,48 @@ describe('DistrictFreightForm — validators mirror server invariants', () => {
 
     expect(emitted()).toBeUndefined();
   });
+
+  const rates = { rate1To15: 10, rate16To50: 8.5, rate51To100: 8, rate101To1000: 7.5, rate1001To1500: 6, rate1501To2000: 6 };
+
+  it('State level: needs a state, not a district, and emits stateId only', () => {
+    group().patchValue({ level: 'STATE', branchId: 'b-1', stateId: 's-1', ...rates });
+    fixture.detectChanges();
+
+    const body = emitted();
+    expect(body).toBeDefined();
+    expect(body!.stateId).toBe('s-1');
+    expect(body!.districtId).toBeNull();
+  });
+
+  it('State level: refuses a missing state', () => {
+    group().patchValue({ level: 'STATE', branchId: 'b-1', stateId: null, ...rates });
+    fixture.detectChanges();
+
+    expect(emitted()).toBeUndefined();
+  });
+
+  it('District level: still needs a district and never sends the narrowing state as stateId', () => {
+    group().patchValue({ level: 'DISTRICT', branchId: 'b-1', stateId: 's-1', districtId: 'd-1', ...rates });
+    fixture.detectChanges();
+
+    const body = emitted();
+    expect(body!.districtId).toBe('d-1');
+    expect(body!.stateId).toBeNull();
+  });
+
+  it('edit of a state-level row opens on the State level with its state selected', () => {
+    const edit = TestBed.createComponent(DistrictFreightForm);
+    edit.componentRef.setInput('mode', 'edit');
+    edit.componentRef.setInput('row', {
+      id: 'r-1', companyId: 'c', branchId: 'b-1', branchCode: null, branchName: null,
+      districtId: null, districtCode: null, districtName: null,
+      stateId: 's-1', stateCode: 'MH', stateName: 'Maharashtra', level: 'STATE',
+      ...rates, odaApplicable: true, odaCharge: 250, status: 'ACTIVE', version: 3
+    });
+    edit.detectChanges();
+
+    const g = (edit.componentInstance as unknown as { form: { getRawValue: () => Record<string, unknown> } }).form;
+    expect(g.getRawValue()['level']).toBe('STATE');
+    expect(g.getRawValue()['stateId']).toBe('s-1');
+  });
 });

@@ -7,6 +7,10 @@
  * shapes; every field is returned by, or accepted by, an endpoint.
  */
 
+/** Which destination a rate row is keyed by. Booking tries DISTRICT first, then falls back to STATE. */
+export type DistrictFreightLevel = 'DISTRICT' | 'STATE';
+export const DISTRICT_FREIGHT_LEVELS: DistrictFreightLevel[] = ['DISTRICT', 'STATE'];
+
 export type DistrictFreightStatus = 'ACTIVE' | 'INACTIVE';
 export const DISTRICT_FREIGHT_STATUSES: DistrictFreightStatus[] = ['ACTIVE', 'INACTIVE'];
 
@@ -33,9 +37,15 @@ export interface DistrictLevelFreight {
   branchId: string;
   branchCode: string | null;
   branchName: string | null;
-  districtId: string;
+  /** Null on a State-level row. */
+  districtId: string | null;
   districtCode: string | null;
   districtName: string | null;
+  /** Set only on a State-level row. */
+  stateId: string | null;
+  stateCode: string | null;
+  stateName: string | null;
+  level: DistrictFreightLevel;
   rate1To15: number;
   rate16To50: number;
   rate51To100: number;
@@ -55,7 +65,9 @@ export interface DistrictLevelFreight {
 /** Fields shared by create and update. */
 export interface DistrictLevelFreightFields {
   branchId: string;
-  districtId: string;
+  /** Exactly one of districtId / stateId is set. */
+  districtId: string | null;
+  stateId: string | null;
   rate1To15: number;
   rate16To50: number;
   rate51To100: number;
@@ -79,6 +91,8 @@ export interface UpdateDistrictLevelFreightRequest extends DistrictLevelFreightF
 export interface DistrictLevelFreightSearchRequest {
   branchId?: string[];
   districtId?: string[];
+  stateId?: string[];
+  level?: DistrictFreightLevel[];
   status?: DistrictFreightStatus[];
 }
 
@@ -86,6 +100,8 @@ export interface ImportRowResult {
   rowNumber: number;
   fromStation: string;
   district: string;
+  /** The State cell, when the row was a state-level rate. */
+  state?: string | null;
   outcome: 'WOULD_CREATE' | 'WOULD_UPDATE' | 'CREATED' | 'UPDATED' | 'ERROR';
   message: string | null;
 }
@@ -144,6 +160,9 @@ export interface FreightCalculationResponse {
   odaApplicable: boolean;
   odaCharge: number;
   totalFreight: number;
+  /** Which District Level Freight row priced the booking — the district's own, or the state fallback. */
+  rateLevel?: DistrictFreightLevel;
+  stateName?: string | null;
   /** Set when a TBB Customer pricing zone priced the booking; `weightSlabLabel` then names it. */
   customerZoneName?: string | null;
   /** Zone rate's docket + mathadi + pack + fuel + FOV — the minimum Other Charges. */

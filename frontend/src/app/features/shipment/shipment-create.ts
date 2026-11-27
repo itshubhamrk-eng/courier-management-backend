@@ -436,6 +436,7 @@ type FreightOutcome =
                   <span class="sum__lbl">Rate / KG
                     <span class="hint">(min {{ f.ratePerKg | number: '1.2-2' }}, increase only)</span>
                     @if (f.customerZoneName) { <span class="hint">· Customer zone {{ f.customerZoneName }}</span> }
+                    @else if (f.rateLevel === 'STATE') { <span class="hint">· State rate{{ f.stateName ? ' — ' + f.stateName : '' }} (no district rate)</span> }
                   </span>
                   <input class="factor-input" type="number" step="0.01" [min]="f.ratePerKg"
                          [value]="ratePerKgOverride() ?? f.ratePerKg"

@@ -74,12 +74,18 @@ export class DistrictFreightEdit implements OnInit {
       next: (r) => {
         this.breadcrumb.set([
           { label: 'District Level Freight', route: '/district-level-freight' },
-          { label: `${r.branchName ?? r.branchCode} → ${r.districtName ?? r.districtCode}`, route: `/district-level-freight/${this.id}` },
+          { label: `${r.branchName ?? r.branchCode} → ${r.level === 'STATE' ? (r.stateName ?? r.stateCode) : (r.districtName ?? r.districtCode)}`, route: `/district-level-freight/${this.id}` },
           { label: 'Edit' }
         ]);
         // The row only carries districtId — the district's own record has the stateId
         // needed to scope District's options before the form ever shows, so the form
         // doesn't briefly render the existing district as an unmatched blank selection.
+        if (r.level === 'STATE' || !r.districtId) {
+          // A state-level row has no district to scope by — it carries its own stateId.
+          this.row.set(r);
+          this.loading.set(false);
+          return;
+        }
         this.masters.get(MASTER_DEFINITIONS.districts, r.districtId).subscribe({
           next: (district) => {
             const stateId = (district['stateId'] as string | null) ?? null;

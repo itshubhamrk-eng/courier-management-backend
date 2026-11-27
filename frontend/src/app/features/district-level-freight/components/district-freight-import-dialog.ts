@@ -25,7 +25,7 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
   template: `
     <div class="imp">
       <h2 class="text-h2">Import District Level Freight</h2>
-      <p class="text-caption">Columns: From Station, District, and the six weight-slab rate columns. Blank rows and the ODA note row are ignored automatically.</p>
+      <p class="text-caption">Columns: From Station, District and/or State (fill one per row — a State row applies when a district has no rate of its own), and the six weight-slab rate columns. Blank rows and the ODA note row are ignored automatically.</p>
 
       @if (stage() === 'pick' || stage() === 'previewing') {
         <div class="picker">
@@ -45,13 +45,13 @@ type Stage = 'pick' | 'previewing' | 'previewed' | 'importing' | 'imported';
         </div>
         <div class="rows app-scroll">
           <table class="rtbl">
-            <thead><tr><th>Row</th><th>From Station</th><th>District</th><th>Outcome</th><th>Message</th></tr></thead>
+            <thead><tr><th>Row</th><th>From Station</th><th>District / State</th><th>Outcome</th><th>Message</th></tr></thead>
             <tbody>
               @for (r of s.rows; track r.rowNumber) {
                 <tr [class.err]="r.outcome === 'ERROR'">
                   <td>{{ r.rowNumber }}</td>
                   <td>{{ r.fromStation }}</td>
-                  <td>{{ r.district }}</td>
+                  <td>{{ r.district || r.state }}</td>
                   <td>{{ r.outcome }}</td>
                   <td>{{ r.message || '—' }}</td>
                 </tr>

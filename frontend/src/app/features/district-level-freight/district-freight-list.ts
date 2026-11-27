@@ -37,7 +37,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">District Level Freight</h1><p class="text-caption">Rate setup by From Station + District + weight slab — {{ page().totalElements }} in all.</p></div>
+        <div><h1 class="text-h1">District Level Freight</h1><p class="text-caption">Rate setup by From Station + District (or State) + weight slab — {{ page().totalElements }} in all.</p></div>
         <div class="page__actions">
           @if (can().create) { <app-button variant="stroked" icon="content_copy" (pressed)="openCopy()">Copy from branch</app-button> }
           <app-button variant="stroked" icon="upload_file" (pressed)="openImport()">Import Excel</app-button>
@@ -52,6 +52,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
         }
         <app-select [control]="stateFilter" label="State" [options]="stateOptions()" [allowEmpty]="true" placeholder="All states" />
         <app-select [control]="districtFilter" label="District" [options]="districtOptions()" [allowEmpty]="true" placeholder="All districts" />
+        <app-select [control]="levelFilter" label="Level" [options]="levelOptions" [allowEmpty]="true" placeholder="District + State" />
         <app-select [control]="statusFilter" label="Status" [options]="statusOptions" [allowEmpty]="true" placeholder="All statuses" />
       </div>
 
@@ -63,7 +64,7 @@ const WRITERS = [AppRole.COMPANY_ADMIN];
     </div>
   `,
   styles: [`
-    .filters { display:grid; grid-template-columns:repeat(4,minmax(0,220px)); gap:12px; margin-bottom:14px; }
+    .filters { display:grid; grid-template-columns:repeat(5,minmax(0,200px)); gap:12px; margin-bottom:14px; }
     @media (max-width:760px){ .filters { grid-template-columns:1fr; } }
   `]
 })
@@ -91,6 +92,8 @@ export class DistrictFreightList implements OnInit {
   readonly stateFilter = new FormControl<string | null>(null);
   readonly districtFilter = new FormControl<string | null>(null);
   readonly statusFilter = new FormControl<string | null>(null);
+  readonly levelFilter = new FormControl<string | null>(null);
+  readonly levelOptions: SelectOption[] = [{ value: 'DISTRICT', label: 'District rates' }, { value: 'STATE', label: 'State rates' }];
 
   private query: PageQuery = { page: 0, size: 20, sort: 'createdDate,desc' };
 
@@ -126,6 +129,7 @@ export class DistrictFreightList implements OnInit {
     });
     this.districtFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
     this.statusFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
+    this.levelFilter.valueChanges.subscribe(() => { this.query = { ...this.query, page: 0 }; this.load(); });
     this.load();
   }
 
@@ -134,6 +138,7 @@ export class DistrictFreightList implements OnInit {
       ...this.query, ...(size ? { size, page: 0 } : {}),
       branchId: this.branchFilter.value ?? undefined,
       districtId: this.districtFilter.value ?? undefined,
+      level: this.levelFilter.value ?? undefined,
       status: this.statusFilter.value ?? undefined
     };
   }
@@ -201,11 +206,11 @@ export class DistrictFreightList implements OnInit {
   }
 
   private download(rows: DistrictLevelFreight[]): void {
-    const header = ['branchName', 'districtName', ...WEIGHT_SLABS.map((s) => s.key), 'odaApplicable', 'odaCharge', 'status'];
+    const header = ['branchName', 'destination', ...WEIGHT_SLABS.map((s) => s.key), 'odaApplicable', 'odaCharge', 'status'];
     const slabCols = WEIGHT_SLABS.map((_, i) => 2 + i);
     const odaChargeCol = 2 + WEIGHT_SLABS.length + 1;
     const lines = rows.map((r) => [
-      r.branchName, r.districtName,
+      r.branchName, r.level === 'STATE' ? `${r.stateName ?? ''} (State)` : r.districtName,
       ...WEIGHT_SLABS.map((s) => (r as unknown as Record<string, unknown>)[s.key] as string | number),
       r.odaApplicable, r.odaCharge, r.status
     ]);

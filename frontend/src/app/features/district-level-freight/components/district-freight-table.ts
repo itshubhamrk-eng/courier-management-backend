@@ -22,11 +22,17 @@ export type DistrictFreightAction = 'view' | 'edit' | 'activate' | 'deactivate' 
   imports: [DecimalPipe, UiTable, StatusBadge, MatMenuModule, MatIconModule],
   template: `
     <app-table [columns]="columns" [rows]="rows()" [loading]="loading()" [sort]="sort()" [startIndex]="startIndex()"
-               emptyTitle="No District Level Freight rates" emptyHint="Add a rate for a From Station + District to get started."
+               emptyTitle="No District Level Freight rates" emptyHint="Add a rate for a From Station + District (or a whole State) to get started."
                (sortChange)="sortChange.emit($event)" (rowClick)="act('view', $event)">
       <ng-template #row let-r>
         <td><div class="cs">{{ r.branchName || '—' }}</div><span class="mono muted">{{ r.branchCode }}</span></td>
-        <td><div class="cs">{{ r.districtName || '—' }}</div><span class="mono muted">{{ r.districtCode }}</span></td>
+        <td>
+          @if (r.level === 'STATE') {
+            <div class="cs">{{ r.stateName || '—' }} <span class="chip">State</span></div><span class="mono muted">{{ r.stateCode }}</span>
+          } @else {
+            <div class="cs">{{ r.districtName || '—' }}</div><span class="mono muted">{{ r.districtCode }}</span>
+          }
+        </td>
         <td class="mono">{{ r.rate1To15 | number: '1.2-2' }}</td>
         <td class="mono">{{ r.rate16To50 | number: '1.2-2' }}</td>
         <td class="mono">{{ r.rate51To100 | number: '1.2-2' }}</td>
@@ -65,6 +71,7 @@ export type DistrictFreightAction = 'view' | 'edit' | 'activate' | 'deactivate' 
     .kebab { border:0; background:transparent; cursor:pointer; color:var(--content-muted); display:inline-flex; padding:4px; border-radius:8px; }
     .kebab:hover { background:var(--surface-muted); }
     .danger { color:var(--danger); }
+    .chip { font:600 13px var(--font-sans); padding:1px 8px; border-radius:999px; background:var(--brand-100); color:var(--brand-700, var(--content-fg)); margin-left:6px; }
   `]
 })
 export class DistrictFreightTable {
@@ -79,7 +86,7 @@ export class DistrictFreightTable {
 
   readonly columns: TableColumn<DistrictLevelFreight>[] = [
     { key: 'branch', header: 'From Station' },
-    { key: 'district', header: 'District' },
+    { key: 'district', header: 'District / State' },
     { key: 'rate1To15', header: '1-15 KG' },
     { key: 'rate16To50', header: '16-50 KG' },
     { key: 'rate51To100', header: '51-100 KG' },
