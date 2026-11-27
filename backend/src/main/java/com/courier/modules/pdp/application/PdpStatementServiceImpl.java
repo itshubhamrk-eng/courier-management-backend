@@ -70,14 +70,14 @@ public class PdpStatementServiceImpl implements PdpStatementService {
         }
         Branch partner = branchService.getById(branchId);
         if (partner.getBranchType() != BranchType.PICKUP_DELIVERY_PARTNER) {
-            throw new BusinessRuleException("Branch %s is not a Pickup-Delivery Partner.".formatted(partner.getBranchCode()));
+            throw new BusinessRuleException("Branch %s is not a Vendor.".formatted(partner.getBranchCode()));
         }
         if (statements.countOverlapping(companyId, branchId, from, to) > 0) {
-            throw new BusinessRuleException("This partner already has a statement overlapping %s to %s.".formatted(from, to));
+            throw new BusinessRuleException("This vendor already has a statement overlapping %s to %s.".formatted(from, to));
         }
         List<PdpEarning> billable = earnings.findBillable(companyId, branchId, from, to);
         if (billable.isEmpty()) {
-            throw new BusinessRuleException("This partner has no unbilled earnings between %s and %s.".formatted(from, to));
+            throw new BusinessRuleException("This vendor has no unbilled earnings between %s and %s.".formatted(from, to));
         }
         PdpStatement s = PdpStatement.builder().statementNo(nextNo(companyId)).branchId(branchId)
                 .periodFrom(from).periodTo(to).remarks(remarks == null || remarks.isBlank() ? null : remarks.trim())

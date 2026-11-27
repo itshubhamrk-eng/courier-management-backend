@@ -123,14 +123,14 @@ class PickupServiceImplTest {
     }
 
     @Test
-    @DisplayName("only a Pickup-Delivery Partner can be assigned")
+    @DisplayName("only a Vendor can be assigned")
     void assignRequiresPartner() {
         UUID plain = UUID.randomUUID();
         when(branchService.getById(plain)).thenReturn(partner(plain, BranchType.BRANCH, true));
         PickupRequest p = created(null);
 
         assertThatThrownBy(() -> service.assign(p.getId(), plain))
-                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a Pickup-Delivery Partner");
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a Vendor");
     }
 
     @Test

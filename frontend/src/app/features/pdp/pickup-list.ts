@@ -37,7 +37,7 @@ import { PickupAssignDialog, PickupCompleteDialog } from './pickup-dialogs';
     <div class="page">
       <header class="page__head">
         <div><h1 class="text-h1">Pickup Requests</h1>
-          <p class="text-caption">Collect shipments from customers through Pickup-Delivery Partners.</p></div>
+          <p class="text-caption">Collect shipments from customers through Vendors.</p></div>
         <div class="page__actions">
           <app-search placeholder="Search no., name, mobile, pincode…" (changed)="onSearch($event)" />
           @if (isAdmin()) { <app-button icon="add" (pressed)="create()">New Pickup</app-button> }
@@ -127,13 +127,13 @@ export class PickupList implements OnInit {
     { key: 'contact', header: 'Contact' },
     { key: 'address', header: 'Address' },
     { key: 'weight', header: 'Weight' },
-    { key: 'partner', header: 'Partner' },
+    { key: 'vendor', header: 'Vendor' },
     { key: 'status', header: 'Status', width: '150px' },
     { key: 'actions', header: '', align: 'right' }
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Pickup Requests' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Pickup Requests' }]);
     this.load();
   }
 

@@ -22,7 +22,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * A pickup or delivery rate card of one Pickup-Delivery Partner: header values here, per-kg
+ * A pickup or delivery rate card of one Vendor: header values here, per-kg
  * weight slabs in {@link PdpRateSlab}. {@code districtId == null} means every district.
  * What the partner is PAID — independent of what the customer is charged.
  */

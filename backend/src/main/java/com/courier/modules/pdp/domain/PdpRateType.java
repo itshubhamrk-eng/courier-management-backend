@@ -1,6 +1,6 @@
 package com.courier.modules.pdp.domain;
 
-/** Which job a Pickup-Delivery Partner rate card pays for. */
+/** Which job a Vendor rate card pays for. */
 public enum PdpRateType {
     /** Paid when the partner collects a shipment from the consignor. */
     PICKUP,

@@ -97,12 +97,12 @@ public enum PermissionModule {
     DRIVER("Drivers", 180),
     VEHICLE("Vehicles", 190),
     VENDOR("Vendors", 200),
-    /** Pickup-Delivery Partner management (a Branch of type PICKUP_DELIVERY_PARTNER). */
-    PDP("Pickup Delivery Partners", 205),
+    /** Vendor management (a Branch of type PICKUP_DELIVERY_PARTNER). */
+    PDP("Vendors", 205),
     /** PDP pickup- and delivery-rate cards (slabs). */
-    PDP_RATE("Partner Rates", 206),
+    PDP_RATE("Vendor Rates", 206),
     /** PDP earnings and billing statements. */
-    PDP_BILLING("Partner Billing", 207),
+    PDP_BILLING("Vendor Billing", 207),
 
     WALLET("Wallet", 210),
     PAYMENT("Payments", 220),

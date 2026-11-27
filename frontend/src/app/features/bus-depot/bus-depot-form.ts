@@ -19,7 +19,7 @@ const TYPE_OPTS: SelectOption[] = (Object.keys(BUS_DEPOT_TYPE_LABEL) as BusDepot
 
 /**
  * Create / edit one MSRTC bus depot or station. "Assigned Branch / Vendor" is optional: any
- * active branch of the company, including Pickup-Delivery Partners (vendors), or none.
+ * active branch of the company, including Vendors, or none.
  */
 @Component({
   selector: 'app-bus-depot-form',

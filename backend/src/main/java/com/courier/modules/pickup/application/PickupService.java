@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Pickup requests worked by Pickup-Delivery Partners. The company admin
+ * Pickup requests worked by Vendors. The company admin
  * create, edit, assign and cancel; the assigned partner (or an admin) accepts, rejects,
  * starts, completes or fails; a booked shipment is linked back with {@link #linkShipment}.
  * A partner-bound caller only ever sees requests assigned to their own branch.
@@ -30,10 +30,10 @@ public interface PickupService {
     /** Count per status for the caller's scope (all of the company's, or their own partner's). */
     Map<PickupStatus, Long> stats();
 
-    /** Assigns (or reassigns) to a Pickup-Delivery Partner. */
+    /** Assigns (or reassigns) to a Vendor. */
     PickupRequest assign(UUID id, UUID pdpBranchId);
 
-    /** The active Pickup-Delivery Partner mapped to this pickup's pincode (Pincode Branch Mapping), if any. */
+    /** The active Vendor mapped to this pickup's pincode (Pincode Branch Mapping), if any. */
     java.util.Optional<UUID> suggestPartner(UUID id);
 
     PickupRequest accept(UUID id);

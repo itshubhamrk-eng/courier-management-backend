@@ -21,7 +21,7 @@ import java.util.UUID;
 
 /**
  * An MSRTC bus depot or bus station, optionally assigned to the branch (or vendor — a
- * Pickup-Delivery Partner is a branch type) that handles it.
+ * Vendor is a branch type) that handles it.
  */
 @Entity
 @Getter

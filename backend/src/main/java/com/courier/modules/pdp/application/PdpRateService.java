@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** Pickup / delivery rate cards of Pickup-Delivery Partners. {@code COMPANY_ADMIN} writes; authenticated users read and calculate. */
+/** Pickup / delivery rate cards of Vendors. {@code COMPANY_ADMIN} writes; authenticated users read and calculate. */
 public interface PdpRateService {
 
     PdpRateView create(SaveCommand command);

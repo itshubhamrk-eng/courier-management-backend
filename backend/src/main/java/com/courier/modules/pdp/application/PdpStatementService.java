@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Billing statements of Pickup-Delivery Partners — the report the company pays against. Built
+ * Billing statements of Vendors — the report the company pays against. Built
  * from ACCRUED earnings; approving and paying are manual marks and never post to a wallet.
  * {@code COMPANY_ADMIN} only.
  */

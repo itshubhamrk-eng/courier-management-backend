@@ -6,7 +6,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { UiInput } from '@shared/components/ui-input/ui-input';
 import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
 
-/** Pick the Pickup-Delivery Partner a request is assigned to. */
+/** Pick the Vendor a request is assigned to. */
 @Component({
   selector: 'app-pickup-assign-dialog',
   standalone: true,
@@ -16,8 +16,8 @@ import { UiSelect, SelectOption } from '@shared/components/ui-select/ui-select';
     <h2 mat-dialog-title>Assign pickup</h2>
     <mat-dialog-content>
       <p class="sub">{{ data.pickup.pickupNo }} — {{ data.pickup.contactName }}, {{ data.pickup.pincode }}</p>
-      <app-select [control]="partner" label="Pickup-Delivery Partner" [options]="data.partners" placeholder="Select a partner" />
-      @if (data.suggested && !data.pickup.pdpBranchId) { <p class="hint">Preselected: the partner mapped to pincode {{ data.pickup.pincode }}.</p> }
+      <app-select [control]="partner" label="Vendor" [options]="data.partners" placeholder="Select a vendor" />
+      @if (data.suggested && !data.pickup.pdpBranchId) { <p class="hint">Preselected: the vendor mapped to pincode {{ data.pickup.pincode }}.</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <app-button variant="stroked" (pressed)="ref.close()">Cancel</app-button>

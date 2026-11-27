@@ -198,7 +198,7 @@ class PdpRateServiceImplTest {
 
         assertThatThrownBy(() -> service.create(new SaveCommand(plain, PdpRateType.PICKUP, null, BigDecimal.ZERO,
                 null, null, null, null, null, null, List.of(slab("0", null, "4")), null)))
-                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a Pickup-Delivery Partner");
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a Vendor");
     }
 
     @Test

@@ -78,7 +78,7 @@ public class PdpDashboardServiceImpl implements PdpDashboardService {
                 .filter(b -> b.getBranchType() == BranchType.PICKUP_DELIVERY_PARTNER)
                 .collect(Collectors.toMap(Branch::getId, b -> b, (a, b) -> a));
         if (scope != null && !partners.containsKey(scope)) {
-            throw new BusinessRuleException("That branch is not an active Pickup-Delivery Partner.");
+            throw new BusinessRuleException("That branch is not an active Vendor.");
         }
 
         LocalDate monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1);

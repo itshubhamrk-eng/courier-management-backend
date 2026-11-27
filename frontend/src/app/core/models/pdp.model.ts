@@ -1,5 +1,5 @@
 /**
- * Pickup-Delivery Partner (PDP) rate cards — mirrors backend `com.courier.modules.pdp`
+ * Vendor rate cards — mirrors backend `com.courier.modules.pdp`
  * (`PdpRateDtos`). A partner is a Branch of type PICKUP_DELIVERY_PARTNER; its pickup and
  * delivery rate cards say what the PARTNER is paid, independent of the customer's freight.
  */

@@ -290,17 +290,17 @@ public class PickupServiceImpl implements PickupService {
 
     private Branch requirePartner(UUID branchId) {
         if (branchId == null) {
-            throw new BusinessRuleException("A Pickup-Delivery Partner is required.");
+            throw new BusinessRuleException("A Vendor is required.");
         }
         Branch b = branchService.getById(branchId);
         if (b.getBranchType() != BranchType.PICKUP_DELIVERY_PARTNER) {
-            throw new BusinessRuleException("Branch %s is not a Pickup-Delivery Partner.".formatted(b.getBranchCode()));
+            throw new BusinessRuleException("Branch %s is not a Vendor.".formatted(b.getBranchCode()));
         }
         if (!b.isActive()) {
-            throw new BusinessRuleException("Partner %s is inactive.".formatted(b.getBranchCode()));
+            throw new BusinessRuleException("Vendor %s is inactive.".formatted(b.getBranchCode()));
         }
         if (!b.isAllowPickup()) {
-            throw new BusinessRuleException("Partner %s is not allowed to do pickups.".formatted(b.getBranchCode()));
+            throw new BusinessRuleException("Vendor %s is not allowed to do pickups.".formatted(b.getBranchCode()));
         }
         return b;
     }

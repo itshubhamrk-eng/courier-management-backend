@@ -4,7 +4,7 @@ import { MasterDataService } from '@features/masters/master-data.service';
 import { AuthService } from './auth.service';
 
 /**
- * Is the signed-in user staffed at a Pickup-Delivery Partner? A partner only collects and delivers,
+ * Is the signed-in user staffed at a Vendor? A partner only collects and delivers,
  * so the sidebar narrows to that work (see `NavigationService`). Read from the branch directory by
  * the user's own `branchId`; false for anyone without a branch (admins) or when it cannot be read —
  * failing open to the full menu, never closed.

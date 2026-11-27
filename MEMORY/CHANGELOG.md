@@ -14,6 +14,11 @@ All notable changes to this project. Format based on
 - Excel import dialog now asks which branch(es) to create the rates for (multi-select, required); every sheet row applies to each picked branch, the sheet's From Station column is optional and ignored. API: optional repeated `branchId` on `/district-level-freight/import[/preview]`; without it the sheet's From Station column still works.
 - Design + plan: `docs/superpowers/specs|plans/2026-11-27-state-level-freight*`. Verified live on a cloned DB (booking fallback, district wins, deactivate fall-through, copy, import incl. bad rows and a legacy sheet). Branch `feat/state-level-freight`, not merged/deployed.
 
+## 2026-11-27 - Pickup Delivery Partner renamed to Vendor (V157, labels only)
+
+- UI text, error messages and Swagger descriptions now say "Vendor". Codes, enum `PICKUP_DELIVERY_PARTNER`, routes (`/pdp/...`), permission codes untouched.
+- V157 renames menu `pdp-management` title and `PDP_*` permission names. Menu items like "Partner Rates" / "Partners" still say Partner.
+
 ## 2026-11-27 - Shipment Copy shows consignor/consignee address + contact (no migration)
 
 - Shipment Copy Mode of Payment now prints only the selected mode (TO PAY / PAID / CREDIT) as plain bold 13px text; no checkbox list. Blank when the mode is unknown.

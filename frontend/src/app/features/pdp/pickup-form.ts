@@ -44,7 +44,7 @@ const SLOTS: SelectOption[] = ['Morning (9-12)', 'Afternoon (12-4)', 'Evening (4
               <app-input [control]="c('preferredDate')" label="Preferred date" type="date" />
               <app-select [control]="c('preferredSlot')" label="Preferred slot" [options]="slots" [allowEmpty]="true" emptyLabel="Any time" placeholder="Any time" />
               @if (!editing()) {
-                <app-select [control]="c('pdpBranchId')" label="Assign to partner (optional)" [options]="partners()" [allowEmpty]="true" emptyLabel="Assign later" placeholder="Assign later" />
+                <app-select [control]="c('pdpBranchId')" label="Assign to vendor (optional)" [options]="partners()" [allowEmpty]="true" emptyLabel="Assign later" placeholder="Assign later" />
               }
               <app-input class="wide" [control]="c('remarks')" label="Remarks" [maxLength]="500" />
             </div>
@@ -95,7 +95,7 @@ export class PickupForm implements OnInit {
   });
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Pickup Requests', route: '/pdp/pickups' }, { label: this.id ? 'Edit' : 'New' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Pickup Requests', route: '/pdp/pickups' }, { label: this.id ? 'Edit' : 'New' }]);
     this.pdp.partners({ page: 0, size: 200 }).subscribe((r) =>
       this.partners.set(r.content.filter((b) => b.status === 'ACTIVE').map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));
     if (this.id) {

@@ -2338,7 +2338,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     /**
-     * A Pickup-Delivery Partner may only mark a shipment delivered with a POD photo on file —
+     * A Vendor may only mark a shipment delivered with a POD photo on file —
      * sent with this call, or already captured (POD Auto Verification stores it before
      * "Complete Delivery"). Every other delivery branch keeps POD optional at this step.
      */
@@ -2354,7 +2354,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 || shipmentAssetRepository.findAllByShipmentIdWithinCompany(shipment.getId(), companyId).stream()
                         .anyMatch(a -> a.getAssetType() == ShipmentAssetType.POD && "PHOTO".equals(a.getKind()));
         if (!photoOnFile) {
-            throw new BusinessRuleException("A POD photo is required before a Pickup-Delivery Partner can mark "
+            throw new BusinessRuleException("A POD photo is required before a Vendor can mark "
                     + "shipment %s delivered. Upload the POD first.".formatted(shipment.getShipmentNumber()));
         }
     }

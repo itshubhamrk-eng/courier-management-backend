@@ -128,23 +128,23 @@ export const NAVIGATION: NavNode[] = [
     // branch), not Customers.
   },
 
-  // Pickup Delivery Partner Management: partners who only collect (pickup) and deliver, each paid
+  // Vendor Management: partners who only collect (pickup) and deliver, each paid
   // from its own pickup / delivery rate cards. COMPANY_ADMIN-only back-office setup, a separate
   // top-level group (not part of Branches). A partner is a Branch of type PICKUP_DELIVERY_PARTNER.
   {
-    id: 'pdp-management', title: 'Pickup Delivery Partner Management', icon: 'handshake', order: 2.7,
+    id: 'pdp-management', title: 'Vendor Management', icon: 'handshake', order: 2.7,
     children: [
       // Dashboard also serves a partner's own login; the server pins it to the caller's branch, so no permission gate.
       { id: 'pdp-dashboard', title: 'Dashboard', icon: 'dashboard', route: '/pdp/dashboard', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
-      { id: 'pdp-partners', title: 'Partners', icon: 'groups', route: '/pdp/partners', permission: 'PDP_READ', roles: COMPANY_ONLY },
-      { id: 'pdp-rates', title: 'Partner Rates', icon: 'request_quote', route: '/pdp/rates', permission: 'PDP_RATE_READ', roles: COMPANY_ONLY },
+      { id: 'pdp-partners', title: 'Vendors', icon: 'groups', route: '/pdp/partners', permission: 'PDP_READ', roles: COMPANY_ONLY },
+      { id: 'pdp-rates', title: 'Vendor Rates', icon: 'request_quote', route: '/pdp/rates', permission: 'PDP_RATE_READ', roles: COMPANY_ONLY },
       { id: 'pdp-pickups', title: 'Pickup Requests', icon: 'inventory_2', route: '/pdp/pickups', permission: 'PICKUP_READ', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
       // Deliveries, earnings and statements also serve a partner's own login (BRANCH_MANAGER): the
       // server scopes them to the caller's own branch, so these carry no permission gate.
       { id: 'pdp-my-rates', title: 'My Rates', icon: 'request_quote', route: '/pdp/my-rates', roles: [AppRole.BRANCH_MANAGER] },
-      { id: 'pdp-deliveries', title: 'Partner Deliveries', icon: 'moving', route: '/pdp/deliveries', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
-      { id: 'pdp-earnings', title: 'Partner Earnings', icon: 'payments', route: '/pdp/earnings', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
-      { id: 'pdp-billing', title: 'Partner Billing', icon: 'receipt_long', route: '/pdp/billing', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] }
+      { id: 'pdp-deliveries', title: 'Vendor Deliveries', icon: 'moving', route: '/pdp/deliveries', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
+      { id: 'pdp-earnings', title: 'Vendor Earnings', icon: 'payments', route: '/pdp/earnings', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] },
+      { id: 'pdp-billing', title: 'Vendor Billing', icon: 'receipt_long', route: '/pdp/billing', roles: [...COMPANY_ONLY, AppRole.BRANCH_MANAGER] }
     ]
   },
 

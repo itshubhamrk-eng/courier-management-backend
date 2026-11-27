@@ -73,7 +73,7 @@ public class PdpBillingCycleService {
         UUID company = requireCompany();
         Branch partner = branchService.getById(branchId);
         if (partner.getBranchType() != BranchType.PICKUP_DELIVERY_PARTNER) {
-            throw new BusinessRuleException("Branch %s is not a Pickup-Delivery Partner.".formatted(partner.getBranchCode()));
+            throw new BusinessRuleException("Branch %s is not a Vendor.".formatted(partner.getBranchCode()));
         }
         if (frequency == null) {
             throw new BusinessRuleException("A billing frequency is required.");
@@ -100,10 +100,10 @@ public class PdpBillingCycleService {
             try {
                 created += CompanyContext.runAs(company, () -> runForBoundCompany(today));
             } catch (Exception e) {
-                log.error("Partner billing cycle failed for company {}", company, e);
+                log.error("Vendor billing cycle failed for company {}", company, e);
             }
         }
-        log.info("Partner billing cycle for {}: {} statement(s) created", today, created);
+        log.info("Vendor billing cycle for {}: {} statement(s) created", today, created);
         return created;
     }
 
@@ -120,7 +120,7 @@ public class PdpBillingCycleService {
                         "Auto-generated for the " + row.frequency().name().toLowerCase().replace('_', ' ') + " cycle");
                 created++;
             } catch (Exception e) {
-                log.error("Could not bill partner {}", p.code(), e);
+                log.error("Could not bill vendor {}", p.code(), e);
             }
         }
         return created;

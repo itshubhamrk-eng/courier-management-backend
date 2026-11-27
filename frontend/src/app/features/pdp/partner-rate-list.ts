@@ -19,11 +19,11 @@ interface PartnerRateRow { partner: Branch; pickup: number; delivery: number; }
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Partner Rates</h1>
-          <p class="text-caption">What each partner is paid — separate pickup and delivery rate cards with weight slabs.</p></div>
+        <div><h1 class="text-h1">Vendor Rates</h1>
+          <p class="text-caption">What each vendor is paid — separate pickup and delivery rate cards with weight slabs.</p></div>
       </header>
       <app-table [columns]="columns" [rows]="rows()" [loading]="loading()"
-                 emptyTitle="No partners" emptyHint="Create a Pickup-Delivery Partner first, then set its rates here."
+                 emptyTitle="No vendors" emptyHint="Create a Vendor first, then set its rates here."
                  (rowClick)="open($event)">
         <ng-template #row let-r>
           <td><strong>{{ r.partner.branchName }}</strong><div class="text-caption">{{ r.partner.branchCode }}</div></td>
@@ -46,14 +46,14 @@ export class PartnerRateList implements OnInit {
   protected readonly rows = signal<PartnerRateRow[]>([]);
   protected readonly loading = signal(true);
   protected readonly columns: TableColumn<PartnerRateRow>[] = [
-    { key: 'partner', header: 'Partner' },
+    { key: 'vendor', header: 'Vendor' },
     { key: 'pickup', header: 'Pickup Rates' },
     { key: 'delivery', header: 'Delivery Rates' },
     { key: 'actions', header: '', width: '130px', align: 'right' }
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Rates' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Rates' }]);
     forkJoin({ partners: this.service.partners({ page: 0, size: 200 }), rates: this.service.rates() }).subscribe({
       next: ({ partners, rates }) => {
         const count = (id: string, t: PdpRate['rateType']) => (rates ?? []).filter((r) => r.branchId === id && r.rateType === t && r.status === 'ACTIVE').length;

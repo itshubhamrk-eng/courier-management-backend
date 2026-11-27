@@ -228,7 +228,7 @@ public sealed interface ShipmentEvent {
     }
 
     /**
-     * A shipment delivered by a Pickup-Delivery Partner is DELIVERED with its POD approved — the
+     * A shipment delivered by a Vendor is DELIVERED with its POD approved — the
      * moment the partner's delivery rate card applies. Published instead of the branch
      * delivery-commission events (a partner is paid from its rate card, not the branch commission
      * fields). Handled synchronously by the pdp module, which accrues an earning; nothing here

@@ -21,7 +21,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * What a Pickup-Delivery Partner is owed for one job. Accrued only — never credited to a
+ * What a Vendor is owed for one job. Accrued only — never credited to a
  * wallet. All pricing inputs are snapshotted so editing a rate card never rewrites history.
  */
 @Entity

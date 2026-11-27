@@ -8,7 +8,7 @@ import {
 } from '@core/models/pdp.model';
 
 /**
- * Pickup-Delivery Partners — a Partner is a `Branch` row with `branchType:
+ * Vendors — a Partner is a `Branch` row with `branchType:
  * 'PICKUP_DELIVERY_PARTNER'`; listing reuses `GET /branches?branchType=…`, create/edit reuse the
  * Branch screens. Rate cards have their own endpoint (`/pdp-rates`).
  */

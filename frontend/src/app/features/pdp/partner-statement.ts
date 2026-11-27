@@ -124,7 +124,7 @@ export class PartnerStatement implements OnInit {
   protected readonly payRef = new FormControl<string>('', { nonNullable: true });
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Billing', route: '/pdp/billing' }, { label: 'Statement' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Billing', route: '/pdp/billing' }, { label: 'Statement' }]);
     this.svc.statement(this.id).subscribe({
       next: (d) => { this.detail.set(d); this.loading.set(false); },
       error: () => { this.loading.set(false); this.back(); }
@@ -159,7 +159,7 @@ export class PartnerStatement implements OnInit {
     const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = d.lines.map((e: PdpEarning) => [e.earningType, e.earnedOn, e.referenceNo, e.pincode, e.chargeableWeightKg ?? e.actualWeightKg,
       e.ratePerKg, e.weightCharge, e.mathadiCharge + e.odaCharge, e.totalAmount].map(q).join(','));
-    const csv = [`Statement,${q(d.statement.statementNo)},Partner,${q(d.statement.branchName)},Period,${d.statement.periodFrom} to ${d.statement.periodTo}`,
+    const csv = [`Statement,${q(d.statement.statementNo)},Vendor,${q(d.statement.branchName)},Period,${d.statement.periodFrom} to ${d.statement.periodTo}`,
       ['Type', 'Date', 'Reference', 'Pincode', 'Weight kg', 'Rate/kg', 'Weight charge', 'Extras', 'Amount'].join(','), ...rows,
       `Net payable,${d.statement.netPayable}`].join('\n');
     const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));

@@ -51,7 +51,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Partner Billing", description = "Earnings and billing statements of Pickup-Delivery Partners")
+@Tag(name = "Vendor Billing", description = "Earnings and billing statements of Vendors")
 public class PdpBillingController {
 
     private static final int MAX_PAGE_SIZE = 200;
@@ -63,7 +63,7 @@ public class PdpBillingController {
     private final PdpDashboardService dashboardService;
 
     @GetMapping("/api/v1/pdp-earnings")
-    @Operation(summary = "List partner earnings", description = "Newest first. ACCRUED = priced and unbilled, UNRATED = no "
+    @Operation(summary = "List vendor earnings", description = "Newest first. ACCRUED = priced and unbilled, UNRATED = no "
             + "rate card then (amount 0), BILLED = on a statement. `size` capped at 200.")
     public ApiResponse<PageResponse<EarningResponse>> earnings(
             @RequestParam(required = false) UUID branchId,
@@ -96,8 +96,8 @@ public class PdpBillingController {
     }
 
     @GetMapping("/api/v1/pdp-statements/schedule")
-    @Operation(summary = "Billing frequency and next statement due, per partner",
-            description = "A partner with no setting is billed monthly. `due` = its cycle has closed with unbilled earnings.")
+    @Operation(summary = "Billing frequency and next statement due, per vendor",
+            description = "A vendor with no setting is billed monthly. `due` = its cycle has closed with unbilled earnings.")
     public ApiResponse<List<ScheduleResponse>> schedule() {
         return ApiResponse.success(cycleService.schedule(PdpBillingCycleService.today()).stream()
                 .map(r -> new ScheduleResponse(r.branchId(), r.branchCode(), r.branchName(), r.frequency(), r.lastBilledTo(),
@@ -105,7 +105,7 @@ public class PdpBillingController {
     }
 
     @PutMapping("/api/v1/pdp-billing-frequency/{branchId}")
-    @Operation(summary = "Set a partner's billing frequency", description = "WEEKLY, FIFTEEN_DAYS or MONTHLY.")
+    @Operation(summary = "Set a vendor's billing frequency", description = "WEEKLY, FIFTEEN_DAYS or MONTHLY.")
     public ApiResponse<FrequencyRequest> setFrequency(@PathVariable UUID branchId, @Valid @RequestBody FrequencyRequest r) {
         return ApiResponse.success(new FrequencyRequest(cycleService.setFrequency(branchId, r.frequency())), "Billing frequency saved");
     }
@@ -124,7 +124,7 @@ public class PdpBillingController {
     }
 
     @PostMapping("/api/v1/pdp-statements")
-    @Operation(summary = "Generate a statement", description = "Bills every ACCRUED, unbilled earning of the partner "
+    @Operation(summary = "Generate a statement", description = "Bills every ACCRUED, unbilled earning of the vendor "
             + "dated within the period. Errors if there are none.")
     public ApiResponse<StatementDetailResponse> generate(@Valid @RequestBody GenerateRequest r) {
         return ApiResponse.success(toDetail(statementService.generate(r.branchId(), r.from(), r.to(), r.remarks())),
@@ -151,8 +151,8 @@ public class PdpBillingController {
     }
 
     @GetMapping("/api/v1/pdp-dashboard")
-    @Operation(summary = "Pickup-Delivery Partner dashboard", description = "Pickups, deliveries, earnings and statements. "
-            + "A company admin sees every partner (or one via `branchId`); a partner login always sees only its own.")
+    @Operation(summary = "Vendor dashboard", description = "Pickups, deliveries, earnings and statements. "
+            + "A company admin sees every vendor (or one via `branchId`); a vendor login always sees only its own.")
     public ApiResponse<PdpDashboardDtos.DashboardResponse> dashboard(@RequestParam(required = false) UUID branchId) {
         return ApiResponse.success(dashboardService.dashboard(branchId));
     }

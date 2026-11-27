@@ -38,14 +38,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Pickup requests. Staff create/edit/assign/cancel; the assigned Pickup-Delivery Partner works
+ * Pickup requests. Staff create/edit/assign/cancel; the assigned Vendor works
  * them (accept, reject, start, complete, fail). Role and branch rules live on the service.
  */
 @RestController
 @RequestMapping("/api/v1/pickups")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Pickups", description = "Pickup requests worked by Pickup-Delivery Partners")
+@Tag(name = "Pickups", description = "Pickup requests worked by Vendors")
 public class PickupController {
 
     private static final int MAX_PAGE_SIZE = 100;
@@ -82,7 +82,7 @@ public class PickupController {
     }
 
     @GetMapping("/{id}/suggested-partner")
-    @Operation(summary = "Partner suggested for this pickup", description = "The active Pickup-Delivery Partner mapped to "
+    @Operation(summary = "Vendor suggested for this pickup", description = "The active Vendor mapped to "
             + "the pickup's pincode in Pincode Branch Mapping. `data` is null when there is none. Admin only.")
     public ApiResponse<UUID> suggestedPartner(@PathVariable UUID id) {
         return ApiResponse.success(service.suggestPartner(id).orElse(null));
@@ -101,25 +101,25 @@ public class PickupController {
     }
 
     @PatchMapping("/{id}/assign")
-    @Operation(summary = "Assign to a Pickup-Delivery Partner")
+    @Operation(summary = "Assign to a Vendor")
     public ApiResponse<PickupResponse> assign(@PathVariable UUID id, @Valid @RequestBody AssignRequest r) {
         return ApiResponse.success(toResponse(service.assign(id, r.pdpBranchId()), new HashMap<>()), "Pickup assigned");
     }
 
     @PatchMapping("/{id}/accept")
-    @Operation(summary = "Partner accepts the assignment")
+    @Operation(summary = "Vendor accepts the assignment")
     public ApiResponse<PickupResponse> accept(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.accept(id), new HashMap<>()), "Pickup accepted");
     }
 
     @PatchMapping("/{id}/reject")
-    @Operation(summary = "Partner rejects the assignment", description = "Returns the request to the pool.")
+    @Operation(summary = "Vendor rejects the assignment", description = "Returns the request to the pool.")
     public ApiResponse<PickupResponse> reject(@PathVariable UUID id, @Valid @RequestBody ReasonRequest r) {
         return ApiResponse.success(toResponse(service.reject(id, r.reason()), new HashMap<>()), "Pickup rejected");
     }
 
     @PatchMapping("/{id}/start")
-    @Operation(summary = "Partner heads out for the pickup")
+    @Operation(summary = "Vendor heads out for the pickup")
     public ApiResponse<PickupResponse> start(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.start(id), new HashMap<>()), "Pickup started");
     }

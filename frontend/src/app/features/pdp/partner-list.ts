@@ -10,7 +10,7 @@ import { UiButton } from '@shared/components/ui-button/ui-button';
 import { StatusBadge } from '@shared/components/status-badge/status-badge';
 import { PdpService } from './pdp.service';
 
-/** Pickup-Delivery Partners — a filtered Branch list (see `PdpService`). New / edit reuse the
+/** Vendors — a filtered Branch list (see `PdpService`). New / edit reuse the
  *  Branch screens: a partner is created exactly like a branch with the PDP type preselected. */
 @Component({
   selector: 'app-partner-list',
@@ -20,16 +20,16 @@ import { PdpService } from './pdp.service';
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Pickup Delivery Partners</h1>
-          <p class="text-caption">Partners who collect (pickup) and deliver shipments for your company.</p></div>
+        <div><h1 class="text-h1">Vendors</h1>
+          <p class="text-caption">Vendors who collect (pickup) and deliver shipments for your company.</p></div>
         <div class="page__actions">
-          <app-search placeholder="Search partners…" (changed)="onSearch($event)" />
-          <app-button icon="add" (pressed)="newPartner()">New Partner</app-button>
+          <app-search placeholder="Search vendors…" (changed)="onSearch($event)" />
+          <app-button icon="add" (pressed)="newPartner()">New Vendor</app-button>
         </div>
       </header>
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [sort]="sort()"
                  [startIndex]="page().page * page().size"
-                 emptyTitle="No partners yet" emptyHint="Create a Pickup-Delivery Partner to get started."
+                 emptyTitle="No vendors yet" emptyHint="Create a Vendor to get started."
                  (sortChange)="onSort($event)" (rowClick)="open($event)" idKey="id">
         <ng-template #row let-p>
           <td><div class="cs">{{ p.branchName }}</div><div class="text-caption">{{ p.branchCode }}</div></td>
@@ -57,7 +57,7 @@ export class PartnerList implements OnInit {
   private query: PageQuery = { page: 0, size: 20 };
 
   readonly columns: TableColumn<Branch>[] = [
-    { key: 'branchName', header: 'Partner' },
+    { key: 'branchName', header: 'Vendor' },
     { key: 'city', header: 'Location' },
     { key: 'state', header: 'State' },
     { key: 'status', header: 'Status', width: '120px' },
@@ -65,7 +65,7 @@ export class PartnerList implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partners' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendors' }]);
     this.load();
   }
 

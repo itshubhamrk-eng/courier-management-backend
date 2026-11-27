@@ -863,7 +863,7 @@ class ShipmentMovementServiceImplTest {
     }
 
     @Test
-    @DisplayName("a Pickup-Delivery Partner cannot mark a shipment delivered without a POD photo")
+    @DisplayName("a Vendor cannot mark a shipment delivered without a POD photo")
     void partnerDeliveryRequiresPod() {
         Shipment shipment = partnerDelivery(false);
 

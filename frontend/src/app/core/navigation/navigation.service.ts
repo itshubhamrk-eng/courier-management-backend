@@ -13,7 +13,7 @@ import { NavNode } from './navigation.model';
 const COLLAPSE_KEY = 'cs.sidebar.collapsed';
 const EXPAND_KEY = 'cs.sidebar.expanded';
 
-/** A Pickup-Delivery Partner only collects and delivers: these top-level groups, and inside
+/** A Vendor only collects and delivers: these top-level groups, and inside
  *  Operations only the booking + delivery-desk leaves, are all its sidebar shows. */
 const PARTNER_GROUPS = new Set(['dashboard', 'pdp-management', 'operations', 'finance', 'reports']);
 const PARTNER_OPERATIONS = new Set([

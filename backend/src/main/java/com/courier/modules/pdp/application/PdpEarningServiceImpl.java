@@ -88,7 +88,7 @@ public class PdpEarningServiceImpl implements PdpEarningService {
                 .weightCharge(e.getWeightCharge().negate()).mathadiCharge(e.getMathadiCharge().negate())
                 .odaCharge(e.getOdaCharge().negate()).totalAmount(e.getTotalAmount().negate())
                 .remark("Reversal of " + e.getReferenceNo() + " (shipment cancelled)").build());
-        log.info("PDP earning {} reversed after billing; adjustment accrued for partner {}", e.getReferenceNo(), e.getBranchId());
+        log.info("PDP earning {} reversed after billing; adjustment accrued for vendor {}", e.getReferenceNo(), e.getBranchId());
     }
 
     @Override
@@ -121,7 +121,7 @@ public class PdpEarningServiceImpl implements PdpEarningService {
             throw new BusinessRuleException("Only an unrated earning can be re-priced.");
         }
         if (!price(e)) {
-            throw new BusinessRuleException("Still no active %s rate for this partner and district."
+            throw new BusinessRuleException("Still no active %s rate for this vendor and district."
                     .formatted(e.getEarningType().name().toLowerCase()));
         }
         PdpEarning saved = earnings.save(e);
@@ -143,9 +143,9 @@ public class PdpEarningServiceImpl implements PdpEarningService {
                 .actualWeightKg(weightKg).status(PdpEarningStatus.UNRATED)
                 .remark("No active rate card").build();
         if (price(e)) {
-            log.info("PDP {} earning {} for partner {}: {}", type, referenceNo, branchId, e.getTotalAmount());
+            log.info("PDP {} earning {} for vendor {}: {}", type, referenceNo, branchId, e.getTotalAmount());
         } else {
-            log.warn("PDP {} earning {} for partner {} left UNRATED — no active rate card", type, referenceNo, branchId);
+            log.warn("PDP {} earning {} for vendor {} left UNRATED — no active rate card", type, referenceNo, branchId);
         }
         earnings.save(e);
     }

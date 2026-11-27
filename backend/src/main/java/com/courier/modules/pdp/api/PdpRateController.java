@@ -32,18 +32,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-/** Pickup / delivery rate cards of Pickup-Delivery Partners. Writes are {@code COMPANY_ADMIN} (enforced on the service). */
+/** Pickup / delivery rate cards of Vendors. Writes are {@code COMPANY_ADMIN} (enforced on the service). */
 @RestController
 @RequestMapping("/api/v1/pdp-rates")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Partner Rates", description = "Pickup and delivery rate cards of Pickup-Delivery Partners")
+@Tag(name = "Vendor Rates", description = "Pickup and delivery rate cards of Vendors")
 public class PdpRateController {
 
     private final PdpRateService service;
 
     @GetMapping
-    @Operation(summary = "List partner rate cards", description = "Optionally for one partner and/or one type.")
+    @Operation(summary = "List vendor rate cards", description = "Optionally for one vendor and/or one type.")
     public ApiResponse<List<RateResponse>> list(@RequestParam(required = false) UUID branchId,
                                                 @RequestParam(required = false) PdpRateType rateType) {
         return ApiResponse.success(service.search(branchId, rateType).stream().map(this::toResponse).toList());
@@ -56,9 +56,9 @@ public class PdpRateController {
     }
 
     @PostMapping
-    @Operation(summary = "Create a rate card", description = "`branchId` must be a Pickup-Delivery Partner. Slabs "
+    @Operation(summary = "Create a rate card", description = "`branchId` must be a Vendor. Slabs "
             + "are half-open [min,max), non-overlapping; only the last may have no maximum. One active card per "
-            + "partner, type and district in any period.")
+            + "vendor, type and district in any period.")
     public ApiResponse<RateResponse> create(@Valid @RequestBody SaveRequest r) {
         return ApiResponse.success(toResponse(service.create(toCommand(r))), "Rate created");
     }
@@ -89,8 +89,8 @@ public class PdpRateController {
     }
 
     @PostMapping("/calculate")
-    @Operation(summary = "What a partner is paid for one job", description = "Read-only. District card first, "
-            + "else the partner's all-districts card; errors if neither is live on the date.")
+    @Operation(summary = "What a vendor is paid for one job", description = "Read-only. District card first, "
+            + "else the vendor's all-districts card; errors if neither is live on the date.")
     public ApiResponse<CalculateResponse> calculate(@Valid @RequestBody CalculateRequest r) {
         Quote q = service.calculate(new QuoteCommand(r.branchId(), r.rateType(), r.districtId(),
                 r.actualWeight(), r.odaApplicable(), r.date()));

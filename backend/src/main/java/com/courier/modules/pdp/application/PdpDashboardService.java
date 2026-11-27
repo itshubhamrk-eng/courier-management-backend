@@ -4,7 +4,7 @@ import com.courier.modules.pdp.api.PdpDashboardDtos.DashboardResponse;
 
 import java.util.UUID;
 
-/** Read-only figures for the Pickup-Delivery Partner dashboard. */
+/** Read-only figures for the Vendor dashboard. */
 public interface PdpDashboardService {
 
     /**

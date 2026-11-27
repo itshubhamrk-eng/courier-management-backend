@@ -51,14 +51,14 @@ function slabsValid(array: AbstractControl): ValidationErrors | null {
     <div class="page">
       <header class="page__head">
         <div>
-          <h1 class="text-h1">{{ partnerName() || 'Partner' }} — Rates</h1>
-          <p class="text-caption">What this partner is paid. Pickup and delivery are priced separately.</p>
+          <h1 class="text-h1">{{ partnerName() || 'Vendor' }} — Rates</h1>
+          <p class="text-caption">What this vendor is paid. Pickup and delivery are priced separately.</p>
         </div>
         <app-button variant="stroked" (pressed)="back()">Back</app-button>
       </header>
 
-      <p class="note-line">These rates are what the partner is <strong>paid</strong>. What the customer is <strong>charged</strong> for this partner's bookings comes from
-        <a (click)="goFreight()" class="lnk">District Level Freight</a> rows set for this partner as the From Station.</p>
+      <p class="note-line">These rates are what the vendor is <strong>paid</strong>. What the customer is <strong>charged</strong> for this vendor's bookings comes from
+        <a (click)="goFreight()" class="lnk">District Level Freight</a> rows set for this vendor as the From Station.</p>
 
       <div class="tabs" role="tablist">
         <button type="button" role="tab" [class.on]="type() === 'PICKUP'" (click)="setType('PICKUP')">Pickup Rates</button>
@@ -69,7 +69,7 @@ function slabsValid(array: AbstractControl): ValidationErrors | null {
         <app-loader [minHeight]="240" caption="Loading…" />
       } @else {
         <app-card [title]="type() === 'PICKUP' ? 'Pickup rate cards' : 'Delivery rate cards'"
-                  [subtitle]="type() === 'PICKUP' ? 'Paid when the partner collects a shipment.' : 'Paid when the partner delivers and the POD is approved.'">
+                  [subtitle]="type() === 'PICKUP' ? 'Paid when the vendor collects a shipment.' : 'Paid when the vendor delivers and the POD is approved.'">
           @if (cards().length) {
             <table class="cards">
               <thead><tr><th>District</th><th>Min weight</th><th>Slabs</th><th>Validity</th><th>Status</th><th></th></tr></thead>
@@ -143,7 +143,7 @@ function slabsValid(array: AbstractControl): ValidationErrors | null {
           </form>
 
           @if (editing()) {
-            <app-card title="Test a quote" subtitle="What the partner would be paid for a sample job, using the saved card.">
+            <app-card title="Test a quote" subtitle="What the vendor would be paid for a sample job, using the saved card.">
               <div class="grid">
                 <app-input [control]="qWeight" label="Actual weight (kg)" type="number" [min]="0" [step]="0.5" />
                 @if (type() === 'DELIVERY') { <label class="oda"><input type="checkbox" [checked]="qOda()" (change)="qOda.set(!qOda())" /> ODA applies</label> }
@@ -155,7 +155,7 @@ function slabsValid(array: AbstractControl): ValidationErrors | null {
                   <dt>Rate / kg</dt><dd>{{ r.ratePerKg }}</dd>
                   <dt>Weight charge</dt><dd>{{ r.weightCharge }}</dd>
                   @if (type() === 'DELIVERY') { <dt>Mathadi</dt><dd>{{ r.mathadiCharge }}</dd><dt>ODA</dt><dd>{{ r.odaCharge }}</dd> }
-                  <dt class="tot">Partner is paid</dt><dd class="tot">{{ r.total }}</dd>
+                  <dt class="tot">Vendor is paid</dt><dd class="tot">{{ r.total }}</dd>
                 </dl>
               }
             </app-card>
@@ -240,7 +240,7 @@ export class PartnerRateEdit implements OnInit {
   protected readonly qWeight = this.fb.nonNullable.control<number>(10, [Validators.min(0.001)]);
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Rates', route: '/pdp/rates' }, { label: 'Rates' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Rates', route: '/pdp/rates' }, { label: 'Rates' }]);
     this.service.partners({ page: 0, size: 200 }).subscribe((p) => {
       const b = p.content.find((x) => x.id === this.branchId);
       if (b) this.partnerName.set(`${b.branchName} (${b.branchCode})`);

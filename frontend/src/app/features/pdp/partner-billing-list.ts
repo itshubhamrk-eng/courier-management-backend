@@ -33,14 +33,14 @@ const STATUSES: SelectOption[] = [{ value: 'DRAFT', label: 'Draft' }, { value: '
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Partner Billing</h1>
-          <p class="text-caption">Statements of what each Pickup-Delivery Partner is owed for a period.</p></div>
+        <div><h1 class="text-h1">Vendor Billing</h1>
+          <p class="text-caption">Statements of what each Vendor is owed for a period.</p></div>
       </header>
 
       @if (isAdmin()) {
-      <app-card title="Generate a statement" subtitle="Bills every accrued, unbilled pickup and delivery earning of the partner in the period.">
+      <app-card title="Generate a statement" subtitle="Bills every accrued, unbilled pickup and delivery earning of the vendor in the period.">
         <div class="gen">
-          <app-select [control]="gPartner" label="Partner" [options]="partnerOpts()" placeholder="Select a partner" />
+          <app-select [control]="gPartner" label="Vendor" [options]="partnerOpts()" placeholder="Select a vendor" />
           <app-input [control]="gFrom" label="From" type="date" />
           <app-input [control]="gTo" label="To" type="date" />
           <app-input [control]="gRemarks" label="Remarks (optional)" [maxLength]="500" />
@@ -50,12 +50,12 @@ const STATUSES: SelectOption[] = [{ value: 'DRAFT', label: 'Draft' }, { value: '
       }
 
       @if (isAdmin()) {
-      <app-card title="Billing schedule" subtitle="How often each partner is billed. A draft statement is created automatically when a cycle closes and the partner has unbilled earnings.">
+      <app-card title="Billing schedule" subtitle="How often each vendor is billed. A draft statement is created automatically when a cycle closes and the vendor has unbilled earnings.">
         <div class="sched__bar">
           <app-button icon="bolt" variant="stroked" [loading]="running()" [disabled]="!dueCount()" (pressed)="runDue()">Generate due statements now ({{ dueCount() }})</app-button>
         </div>
         <table class="sched">
-          <thead><tr><th>Partner</th><th>Frequency</th><th>Last billed to</th><th>Unbilled</th><th>Next statement due</th></tr></thead>
+          <thead><tr><th>Vendor</th><th>Frequency</th><th>Last billed to</th><th>Unbilled</th><th>Next statement due</th></tr></thead>
           <tbody>
             @for (r of schedule(); track r.branchId) {
               <tr>
@@ -67,18 +67,18 @@ const STATUSES: SelectOption[] = [{ value: 'DRAFT', label: 'Draft' }, { value: '
                 <td>{{ r.unbilledEarnings }}</td>
                 <td>@if (r.due) { <strong>{{ r.dueFrom }} → {{ r.dueTo }}</strong> } @else { <span class="text-caption">Nothing due</span> }</td>
               </tr>
-            } @empty { <tr><td colspan="5" class="text-caption">No active partners.</td></tr> }
+            } @empty { <tr><td colspan="5" class="text-caption">No active vendors.</td></tr> }
           </tbody>
         </table>
       </app-card>
       }
 
       <div class="filters">
-        @if (isAdmin()) { <app-select [control]="partnerCtl" label="Partner" [options]="partnerOpts()" [allowEmpty]="true" emptyLabel="All partners" placeholder="All partners" /> }
+        @if (isAdmin()) { <app-select [control]="partnerCtl" label="Vendor" [options]="partnerOpts()" [allowEmpty]="true" emptyLabel="All vendors" placeholder="All vendors" /> }
         <app-select [control]="statusCtl" label="Status" [options]="statuses" [allowEmpty]="true" emptyLabel="All" placeholder="All" />
       </div>
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
-                 emptyTitle="No statements yet" emptyHint="Generate one above once a partner has earnings." idKey="id" (rowClick)="open($event)">
+                 emptyTitle="No statements yet" emptyHint="Generate one above once a vendor has earnings." idKey="id" (rowClick)="open($event)">
         <ng-template #row let-s>
           <td><strong>{{ s.statementNo }}</strong><div class="text-caption">{{ s.createdDate?.slice(0, 10) }}</div></td>
           <td>{{ s.branchName }}<div class="text-caption">{{ s.branchCode }}</div></td>
@@ -131,12 +131,12 @@ export class PartnerBillingList implements OnInit {
   private query: PageQuery = { page: 0, size: 20 };
 
   protected readonly columns: TableColumn<PdpStatement>[] = [
-    { key: 'no', header: 'Statement' }, { key: 'partner', header: 'Partner' }, { key: 'period', header: 'Period' },
+    { key: 'no', header: 'Statement' }, { key: 'vendor', header: 'Vendor' }, { key: 'period', header: 'Period' },
     { key: 'jobs', header: 'Pickups / Deliveries' }, { key: 'net', header: 'Net payable' }, { key: 'status', header: 'Status', width: '170px' }
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Billing' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Billing' }]);
     if (this.isAdmin()) {
       this.pdp.partners({ page: 0, size: 200 }).subscribe((r) =>
         this.partnerOpts.set(r.content.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));

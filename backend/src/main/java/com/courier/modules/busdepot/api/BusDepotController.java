@@ -42,7 +42,7 @@ public class BusDepotController {
 
     @PostMapping
     @Operation(summary = "Create a bus depot / station", description = "Code and name must be unique. `branchId` "
-            + "(optional) assigns an active branch or vendor (Pickup-Delivery Partner) to the depot.")
+            + "(optional) assigns an active branch or Vendor to the depot.")
     public ResponseEntity<ApiResponse<DepotResponse>> create(@Valid @RequestBody SaveRequest r) {
         BusDepotView created = service.create(new DepotInput(r.depotCode(), r.depotName(), r.depotType(), r.branchId(),
                 r.divisionId(), r.parentDepotId(), r.address(), r.city(), r.district(), r.state(), r.pincode(), r.contactPerson(), r.contactMobile()));

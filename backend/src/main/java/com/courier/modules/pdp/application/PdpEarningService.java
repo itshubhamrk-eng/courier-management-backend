@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Accrued earnings of Pickup-Delivery Partners. The {@code record*} methods are called by the
+ * Accrued earnings of Vendors. The {@code record*} methods are called by the
  * pickup and shipment flows inside their own transaction and never throw for a missing rate
  * card — that becomes an UNRATED earning an admin can re-price. Nothing here touches a wallet.
  */

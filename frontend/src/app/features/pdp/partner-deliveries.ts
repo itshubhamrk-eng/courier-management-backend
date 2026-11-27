@@ -22,7 +22,7 @@ const STATUSES: SelectOption[] = [
 ];
 
 /**
- * Deliveries handled by a Pickup-Delivery Partner, with the POD / earning state of each. A partner
+ * Deliveries handled by a Vendor, with the POD / earning state of each. A partner
  * must have a POD photo on file to mark a delivery done; the delivery is paid only once the
  * company approves that POD — so a Delivered row with no earning yet is "POD pending approval"
  * (the Missing-POD worklist: filter Delivered and look for the amber rows).
@@ -35,21 +35,21 @@ const STATUSES: SelectOption[] = [
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Partner Deliveries</h1>
-          <p class="text-caption">Shipments delivered by Pickup-Delivery Partners and whether their POD has been approved.</p></div>
+        <div><h1 class="text-h1">Vendor Deliveries</h1>
+          <p class="text-caption">Shipments delivered by Vendors and whether their POD has been approved.</p></div>
       </header>
       <div class="filters">
         @if (isAdmin()) {
-          <app-select [control]="partnerCtl" label="Partner" [options]="partnerOpts()" placeholder="Select a partner" />
+          <app-select [control]="partnerCtl" label="Vendor" [options]="partnerOpts()" placeholder="Select a vendor" />
         }
         <app-select [control]="statusCtl" label="Status" [options]="statuses" [allowEmpty]="true" emptyLabel="All" placeholder="All" />
       </div>
       @if (!partnerId()) {
-        <p class="hint">Select a partner to see its deliveries.</p>
+        <p class="hint">Select a vendor to see its deliveries.</p>
       } @else {
         <div class="sum">Delivered without approved POD on this page: <strong [class.warn]="pending() > 0">{{ pending() }}</strong></div>
         <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
-                   emptyTitle="No deliveries" emptyHint="Shipments handed to this partner by Manifest Creation appear here." idKey="id" (rowClick)="open($event)">
+                   emptyTitle="No deliveries" emptyHint="Shipments handed to this vendor by Manifest Creation appear here." idKey="id" (rowClick)="open($event)">
           <ng-template #row let-s>
             <td><strong>{{ s.shipmentNumber }}</strong><div class="text-caption">{{ s.trackingNumber }}</div></td>
             <td>{{ s.toCity || '—' }}</td>
@@ -101,7 +101,7 @@ export class PartnerDeliveries implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Deliveries' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Deliveries' }]);
     if (this.isAdmin()) {
       this.pdp.partners({ page: 0, size: 200 }).subscribe((r) =>
         this.partnerOpts.set(r.content.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));

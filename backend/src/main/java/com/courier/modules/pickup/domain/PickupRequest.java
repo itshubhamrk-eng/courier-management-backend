@@ -22,7 +22,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/** A request to collect a shipment from an address, worked by a Pickup-Delivery Partner. */
+/** A request to collect a shipment from an address, worked by a Vendor. */
 @Entity
 @Getter
 @Setter

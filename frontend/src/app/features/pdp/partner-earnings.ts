@@ -35,11 +35,11 @@ const STATUSES: SelectOption[] = [
   template: `
     <div class="page">
       <header class="page__head">
-        <div><h1 class="text-h1">Partner Earnings</h1>
-          <p class="text-caption">Pickup and delivery earnings per job — accrued, settled through Partner Billing.</p></div>
+        <div><h1 class="text-h1">Vendor Earnings</h1>
+          <p class="text-caption">Pickup and delivery earnings per job — accrued, settled through Vendor Billing.</p></div>
       </header>
       <div class="filters">
-        @if (isAdmin()) { <app-select [control]="partnerCtl" label="Partner" [options]="partnerOpts()" [allowEmpty]="true" emptyLabel="All partners" placeholder="All partners" /> }
+        @if (isAdmin()) { <app-select [control]="partnerCtl" label="Vendor" [options]="partnerOpts()" [allowEmpty]="true" emptyLabel="All vendors" placeholder="All vendors" /> }
         <app-select [control]="typeCtl" label="Type" [options]="types" [allowEmpty]="true" emptyLabel="All" placeholder="All" />
         <app-select [control]="statusCtl" label="Status" [options]="statuses" [allowEmpty]="true" emptyLabel="All" placeholder="All" />
         <app-input [control]="fromCtl" label="From" type="date" />
@@ -47,7 +47,7 @@ const STATUSES: SelectOption[] = [
       </div>
       <div class="sum">Showing {{ page().content.length }} of {{ page().totalElements }} · page total <strong>{{ pageTotal() }}</strong></div>
       <app-table [columns]="columns" [rows]="page().content" [loading]="loading()" [startIndex]="page().page * page().size"
-                 emptyTitle="No earnings yet" emptyHint="Earnings appear when a pickup is booked or a partner delivery's POD is approved." idKey="id">
+                 emptyTitle="No earnings yet" emptyHint="Earnings appear when a pickup is booked or a vendor delivery's POD is approved." idKey="id">
         <ng-template #row let-e>
           <td>{{ e.earnedOn }}</td>
           <td><strong>{{ e.branchName }}</strong><div class="text-caption">{{ e.branchCode }}</div></td>
@@ -94,13 +94,13 @@ export class PartnerEarnings implements OnInit {
   private query: PageQuery = { page: 0, size: 20 };
 
   protected readonly columns: TableColumn<PdpEarning>[] = [
-    { key: 'date', header: 'Date' }, { key: 'partner', header: 'Partner' }, { key: 'job', header: 'Job' },
+    { key: 'date', header: 'Date' }, { key: 'vendor', header: 'Vendor' }, { key: 'job', header: 'Job' },
     { key: 'weight', header: 'Weight' }, { key: 'rate', header: 'Rate / kg' }, { key: 'amount', header: 'Amount' },
     { key: 'status', header: 'Status', width: '150px' }, { key: 'actions', header: '', width: '120px', align: 'right' }
   ];
 
   ngOnInit(): void {
-    this.breadcrumb.set([{ label: 'Pickup Delivery Partner Management' }, { label: 'Partner Earnings' }]);
+    this.breadcrumb.set([{ label: 'Vendor Management' }, { label: 'Vendor Earnings' }]);
     if (this.isAdmin()) {
       this.pdp.partners({ page: 0, size: 200 }).subscribe((r) =>
         this.partnerOpts.set(r.content.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))));

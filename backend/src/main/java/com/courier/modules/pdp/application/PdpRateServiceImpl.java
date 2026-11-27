@@ -34,7 +34,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Pickup / delivery rate cards of Pickup-Delivery Partners. A card belongs to one partner
+ * Pickup / delivery rate cards of Vendors. A card belongs to one partner
  * (a Branch of type {@code PICKUP_DELIVERY_PARTNER}), one {@link PdpRateType} and one district
  * (or all). Weight charge = max(actual, card minimum) x the covering slab's rate per kg.
  * Slabs are half-open {@code [min, max)}, must not overlap, and only the last may be open-ended.
@@ -77,7 +77,7 @@ public class PdpRateServiceImpl implements PdpRateService {
             throw new BusinessRuleException("A rate card's type cannot be changed; create a new card instead.");
         }
         if (c.branchId() != null && !c.branchId().equals(card.getBranchId())) {
-            throw new BusinessRuleException("A rate card's partner cannot be changed; create a new card instead.");
+            throw new BusinessRuleException("A rate card's vendor cannot be changed; create a new card instead.");
         }
         Branch partner = requirePartner(card.getBranchId());
         return persist(companyId, partner, card, c);
@@ -172,7 +172,7 @@ public class PdpRateServiceImpl implements PdpRateService {
     public Quote quote(QuoteCommand q) {
         UUID companyId = requireCompany();
         if (q.branchId() == null || q.rateType() == null) {
-            throw new BusinessRuleException("A partner and a rate type are required.");
+            throw new BusinessRuleException("A vendor and a rate type are required.");
         }
         if (q.actualWeight() == null || q.actualWeight().signum() <= 0) {
             throw new BusinessRuleException("Actual weight must be greater than zero.");
@@ -186,7 +186,7 @@ public class PdpRateServiceImpl implements PdpRateService {
                 .findFirst()
                 .or(() -> live.stream().filter(r -> r.getDistrictId() == null).findFirst())
                 .orElseThrow(() -> new BusinessRuleException(
-                        "This partner has no active %s rate for that district on %s."
+                        "This vendor has no active %s rate for that district on %s."
                                 .formatted(q.rateType().name().toLowerCase(), date)));
 
         BigDecimal chargeable = q.actualWeight().max(card.getMinChargeableWeight());
@@ -251,7 +251,7 @@ public class PdpRateServiceImpl implements PdpRateService {
             slab.setRateId(saved.getId());
             slabs.save(slab);
         }
-        log.info("PDP {} rate {} saved for partner {} in company {} by {} ({} slab(s))",
+        log.info("PDP {} rate {} saved for vendor {} in company {} by {} ({} slab(s))",
                 saved.getRateType(), saved.getId(), partner.getBranchCode(), companyId, actor(), newSlabs.size());
         auditService.record(AuditAction.PDP_RATE_SAVED, ENTITY, saved.getId(),
                 Map.of("branchId", partner.getId().toString(), "rateType", saved.getRateType().name(),
@@ -269,7 +269,7 @@ public class PdpRateServiceImpl implements PdpRateService {
                 .anyMatch(o -> o.overlaps(from, to));
         if (clash) {
             throw new BusinessRuleException(
-                    "Another active %s rate of this partner already covers that district in the same period."
+                    "Another active %s rate of this vendor already covers that district in the same period."
                             .formatted(card.getRateType().name().toLowerCase()));
         }
     }
@@ -289,12 +289,12 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     private Branch requirePartner(UUID branchId) {
         if (branchId == null) {
-            throw new BusinessRuleException("A partner is required.");
+            throw new BusinessRuleException("A vendor is required.");
         }
         Branch branch = branchService.getById(branchId);
         if (branch.getBranchType() != BranchType.PICKUP_DELIVERY_PARTNER) {
             throw new BusinessRuleException(
-                    "Branch %s is not a Pickup-Delivery Partner.".formatted(branch.getBranchCode()));
+                    "Branch %s is not a Vendor.".formatted(branch.getBranchCode()));
         }
         return branch;
     }
@@ -335,7 +335,7 @@ public class PdpRateServiceImpl implements PdpRateService {
 
     private UUID requireCompany() {
         return CompanyContext.getCompanyId().orElseThrow(() -> new BusinessRuleException(
-                "No company is bound to this request. Partner rates belong to a company."));
+                "No company is bound to this request. Vendor rates belong to a company."));
     }
 
     private String actor() {
