@@ -13,14 +13,24 @@ import java.util.UUID;
  * @param branchIds   match any of these From Stations
  * @param districtIds match any of these destination districts
  * @param statuses    match any of these statuses
+ * @param stateIds    match any of these destination states (State-level rows)
+ * @param levels      match only DISTRICT and/or STATE level rows
+ * @param stateIds    match any of these destination states (State-level rows)
+ * @param levels      match only DISTRICT and/or STATE level rows
  */
 public record DistrictLevelFreightCriteria(
         Set<UUID> branchIds,
         Set<UUID> districtIds,
-        Set<DistrictFreightStatus> statuses
+        Set<DistrictFreightStatus> statuses,
+        Set<UUID> stateIds,
+        Set<DistrictFreightLevel> levels
 ) {
+    public DistrictLevelFreightCriteria(Set<UUID> branchIds, Set<UUID> districtIds,
+                                        Set<DistrictFreightStatus> statuses) {
+        this(branchIds, districtIds, statuses, null, null);
+    }
 
     public static DistrictLevelFreightCriteria none() {
-        return new DistrictLevelFreightCriteria(null, null, null);
+        return new DistrictLevelFreightCriteria(null, null, null, null, null);
     }
 }

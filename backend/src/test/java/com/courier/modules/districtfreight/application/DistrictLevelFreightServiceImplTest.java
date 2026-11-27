@@ -397,4 +397,92 @@ class DistrictLevelFreightServiceImplTest {
         verify(districtLookup, org.mockito.Mockito.times(1)).findDistricts(any());
         verify(districtLookup, never()).findDistrict(any());
     }
+
+    // ------------------------------------------------------------ state-level rows
+
+    private static final UUID STATE = UUID.randomUUID();
+    private static final DistrictLookupPort.StateRef ACTIVE_STATE =
+            new DistrictLookupPort.StateRef(STATE, "MH", "Maharashtra", true);
+
+    private CreateDistrictLevelFreightCommand stateCommand(UUID districtId, UUID stateId) {
+        return new CreateDistrictLevelFreightCommand(BRANCH, districtId, stateId,
+                new BigDecimal("10.00"), new BigDecimal("8.50"), new BigDecimal("8.00"),
+                new BigDecimal("7.50"), new BigDecimal("6.00"), new BigDecimal("6.00"),
+                true, new BigDecimal("250.00"));
+    }
+
+    @Test
+    @DisplayName("state: creates a state-level row with no district")
+    void createsStateRow() {
+        when(districtLookup.findState(eq(STATE))).thenReturn(Optional.of(ACTIVE_STATE));
+
+        DistrictLevelFreight saved = service.create(stateCommand(null, STATE));
+
+        assertThat(saved.getStateId()).isEqualTo(STATE);
+        assertThat(saved.getDistrictId()).isNull();
+        assertThat(saved.isStateLevel()).isTrue();
+    }
+
+    @Test
+    @DisplayName("state: both or neither of district/state is refused")
+    void refusesBothOrNeither() {
+        when(districtLookup.findState(eq(STATE))).thenReturn(Optional.of(ACTIVE_STATE));
+        assertThatThrownBy(() -> service.create(stateCommand(DISTRICT, STATE)))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("either a district or a state");
+        assertThatThrownBy(() -> service.create(stateCommand(null, null)))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("either a district or a state");
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("state: a duplicate state for the same branch is refused")
+    void refusesDuplicateState() {
+        when(districtLookup.findState(eq(STATE))).thenReturn(Optional.of(ACTIVE_STATE));
+        when(repository.isStateComboTaken(COMPANY, BRANCH, STATE, null)).thenReturn(true);
+        assertThatThrownBy(() -> service.create(stateCommand(null, STATE)))
+                .isInstanceOf(DuplicateResourceException.class);
+    }
+
+    @Test
+    @DisplayName("state: an inactive state is refused")
+    void refusesInactiveState() {
+        when(districtLookup.findState(eq(STATE)))
+                .thenReturn(Optional.of(new DistrictLookupPort.StateRef(STATE, "MH", "Maharashtra", false)));
+        assertThatThrownBy(() -> service.create(stateCommand(null, STATE)))
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("inactive");
+    }
+
+    private DistrictLevelFreight stateSourceRow(UUID stateId) {
+        DistrictLevelFreight f = sourceRow(null);
+        f.setStateId(stateId);
+        return f;
+    }
+
+    @Test
+    @DisplayName("copy: copies state rows too, skipping a state the target already has (soft-deleted included)")
+    void copyCopiesStateRows() {
+        UUID stateKept = UUID.randomUUID();
+        UUID stateNew = UUID.randomUUID();
+        when(branchLookup.findBranch(eq(TARGET), eq(COMPANY)))
+                .thenReturn(Optional.of(new BranchLookupPort.BranchRef(TARGET, "KOLHAPUR", "Kolhapur", true)));
+        when(districtLookup.findDistricts(any())).thenReturn(java.util.Map.of());
+        when(districtLookup.findStates(any())).thenReturn(java.util.Map.of(
+                stateKept, new DistrictLookupPort.StateRef(stateKept, "K", "Kept", true),
+                stateNew, new DistrictLookupPort.StateRef(stateNew, "N", "New", true)));
+        when(repository.findByCompanyIdAndBranchIdAndStatus(COMPANY, BRANCH, DistrictFreightStatus.ACTIVE))
+                .thenReturn(java.util.List.of(stateSourceRow(stateKept), stateSourceRow(stateNew)));
+        when(repository.findDistrictIdsIncludingDeleted(COMPANY, TARGET)).thenReturn(Set.of());
+        when(repository.findStateIdsIncludingDeleted(COMPANY, TARGET)).thenReturn(Set.of(stateKept));
+
+        CopyDistrictFreightResult result = service.copyFromBranch(BRANCH, java.util.List.of(TARGET));
+
+        assertThat(result.targets().get(0).copied()).isEqualTo(1);
+        assertThat(result.targets().get(0).skipped()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<DistrictLevelFreight> saved =
+                org.mockito.ArgumentCaptor.forClass(DistrictLevelFreight.class);
+        verify(repository).save(saved.capture());
+        assertThat(saved.getValue().getStateId()).isEqualTo(stateNew);
+        assertThat(saved.getValue().getDistrictId()).isNull();
+        assertThat(saved.getValue().getBranchId()).isEqualTo(TARGET);
+    }
 }

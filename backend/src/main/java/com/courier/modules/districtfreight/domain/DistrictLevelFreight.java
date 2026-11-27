@@ -111,6 +111,10 @@ public class DistrictLevelFreight extends CompanyOwnedEntity {
         return stateId != null;
     }
 
+    public DistrictFreightLevel level() {
+        return isStateLevel() ? DistrictFreightLevel.STATE : DistrictFreightLevel.DISTRICT;
+    }
+
     public boolean isActive() {
         return status == DistrictFreightStatus.ACTIVE;
     }

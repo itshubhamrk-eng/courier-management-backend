@@ -1,5 +1,6 @@
 package com.courier.modules.districtfreight.api.dto;
 
+import com.courier.modules.districtfreight.domain.DistrictFreightLevel;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -13,9 +14,11 @@ import java.util.UUID;
 public record DistrictLevelFreightSearchRequest(
         Set<UUID> branchId,
         Set<UUID> districtId,
-        Set<DistrictFreightStatus> status
+        Set<DistrictFreightStatus> status,
+        Set<UUID> stateId,
+        Set<DistrictFreightLevel> level
 ) {
     public static DistrictLevelFreightSearchRequest empty() {
-        return new DistrictLevelFreightSearchRequest(null, null, null);
+        return new DistrictLevelFreightSearchRequest(null, null, null, null, null);
     }
 }

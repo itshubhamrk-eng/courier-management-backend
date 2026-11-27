@@ -1,5 +1,6 @@
 package com.courier.modules.districtfreight.api.dto;
 
+import com.courier.modules.districtfreight.domain.DistrictFreightLevel;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,6 +22,7 @@ public record DistrictLevelFreightResponse(
         UUID id, UUID companyId,
         UUID branchId, String branchCode, String branchName,
         UUID districtId, String districtCode, String districtName,
+        UUID stateId, String stateCode, String stateName, DistrictFreightLevel level,
         BigDecimal rate1To15, BigDecimal rate16To50, BigDecimal rate51To100,
         BigDecimal rate101To1000, BigDecimal rate1001To1500, BigDecimal rate1501To2000,
         boolean odaApplicable, BigDecimal odaCharge,

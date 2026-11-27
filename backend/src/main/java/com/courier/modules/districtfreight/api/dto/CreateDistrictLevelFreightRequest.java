@@ -16,7 +16,8 @@ import java.util.UUID;
 public record CreateDistrictLevelFreightRequest(
 
         @NotNull @Schema(description = "Branch id — the From Station") UUID branchId,
-        @NotNull @Schema(description = "District id — the destination district") UUID districtId,
+        @Schema(description = "District id — the destination district. Set this OR stateId, never both.") UUID districtId,
+        @Schema(description = "State id — a state-level rate used when no district rate exists. Set this OR districtId.") UUID stateId,
 
         @NotNull @DecimalMin(value = "0.0", message = "cannot be negative")
         @Schema(description = "Per-KG rate, 1 to 15 KG") BigDecimal rate1To15,

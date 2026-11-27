@@ -3,6 +3,7 @@ package com.courier.modules.districtfreight.application;
 import com.courier.modules.districtfreight.application.command.CreateDistrictLevelFreightCommand;
 import com.courier.modules.districtfreight.application.command.UpdateDistrictLevelFreightCommand;
 import com.courier.modules.districtfreight.domain.BranchLookupPort;
+import com.courier.modules.districtfreight.domain.DistrictFreightLevel;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreight;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreightCriteria;
@@ -70,12 +71,12 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         UUID companyId = requireCompany();
 
         BranchLookupPort.BranchRef branch = requireBranch(command.branchId(), companyId);
-        DistrictLookupPort.DistrictRef district = requireDistrict(command.districtId());
-        requireComboAvailable(companyId, branch.branchId(), district.districtId(), null);
+        Destination destination = requireDestination(command.districtId(), command.stateId());
+        requireComboAvailable(companyId, branch.branchId(), destination, null);
 
         DistrictLevelFreight freight = new DistrictLevelFreight();
         freight.setBranchId(branch.branchId());
-        freight.setDistrictId(district.districtId());
+        destination.applyTo(freight);
         applyRates(freight, command.rate1To15(), command.rate16To50(), command.rate51To100(),
                 command.rate101To1000(), command.rate1001To1500(), command.rate1501To2000(),
                 command.odaApplicable(), command.odaCharge());
@@ -83,10 +84,11 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         freight.applyInvariants();
 
         DistrictLevelFreight saved = repository.save(freight);
-        log.info("District Level Freight {} -> {} created in company {} by {}",
-                branch.branchCode(), district.code(), companyId, currentActor());
+        log.info("District Level Freight {} -> {} ({}) created in company {} by {}",
+                branch.branchCode(), destination.code(), destination.level(), companyId, currentActor());
         auditService.record(AuditAction.DISTRICT_FREIGHT_CREATED, ENTITY, saved.getId(),
-                Map.of("branchCode", branch.branchCode(), "districtCode", district.code()));
+                Map.of("branchCode", branch.branchCode(), "destinationCode", destination.code(),
+                        "level", destination.level().name()));
         return saved;
     }
 
@@ -101,13 +103,13 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         requireCurrentVersion(freight, command.expectedVersion());
 
         BranchLookupPort.BranchRef branch = requireBranch(command.branchId(), companyId);
-        DistrictLookupPort.DistrictRef district = requireDistrict(command.districtId());
-        requireComboAvailable(companyId, branch.branchId(), district.districtId(), freight.getId());
+        Destination destination = requireDestination(command.districtId(), command.stateId());
+        requireComboAvailable(companyId, branch.branchId(), destination, freight.getId());
 
         Map<String, Object> before = snapshot(freight);
 
         freight.setBranchId(branch.branchId());
-        freight.setDistrictId(district.districtId());
+        destination.applyTo(freight);
         applyRates(freight, command.rate1To15(), command.rate16To50(), command.rate51To100(),
                 command.rate101To1000(), command.rate1001To1500(), command.rate1501To2000(),
                 command.odaApplicable(), command.odaCharge());
@@ -153,7 +155,8 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         UUID ownBranchId = branchLookup.findOwnBranchId(caller.userId(), caller.companyId())
                 .orElseThrow(() -> new BusinessRuleException(
                         "You are not placed at a branch, so you have no rates to see."));
-        return new DistrictLevelFreightCriteria(Set.of(ownBranchId), criteria.districtIds(), criteria.statuses());
+        return new DistrictLevelFreightCriteria(Set.of(ownBranchId), criteria.districtIds(), criteria.statuses(),
+                criteria.stateIds(), criteria.levels());
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -226,28 +229,44 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         List<DistrictLevelFreight> sourceRows = repository.findByCompanyIdAndBranchIdAndStatus(
                 companyId, source.branchId(), DistrictFreightStatus.ACTIVE);
 
-        // One batch lookup for every target: which source districts are still active.
+        // One batch lookup per level for every target: which source districts/states are still active.
         Set<UUID> activeDistricts = new LinkedHashSet<>();
-        districtLookup.findDistricts(sourceRows.stream().map(DistrictLevelFreight::getDistrictId).toList())
+        districtLookup.findDistricts(sourceRows.stream().map(DistrictLevelFreight::getDistrictId)
+                        .filter(Objects::nonNull).toList())
                 .forEach((id, ref) -> {
                     if (ref.active()) {
                         activeDistricts.add(id);
+                    }
+                });
+        Set<UUID> activeStates = new LinkedHashSet<>();
+        districtLookup.findStates(sourceRows.stream().map(DistrictLevelFreight::getStateId)
+                        .filter(Objects::nonNull).toList())
+                .forEach((id, ref) -> {
+                    if (ref.active()) {
+                        activeStates.add(id);
                     }
                 });
 
         List<CopyDistrictFreightResult.TargetResult> results = new ArrayList<>();
         for (BranchLookupPort.BranchRef target : targets) {
             Set<UUID> existing = repository.findDistrictIdsIncludingDeleted(companyId, target.branchId());
+            Set<UUID> existingStates = repository.findStateIdsIncludingDeleted(companyId, target.branchId());
             int copied = 0;
             int skipped = 0;
             for (DistrictLevelFreight row : sourceRows) {
-                if (existing.contains(row.getDistrictId()) || !activeDistricts.contains(row.getDistrictId())) {
+                boolean stateRow = row.isStateLevel();
+                boolean taken = stateRow ? existingStates.contains(row.getStateId())
+                        : existing.contains(row.getDistrictId());
+                boolean live = stateRow ? activeStates.contains(row.getStateId())
+                        : activeDistricts.contains(row.getDistrictId());
+                if (taken || !live) {
                     skipped++;
                     continue;
                 }
                 DistrictLevelFreight copy = new DistrictLevelFreight();
                 copy.setBranchId(target.branchId());
                 copy.setDistrictId(row.getDistrictId());
+                copy.setStateId(row.getStateId());
                 applyRates(copy, row.getRate1To15(), row.getRate16To50(), row.getRate51To100(),
                         row.getRate101To1000(), row.getRate1001To1500(), row.getRate1501To2000(),
                         row.isOdaApplicable(), row.getOdaCharge());
@@ -287,6 +306,36 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         return branch;
     }
 
+    /** The validated destination of a rate row: exactly one of district / state. */
+    private record Destination(UUID districtId, UUID stateId, String code, DistrictFreightLevel level) {
+        void applyTo(DistrictLevelFreight freight) {
+            freight.setDistrictId(districtId);
+            freight.setStateId(stateId);
+        }
+    }
+
+    private Destination requireDestination(UUID districtId, UUID stateId) {
+        if ((districtId == null) == (stateId == null)) {
+            throw new BusinessRuleException("Choose either a district or a state, not both and not neither.");
+        }
+        if (districtId != null) {
+            DistrictLookupPort.DistrictRef district = requireDistrict(districtId);
+            return new Destination(district.districtId(), null, district.code(), DistrictFreightLevel.DISTRICT);
+        }
+        DistrictLookupPort.StateRef state = requireState(stateId);
+        return new Destination(null, state.stateId(), state.code(), DistrictFreightLevel.STATE);
+    }
+
+    private DistrictLookupPort.StateRef requireState(UUID stateId) {
+        DistrictLookupPort.StateRef state = districtLookup.findState(stateId)
+                .orElseThrow(() -> new BusinessRuleException("No such state: " + stateId));
+        if (!state.active()) {
+            throw new BusinessRuleException(
+                    "State %s is inactive and cannot be used as a destination.".formatted(state.code()));
+        }
+        return state;
+    }
+
     private DistrictLookupPort.DistrictRef requireDistrict(UUID districtId) {
         if (districtId == null) {
             throw new BusinessRuleException("A destination district is required.");
@@ -300,8 +349,13 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         return district;
     }
 
-    private void requireComboAvailable(UUID companyId, UUID branchId, UUID districtId, UUID excludeId) {
-        if (repository.isComboTaken(companyId, branchId, districtId, excludeId)) {
+    private void requireComboAvailable(UUID companyId, UUID branchId, Destination destination, UUID excludeId) {
+        if (destination.level() == DistrictFreightLevel.STATE) {
+            if (repository.isStateComboTaken(companyId, branchId, destination.stateId(), excludeId)) {
+                throw new DuplicateResourceException(
+                        "A District Level Freight rate for this From Station and State already exists.");
+            }
+        } else if (repository.isComboTaken(companyId, branchId, destination.districtId(), excludeId)) {
             throw new DuplicateResourceException(
                     "A District Level Freight rate for this From Station and District already exists.");
         }
@@ -344,6 +398,7 @@ public class DistrictLevelFreightServiceImpl implements DistrictLevelFreightServ
         Map<String, Object> v = new LinkedHashMap<>();
         v.put("branchId", String.valueOf(f.getBranchId()));
         v.put("districtId", String.valueOf(f.getDistrictId()));
+        v.put("stateId", String.valueOf(f.getStateId()));
         v.put("rate1To15", String.valueOf(f.getRate1To15()));
         v.put("rate16To50", String.valueOf(f.getRate16To50()));
         v.put("rate51To100", String.valueOf(f.getRate51To100()));

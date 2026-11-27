@@ -40,14 +40,14 @@ public class DistrictLevelFreightMapper {
 
     public CreateDistrictLevelFreightCommand toCommand(CreateDistrictLevelFreightRequest r) {
         return new CreateDistrictLevelFreightCommand(
-                r.branchId(), r.districtId(), r.rate1To15(), r.rate16To50(), r.rate51To100(),
+                r.branchId(), r.districtId(), r.stateId(), r.rate1To15(), r.rate16To50(), r.rate51To100(),
                 r.rate101To1000(), r.rate1001To1500(), r.rate1501To2000(),
                 r.odaApplicable(), r.odaCharge());
     }
 
     public UpdateDistrictLevelFreightCommand toCommand(UpdateDistrictLevelFreightRequest r) {
         return new UpdateDistrictLevelFreightCommand(
-                r.branchId(), r.districtId(), r.rate1To15(), r.rate16To50(), r.rate51To100(),
+                r.branchId(), r.districtId(), r.stateId(), r.rate1To15(), r.rate16To50(), r.rate51To100(),
                 r.rate101To1000(), r.rate1001To1500(), r.rate1501To2000(),
                 r.odaApplicable(), r.odaCharge(), r.version());
     }
@@ -61,14 +61,18 @@ public class DistrictLevelFreightMapper {
 
     public DistrictLevelFreightCriteria toCriteria(DistrictLevelFreightSearchRequest r) {
         DistrictLevelFreightSearchRequest safe = r == null ? DistrictLevelFreightSearchRequest.empty() : r;
-        return new DistrictLevelFreightCriteria(safe.branchId(), safe.districtId(), safe.status());
+        return new DistrictLevelFreightCriteria(safe.branchId(), safe.districtId(), safe.status(),
+                safe.stateId(), safe.level());
     }
 
     public DistrictLevelFreightResponse toResponse(DistrictLevelFreight f) {
         UUID companyId = CompanyContext.getCompanyId().orElse(f.getCompanyId());
         BranchLookupPort.BranchRef branch = branchLookup.findBranch(f.getBranchId(), companyId).orElse(null);
-        DistrictLookupPort.DistrictRef district = districtLookup.findDistrict(f.getDistrictId()).orElse(null);
-        return toResponse(f, branch, district);
+        DistrictLookupPort.DistrictRef district = f.getDistrictId() == null ? null
+                : districtLookup.findDistrict(f.getDistrictId()).orElse(null);
+        DistrictLookupPort.StateRef state = f.getStateId() == null ? null
+                : districtLookup.findState(f.getStateId()).orElse(null);
+        return toResponse(f, branch, district, state);
     }
 
     public PageResponse<DistrictLevelFreightResponse> toPage(Page<DistrictLevelFreight> page) {
@@ -76,20 +80,27 @@ public class DistrictLevelFreightMapper {
         Set<UUID> branchIds = page.getContent().stream().map(DistrictLevelFreight::getBranchId)
                 .collect(Collectors.toSet());
         Set<UUID> districtIds = page.getContent().stream().map(DistrictLevelFreight::getDistrictId)
-                .collect(Collectors.toSet());
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<UUID> stateIds = page.getContent().stream().map(DistrictLevelFreight::getStateId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         Map<UUID, BranchLookupPort.BranchRef> branches = branchLookup.findBranches(branchIds, companyId);
         Map<UUID, DistrictLookupPort.DistrictRef> districts = districtLookup.findDistricts(districtIds);
+        Map<UUID, DistrictLookupPort.StateRef> states = districtLookup.findStates(stateIds);
         return PageResponse.from(page,
-                f -> toResponse(f, branches.get(f.getBranchId()), districts.get(f.getDistrictId())));
+                f -> toResponse(f, branches.get(f.getBranchId()),
+                        f.getDistrictId() == null ? null : districts.get(f.getDistrictId()),
+                        f.getStateId() == null ? null : states.get(f.getStateId())));
     }
 
     private DistrictLevelFreightResponse toResponse(DistrictLevelFreight f,
                                                       BranchLookupPort.BranchRef branch,
-                                                      DistrictLookupPort.DistrictRef district) {
+                                                      DistrictLookupPort.DistrictRef district,
+                                                      DistrictLookupPort.StateRef state) {
         return new DistrictLevelFreightResponse(
                 f.getId(), f.getCompanyId(),
                 f.getBranchId(), branch == null ? null : branch.branchCode(), branch == null ? null : branch.branchName(),
                 f.getDistrictId(), district == null ? null : district.code(), district == null ? null : district.name(),
+                f.getStateId(), state == null ? null : state.code(), state == null ? null : state.name(), f.level(),
                 f.getRate1To15(), f.getRate16To50(), f.getRate51To100(),
                 f.getRate101To1000(), f.getRate1001To1500(), f.getRate1501To2000(),
                 f.isOdaApplicable(), f.getOdaCharge(),

@@ -28,6 +28,19 @@ public final class DistrictLevelFreightSpecifications {
             if (safe.districtIds() != null && !safe.districtIds().isEmpty()) {
                 predicates.add(root.get("districtId").in(safe.districtIds()));
             }
+            if (safe.stateIds() != null && !safe.stateIds().isEmpty()) {
+                predicates.add(root.get("stateId").in(safe.stateIds()));
+            }
+            if (safe.levels() != null && !safe.levels().isEmpty()) {
+                List<Predicate> byLevel = new ArrayList<>();
+                if (safe.levels().contains(DistrictFreightLevel.DISTRICT)) {
+                    byLevel.add(cb.isNull(root.get("stateId")));
+                }
+                if (safe.levels().contains(DistrictFreightLevel.STATE)) {
+                    byLevel.add(cb.isNotNull(root.get("stateId")));
+                }
+                predicates.add(cb.or(byLevel.toArray(Predicate[]::new)));
+            }
             if (safe.statuses() != null && !safe.statuses().isEmpty()) {
                 predicates.add(root.get("status").in(safe.statuses()));
             }

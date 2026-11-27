@@ -17,7 +17,8 @@ import java.util.UUID;
 public record UpdateDistrictLevelFreightRequest(
 
         @NotNull UUID branchId,
-        @NotNull UUID districtId,
+        UUID districtId,
+        UUID stateId,
 
         @NotNull @DecimalMin(value = "0.0", message = "cannot be negative") BigDecimal rate1To15,
         @NotNull @DecimalMin(value = "0.0", message = "cannot be negative") BigDecimal rate16To50,
