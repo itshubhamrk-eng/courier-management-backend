@@ -19,4 +19,7 @@ public interface StateRepository extends MasterDataRepository<State> {
 
     /** Used by the postal-lookup auto-resolver, scoped to the parent country. */
     Optional<State> findByCompanyIdAndCountryIdAndNameIgnoreCase(UUID companyId, UUID countryId, String name);
+
+    /** Used by District Level Freight's Excel import: a State cell is matched by name alone. */
+    Optional<State> findByCompanyIdAndNameIgnoreCase(UUID companyId, String name);
 }

@@ -3,6 +3,8 @@ package com.courier.modules.master.infrastructure;
 import com.courier.modules.districtfreight.domain.DistrictLookupPort;
 import com.courier.modules.master.domain.District;
 import com.courier.modules.master.domain.DistrictRepository;
+import com.courier.modules.master.domain.State;
+import com.courier.modules.master.domain.StateRepository;
 import com.courier.modules.master.domain.GlobalMasters;
 import com.courier.modules.master.domain.MasterDataCriteria;
 import com.courier.modules.master.domain.MasterDataSpecifications;
@@ -34,6 +36,7 @@ import java.util.UUID;
 public class MasterDistrictFreightDistrictDirectory implements DistrictLookupPort {
 
     private final DistrictRepository districtRepository;
+    private final StateRepository stateRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -77,6 +80,54 @@ public class MasterDistrictFreightDistrictDirectory implements DistrictLookupPor
         return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () ->
                 districtRepository.findByCompanyIdAndNameIgnoreCase(GlobalMasters.PLATFORM_COMPANY_ID, trimmed)
                         .map(this::toRef));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StateRef> findState(UUID stateId) {
+        if (stateId == null) {
+            return Optional.empty();
+        }
+        return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () ->
+                stateRepository.findByIdWithinCompany(stateId, GlobalMasters.PLATFORM_COMPANY_ID)
+                        .map(this::toStateRef));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, StateRef> findStates(Collection<UUID> stateIds) {
+        if (stateIds == null || stateIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> wanted = stateIds.stream().filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        if (wanted.isEmpty()) {
+            return Map.of();
+        }
+        return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () -> {
+            MasterDataCriteria criteria = MasterDataCriteria.none()
+                    .withCompanyId(GlobalMasters.PLATFORM_COMPANY_ID)
+                    .withIds(wanted);
+            Map<UUID, StateRef> byId = new LinkedHashMap<>();
+            stateRepository.findAll(MasterDataSpecifications.matching(criteria))
+                    .forEach(state -> byId.put(state.getId(), toStateRef(state)));
+            return byId;
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StateRef> findStateByName(String name) {
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        String trimmed = name.trim();
+        return CompanyContext.runAs(GlobalMasters.PLATFORM_COMPANY_ID, () ->
+                stateRepository.findByCompanyIdAndNameIgnoreCase(GlobalMasters.PLATFORM_COMPANY_ID, trimmed)
+                        .map(this::toStateRef));
+    }
+
+    private StateRef toStateRef(State state) {
+        return new StateRef(state.getId(), state.getCode(), state.getName(), state.isActive());
     }
 
     private DistrictRef toRef(District district) {

@@ -47,11 +47,14 @@ import java.util.UUID;
         name = "district_level_freight",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_district_freight_combo",
-                        columnNames = {"company_id", "branch_id", "district_id"})
+                        columnNames = {"company_id", "branch_id", "district_id"}),
+                @UniqueConstraint(name = "uk_district_freight_state_combo",
+                        columnNames = {"company_id", "branch_id", "state_id"})
         },
         indexes = {
                 @Index(name = "idx_district_freight_branch", columnList = "company_id, branch_id"),
                 @Index(name = "idx_district_freight_district", columnList = "company_id, district_id"),
+                @Index(name = "idx_district_freight_state", columnList = "company_id, state_id"),
                 @Index(name = "idx_district_freight_status", columnList = "company_id, status")
         })
 // Repeated deliberately: Hibernate does not inherit @Filter from a @MappedSuperclass.
@@ -64,8 +67,13 @@ public class DistrictLevelFreight extends CompanyOwnedEntity {
     private UUID branchId;
 
     @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "district_id", columnDefinition = "BINARY(16)", nullable = false)
+    @Column(name = "district_id", columnDefinition = "BINARY(16)")
     private UUID districtId;
+
+    /** State-level rate: set INSTEAD of {@link #districtId} (exactly one of the two). */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "state_id", columnDefinition = "BINARY(16)")
+    private UUID stateId;
 
     @Column(name = "rate_1_to_15", nullable = false, precision = 19, scale = 4)
     private BigDecimal rate1To15;
@@ -97,6 +105,11 @@ public class DistrictLevelFreight extends CompanyOwnedEntity {
     private DistrictFreightStatus status = DistrictFreightStatus.ACTIVE;
 
     // ---------------------------------------------------------------- behaviour
+
+    /** True for a State-level rate (booking falls back to it when no district row exists). */
+    public boolean isStateLevel() {
+        return stateId != null;
+    }
 
     public boolean isActive() {
         return status == DistrictFreightStatus.ACTIVE;
@@ -183,8 +196,11 @@ public class DistrictLevelFreight extends CompanyOwnedEntity {
         if (branchId == null) {
             throw new BusinessRuleException("A From Station (branch) is required.");
         }
-        if (districtId == null) {
-            throw new BusinessRuleException("A destination district is required.");
+        if (districtId == null && stateId == null) {
+            throw new BusinessRuleException("A destination district or state is required.");
+        }
+        if (districtId != null && stateId != null) {
+            throw new BusinessRuleException("Choose either a district or a state, not both.");
         }
         requireNonNegative(rate1To15, "1 to 15 KG rate");
         requireNonNegative(rate16To50, "16 to 50 KG rate");

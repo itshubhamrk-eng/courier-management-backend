@@ -24,7 +24,15 @@ public interface PincodeCoverageLookupPort {
      *  specific pincode actually needs shown as its "city". */
     record CoverageRef(UUID pincodeId, String pincodeCode, boolean serviceable, boolean odaApplicable,
                         UUID districtId, String districtCode, String districtName, boolean districtActive,
-                        String cityName, UUID cityId) {
+                        String cityName, UUID cityId,
+                        UUID stateId, String stateName, boolean stateActive) {
+        /** Pre-state shape (callers that never look at the state): state unknown, treated active. */
+        public CoverageRef(UUID pincodeId, String pincodeCode, boolean serviceable, boolean odaApplicable,
+                           UUID districtId, String districtCode, String districtName, boolean districtActive,
+                           String cityName, UUID cityId) {
+            this(pincodeId, pincodeCode, serviceable, odaApplicable, districtId, districtCode, districtName,
+                    districtActive, cityName, cityId, null, null, true);
+        }
     }
 
     /** {@code pincodeCode} is matched exactly, case-insensitively — empty when no pincode

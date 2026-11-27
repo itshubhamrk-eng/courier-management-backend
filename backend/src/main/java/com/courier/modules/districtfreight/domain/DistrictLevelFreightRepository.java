@@ -32,6 +32,36 @@ public interface DistrictLevelFreightRepository
     Optional<DistrictLevelFreight> findByCompanyIdAndBranchIdAndDistrictId(
             UUID companyId, UUID branchId, UUID districtId);
 
+    /** The booking fallback / import upsert lookup for a State-level row. */
+    Optional<DistrictLevelFreight> findByCompanyIdAndBranchIdAndStateId(
+            UUID companyId, UUID branchId, UUID stateId);
+
+    default boolean isStateComboTaken(UUID companyId, UUID branchId, UUID stateId, UUID excludeId) {
+        return countByStateComboIncludingDeleted(TimeOrderedUuid.toBytes(companyId),
+                TimeOrderedUuid.toBytes(branchId), TimeOrderedUuid.toBytes(stateId),
+                excludeId == null ? null : TimeOrderedUuid.toBytes(excludeId)) > 0;
+    }
+
+    @Query(value = """
+            SELECT COUNT(*) FROM district_level_freight
+            WHERE company_id = :companyId AND branch_id = :branchId AND state_id = :stateId
+              AND (:excludeId IS NULL OR id <> :excludeId)
+            """, nativeQuery = true)
+    long countByStateComboIncludingDeleted(@Param("companyId") byte[] companyId,
+                                            @Param("branchId") byte[] branchId,
+                                            @Param("stateId") byte[] stateId,
+                                            @Param("excludeId") byte[] excludeId);
+
+    /** Every state this branch already has a row for, soft-deleted rows included. */
+    default Set<UUID> findStateIdsIncludingDeleted(UUID companyId, UUID branchId) {
+        Set<UUID> ids = new HashSet<>();
+        for (byte[] raw : stateIdBytesIncludingDeleted(
+                TimeOrderedUuid.toBytes(companyId), TimeOrderedUuid.toBytes(branchId))) {
+            ids.add(TimeOrderedUuid.fromBytes(raw));
+        }
+        return ids;
+    }
+
     default boolean isComboTaken(UUID companyId, UUID branchId, UUID districtId, UUID excludeId) {
         return countByComboIncludingDeleted(TimeOrderedUuid.toBytes(companyId),
                 TimeOrderedUuid.toBytes(branchId), TimeOrderedUuid.toBytes(districtId),
@@ -61,8 +91,15 @@ public interface DistrictLevelFreightRepository
 
     @Query(value = """
             SELECT district_id FROM district_level_freight
-            WHERE company_id = :companyId AND branch_id = :branchId
+            WHERE company_id = :companyId AND branch_id = :branchId AND district_id IS NOT NULL
             """, nativeQuery = true)
     List<byte[]> districtIdBytesIncludingDeleted(@Param("companyId") byte[] companyId,
                                                   @Param("branchId") byte[] branchId);
+
+    @Query(value = """
+            SELECT state_id FROM district_level_freight
+            WHERE company_id = :companyId AND branch_id = :branchId AND state_id IS NOT NULL
+            """, nativeQuery = true)
+    List<byte[]> stateIdBytesIncludingDeleted(@Param("companyId") byte[] companyId,
+                                               @Param("branchId") byte[] branchId);
 }

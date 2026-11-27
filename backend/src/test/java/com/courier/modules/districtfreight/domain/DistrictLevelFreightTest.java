@@ -100,4 +100,38 @@ class DistrictLevelFreightTest {
         assertThat(f.matchWeightSlab(new BigDecimal("2001"))).isEmpty();
         assertThat(f.matchWeightSlab(null)).isEmpty();
     }
+
+    @Test
+    @DisplayName("applyInvariants rejects a row with both a district and a state")
+    void rejectsBothDistrictAndState() {
+        DistrictLevelFreight f = row();
+        f.setStateId(UUID.randomUUID());
+        assertThatThrownBy(f::applyInvariants).isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    @DisplayName("applyInvariants rejects a row with neither a district nor a state")
+    void rejectsNeitherDistrictNorState() {
+        DistrictLevelFreight f = row();
+        f.setDistrictId(null);
+        assertThatThrownBy(f::applyInvariants).isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    @DisplayName("applyInvariants accepts a state-only row and reports it as state level")
+    void acceptsStateOnly() {
+        DistrictLevelFreight f = row();
+        f.setDistrictId(null);
+        f.setStateId(UUID.randomUUID());
+        f.applyInvariants();
+        assertThat(f.isStateLevel()).isTrue();
+    }
+
+    @Test
+    @DisplayName("applyInvariants accepts a district-only row and reports it as district level")
+    void acceptsDistrictOnly() {
+        DistrictLevelFreight f = row();
+        f.applyInvariants();
+        assertThat(f.isStateLevel()).isFalse();
+    }
 }

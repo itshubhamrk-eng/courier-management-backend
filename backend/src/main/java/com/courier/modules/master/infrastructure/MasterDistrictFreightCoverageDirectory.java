@@ -7,6 +7,8 @@ import com.courier.modules.master.domain.City;
 import com.courier.modules.master.domain.CityRepository;
 import com.courier.modules.master.domain.District;
 import com.courier.modules.master.domain.DistrictRepository;
+import com.courier.modules.master.domain.State;
+import com.courier.modules.master.domain.StateRepository;
 import com.courier.modules.master.domain.GlobalMasters;
 import com.courier.modules.master.domain.Pincode;
 import com.courier.modules.master.domain.PincodeArea;
@@ -36,6 +38,7 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
     private final AreaRepository areaRepository;
     private final CityRepository cityRepository;
     private final DistrictRepository districtRepository;
+    private final StateRepository stateRepository;
     private final PincodeAreaRepository pincodeAreaRepository;
 
     @Override
@@ -72,7 +75,8 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
             }
             return Optional.of(new CoverageRef(pincode.getId(), pincode.getCode(), pincode.isServiceable(),
                     pincode.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
-                    district.isActive(), pincode.getName(), city.getId()));
+                    district.isActive(), pincode.getName(), city.getId(),
+                    district.getStateId(), stateName(district), stateActive(district)));
         });
     }
 
@@ -118,7 +122,21 @@ public class MasterDistrictFreightCoverageDirectory implements PincodeCoverageLo
                     link.isOdaApplicable(), district.getId(), district.getCode(), district.getName(),
                     // District, not City: City rows come from India Post's postal *Division*
                     // (Shahada's is "Dhule" though its district is Nandurbar).
-                    district.isActive(), area.getName() + ", " + district.getName(), city.getId()));
+                    district.isActive(), area.getName() + ", " + district.getName(), city.getId(),
+                    district.getStateId(), stateName(district), stateActive(district)));
         });
+    }
+
+    /** Called inside {@code runAs(PLATFORM)}: the state of a district, which every district has. */
+    private String stateName(District district) {
+        return state(district).map(State::getName).orElse(null);
+    }
+
+    private boolean stateActive(District district) {
+        return state(district).map(State::isActive).orElse(false);
+    }
+
+    private Optional<State> state(District district) {
+        return stateRepository.findByIdWithinCompany(district.getStateId(), GlobalMasters.PLATFORM_COMPANY_ID);
     }
 }

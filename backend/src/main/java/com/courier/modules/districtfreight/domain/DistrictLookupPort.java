@@ -26,4 +26,15 @@ public interface DistrictLookupPort {
     /** Resolves a "District" cell from an Excel import by name alone, case-insensitively —
      *  the sheet does not name a state to disambiguate by. */
     Optional<DistrictRef> findDistrictByName(String name);
+
+    /** The (global) State master, for State-level rate rows. */
+    record StateRef(UUID stateId, String code, String name, boolean active) {
+    }
+
+    Optional<StateRef> findState(UUID stateId);
+
+    Map<UUID, StateRef> findStates(Collection<UUID> stateIds);
+
+    /** Resolves a "State" cell from an Excel import by name, case-insensitively. */
+    Optional<StateRef> findStateByName(String name);
 }
