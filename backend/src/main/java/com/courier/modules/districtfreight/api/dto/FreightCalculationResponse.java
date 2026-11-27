@@ -1,5 +1,6 @@
 package com.courier.modules.districtfreight.api.dto;
 
+import com.courier.modules.districtfreight.domain.DistrictFreightLevel;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -26,6 +27,10 @@ public record FreightCalculationResponse(
         String customerZoneName,
         @Schema(description = "Zone rate's docket + mathadi + pack + fuel + FOV — the minimum Other "
                 + "Charges for the booking. Zero when District Level Freight priced it")
-        BigDecimal customerExtraCharges
+        BigDecimal customerExtraCharges,
+        @Schema(description = "Which District Level Freight row priced this booking: the district's own "
+                + "rate, or the destination state's fallback rate")
+        DistrictFreightLevel rateLevel,
+        @Schema(description = "Destination state name") String stateName
 ) {
 }

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -94,12 +95,19 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
             }
         }
 
+        // District first; a missing or deactivated district row falls through to the state row.
         DistrictLevelFreight freight = repository
                 .findByCompanyIdAndBranchIdAndDistrictId(companyId, branch.branchId(), coverage.districtId())
                 .filter(row -> row.getStatus() == DistrictFreightStatus.ACTIVE)
+                .or(() -> coverage.stateId() == null ? Optional.empty()
+                        : repository.findByCompanyIdAndBranchIdAndStateId(companyId, branch.branchId(),
+                                        coverage.stateId())
+                                .filter(row -> row.getStatus() == DistrictFreightStatus.ACTIVE))
                 .orElseThrow(() -> new BusinessRuleException(
-                        "No District Level Freight configuration exists for %s -> %s. "
-                                .formatted(branch.branchCode(), coverage.districtName())
+                        "No District Level Freight configuration exists for %s -> %s%s. "
+                                .formatted(branch.branchCode(), coverage.districtName(),
+                                        coverage.stateName() == null ? ""
+                                                : " or its state " + coverage.stateName())
                                 + "Set one up under District Level Freight before booking this lane."));
 
         DistrictLevelFreight.SlabMatch slab = freight.matchWeightSlab(chargeableWeight)
@@ -119,7 +127,8 @@ public class FreightCalculationServiceImpl implements FreightCalculationService 
         return new FreightCalculationResult(freight.getId(), branch.branchId(), branch.branchCode(),
                 branch.branchName(), coverage.districtId(), coverage.districtCode(), coverage.districtName(),
                 coverage.pincodeId(), coverage.pincodeCode(), coverage.cityName(), chargeableWeight, slab.label(),
-                slab.ratePerKg(), baseFreight, odaApplies, odaCharge, totalFreight);
+                slab.ratePerKg(), baseFreight, odaApplies, odaCharge, totalFreight, null, BigDecimal.ZERO,
+                freight.level(), coverage.stateName());
     }
 
     /** The customer's zone rate card for this destination, or null when no ACTIVE zone of

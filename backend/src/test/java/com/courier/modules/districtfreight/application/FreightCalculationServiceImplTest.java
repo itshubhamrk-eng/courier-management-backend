@@ -4,6 +4,7 @@ import com.courier.modules.customerpricing.application.PricingZoneService;
 import com.courier.modules.customerpricing.application.PricingZoneView;
 import com.courier.modules.customerpricing.application.ZoneRateService;
 import com.courier.modules.districtfreight.domain.BranchLookupPort;
+import com.courier.modules.districtfreight.domain.DistrictFreightLevel;
 import com.courier.modules.districtfreight.domain.DistrictFreightStatus;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreight;
 import com.courier.modules.districtfreight.domain.DistrictLevelFreightRepository;
@@ -391,5 +392,108 @@ class FreightCalculationServiceImplTest {
         service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
 
         org.mockito.Mockito.verifyNoInteractions(zoneService, zoneRateService);
+    }
+
+    // ------------------------------------------------------------ state-level fallback
+
+    private static final UUID STATE = UUID.randomUUID();
+
+    private PincodeCoverageLookupPort.CoverageRef inState(boolean oda) {
+        return new PincodeCoverageLookupPort.CoverageRef(PINCODE, DESTINATION_PINCODE, true, oda,
+                DISTRICT, "PUNE", "Pune", true, "Pune", null, STATE, "Maharashtra", true);
+    }
+
+    /** A state-level row whose 16-50 KG rate (5.00) differs from the district row's (8.50). */
+    private DistrictLevelFreight stateRow() {
+        DistrictLevelFreight f = row();
+        f.setDistrictId(null);
+        f.setStateId(STATE);
+        f.setRate16To50(new BigDecimal("5.00"));
+        return f;
+    }
+
+    @Test
+    @DisplayName("state: a district row wins over a state row for the same lane")
+    void districtRowWinsOverStateRow() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(false)));
+        when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
+                .thenReturn(Optional.of(row()));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE))
+                .thenReturn(Optional.of(stateRow()));
+
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
+
+        assertThat(result.rateLevel()).isEqualTo(DistrictFreightLevel.DISTRICT);
+        assertThat(result.ratePerKg()).isEqualByComparingTo("8.50");
+    }
+
+    @Test
+    @DisplayName("state: with no district row, the state row prices the booking and says so")
+    void fallsBackToStateRow() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(false)));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE))
+                .thenReturn(Optional.of(stateRow()));
+
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
+
+        assertThat(result.rateLevel()).isEqualTo(DistrictFreightLevel.STATE);
+        assertThat(result.stateName()).isEqualTo("Maharashtra");
+        assertThat(result.ratePerKg()).isEqualByComparingTo("5.00");
+        assertThat(result.baseFreight()).isEqualByComparingTo("100.00");
+        assertThat(result.districtName()).isEqualTo("Pune");
+    }
+
+    @Test
+    @DisplayName("state: an INACTIVE district row is treated as not set up, so the state row applies")
+    void inactiveDistrictRowFallsThroughToState() {
+        DistrictLevelFreight inactive = row();
+        inactive.setStatus(DistrictFreightStatus.INACTIVE);
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(false)));
+        when(repository.findByCompanyIdAndBranchIdAndDistrictId(COMPANY, BRANCH, DISTRICT))
+                .thenReturn(Optional.of(inactive));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE))
+                .thenReturn(Optional.of(stateRow()));
+
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
+
+        assertThat(result.rateLevel()).isEqualTo(DistrictFreightLevel.STATE);
+    }
+
+    @Test
+    @DisplayName("state: neither a district nor a state row refuses, naming the branch, district and state")
+    void neitherRowRefuses() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(false)));
+
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("ICHALKARANJI -> Pune")
+                .hasMessageContaining("or its state Maharashtra");
+    }
+
+    @Test
+    @DisplayName("state: an INACTIVE state row does not price the booking")
+    void inactiveStateRowIgnored() {
+        DistrictLevelFreight inactive = stateRow();
+        inactive.setStatus(DistrictFreightStatus.INACTIVE);
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(false)));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE))
+                .thenReturn(Optional.of(inactive));
+
+        assertThatThrownBy(() -> service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20")))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    @DisplayName("state: ODA on a state row follows the pincode's ODA flag, like a district row")
+    void stateRowOdaFollowsPincode() {
+        when(coverageLookup.findByPincode(DESTINATION_PINCODE)).thenReturn(Optional.of(inState(true)));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE))
+                .thenReturn(Optional.of(stateRow()));
+
+        FreightCalculationResult result = service.calculate(BRANCH, DESTINATION_PINCODE, null, new BigDecimal("20"));
+
+        assertThat(result.odaApplicable()).isTrue();
+        assertThat(result.odaCharge()).isEqualByComparingTo("250.00");
+        assertThat(result.totalFreight()).isEqualByComparingTo("350.00");
     }
 }
