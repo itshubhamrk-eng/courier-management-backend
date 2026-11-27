@@ -11,6 +11,7 @@ public record ImportRowResult(
         int rowNumber,
         String fromStation,
         String district,
+        @Schema(description = "The State cell, when the row was a state-level rate; null otherwise") String state,
         @Schema(description = "WOULD_CREATE / WOULD_UPDATE (preview) or CREATED / UPDATED (commit), or ERROR")
         String outcome,
         @Schema(description = "Null on success") String message

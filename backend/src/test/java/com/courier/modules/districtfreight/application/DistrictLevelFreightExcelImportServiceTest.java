@@ -177,4 +177,141 @@ class DistrictLevelFreightExcelImportServiceTest {
             row.createCell(2 + i).setCellValue(rates[i]);
         }
     }
+
+    // ------------------------------------------------------------ state-level rows
+
+    private static final UUID STATE_MH = UUID.randomUUID();
+    private static final DistrictLookupPort.StateRef MAHARASHTRA =
+            new DistrictLookupPort.StateRef(STATE_MH, "MH", "Maharashtra", true);
+
+    /** District/State columns both present; each row is {branch, district, state}. */
+    private MockMultipartFile sheetWithState(String[]... rows) throws IOException {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet();
+            Row header = sheet.createRow(0);
+            List<String> headers = List.of("From station", "District", "State", "1KG TO 15 KG", "16 KG TO 50KG",
+                    "51 KG TO 100 KG", "101 KG TO 1000 KG", "1001 KG TO 1500 KG", "1501 KG TO 2000KG");
+            for (int i = 0; i < headers.size(); i++) {
+                header.createCell(i).setCellValue(headers.get(i));
+            }
+            int r = 1;
+            for (String[] cells : rows) {
+                Row row = sheet.createRow(r++);
+                for (int c = 0; c < 3; c++) {
+                    if (cells[c] != null) {
+                        row.createCell(c).setCellValue(cells[c]);
+                    }
+                }
+                double[] rates = {10, 8, 7.5, 6, 5.5, 5};
+                for (int i = 0; i < rates.length; i++) {
+                    row.createCell(3 + i).setCellValue(rates[i]);
+                }
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return new MockMultipartFile("file", "rates.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+        }
+    }
+
+    private void givenState() {
+        when(districtLookup.findStateByName("MAHARASHTRA")).thenReturn(Optional.of(MAHARASHTRA));
+        when(repository.findByCompanyIdAndBranchIdAndStateId(any(), any(), any())).thenReturn(Optional.empty());
+    }
+
+    @Test
+    @DisplayName("state: a row with only the State column filled is previewed as a state-level create")
+    void stateOnlyRowCreatesStateLevel() throws IOException {
+        givenState();
+
+        ImportSummaryResponse result = importService.preview(
+                sheetWithState(new String[]{"KARAD", null, "MAHARASHTRA"}));
+
+        assertThat(result.succeeded()).isEqualTo(1);
+        assertThat(result.rows()).extracting("outcome").containsExactly("WOULD_CREATE");
+        assertThat(result.rows()).extracting("state").containsExactly("MAHARASHTRA");
+    }
+
+    @Test
+    @DisplayName("state: commit creates the row with stateId and no districtId")
+    void commitCreatesWithStateId() throws IOException {
+        givenState();
+
+        importService.commit(sheetWithState(new String[]{"KARAD", null, "MAHARASHTRA"}));
+
+        org.mockito.ArgumentCaptor<com.courier.modules.districtfreight.application.command
+                .CreateDistrictLevelFreightCommand> cmd = org.mockito.ArgumentCaptor.forClass(
+                com.courier.modules.districtfreight.application.command.CreateDistrictLevelFreightCommand.class);
+        org.mockito.Mockito.verify(service).create(cmd.capture());
+        assertThat(cmd.getValue().stateId()).isEqualTo(STATE_MH);
+        assertThat(cmd.getValue().districtId()).isNull();
+    }
+
+    @Test
+    @DisplayName("state: a row with both District and State is an error and the other rows still import")
+    void bothDistrictAndStateIsRowError() throws IOException {
+        givenState();
+
+        ImportSummaryResponse result = importService.preview(sheetWithState(
+                new String[]{"KARAD", "PUNE", "MAHARASHTRA"},
+                new String[]{"KARAD", "SATARA", null}));
+
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.succeeded()).isEqualTo(1);
+        assertThat(result.rows()).extracting("outcome").containsExactly("ERROR", "WOULD_CREATE");
+        assertThat(result.rows().get(0).message()).contains("either District or State");
+    }
+
+    @Test
+    @DisplayName("state: a row with rates but neither District nor State is an error")
+    void neitherDistrictNorStateIsRowError() throws IOException {
+        givenState();
+
+        ImportSummaryResponse result = importService.preview(
+                sheetWithState(new String[]{"KARAD", null, null}));
+
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.rows().get(0).message()).contains("either District or State");
+    }
+
+    @Test
+    @DisplayName("state: an unknown state name is a row error")
+    void unknownStateIsRowError() throws IOException {
+        when(districtLookup.findStateByName("ATLANTIS")).thenReturn(Optional.empty());
+
+        ImportSummaryResponse result = importService.preview(
+                sheetWithState(new String[]{"KARAD", null, "ATLANTIS"}));
+
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.rows().get(0).message()).contains("No state matches");
+    }
+
+    @Test
+    @DisplayName("state: the same branch + state twice in one file errors on the second")
+    void duplicateStateInFileErrors() throws IOException {
+        givenState();
+
+        ImportSummaryResponse result = importService.preview(sheetWithState(
+                new String[]{"KARAD", null, "MAHARASHTRA"},
+                new String[]{"KARAD", null, "MAHARASHTRA"}));
+
+        assertThat(result.rows()).extracting("outcome").containsExactly("WOULD_CREATE", "ERROR");
+    }
+
+    @Test
+    @DisplayName("state: an existing state-level row is updated, not duplicated")
+    void existingStateRowIsUpdated() throws IOException {
+        when(districtLookup.findStateByName("MAHARASHTRA")).thenReturn(Optional.of(MAHARASHTRA));
+        com.courier.modules.districtfreight.domain.DistrictLevelFreight existing =
+                new com.courier.modules.districtfreight.domain.DistrictLevelFreight();
+        existing.setId(UUID.randomUUID());
+        existing.setStateId(STATE_MH);
+        when(repository.findByCompanyIdAndBranchIdAndStateId(COMPANY, BRANCH, STATE_MH))
+                .thenReturn(Optional.of(existing));
+
+        ImportSummaryResponse result = importService.preview(
+                sheetWithState(new String[]{"KARAD", null, "MAHARASHTRA"}));
+
+        assertThat(result.rows()).extracting("outcome").containsExactly("WOULD_UPDATE");
+    }
 }

@@ -86,7 +86,7 @@ public class DistrictLevelFreightExcelImportService {
     private static final Pattern NUMBER = Pattern.compile("\\d+");
 
     private static final List<String> REQUIRED_COLUMNS = List.of(
-            "branch", "district", "rate1To15", "rate16To50", "rate51To100",
+            "branch", "rate1To15", "rate16To50", "rate51To100",
             "rate101To1000", "rate1001To1500", "rate1501To2000");
 
     private final DistrictLevelFreightRepository repository;
@@ -127,11 +127,33 @@ public class DistrictLevelFreightExcelImportService {
                     throw new BusinessRuleException(
                             "No branch matches From Station \"" + row.branchLabel + "\".");
                 }
-                DistrictLookupPort.DistrictRef district = districtLookup.findDistrictByName(row.districtLabel)
-                        .orElseThrow(() -> new BusinessRuleException(
-                                "No district matches \"" + row.districtLabel + "\"."));
-                if (!district.active()) {
-                    throw new BusinessRuleException("District \"" + district.name() + "\" is inactive.");
+                boolean hasDistrict = !row.districtLabel.isBlank();
+                boolean hasState = !row.stateLabel.isBlank();
+                if (hasDistrict == hasState) {
+                    throw new BusinessRuleException(
+                            "Fill either District or State on each row — not both and not neither.");
+                }
+                UUID districtId = null;
+                UUID stateId = null;
+                String destinationName;
+                if (hasDistrict) {
+                    DistrictLookupPort.DistrictRef district = districtLookup.findDistrictByName(row.districtLabel)
+                            .orElseThrow(() -> new BusinessRuleException(
+                                    "No district matches \"" + row.districtLabel + "\"."));
+                    if (!district.active()) {
+                        throw new BusinessRuleException("District \"" + district.name() + "\" is inactive.");
+                    }
+                    districtId = district.districtId();
+                    destinationName = district.name();
+                } else {
+                    DistrictLookupPort.StateRef state = districtLookup.findStateByName(row.stateLabel)
+                            .orElseThrow(() -> new BusinessRuleException(
+                                    "No state matches \"" + row.stateLabel + "\"."));
+                    if (!state.active()) {
+                        throw new BusinessRuleException("State \"" + state.name() + "\" is inactive.");
+                    }
+                    stateId = state.stateId();
+                    destinationName = state.name();
                 }
 
                 for (BranchLookupPort.BranchRef branch : branches) {
@@ -139,25 +161,31 @@ public class DistrictLevelFreightExcelImportService {
                         if (!branch.active()) {
                             throw new BusinessRuleException("Branch \"" + branch.branchName() + "\" is inactive.");
                         }
-                        String comboKey = branch.branchId() + "|" + district.districtId();
+                        String comboKey = branch.branchId() + (stateId != null ? "|S:" + stateId : "|D:" + districtId);
                         if (!seenInFile.add(comboKey)) {
                             throw new BusinessRuleException(
-                                    "Duplicate From Station + District in this file: " + branch.branchName()
-                                            + " + " + district.name() + ".");
+                                    "Duplicate From Station + " + (stateId != null ? "State" : "District")
+                                            + " in this file: " + branch.branchName() + " + " + destinationName + ".");
                         }
 
-                        var existing = repository.findByCompanyIdAndBranchIdAndDistrictId(
-                                companyId, branch.branchId(), district.districtId());
-                        String outcome = applyRow(row, branch.branchId(), district.districtId(), existing.orElse(null), dryRun);
-                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel, outcome, null));
+                        var existing = stateId != null
+                                ? repository.findByCompanyIdAndBranchIdAndStateId(companyId, branch.branchId(), stateId)
+                                : repository.findByCompanyIdAndBranchIdAndDistrictId(
+                                        companyId, branch.branchId(), districtId);
+                        String outcome = applyRow(row, branch.branchId(), districtId, stateId,
+                                existing.orElse(null), dryRun);
+                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel,
+                                row.stateLabel.isBlank() ? null : row.stateLabel, outcome, null));
                         succeeded++;
                     } catch (BusinessRuleException e) {
-                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel, "ERROR", e.getMessage()));
+                        results.add(new ImportRowResult(row.rowNumber, branch.branchName(), row.districtLabel,
+                                row.stateLabel.isBlank() ? null : row.stateLabel, "ERROR", e.getMessage()));
                         failed++;
                     }
                 }
             } catch (BusinessRuleException e) {
-                results.add(new ImportRowResult(row.rowNumber, row.branchLabel, row.districtLabel, "ERROR", e.getMessage()));
+                results.add(new ImportRowResult(row.rowNumber, row.branchLabel, row.districtLabel,
+                        row.stateLabel.isBlank() ? null : row.stateLabel, "ERROR", e.getMessage()));
                 failed++;
             }
         }
@@ -167,12 +195,12 @@ public class DistrictLevelFreightExcelImportService {
         return new ImportSummaryResponse(dryRun, parsed.size(), succeeded, failed, results);
     }
 
-    private String applyRow(ParsedRow row, UUID branchId, UUID districtId,
+    private String applyRow(ParsedRow row, UUID branchId, UUID districtId, UUID stateId,
                              DistrictLevelFreight existing, boolean dryRun) {
         if (existing == null) {
             if (!dryRun) {
                 service.create(new CreateDistrictLevelFreightCommand(
-                        branchId, districtId, row.rate1To15, row.rate16To50, row.rate51To100,
+                        branchId, districtId, stateId, row.rate1To15, row.rate16To50, row.rate51To100,
                         row.rate101To1000, row.rate1001To1500, row.rate1501To2000,
                         true, row.odaCharge));
             }
@@ -180,7 +208,7 @@ public class DistrictLevelFreightExcelImportService {
         }
         if (!dryRun) {
             service.update(existing.getId(), new UpdateDistrictLevelFreightCommand(
-                    branchId, districtId, row.rate1To15, row.rate16To50, row.rate51To100,
+                    branchId, districtId, stateId, row.rate1To15, row.rate16To50, row.rate51To100,
                     row.rate101To1000, row.rate1001To1500, row.rate1501To2000,
                     existing.isOdaApplicable(), row.odaCharge == null ? existing.getOdaCharge() : row.odaCharge,
                     existing.getVersion()));
@@ -191,7 +219,7 @@ public class DistrictLevelFreightExcelImportService {
     // --------------------------------------------------------------------- parsing
 
     private record ParsedRow(
-            int rowNumber, String branchLabel, String districtLabel,
+            int rowNumber, String branchLabel, String districtLabel, String stateLabel,
             BigDecimal rate1To15, BigDecimal rate16To50, BigDecimal rate51To100,
             BigDecimal rate101To1000, BigDecimal rate1001To1500, BigDecimal rate1501To2000,
             BigDecimal odaCharge) {
@@ -217,8 +245,9 @@ public class DistrictLevelFreightExcelImportService {
 
                 String branchLabel = cells.getOrDefault("branch", "");
                 String districtLabel = cells.getOrDefault("district", "");
-                if (branchLabel.isBlank() || districtLabel.isBlank()) {
-                    continue; // blank spacer row or a note row with no station/district
+                String stateLabel = cells.getOrDefault("state", "");
+                if (branchLabel.isBlank()) {
+                    continue; // blank spacer row or a note row with no station
                 }
 
                 BigDecimal r1 = tryParseDecimal(cells.get("rate1To15"));
@@ -234,7 +263,7 @@ public class DistrictLevelFreightExcelImportService {
                 }
                 BigDecimal oda = tryParseDecimal(cells.get("odaCharge"));
 
-                rows.add(new ParsedRow(r + 1, branchLabel.trim(), districtLabel.trim(),
+                rows.add(new ParsedRow(r + 1, branchLabel.trim(), districtLabel.trim(), stateLabel.trim(),
                         r1, r2, r3, r4, r5, r6, oda));
             }
             if (rows.isEmpty()) {
@@ -262,10 +291,15 @@ public class DistrictLevelFreightExcelImportService {
         }
         Set<String> found = new HashSet<>(columns.values());
         List<String> missing = REQUIRED_COLUMNS.stream().filter(c -> !found.contains(c)).toList();
+        if (!found.contains("district") && !found.contains("state")) {
+            throw new BusinessRuleException(
+                    "The sheet needs a District column, a State column, or both. Expected From Station, "
+                            + "District and/or State, and the six weight-slab rate columns.");
+        }
         if (!missing.isEmpty()) {
             throw new BusinessRuleException(
                     "The sheet is missing expected column(s): " + String.join(", ", missing)
-                            + ". Expected From Station, District, and the six weight-slab rate columns.");
+                            + ". Expected From Station, District and/or State, and the six weight-slab rate columns.");
         }
         return columns;
     }
@@ -287,6 +321,9 @@ public class DistrictLevelFreightExcelImportService {
         }
         if (normalised.contains("DISTRICT")) {
             return "district";
+        }
+        if (normalised.equals("STATE") || normalised.equals("TOSTATE") || normalised.equals("DESTINATIONSTATE")) {
+            return "state";
         }
         if (normalised.contains("ODA")) {
             return "odaCharge";
