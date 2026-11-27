@@ -144,7 +144,11 @@ export class TopupRequests implements OnInit {
         next: (p) => this.branchOptions.set(p.content.map((b) => ({ value: b.id, label: `${b.branchName} (${b.branchCode})` }))),
         error: () => this.branchOptions.set([])
       });
-      this.branchControl.valueChanges.subscribe(() => this.load());
+      this.branchControl.valueChanges.subscribe((v) => {
+        // Typed-but-unpicked text is not a branch id; reload only on a picked option or a cleared box.
+        if (v && !this.branchOptions().some((o) => o.value === v)) return;
+        this.load();
+      });
     }
     this.statusControl.valueChanges.subscribe(() => this.load());
     this.load();

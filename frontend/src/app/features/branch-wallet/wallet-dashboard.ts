@@ -203,6 +203,9 @@ export class WalletDashboard implements OnInit {
     if (this.isAdmin()) this.loadBranches();
 
     this.branchControl.valueChanges.subscribe((branchId) => {
+      // The autocomplete writes every typed keystroke into the control; only a picked option
+      // (or a cleared box) is a real branch choice.
+      if (branchId && !this.branchOptions().some((o) => o.value === branchId)) return;
       this.router.navigate([], { relativeTo: this.route, queryParams: { branchId: branchId || null } });
     });
   }
