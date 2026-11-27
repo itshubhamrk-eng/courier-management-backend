@@ -11,6 +11,7 @@ All notable changes to this project. Format based on
 - A rate row is keyed by a District **or** a State (`district_id` nullable, new `state_id`, CHECK exactly one; unique per branch+state). Booking resolves customer zone -> ACTIVE district row -> ACTIVE state row of the district's state -> refuse. An INACTIVE district row falls through to the state row (user-approved call).
 - `FreightCalculationResult`/response gain `rateLevel` + `stateName`; shipment-create sidebar shows "State rate - <state> (no district rate)". Refusal message now also names the state.
 - Create/update/list (Level filter + column)/copy-from-branch/Excel import (optional `state` column; fill District or State, never both) all support state rows. CSV export column `districtName` is now `destination`.
+- Excel import dialog now asks which branch(es) to create the rates for (multi-select, required); every sheet row applies to each picked branch, the sheet's From Station column is optional and ignored. API: optional repeated `branchId` on `/district-level-freight/import[/preview]`; without it the sheet's From Station column still works.
 - Design + plan: `docs/superpowers/specs|plans/2026-11-27-state-level-freight*`. Verified live on a cloned DB (booking fallback, district wins, deactivate fall-through, copy, import incl. bad rows and a legacy sheet). Branch `feat/state-level-freight`, not merged/deployed.
 
 ## 2026-11-27 - Shipment Copy shows consignor/consignee address + contact (no migration)
