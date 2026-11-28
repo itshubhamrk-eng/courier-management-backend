@@ -575,7 +575,11 @@ export class Delivery implements OnInit {
   deliver(): void {
     const shipment = this.shipment();
     if (!shipment || this.form.invalid) { this.form.markAllAsTouched(); return; }
-    if (!this.photo()) { this.notify.error('A delivery photo is required.'); return; }
+    // A photo is only needed while no POD exists yet. Once one is captured and stored
+    // (PodService.verify, or loaded by getLatest when this shipment is reopened after a
+    // reload) `verification()` is set and the server already holds the photo — requiring
+    // the in-memory file as well made a reopened shipment impossible to close.
+    if (!this.verification() && !this.photo()) { this.notify.error('A delivery photo is required.'); return; }
     const v = this.form.getRawValue();
     this.delivering.set(true);
     this.movementService.deliver({

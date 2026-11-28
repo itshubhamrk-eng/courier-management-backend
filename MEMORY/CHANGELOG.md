@@ -6,6 +6,10 @@ All notable changes to this project. Format based on
 
 **Update this file at the end of every task.**
 
+## 2026-11-28 - Fix: Complete Delivery blocked after reopening a shipment with a stored POD (frontend only)
+
+- `delivery.ts` `deliver()` demanded the in-memory photo file even when the POD was already captured and stored. Reopening/reloading the Delivery page loads the stored POD via `getLatest` (so Complete Delivery shows) but the file signal is empty, so it failed with "A delivery photo is required." Now the photo is only required while no POD exists (`!verification() && !photo()`). Found on the OCCPL prod test flow (Solapur vendor). Not deployed.
+
 ## 2026-11-28 - Vendor gets branch delivery credits; Manifest "Send to Vendor" (no migration)
 
 - A vendor delivery (delivered + POD approved) now credits the vendor's wallet with its own DRS charge, delivery commission per kg and ODA amount, like any delivery branch. The rate-card `PartnerDeliveryEarned` accrual is no longer published for deliveries (pickup earnings unchanged; the event class and listener remain, unused).
